@@ -1,0 +1,23 @@
+@import 'tailwindcss';
+
+/*
+ * An instrument, not a document: no page bounce, text selection, long-press
+ * callout or tap highlight on touch screens. Play surfaces add
+ * touch-action: none themselves.
+ */
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  overscroll-behavior: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+  background: #0b0b10;
+  color: #e7e7ee;
+}

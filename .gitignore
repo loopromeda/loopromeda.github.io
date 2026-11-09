@@ -1,0 +1,8 @@
+node_modules/
+# The built site (vite build), published by .github/workflows/deploy.yml
+dist/
+coverage/
+# What phones reported to the dev server (scripts/vite-device-report.ts)
+device-reports.jsonl
+*.log
+.DS_Store
