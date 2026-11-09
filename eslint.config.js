@@ -14,9 +14,15 @@ export default defineConfig(
   tseslint.configs.recommended,
   prettier,
   {
-    // The app, in the browser (the worklet's own scope comes with M1)
+    // The app, in the browser
     files: ['src/**'],
+    ignores: ['src/worklet/**'],
     languageOptions: { globals: globals.browser },
+  },
+  {
+    // The audio thread: AudioWorkletGlobalScope, no window or document
+    files: ['src/worklet/**'],
+    languageOptions: { globals: globals.audioWorklet },
   },
   {
     files: ['src/**/*.{ts,tsx}'],

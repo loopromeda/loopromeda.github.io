@@ -30,9 +30,9 @@ export function deviceReport(file = 'device-reports.jsonl'): Plugin {
           if (body.length > MAX_BODY) req.destroy()
         })
         req.on('end', () => {
-          let report: { userAgent?: unknown }
+          let report: { kind?: unknown; state?: unknown; userAgent?: unknown }
           try {
-            report = JSON.parse(body) as { userAgent?: unknown }
+            report = JSON.parse(body) as typeof report
           } catch {
             res.statusCode = 400
             res.end()
@@ -41,8 +41,12 @@ export function deviceReport(file = 'device-reports.jsonl'): Plugin {
           const line = { at: new Date().toISOString(), ...report }
           appendFile(out, JSON.stringify(line) + '\n').then(
             () => {
+              const what =
+                report.kind === 'engine'
+                  ? `engine ${String(report.state)}`
+                  : String(report.kind)
               server.config.logger.info(
-                `device report: ${String(report.userAgent)}`,
+                `device report (${what}): ${String(report.userAgent)}`,
                 { timestamp: true }
               )
               res.statusCode = 204

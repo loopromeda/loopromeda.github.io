@@ -10,7 +10,7 @@ played by touch, installable as a PWA. The plan and the decisions behind it:
 pnpm dev            # Vite on 127.0.0.1:5173 (this machine only)
 pnpm dev:tailnet    # same, plus https://<machine>.<tailnet>.ts.net:5173 for phones
 pnpm tailnet:off    # stop serving 5173 to the tailnet
-pnpm typecheck      # tsc: app (tsconfig.json) and configs (tsconfig.node.json)
+pnpm typecheck      # tsc: app, audio thread (tsconfig.worklet.json), configs
 pnpm lint           # eslint
 pnpm format:check   # prettier (pnpm format to fix)
 pnpm test           # vitest, once
@@ -39,12 +39,21 @@ Before calling a change done: `pnpm typecheck && pnpm lint && pnpm format:check 
 
 ```
 src/dsp/      pure DSP (oscillators, envelopes, filters, voices)
-src/worklet/  the AudioWorkletProcessor around src/dsp      (M1)
-src/engine/   AudioContext lifecycle, unlock, node wiring   (M1)
-src/state/    parameter schema, store, presets              (M2)
-src/ui/       React components                              (M3)
-scripts/      dev tooling (tailnet.sh)
+src/worklet/  the AudioWorkletProcessor around src/dsp; own globals and
+              tsconfig (tsconfig.worklet.json), loaded via ?worker&url
+src/engine/   AudioContext lifecycle, unlock, node wiring; protocol.ts is
+              the message types both threads share (plain data only)
+src/state/    params.ts: the parameter schema; presets come in M4
+src/viz/      pure display math (trigger, decimation), allocation-free
+src/ui/       React components; Scope.tsx draws the output waveform,
+              Knob.tsx turns one parameter
+scripts/      dev tooling: tailnet.sh, the device-report Vite plugin
 ```
+
+Dev-only device reports: every page load, every audio state change and,
+every 5 s while it draws, the waveform display's frame cost on a phone are
+appended to `device-reports.jsonl` (gitignored). Read it after a
+device test instead of asking for numbers to be retyped.
 
 ## Repository
 

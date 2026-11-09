@@ -24,6 +24,9 @@ importers:
       '@tailwindcss/vite':
         specifier: 4.3.5
         version: 4.3.5(vite@8.3.7(@types/node@26.6.6)(jiti@2.7.0))
+      '@types/audioworklet':
+        specifier: 0.0.101
+        version: 0.0.101
       '@types/node':
         specifier: ^26.6.6
         version: 26.6.6
@@ -416,6 +419,9 @@ packages:
     resolution: {integrity: sha512-BCNiY0a1ZjdOHVqw7kyb7U72BwfMF3dfUuN+tQsLWky/J5JOI/r7abibglXfygrZhVO/3u3V+E25kkKTeMkXaQ==}
     peerDependencies:
       vite: ^5.2.0 || ^6 || ^7 || ^8
+
+  '@types/audioworklet@0.0.101':
+    resolution: {integrity: sha512-HLAYPux6EUQNSV0wLbQ8cgcszzlMUAKvejd09UG+QUUedq5cVLSWOOLjbwexeOp06Hy3eS6CTdCdsTwG3PrZEA==}
 
   '@types/chai@5.2.3':
     resolution: {integrity: sha512-Mw558oeA9fFbv65/y4mHtXDs9bPnFMZAL/jxdPFUpOHHIXX91mcgEHbS5Lahr+pwZFR8A7GQleRWeI6cGFC2UA==}
@@ -1486,6 +1492,8 @@ snapshots:
       '@tailwindcss/oxide': 4.3.5
       tailwindcss: 4.3.5
       vite: 8.3.7(@types/node@26.6.6)(jiti@2.7.0)
+
+  '@types/audioworklet@0.0.101': {}
 
   '@types/chai@5.2.3':
     dependencies:

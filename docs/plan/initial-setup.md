@@ -66,12 +66,45 @@ Message protocol (sketch):
 type ToWorklet =
   | { t: 'noteOn'; id: number; note: number; vel: number } // id = pointerId-derived
   | { t: 'noteOff'; id: number }
-  | { t: 'param'; id: ParamId; value: number } // normalized 0..1 → schema maps
+  | { t: 'param'; id: ParamId; value: number } // in the param's own units
   | { t: 'panic' }
 ```
 
 Worklet rules: no allocation in `process()`, preallocated voice buffers, param
 smoothing (no zipper noise), denormal guard, read `sampleRate` (never hardcode 44.1/48k).
+
+Parameter values travel in their own units (semitones, cents, 0..1 level),
+not as knob positions: presets stay readable, and the audio thread never
+needs a knob's curve. A knob maps its travel to a value with the schema
+(`toValue`/`toNormalized`), and the engine keeps the main thread's copy of
+every value and sends them all to a new worklet.
+
+### Instruments are patches, not code
+
+One voice implementation makes every instrument; an instrument is data.
+Confirmed with ashon 2026-11-09.
+
+```
+Patch   parameter values (versioned JSON, the §1.4 schema)   bass, pad, kick…
+Part    one Patch + its own voice pool                      a sequencer track
+Voice   osc ×2 + noise → filter → amp, envelopes, LFO       the only DSP code
+Engine  N Parts → mixer → effects, all in the one worklet
+```
+
+- New sounds are new presets, never new DSP code.
+- Several Parts at once make the synth multitimbral: each sequencer track (M5)
+  plays its own Part.
+- The voice carries enough blocks to span the instruments the step sequencer
+  needs: two oscillators with detune, noise, filter envelope, **pitch
+  envelope** (kicks, plucks), LFO, glide, velocity. With noise + high-pass a
+  patch makes hats and snares; a pitch-swept sine makes a kick.
+- Out of reach for this voice: realistic acoustic instruments (sampling or
+  physical modelling); bells and electric pianos wait for the FM oscillator.
+- Fixed architecture, not user patching: a modular cable UI does not fit a
+  phone screen. A small modulation matrix can open it up later.
+- CPU budget is voices × Parts: one global voice cap, checked by the M2
+  benchmark. Drums may move to a lighter dedicated voice only if that
+  benchmark says so.
 
 ### Directory layout
 
@@ -119,12 +152,16 @@ see `docs/platform-notes.md`). The Pages URL and green CI wait for a remote.
 
 ### M1 — Audio spike on real devices (M) — _highest risk_
 
-- [ ] "Tap to start" overlay: create/resume `AudioContext` inside the pointer handler
-- [ ] iOS: feature-detect and set `navigator.audioSession.type = 'playback'` so the
-      silent switch doesn't mute us; fallback: silent looping `<audio>` unmute trick
-- [ ] Load worklet via `?worker&url`; worklet plays a sine on one big touch pad
-- [ ] Handle `statechange` (incl. Safari's `interrupted`) and `visibilitychange` → resume
-- [ ] DebugHUD: `sampleRate`, `baseLatency`, `outputLatency`, context state
+- [x] "Tap to start" screen: create/resume `AudioContext` inside the **click**
+      (on touch screens pointerdown is not a user activation; click is)
+- [x] iOS: feature-detect and set `navigator.audioSession.type = 'playback'` so the
+      silent switch doesn't mute us — written, untested until an iPhone tries it
+- [ ] Fallback if that is not enough: silent looping `<audio>` unmute trick
+- [x] Load worklet via `?worker&url`; worklet plays a sine on one big touch pad —
+      loads in dev and in the production build (desktop Chrome, 2026-11-09)
+- [x] Handle `statechange` (incl. Safari's `interrupted`) and `visibilitychange` → resume
+- [x] DebugHUD: `sampleRate`, `baseLatency`, `outputLatency`, context state; every
+      engine state change also lands in `device-reports.jsonl`
 - [ ] Real-device checklist (iPhone Safari, Android Chrome, plus installed-PWA mode):
       sound with silent switch on, after lock/unlock, after a phone call / other app
       audio, after backgrounding; touch-to-sound latency feel; glitches under load
@@ -137,11 +174,22 @@ recorded; any blocker found here can still change §2 (e.g. Capacitor for iOS).
 ### M2 — Synth core DSP (L)
 
 - [ ] Oscillators: sine, polyBLEP saw/square, triangle; detune; noise **[oc for sine/noise]**
-- [ ] ADSR (amp + filter env), exponential segments **[oc]**
+  - [x] `src/dsp/oscillator.ts` 2026-11-10: sine, polyBLAMP triangle, polyBLEP
+        saw/square, one phase across wave changes. Measured at 1220 Hz, 48 kHz:
+        aliasing 13–16 dB below the sharp-edged waves (tests hold it above 10).
+  - [ ] detune (second oscillator), noise
+  - [x] Oscillator knobs on the test note, asked for by ashon 2026-11-10: Wave,
+        Octave, Semi, Fine, Level (`src/ui/Knob.tsx`, `OscillatorPanel.tsx`).
+        A knob turns by vertical drag (160 px end to end), double-tap resets
+        it, and the arrow, Page and Home/End keys move it. A knob with up to 8
+        stops marks each with a white dot (Wave, Octave; not Semi's 25).
+- [ ] ADSR (amp + filter env), exponential segments **[oc]**; pitch envelope; LFO
 - [ ] State-variable filter (LP/HP/BP) with resonance and env/keytrack amount
 - [ ] 8-voice allocator with oldest-note stealing and click-free release
-- [ ] Param smoothing, master gain, soft clipper
-- [ ] `params.ts` schema (single source) + normalized↔real mapping tests **[oc]**
+- [ ] Param smoothing, master gain, soft clipper (level smoothing done:
+      `src/dsp/smoother.ts`, one-pole, 5 ms)
+- [x] `params.ts` schema (single source) + normalized↔real mapping tests **[oc]**
+      (2026-11-10; osc params so far, more as the voice grows)
 - [ ] `scripts/render-wav.ts` (WAV writer **[oc]**) for listening checks
 - [ ] Node micro-benchmark: block render time for 8 voices (budget: one 128-frame
       block at 48 kHz = 2.67 ms; aim well under a third of that)
@@ -159,13 +207,24 @@ right, benchmark within budget.
 - [ ] Kill browser gestures on play surfaces: `touch-action: none`, no double-tap zoom,
       no text selection / iOS long-press callout, keep away from edge-swipe zones
 - [ ] Playwright smoke: page loads, start overlay unlocks, keys respond (mobile emulation)
+- [x] Output waveform display (`src/ui/Scope.tsx`), asked for by ashon
+      2026-11-10: AnalyserNode tap in the output path, rising-edge trigger
+      placed between samples (a whole-sample trigger shook a 440 Hz trace by
+      up to 1.5 px a frame; sub-sample, 0.1 px or less), one opaque canvas with
+      a pre-rendered grid, min/max decimation, no per-frame allocation, idle
+      when silent. Desktop Chrome, 3392×288: 0.08 ms a frame. Not used, on
+      purpose: `desynchronized` (an input-latency hint, no throughput gain, tearing risk)
+      and an OffscreenCanvas worker (the analyser lives on the main thread, so
+      every frame would be copied across for less work than it saves).
 
 **Exit:** 3+ finger chords play with no scrolling or zooming, UI stays smooth while
 dragging knobs during notes.
 
 ### M4 — Presets & PWA (M)
 
-- [ ] Factory presets (versioned JSON) + user presets in `localStorage`/IndexedDB
+- [ ] Factory presets (versioned JSON) + user presets in `localStorage`/IndexedDB:
+      a starter set across bass, lead, pad, pluck and a drum kit, all from the
+      one voice (§3, "Instruments are patches")
 - [ ] `vite-plugin-pwa`: manifest, icons, offline cache
 - [ ] Screen Wake Lock while the instrument is open (feature-detected)
 
@@ -174,6 +233,7 @@ dragging knobs during notes.
 ### M5 — The "loop" (L) — _needs decision §7.2_
 
 - [ ] Clock inside the worklet (sample-accurate), tempo, transport
+- [ ] Multiple Parts in the engine, one per track, each with its own Patch
 - [ ] Either a step sequencer (pattern loop) or a live loop recorder (record notes,
       overdub) — or both, sequenced in this order
 - [ ] Pattern save/load alongside presets

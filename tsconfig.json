@@ -12,5 +12,7 @@
     "skipLibCheck": true,
     "noEmit": true
   },
-  "include": ["src"]
+  "include": ["src"],
+  // The audio thread has its own globals (tsconfig.worklet.json)
+  "exclude": ["src/worklet"]
 }

@@ -1,45 +1,87 @@
+import { useSyncExternalStore } from 'react'
+import type { Engine } from './engine/engine'
 import type { PlatformReport } from './platform'
+import { DebugHud } from './ui/DebugHud'
+import { OscillatorPanel } from './ui/OscillatorPanel'
+import { PlatformChecks } from './ui/PlatformChecks'
+import { Scope, type ScopeStats } from './ui/Scope'
+import { TestPad } from './ui/TestPad'
 
-/** Why a missing feature can be fine, shown under its name when missing */
-const hints: Record<string, string> = {
-  'Audio Session API': 'iOS only: Android has no silent-switch mute',
-  'Web MIDI': 'Not in iOS Safari; MIDI stays optional',
-  'Screen Wake Lock': 'Optional: keeps the screen on while playing',
-}
+/** The test note is the tuning reference, A4: 440 Hz with the knobs at 0 */
+const TEST_NOTE = 69
+
+const page =
+  'flex h-full flex-col px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]'
 
 /**
- * The first screen until the engine exists (M1): opened on a phone, it shows
- * at a glance what the browser offers, starting with whether the page got a
- * secure context, without which there is no AudioWorklet.
+ * A start screen (what the browser offers, and the tap that may start
+ * audio), then the audio path's numbers, the output waveform and the
+ * oscillator's knobs above a pad that sounds a test note.
  */
-export function App({ platform }: { platform: PlatformReport }) {
+export function App({
+  platform,
+  engine,
+  onScopeStats,
+}: {
+  platform: PlatformReport
+  engine: Engine
+  onScopeStats?: (stats: ScopeStats) => void
+}) {
+  const snapshot = useSyncExternalStore(engine.subscribe, engine.getSnapshot)
+  const { state } = snapshot
+
+  if (state === 'idle' || state === 'starting' || state === 'failed') {
+    const failed = state === 'failed'
+    return (
+      <main className={`${page} items-center justify-center gap-6`}>
+        <h1 className="text-3xl font-semibold tracking-tight">Loopromeda</h1>
+        <PlatformChecks platform={platform} />
+        {failed && (
+          <p className="max-w-xs text-center text-sm break-words text-red-400 select-text">
+            {snapshot.error}
+          </p>
+        )}
+        <button
+          type="button"
+          disabled={state === 'starting'}
+          // A click, not pointerdown: on touch screens only the click
+          // counts as the user activation iOS needs to start audio
+          onClick={() => (failed ? location.reload() : void engine.start())}
+          className="w-full max-w-xs rounded-xl bg-emerald-500 px-6 py-4 text-lg font-semibold text-black disabled:opacity-50"
+        >
+          {failed
+            ? 'Reload'
+            : state === 'starting'
+              ? 'Starting…'
+              : 'Tap to start audio'}
+        </button>
+        <p className="max-w-xs text-center text-xs break-words text-zinc-500 select-text">
+          {platform.standalone ? 'Home screen · ' : ''}
+          {platform.userAgent}
+        </p>
+      </main>
+    )
+  }
+
   return (
-    <main className="flex min-h-full flex-col items-center justify-center gap-6 px-6 pt-[max(1.5rem,env(safe-area-inset-top))] pb-[max(1.5rem,env(safe-area-inset-bottom))]">
-      <h1 className="text-3xl font-semibold tracking-tight">Loopromeda</h1>
-      <ul className="w-full max-w-xs space-y-2 text-sm">
-        {Object.entries(platform.checks).map(([name, ok]) => (
-          <li
-            key={name}
-            className="flex justify-between gap-4 rounded-lg bg-white/5 px-4 py-3"
-          >
-            <span>
-              {name}
-              {!ok && hints[name] && (
-                <span className="block text-xs text-zinc-500">
-                  {hints[name]}
-                </span>
-              )}
-            </span>
-            <span className={ok ? 'text-emerald-400' : 'text-zinc-500'}>
-              {ok ? 'yes' : 'no'}
-            </span>
-          </li>
-        ))}
-      </ul>
-      <p className="max-w-xs text-center text-xs break-words text-zinc-500 select-text">
-        {platform.standalone ? 'Home screen · ' : ''}
-        {platform.userAgent}
-      </p>
+    <main className={`${page} gap-3`}>
+      <DebugHud engine={engine} snapshot={snapshot} />
+      <Scope engine={engine} onStats={onScopeStats} />
+      <OscillatorPanel engine={engine} />
+      <TestPad engine={engine} note={TEST_NOTE} label="Hold to play A4" />
+      {state !== 'running' && (
+        <button
+          type="button"
+          onClick={() =>
+            state === 'closed' ? location.reload() : void engine.resume()
+          }
+          className="fixed inset-0 bg-black/80 px-8 text-lg"
+        >
+          Audio is {state}.
+          <br />
+          {state === 'closed' ? 'Tap to reload' : 'Tap to resume'}
+        </button>
+      )}
     </main>
   )
 }

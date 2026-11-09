@@ -1,0 +1,230 @@
+import {
+  PARAMS,
+  clampValue,
+  defaultValues,
+  paramIndex,
+  type ParamId,
+} from '../state/params'
+import processorUrl from '../worklet/processor.ts?worker&url'
+import { PROCESSOR_NAME, type ToWorklet } from './protocol'
+
+/**
+ * The context's own states (Safari adds 'interrupted', for phone calls and
+ * other apps taking the audio) plus the engine's: not started yet, loading
+ * the worklet, failed to start.
+ */
+export type EngineState =
+  | 'idle'
+  | 'starting'
+  | 'running'
+  | 'suspended'
+  | 'interrupted'
+  | 'closed'
+  | 'failed'
+
+export interface EngineSnapshot {
+  readonly state: EngineState
+  readonly sampleRate?: number
+  /** Seconds the context's own processing adds (AudioContext.baseLatency) */
+  readonly baseLatency?: number
+  /** Seconds from the context's output to the speaker, as estimated */
+  readonly outputLatency?: number
+  readonly error?: string
+}
+
+/** Safari's Audio Session API (iOS 16.4+), not in TypeScript's DOM types */
+type AudioSessionNavigator = Navigator & { audioSession?: { type: string } }
+
+const seconds = (value: unknown): number | undefined =>
+  typeof value === 'number' && Number.isFinite(value) ? value : undefined
+
+/**
+ * Samples one waveform read returns (AnalyserNode.fftSize): 43 ms at 48 kHz,
+ * room for a display window plus a period to find a trigger in
+ */
+export const WAVEFORM_SIZE = 2048
+
+/**
+ * The page's audio: one AudioContext and one AudioWorkletNode, which runs
+ * all of the DSP (src/worklet). The main thread only sends it intents.
+ * Subscribe-and-snapshot, for useSyncExternalStore.
+ *
+ * It also holds the main thread's copy of every parameter value, so knobs
+ * can be set before the audio starts and a new worklet gets them all.
+ */
+export class Engine {
+  #context: AudioContext | undefined
+  #node: AudioWorkletNode | undefined
+  /** Taps the output for displays; passes the signal through unchanged */
+  #analyser: AnalyserNode | undefined
+  #snapshot: EngineSnapshot = { state: 'idle' }
+  /** Every parameter's value, in PARAMS order */
+  readonly #values = defaultValues()
+  readonly #listeners = new Set<() => void>()
+
+  get snapshot(): EngineSnapshot {
+    return this.#snapshot
+  }
+
+  readonly getSnapshot = (): EngineSnapshot => this.#snapshot
+
+  readonly subscribe = (listener: () => void): (() => void) => {
+    this.#listeners.add(listener)
+    return () => this.#listeners.delete(listener)
+  }
+
+  /**
+   * Starts the audio. Call it from a click: browsers, iOS most strictly, let
+   * audio start only inside a user activation, so everything up to the first
+   * await below runs synchronously within the click.
+   */
+  async start(): Promise<void> {
+    if (this.#context) return this.resume()
+
+    // iOS: play through the silent switch, as a music app does
+    const nav = navigator as AudioSessionNavigator
+    if (nav.audioSession) nav.audioSession.type = 'playback'
+
+    let context: AudioContext
+    try {
+      context = new AudioContext({ latencyHint: 'interactive' })
+    } catch (error) {
+      this.#fail(error)
+      return
+    }
+    this.#context = context
+    const resumed = context.resume()
+    context.addEventListener('statechange', this.refresh)
+    document.addEventListener('visibilitychange', this.#onVisibility)
+    this.refresh()
+
+    try {
+      await context.audioWorklet.addModule(processorUrl)
+      const node = new AudioWorkletNode(context, PROCESSOR_NAME, {
+        numberOfInputs: 0,
+        outputChannelCount: [1],
+      })
+      // In the path rather than beside it: an analyser that does not reach
+      // the destination is not guaranteed to be rendered in every browser
+      const analyser = new AnalyserNode(context, {
+        fftSize: WAVEFORM_SIZE,
+        smoothingTimeConstant: 0,
+      })
+      node.connect(analyser).connect(context.destination)
+      this.#analyser = analyser
+      this.#node = node
+      // The worklet starts from the defaults: catch it up, ahead of any note
+      PARAMS.forEach((spec, index) =>
+        this.#post({ t: 'param', id: spec.id, value: this.#values[index] ?? 0 })
+      )
+      await resumed
+    } catch (error) {
+      this.#fail(error)
+      return
+    }
+    this.refresh()
+  }
+
+  /**
+   * Resumes a suspended or interrupted context. iOS may refuse outside a
+   * click; the state then stays as it was and the UI offers a tap.
+   */
+  async resume(): Promise<void> {
+    const context = this.#context
+    if (!context || context.state === 'closed') return
+    try {
+      await context.resume()
+    } catch {
+      // Still suspended: the state shows it
+    }
+    this.refresh()
+  }
+
+  noteOn(id: number, note: number, velocity = 1): void {
+    this.#post({ t: 'noteOn', id, note, velocity })
+  }
+
+  noteOff(id: number): void {
+    this.#post({ t: 'noteOff', id })
+  }
+
+  panic(): void {
+    this.#post({ t: 'panic' })
+  }
+
+  /** A parameter's current value, in its own units */
+  getParam(id: ParamId): number {
+    return this.#values[paramIndex(id)] ?? 0
+  }
+
+  /**
+   * Sets a parameter, clamped to its range and snapped to its steps, and
+   * sends it to the audio thread if that changed it
+   */
+  setParam(id: ParamId, value: number): void {
+    const index = paramIndex(id)
+    const spec = PARAMS[index]
+    if (!spec) return
+    const next = clampValue(spec, value)
+    if (next === this.#values[index]) return
+    this.#values[index] = next
+    this.#post({ t: 'param', id, value: next })
+  }
+
+  /**
+   * Copies the latest WAVEFORM_SIZE output samples into `into`, oldest
+   * first. False (and `into` untouched) until the engine has started.
+   */
+  readWaveform(into: Float32Array<ArrayBuffer>): boolean {
+    if (!this.#analyser) return false
+    this.#analyser.getFloatTimeDomainData(into)
+    return true
+  }
+
+  /**
+   * Re-reads the context. State changes come with events; outputLatency
+   * moves without one, so a display polls this.
+   */
+  readonly refresh = (): void => {
+    const context = this.#context
+    if (!context || this.#snapshot.state === 'failed') return
+    this.#set({
+      // Until the worklet is loaded, a running context has nothing to play
+      state: this.#node ? (context.state as EngineState) : 'starting',
+      sampleRate: context.sampleRate,
+      baseLatency: seconds(context.baseLatency),
+      outputLatency: seconds(context.outputLatency),
+    })
+  }
+
+  readonly #onVisibility = (): void => {
+    if (document.visibilityState === 'visible') void this.resume()
+  }
+
+  #post(message: ToWorklet): void {
+    this.#node?.port.postMessage(message)
+  }
+
+  #fail(error: unknown): void {
+    this.#set({
+      ...this.#snapshot,
+      state: 'failed',
+      error:
+        error instanceof Error ? `${error.name}: ${error.message}` : `${error}`,
+    })
+  }
+
+  #set(next: EngineSnapshot): void {
+    const now = this.#snapshot
+    if (
+      next.state === now.state &&
+      next.sampleRate === now.sampleRate &&
+      next.baseLatency === now.baseLatency &&
+      next.outputLatency === now.outputLatency &&
+      next.error === now.error
+    )
+      return
+    this.#snapshot = next
+    for (const listener of this.#listeners) listener()
+  }
+}

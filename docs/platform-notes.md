@@ -22,4 +22,15 @@ findings are added by hand during the M1 checklist.
 - Client Hints report `mobile: false` on this foldable (large inner screen),
   so layout must not branch on "mobile"; size the play surface from the
   viewport, and expect the aspect ratio to change on fold/unfold (M3).
-- Audio behavior (unlock, latency, glitches): not tested yet (M1).
+- Audio start (M1 test tone), 2026-11-09: the engine went from the tap to
+  `running` in 41 ms. Reported at 48000 Hz: `baseLatency` 3 ms,
+  `outputLatency` 0 ms at first and 24 ms two seconds later (it settles once
+  audio flows), so about 27 ms from the context to the speaker, before touch
+  input latency. Whether the tone sounded, and lock / background / other-app
+  behavior: not checked yet.
+
+## Desktop baseline: macOS · Chrome (desktop)
+
+2026-11-09, `127.0.0.1:5173` (dev) and `vite preview` (production build): the
+worklet loads in both; 48000 Hz, `baseLatency` 5.3 ms, `outputLatency` 32 ms
+(built-in output). No console errors.

@@ -35,21 +35,39 @@ interface UADataLike {
 }
 
 /**
- * Dev only: hands the report to the dev server, which keeps it in
- * device-reports.jsonl (scripts/vite-device-report.ts), so what a phone
- * offers is on record without anyone retyping it. On Chromium it adds the
- * device model and OS version, which the reduced user agent string hides
- * ("Android 10; K" on every Android phone).
+ * What a report is about: the browser on page load, the audio engine on
+ * each state change (started, suspended by a lock screen, resumed, ...), or
+ * what the waveform display costs to draw
  */
-export async function sendReport(report: PlatformReport): Promise<void> {
+export type ReportKind = 'platform' | 'engine' | 'scope'
+
+/**
+ * Dev only: hands a report to the dev server, which keeps it in
+ * device-reports.jsonl (scripts/vite-device-report.ts), so what a phone
+ * did is on record without anyone retyping it. Platform reports add, on
+ * Chromium, the device model and OS version, which the reduced user agent
+ * string hides ("Android 10; K" on every Android phone).
+ */
+export async function sendReport(
+  kind: ReportKind,
+  data: object
+): Promise<void> {
   const nav = navigator as Navigator & { userAgentData?: UADataLike }
-  const device = await nav.userAgentData
-    ?.getHighEntropyValues(['model', 'platformVersion', 'fullVersionList'])
-    .catch(() => undefined)
+  const device =
+    kind === 'platform'
+      ? await nav.userAgentData
+          ?.getHighEntropyValues([
+            'model',
+            'platformVersion',
+            'fullVersionList',
+          ])
+          .catch(() => undefined)
+      : undefined
+  const report = { kind, userAgent: navigator.userAgent, ...data, device }
   await fetch(`${import.meta.env.BASE_URL}__device-report`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ ...report, device }),
+    body: JSON.stringify(report),
     keepalive: true,
   }).catch(() => {
     // A report is a convenience; the page works without one
