@@ -54,16 +54,22 @@ export class VoiceAllocator {
     return index
   }
 
-  /** The voice key held, now released; -1 if key held none */
-  noteOff(key: number): number {
+  /** The voice key holds, or -1 if it holds none */
+  voiceOf(key: number): number {
     for (let i = 0; i < this.#voices.length; i++) {
-      if (this.#held[i] === 1 && this.#key[i] === key) {
-        this.#held[i] = 0
-        this.#stamp[i] = ++this.#clock
-        return i
-      }
+      if (this.#held[i] === 1 && this.#key[i] === key) return i
     }
     return -1
+  }
+
+  /** The voice key held, now released; -1 if key held none */
+  noteOff(key: number): number {
+    const index = this.voiceOf(key)
+    if (index >= 0) {
+      this.#held[index] = 0
+      this.#stamp[index] = ++this.#clock
+    }
+    return index
   }
 
   /** Every key lets go; the caller releases the voices */

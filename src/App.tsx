@@ -1,14 +1,18 @@
 import { useState, useSyncExternalStore } from 'react'
 import type { Engine } from './engine/engine'
+import type { BenchReport } from './engine/protocol'
 import type { PlatformReport } from './platform'
 import { EnvelopePanel } from './ui/EnvelopePanel'
 import { FilterPanel } from './ui/FilterPanel'
 import { Keyboard } from './ui/Keyboard'
+import { LfoPanel } from './ui/LfoPanel'
+import { ModPanel } from './ui/ModPanel'
 import { OscillatorPanel } from './ui/OscillatorPanel'
 import { PlatformChecks } from './ui/PlatformChecks'
 import { Scope, type ScopeStats } from './ui/Scope'
 import { StatusBar } from './ui/StatusBar'
 import { Tabs } from './ui/Tabs'
+import { VoicePanel } from './ui/VoicePanel'
 
 const page =
   'flex h-full flex-col px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]'
@@ -22,10 +26,13 @@ export function App({
   platform,
   engine,
   onScopeStats,
+  onBench,
 }: {
   platform: PlatformReport
   engine: Engine
   onScopeStats?: (stats: ScopeStats) => void
+  /** Dev only: offers Measure CPU on the VOICE tab and gets its results */
+  onBench?: (report: BenchReport) => void
 }) {
   const snapshot = useSyncExternalStore(engine.subscribe, engine.getSnapshot)
   const { state } = snapshot
@@ -82,6 +89,13 @@ export function App({
             id: 'filter',
             label: 'FILTER',
             panel: <FilterPanel engine={engine} />,
+          },
+          { id: 'lfo', label: 'LFO', panel: <LfoPanel engine={engine} /> },
+          { id: 'mod', label: 'MOD', panel: <ModPanel engine={engine} /> },
+          {
+            id: 'voice',
+            label: 'VOICE',
+            panel: <VoicePanel engine={engine} onBench={onBench} />,
           },
         ]}
       />

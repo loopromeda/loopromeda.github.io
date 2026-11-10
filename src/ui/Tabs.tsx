@@ -13,10 +13,12 @@ export interface Tab {
  * The arrow, Home and End keys move between tabs (WAI-ARIA tabs pattern).
  *
  * From the md breakpoint (768 px) the tabs go and the panels stand side by
- * side, all visible: a wide screen is short, and the keyboard needs the
+ * side in one row: a wide screen is short, and the keyboard needs the
  * height (the storyboard's Wide board). Each panel keeps at least 16rem, so
- * its knobs stay big enough to turn; ones that do not fit wrap to another
- * row. CSS only, so each panel, and each knob in it, is still mounted once.
+ * its knobs stay big enough to turn; the row scrolls sideways, a panel at a
+ * time, past the ones that do not fit, rather than wrap into a second row
+ * that would take the keyboard's height. CSS only, so each panel, and each
+ * knob in it, is still mounted once.
  */
 export function Tabs({
   tabs,
@@ -68,14 +70,14 @@ export function Tabs({
           )
         })}
       </div>
-      <div className="grid md:grid-cols-[repeat(auto-fit,minmax(16rem,1fr))] md:gap-3">
+      <div className="grid md:snap-x md:snap-mandatory md:auto-cols-[minmax(16rem,1fr)] md:grid-flow-col md:gap-3 md:overflow-x-auto md:overscroll-x-contain">
         {tabs.map((tab) => (
           <div
             key={tab.id}
             id={`panel-${tab.id}`}
             role="tabpanel"
             aria-labelledby={`tab-${tab.id}`}
-            className={`col-start-1 row-start-1 md:visible md:col-auto md:row-auto ${tab.id === active ? '' : 'invisible'}`}
+            className={`col-start-1 row-start-1 md:visible md:col-auto md:row-auto md:snap-start ${tab.id === active ? '' : 'invisible'}`}
           >
             {tab.panel}
           </div>

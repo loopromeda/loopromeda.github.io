@@ -109,6 +109,42 @@ export function keyAt(
   return whiteNote(start, white)
 }
 
+/** The velocity of a touch at a key's back edge; its front edge plays 1 */
+export const MIN_VELOCITY = 0.2
+
+/** True for the black keys' notes: C#, D#, F#, G#, A# */
+export function isBlack(note: number): boolean {
+  const semitone = ((note % 12) + 12) % 12
+  return (
+    semitone === 1 ||
+    semitone === 3 ||
+    semitone === 6 ||
+    semitone === 8 ||
+    semitone === 10
+  )
+}
+
+/**
+ * How hard a touch at y (down the keyboard, 0..1) plays note: softest at
+ * the key's back edge, hardest at its front edge (the bottom of a white
+ * key, BLACK_LENGTH down for a black one), as on a piano
+ */
+export function velocityAt(note: number, y: number): number {
+  const length = isBlack(note) ? BLACK_LENGTH : 1
+  const along = Math.min(Math.max(y / length, 0), 1)
+  return MIN_VELOCITY + (1 - MIN_VELOCITY) * along
+}
+
+/**
+ * The Slide of a finger that pressed at startY and is at y now (both down
+ * the keyboard, 0..1): positive up, -1..1, half the keyboard's height for
+ * the whole way
+ */
+export function slideFrom(startY: number, y: number): number {
+  const slide = (startY - y) * 2
+  return slide > -1 ? (slide < 1 ? slide : 1) : -1
+}
+
 /** The note of white key i, counting from C in octave start */
 function whiteNote(start: number, i: number): number {
   return cNote(start + Math.floor(i / 7)) + (WHITE_SEMITONES[i % 7] as number)

@@ -36,10 +36,11 @@ interface UADataLike {
 
 /**
  * What a report is about: the browser on page load, the audio engine on
- * each state change (started, suspended by a lock screen, resumed, ...), or
- * what the waveform display costs to draw
+ * each state change (started, suspended by a lock screen, resumed, ...),
+ * what the waveform display costs to draw, or the audio thread's render
+ * time, measured from the VOICE tab
  */
-export type ReportKind = 'platform' | 'engine' | 'scope'
+export type ReportKind = 'platform' | 'engine' | 'scope' | 'bench'
 
 /**
  * Dev only: hands a report to the dev server, which keeps it in

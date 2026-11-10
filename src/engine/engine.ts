@@ -6,7 +6,12 @@ import {
   type ParamId,
 } from '../state/params'
 import processorUrl from '../worklet/processor.ts?worker&url'
-import { PROCESSOR_NAME, type ToWorklet } from './protocol'
+import {
+  PROCESSOR_NAME,
+  type BenchReport,
+  type FromWorklet,
+  type ToWorklet,
+} from './protocol'
 
 /**
  * The context's own states (Safari adds 'interrupted', for phone calls and
@@ -62,6 +67,8 @@ export class Engine {
   readonly #values = defaultValues()
   readonly #listeners = new Set<() => void>()
   readonly #paramListeners = new Set<(id: ParamId, value: number) => void>()
+  /** Who waits for the measurement under way, answered in order */
+  readonly #benchWaiting: ((report: BenchReport) => void)[] = []
 
   get snapshot(): EngineSnapshot {
     return this.#snapshot
@@ -111,6 +118,8 @@ export class Engine {
         fftSize: WAVEFORM_SIZE,
         smoothingTimeConstant: 0,
       })
+      node.port.onmessage = (event: MessageEvent<FromWorklet>) =>
+        this.#receive(event.data)
       node.connect(analyser).connect(context.destination)
       this.#analyser = analyser
       this.#node = node
@@ -149,8 +158,27 @@ export class Engine {
     this.#post({ t: 'noteOff', id })
   }
 
+  /** Touch id's finger slid up its key (or down, below 0), -1..1 */
+  slide(id: number, value: number): void {
+    this.#post({ t: 'slide', id, value })
+  }
+
   panic(): void {
     this.#post({ t: 'panic' })
+  }
+
+  /**
+   * Times the voice's heaviest patch (src/dsp/stress.ts) at each voice
+   * count on the audio thread itself, and resolves with how long a block
+   * took. The audio stops while it runs, about a third of a second a
+   * count. Undefined if the audio has not started.
+   */
+  bench(voices: readonly number[]): Promise<BenchReport | undefined> {
+    if (!this.#node) return Promise.resolve(undefined)
+    return new Promise((resolve) => {
+      this.#benchWaiting.push(resolve)
+      this.#post({ t: 'bench', voices })
+    })
   }
 
   /** A parameter's current value, in its own units */
@@ -213,6 +241,13 @@ export class Engine {
 
   readonly #onVisibility = (): void => {
     if (document.visibilityState === 'visible') void this.resume()
+  }
+
+  #receive(message: FromWorklet): void {
+    if (message.t === 'bench') {
+      const { results, clock } = message
+      this.#benchWaiting.shift()?.({ results, clock })
+    }
   }
 
   #post(message: ToWorklet): void {

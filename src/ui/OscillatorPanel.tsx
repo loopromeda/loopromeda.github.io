@@ -4,41 +4,51 @@ import type { ParamId } from '../state/params'
 import { Knob } from './Knob'
 import { Switch } from './Switch'
 
-/** The sound sources, one page each; their levels mix into the filter */
-const SOURCES = [
+/**
+ * The panel's pages: each oscillator's tone, then the mixer, where the
+ * levels, ring modulation and FM sit. A button's dot lights while its
+ * levels are up.
+ */
+const PAGES = [
   {
     id: 'osc1',
     label: '1',
-    level: 'osc1.level',
-    knobs: ['osc1.wave', 'osc1.octave', 'osc1.semi', 'osc1.fine', 'osc1.level'],
+    lit: ['osc1.level'],
+    knobs: ['osc1.wave', 'osc1.octave', 'osc1.semi', 'osc1.fine', 'osc1.width'],
   },
   {
     id: 'osc2',
     label: '2',
-    level: 'osc2.level',
-    knobs: ['osc2.wave', 'osc2.octave', 'osc2.semi', 'osc2.fine', 'osc2.level'],
+    lit: ['osc2.level'],
+    knobs: ['osc2.wave', 'osc2.octave', 'osc2.semi', 'osc2.fine', 'osc2.width'],
   },
   {
-    id: 'noise',
-    label: 'Noise',
-    level: 'noise.level',
-    knobs: ['noise.level'],
+    id: 'mix',
+    label: 'Mix',
+    lit: ['noise.level', 'ring.level', 'fm.amount'],
+    knobs: [
+      'osc1.level',
+      'osc2.level',
+      'noise.level',
+      'ring.level',
+      'fm.amount',
+    ],
   },
 ] as const satisfies readonly {
   id: string
   label: string
-  level: ParamId
+  lit: readonly ParamId[]
   knobs: readonly ParamId[]
 }[]
 
 /**
- * The sound sources: two oscillators and noise, a page each, picked above.
- * A source whose level is up shows a lit dot on its button, so one sounding
- * from a hidden page is still seen.
+ * The sound sources: two oscillators (Width is the square's pulse width)
+ * and a mixer for them, noise, their ring product and how far oscillator 2
+ * frequency-modulates oscillator 1, a page each, picked above
  */
 export function OscillatorPanel({ engine }: { engine: Engine }) {
   const [shown, setShown] = useState(0)
-  const source = SOURCES[shown] ?? SOURCES[0]
+  const page = PAGES[shown] ?? PAGES[0]
   return (
     <section
       aria-labelledby="oscillator-heading"
@@ -53,14 +63,14 @@ export function OscillatorPanel({ engine }: { engine: Engine }) {
         </h2>
         <Switch
           engine={engine}
-          label="Source shown"
-          options={SOURCES}
+          label="Page shown"
+          options={PAGES}
           shown={shown}
           onShow={setShown}
         />
       </div>
       <div className="mt-auto grid grid-cols-5 justify-items-center gap-2">
-        {source.knobs.map((id) => (
+        {page.knobs.map((id) => (
           <Knob key={id} engine={engine} id={id} />
         ))}
       </div>

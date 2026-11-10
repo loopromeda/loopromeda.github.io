@@ -39,15 +39,18 @@ Before calling a change done: `pnpm typecheck && pnpm lint && pnpm format:check 
 ## Layout
 
 ```
-src/dsp/      pure DSP (oscillators, envelopes, filters, voices); synth.ts
-              is the whole instrument: voice pool, allocator, mix
+src/dsp/      pure DSP (oscillators, envelopes, LFOs, filters, voices);
+              mod.ts numbers the matrix's sources and destinations;
+              synth.ts is the whole instrument: voice pool, allocator,
+              mono/legato, matrix, mix
 src/worklet/  the AudioWorkletProcessor around src/dsp; own globals and
               tsconfig (tsconfig.worklet.json), loaded via ?worker&url
 src/engine/   AudioContext lifecycle, unlock, node wiring; protocol.ts is
               the message types both threads share (plain data only)
 src/state/    params.ts: the parameter schema; presets come in M4
 src/viz/      pure display math (scope trigger and decimation, envelope
-              outline, filter response, keyboard geometry and hit-testing)
+              and LFO outlines, filter response, keyboard geometry,
+              hit-testing, velocity and Slide from a touch's position)
 src/ui/       React components; Scope.tsx draws the output waveform,
               Knob.tsx turns one parameter, Keyboard.tsx plays notes
 scripts/      dev tooling: tailnet.sh, the device-report Vite plugin
@@ -55,7 +58,9 @@ scripts/      dev tooling: tailnet.sh, the device-report Vite plugin
 
 Dev-only device reports: every page load, every audio state change and,
 every 5 s while it draws, the waveform display's frame cost on a phone are
-appended to `device-reports.jsonl` (gitignored). Read it after a
+appended to `device-reports.jsonl` (gitignored), and so is the audio
+thread's render time when the VOICE tab's Measure CPU is tapped (the
+heaviest patch, `src/dsp/stress.ts`, at 8 to 32 voices). Read it after a
 device test instead of asking for numbers to be retyped.
 
 ## Repository

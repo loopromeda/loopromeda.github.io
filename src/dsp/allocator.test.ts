@@ -83,6 +83,17 @@ describe('VoiceAllocator', () => {
     expect(allocator.noteOn(7)).toBe(a)
   })
 
+  it('tells which voice a key holds', () => {
+    const allocator = new VoiceAllocator(voices(3))
+    const a = allocator.noteOn(1)
+    const b = allocator.noteOn(2)
+    expect(allocator.voiceOf(1)).toBe(a)
+    expect(allocator.voiceOf(2)).toBe(b)
+    expect(allocator.voiceOf(3)).toBe(-1)
+    allocator.noteOff(1)
+    expect(allocator.voiceOf(1)).toBe(-1)
+  })
+
   it('lets every key go at once', () => {
     const allocator = new VoiceAllocator(voices(3))
     allocator.noteOn(1)

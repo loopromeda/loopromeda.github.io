@@ -12,6 +12,8 @@ import {
   keyAt,
   keyboardLayout,
   noteName,
+  slideFrom,
+  velocityAt,
 } from '../viz/keyboard'
 
 /** The keyboard starts on C1 or higher, and its top C is C8 or lower */
@@ -46,15 +48,23 @@ const COMPUTER_KEYS: Readonly<Record<string, number>> = {
 }
 /** Computer keys' engine ids: this minus the semitone, below any pointerId */
 const COMPUTER_ID = -1000
+/** A Slide change smaller than this is not worth a message */
+const SLIDE_STEP = 1 / 256
 
 /**
  * Who holds which note: each touch (by pointerId) and computer key holds one.
- * Lights the key elements directly, so a press never re-renders React.
+ * Lights the key elements directly, so a press never re-renders React. A
+ * touch also carries the velocity it pressed with and where it pressed, so
+ * its finger sliding up or down the keys sends Slide.
  */
 class Hands {
   readonly #engine: Engine
   /** The note each id holds */
   readonly #notes = new Map<number, number>()
+  /** Each touch's velocity, where it pressed (0..1 down the keys), its Slide */
+  readonly #velocities = new Map<number, number>()
+  readonly #starts = new Map<number, number>()
+  readonly #slides = new Map<number, number>()
   /** How many ids hold each note: two fingers can share a key */
   readonly #counts = new Map<number, number>()
   /** The key elements on screen, by note */
@@ -68,14 +78,39 @@ class Hands {
     return this.#notes.has(id)
   }
 
-  /** id plays note; an id already holding another note moves to it */
-  play(id: number, note: number): void {
+  /**
+   * id plays note (at full velocity, unless pressed with one); an id
+   * already holding another note moves to it. True if the note changed.
+   */
+  play(id: number, note: number): boolean {
     const was = this.#notes.get(id)
-    if (was === note) return
+    if (was === note) return false
     if (was !== undefined) this.#light(was, -1)
     this.#notes.set(id, note)
     this.#light(note, 1)
-    this.#engine.noteOn(id, note)
+    this.#engine.noteOn(id, note, this.#velocities.get(id) ?? 1)
+    return true
+  }
+
+  /** A touch presses note, at y down the keys (0..1): lower plays louder */
+  press(id: number, note: number, y: number): void {
+    this.#velocities.set(id, velocityAt(note, y))
+    this.#starts.set(id, y)
+    this.#slides.set(id, 0)
+    this.play(id, note)
+  }
+
+  /** A touch's finger is now at y, over note */
+  slideTo(id: number, note: number, y: number): void {
+    const moved = this.play(id, note)
+    const start = this.#starts.get(id)
+    if (start === undefined) return
+    const slide = slideFrom(start, y)
+    // A new note starts with no Slide: tell it the finger's
+    if (moved || Math.abs(slide - (this.#slides.get(id) ?? 0)) >= SLIDE_STEP) {
+      this.#slides.set(id, slide)
+      this.#engine.slide(id, slide)
+    }
   }
 
   /** id lets go */
@@ -83,6 +118,9 @@ class Hands {
     const was = this.#notes.get(id)
     if (was === undefined) return
     this.#notes.delete(id)
+    this.#velocities.delete(id)
+    this.#starts.delete(id)
+    this.#slides.delete(id)
     this.#light(was, -1)
     this.#engine.noteOff(id)
   }
@@ -178,14 +216,12 @@ export function Keyboard({ engine }: { engine: Engine }) {
     }
   }, [hands, first, highest])
 
-  const noteAt = (event: PointerEvent<HTMLDivElement>) => {
+  /** Where a touch is, across and down the keys (0..1), and the key there */
+  const pointAt = (event: PointerEvent<HTMLDivElement>) => {
     const box = boxRef.current ?? event.currentTarget.getBoundingClientRect()
-    return keyAt(
-      (event.clientX - box.left) / box.width,
-      (event.clientY - box.top) / box.height,
-      first,
-      octaves
-    )
+    const x = (event.clientX - box.left) / box.width
+    const y = (event.clientY - box.top) / box.height
+    return { y, note: keyAt(x, y, first, octaves) }
   }
 
   const down = (event: PointerEvent<HTMLDivElement>) => {
@@ -193,11 +229,14 @@ export function Keyboard({ engine }: { engine: Engine }) {
     // Keep this finger's moves even when it slides off the keyboard
     event.currentTarget.setPointerCapture(event.pointerId)
     boxRef.current = event.currentTarget.getBoundingClientRect()
-    hands.play(event.pointerId, noteAt(event))
+    const { y, note } = pointAt(event)
+    hands.press(event.pointerId, note, y)
   }
 
   const move = (event: PointerEvent<HTMLDivElement>) => {
-    if (hands.holds(event.pointerId)) hands.play(event.pointerId, noteAt(event))
+    if (!hands.holds(event.pointerId)) return
+    const { y, note } = pointAt(event)
+    hands.slideTo(event.pointerId, note, y)
   }
 
   // pointerup is followed by lostpointercapture; stop() ignores the second

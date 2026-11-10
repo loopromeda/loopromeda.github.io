@@ -5,15 +5,15 @@ import type { ParamId } from '../state/params'
 export interface SwitchOption {
   id: string
   label: string
-  /** A level: while it is above 0 the option shows a lit dot */
-  level?: ParamId
+  /** Levels or amounts: while any is not 0 the option shows a lit dot */
+  lit?: readonly ParamId[]
 }
 
 /**
  * A row of buttons picking which page of a panel shows, one pressed at a
- * time. An option with a level lights a dot while that level is above 0,
- * so a sound source on a hidden page is still seen to sound; the dots
- * follow the engine directly, without re-rendering React.
+ * time. An option with levels lights a dot while any of them is not 0, so
+ * a sound source on a hidden page is still seen to sound; the dots follow
+ * the engine directly, without re-rendering React.
  */
 export function Switch({
   engine,
@@ -32,15 +32,16 @@ export function Switch({
 
   useLayoutEffect(() => {
     const light = (index: number) => {
-      const level = options[index]?.level
+      const lit = options[index]?.lit
       const dot = dotsRef.current[index]
-      if (!level || !dot) return
-      dot.dataset.on = engine.getParam(level) > 0 ? 'true' : 'false'
+      if (!lit || !dot) return
+      const on = lit.some((id) => engine.getParam(id) !== 0)
+      dot.dataset.on = on ? 'true' : 'false'
     }
     options.forEach((_, index) => light(index))
     return engine.onParam((id) => {
       options.forEach((option, index) => {
-        if (option.level === id) light(index)
+        if (option.lit?.includes(id)) light(index)
       })
     })
   }, [engine, options])
@@ -60,7 +61,7 @@ export function Switch({
           className="flex h-7 items-center gap-1.5 px-3 text-[11px] font-semibold tracking-wider text-zinc-400 aria-pressed:bg-white/10 aria-pressed:text-white"
         >
           {option.label}
-          {option.level && (
+          {option.lit && (
             <span
               ref={(dot) => {
                 dotsRef.current[index] = dot

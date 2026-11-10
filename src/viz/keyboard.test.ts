@@ -2,10 +2,14 @@ import { describe, expect, it } from 'vitest'
 import {
   BLACK_LENGTH,
   BLACK_WIDTH,
+  MIN_VELOCITY,
   cNote,
+  isBlack,
   keyAt,
   keyboardLayout,
   noteName,
+  slideFrom,
+  velocityAt,
   whiteCount,
 } from './keyboard'
 
@@ -105,5 +109,49 @@ describe('keyAt', () => {
       const y = key.black ? high : low
       expect(keyAt(key.left + key.width / 2, y, 2, 3)).toBe(key.note)
     }
+  })
+})
+
+describe('velocityAt', () => {
+  it('plays softest at the back of a white key, hardest at its front', () => {
+    expect(velocityAt(60, 0)).toBeCloseTo(MIN_VELOCITY, 12)
+    expect(velocityAt(60, 0.5)).toBeCloseTo((MIN_VELOCITY + 1) / 2, 12)
+    expect(velocityAt(60, 1)).toBe(1)
+  })
+
+  it('measures a black key along its own, shorter length', () => {
+    expect(velocityAt(61, BLACK_LENGTH)).toBe(1)
+    expect(velocityAt(61, BLACK_LENGTH / 2)).toBeCloseTo(
+      (MIN_VELOCITY + 1) / 2,
+      12
+    )
+  })
+
+  it('stays within its range off the keyboard', () => {
+    expect(velocityAt(60, -0.2)).toBe(MIN_VELOCITY)
+    expect(velocityAt(61, 0.9)).toBe(1)
+  })
+})
+
+describe('isBlack', () => {
+  it('knows the black keys in any octave', () => {
+    const blacks = [1, 3, 6, 8, 10]
+    for (let note = -12; note < 24; note++) {
+      expect(isBlack(note)).toBe(blacks.includes(((note % 12) + 12) % 12))
+    }
+  })
+})
+
+describe('slideFrom', () => {
+  it('is 0 where the finger pressed, positive above it', () => {
+    expect(slideFrom(0.6, 0.6)).toBe(0)
+    expect(slideFrom(0.6, 0.35)).toBeCloseTo(0.5, 12)
+    expect(slideFrom(0.6, 0.85)).toBeCloseTo(-0.5, 12)
+  })
+
+  it('reaches its ends half the keyboard away, and stops there', () => {
+    expect(slideFrom(0.75, 0.25)).toBe(1)
+    expect(slideFrom(0.75, 0)).toBe(1)
+    expect(slideFrom(0, 1)).toBe(-1)
   })
 })

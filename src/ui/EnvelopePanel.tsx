@@ -25,6 +25,16 @@ const ENVELOPES = [
       'filterEnv.release',
     ],
   },
+  {
+    id: 'mod',
+    label: 'Mod',
+    stages: [
+      'modEnv.attack',
+      'modEnv.decay',
+      'modEnv.sustain',
+      'modEnv.release',
+    ],
+  },
 ] as const satisfies readonly { id: string; label: string; stages: Stages }[]
 
 /** The outline's drawing box; the SVG stretches it to the panel's width */
@@ -34,8 +44,9 @@ const HEIGHT = 56
 const PAD = 3
 
 /**
- * The envelopes: the amp's (how loud over a note) or the filter's (how far
- * it opens), picked above, with its outline over its four knobs
+ * The envelopes: the amp's (how loud over a note), the filter's (how far
+ * it opens) or the mod envelope (whatever the matrix routes it to: a
+ * pitch drop for a kick), picked above, with its outline over its knobs
  */
 export function EnvelopePanel({ engine }: { engine: Engine }) {
   const [shown, setShown] = useState(0)

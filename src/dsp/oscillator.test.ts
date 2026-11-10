@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { Oscillator, SAW, SINE, SQUARE, TRIANGLE, WAVES } from './oscillator'
+import {
+  MAX_WIDTH,
+  MIN_WIDTH,
+  Oscillator,
+  SAW,
+  SINE,
+  SQUARE,
+  TRIANGLE,
+  WAVES,
+} from './oscillator'
 
 const SAMPLE_RATE = 48000
 const SHAPES = [
@@ -177,5 +186,131 @@ describe('Oscillator', () => {
     oscillator.process(out, 0, SAW)
     expect(new Set(out).size).toBe(1)
     expect(oscillator.phase).toBe(0.75)
+  })
+
+  it('plays a square of any pulse width, centred on 0', () => {
+    for (const width of [0.1, 0.25, 0.7]) {
+      const oscillator = new Oscillator(SAMPLE_RATE)
+      oscillator.width = width
+      // 480 Hz: 100 samples a cycle, ten whole cycles
+      const out = new Float32Array(1000)
+      oscillator.process(out, 480, SQUARE)
+      const high = out.filter((v) => v > 0).length / out.length
+      expect(high).toBeCloseTo(width, 1)
+      const mean = out.reduce((sum, v) => sum + v, 0) / out.length
+      expect(Math.abs(mean)).toBeLessThan(1e-6)
+    }
+  })
+
+  it('keeps the pulse width clear of 0 and 1', () => {
+    const narrowest = new Oscillator(SAMPLE_RATE)
+    narrowest.width = -1
+    const clamped = new Oscillator(SAMPLE_RATE)
+    clamped.width = MIN_WIDTH
+    const a = new Float32Array(500)
+    const b = new Float32Array(500)
+    narrowest.process(a, 480, SQUARE)
+    clamped.process(b, 480, SQUARE)
+    expect(a).toEqual(b)
+    narrowest.width = 2
+    clamped.width = MAX_WIDTH
+    narrowest.process(a, 480, SQUARE)
+    clamped.process(b, 480, SQUARE)
+    expect(a).toEqual(b)
+  })
+
+  it.each(SHAPES)('renders the %s per sample as process does', (_, wave) => {
+    const steady = render(wave, 523.25, 512)
+    const increments = new Float32Array(512).fill(523.25 / SAMPLE_RATE)
+    const out = new Float32Array(512)
+    new Oscillator(SAMPLE_RATE).render(out, increments, wave)
+    // The per-sample steps are float32, so the phase drifts a hair
+    for (let i = 0; i < out.length; i++) {
+      expect(out[i]).toBeCloseTo(steady[i] as number, 3)
+    }
+  })
+
+  it('follows a per-sample frequency', () => {
+    // 480 Hz, then 960 Hz: 100 samples a cycle, then 50
+    const increments = new Float32Array(1000)
+    increments.fill(0.01, 0, 500)
+    increments.fill(0.02, 500)
+    const out = new Float32Array(1000)
+    new Oscillator(SAMPLE_RATE).render(out, increments, SINE)
+    let first = 0
+    let second = 0
+    for (let i = 1; i < 1000; i++) {
+      if ((out[i - 1] as number) < 0 && (out[i] as number) >= 0) {
+        if (i < 500) first++
+        else second++
+      }
+    }
+    // Rising through 0 at 100, 200, 300, 400, then at 500, 550 ... 950
+    expect(first).toBe(4)
+    expect(second).toBe(10)
+  })
+
+  it('takes a per-sample pulse width', () => {
+    const increments = new Float32Array(1000).fill(0.01)
+    const widths = new Float32Array(1000)
+    widths.fill(0.25, 0, 500)
+    widths.fill(0.75, 500)
+    const out = new Float32Array(1000)
+    new Oscillator(SAMPLE_RATE).render(out, increments, SQUARE, 0, 1000, widths)
+    const high = (from: number, to: number) =>
+      out.subarray(from, to).filter((v) => v > 0).length / (to - from)
+    expect(high(0, 500)).toBeCloseTo(0.25, 1)
+    expect(high(500, 1000)).toBeCloseTo(0.75, 1)
+  })
+
+  it('reads the wave a phase offset ahead', () => {
+    const increments = new Float32Array(200).fill(0.01)
+    const offsets = new Float32Array(200).fill(0.25)
+    const out = new Float32Array(200)
+    new Oscillator(SAMPLE_RATE).render(
+      out,
+      increments,
+      SINE,
+      0,
+      200,
+      undefined,
+      offsets
+    )
+    for (let i = 0; i < out.length; i++) {
+      expect(out[i]).toBeCloseTo(Math.cos(2 * Math.PI * 0.01 * i), 5)
+    }
+  })
+
+  it('continues render seamlessly from block to block', () => {
+    const increments = new Float32Array(384)
+    const offsets = new Float32Array(384)
+    for (let i = 0; i < 384; i++) {
+      increments[i] = 0.005 + 0.00002 * i
+      offsets[i] = 0.3 * Math.sin(i / 20)
+    }
+    const whole = new Float32Array(384)
+    new Oscillator(SAMPLE_RATE).render(
+      whole,
+      increments,
+      SAW,
+      0,
+      384,
+      undefined,
+      offsets
+    )
+    const oscillator = new Oscillator(SAMPLE_RATE)
+    const blocks = new Float32Array(384)
+    for (let start = 0; start < 384; start += 128) {
+      oscillator.render(
+        blocks,
+        increments,
+        SAW,
+        start,
+        start + 128,
+        undefined,
+        offsets
+      )
+    }
+    expect(blocks).toEqual(whole)
   })
 })

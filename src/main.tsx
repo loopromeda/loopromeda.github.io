@@ -2,6 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { App } from './App'
 import { Engine } from './engine/engine'
+import type { BenchReport } from './engine/protocol'
 import './index.css'
 import { readPlatform, sendReport } from './platform'
 import type { ScopeStats } from './ui/Scope'
@@ -12,6 +13,7 @@ if (!root) throw new Error('index.html has no #root')
 const platform = readPlatform()
 const engine = new Engine()
 let reportScope: ((stats: ScopeStats) => void) | undefined
+let reportBench: ((report: BenchReport) => void) | undefined
 
 if (import.meta.env.DEV) {
   // What the waveform costs to draw on this device, every 5 s while it draws
@@ -21,6 +23,9 @@ if (import.meta.env.DEV) {
     lastScope = stats.at
     void sendReport('scope', stats)
   }
+  // The audio thread's render time, measured by hand on the VOICE tab
+  reportBench = (report) =>
+    void sendReport('bench', { ...engine.snapshot, ...report })
   void sendReport('platform', platform)
   // Every audio state change goes on record: start, a lock screen
   // suspending, an interruption, a resume. Latency settles a moment after
@@ -41,6 +46,11 @@ if (import.meta.env.DEV) {
 
 createRoot(root).render(
   <StrictMode>
-    <App platform={platform} engine={engine} onScopeStats={reportScope} />
+    <App
+      platform={platform}
+      engine={engine}
+      onScopeStats={reportScope}
+      onBench={reportBench}
+    />
   </StrictMode>
 )

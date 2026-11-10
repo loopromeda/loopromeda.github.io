@@ -72,14 +72,32 @@ function detents(spec: ParamSpec): { x: number; y: number }[] {
  * finger its own knob), double-tap for the default, arrow keys, Page
  * Up/Down and Home/End from the keyboard. A drag goes straight to the
  * engine and the knob redraws by setting SVG attributes and text: no React
- * state, so nothing re-renders while it turns.
+ * state, so nothing re-renders while it turns. It also follows its value
+ * changed from elsewhere.
  *
  * A two-sided range (Octave, Semi, Fine) lights the arc from its zero, a
  * one-sided range from its minimum. A knob with a few stops (Wave, Octave)
  * marks each with a white dot around the arc.
+ *
+ * `format` replaces the schema's readout (a matrix amount shown in its
+ * destination's units); the readout is redrawn when a `watch` parameter it
+ * depends on changes.
  */
-export function Knob({ engine, id }: { engine: Engine; id: ParamId }) {
+export function Knob({
+  engine,
+  id,
+  format,
+  watch,
+}: {
+  engine: Engine
+  id: ParamId
+  format?: (value: number) => string
+  watch?: readonly ParamId[]
+}) {
   const spec = getParam(id)
+  /** The latest props, for the listener set up once per id */
+  const formatRef = useRef(format)
+  const watchRef = useRef(watch)
   const rootRef = useRef<HTMLDivElement>(null)
   const arcRef = useRef<SVGPathElement>(null)
   const pointerRef = useRef<SVGLineElement>(null)
@@ -106,7 +124,7 @@ export function Knob({ engine, id }: { engine: Engine; id: ParamId }) {
       'transform',
       `rotate(${angleOf(normalized)} ${CENTER} ${CENTER})`
     )
-    const text = formatValue(spec, value)
+    const text = formatRef.current?.(value) ?? formatValue(spec, value)
     if (textRef.current) textRef.current.textContent = text
     const root = rootRef.current
     if (root) {
@@ -122,8 +140,23 @@ export function Knob({ engine, id }: { engine: Engine; id: ParamId }) {
 
   // Before the first paint: the knob never flashes a wrong position
   useLayoutEffect(() => {
+    formatRef.current = format
+    watchRef.current = watch
     show(engine.getParam(id))
   })
+
+  // A value set elsewhere, or one the readout depends on
+  useLayoutEffect(
+    () =>
+      engine.onParam((changed) => {
+        if (changed === id || watchRef.current?.includes(changed)) {
+          show(engine.getParam(id))
+        }
+      }),
+    // show reads only refs and the spec, both fixed for an id
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [engine, id]
+  )
 
   const down = (event: PointerEvent<HTMLDivElement>) => {
     const g = gesture.current

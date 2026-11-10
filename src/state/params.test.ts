@@ -1,11 +1,26 @@
 import { describe, expect, it } from 'vitest'
+import { LFO_SHAPES } from '../dsp/lfo'
+import {
+  DEST_COUNT,
+  DEST_CUTOFF,
+  DEST_PITCH,
+  MOD_SLOTS,
+  SOURCE_COUNT,
+  SOURCE_SLIDE,
+} from '../dsp/mod'
 import { WAVES } from '../dsp/oscillator'
 import {
+  LFO_SHAPE_NAMES,
+  MOD_DESTS,
+  MOD_SLOT_COUNT,
+  MOD_SOURCES,
   PARAMS,
   clampValue,
   defaultValues,
+  formatModAmount,
   formatValue,
   getParam,
+  modSlotIds,
   paramIndex,
   toNormalized,
   toValue,
@@ -39,6 +54,26 @@ describe('PARAMS', () => {
   it("names osc1.wave's steps in the oscillator's own order", () => {
     const names = getParam('osc1.wave').choices?.map((c) => c.toLowerCase())
     expect(names).toEqual([...WAVES])
+  })
+
+  it("names as many LFO shapes, sources and destinations as the DSP's", () => {
+    expect(LFO_SHAPE_NAMES.length).toBe(LFO_SHAPES.length)
+    expect(MOD_SOURCES.length).toBe(SOURCE_COUNT)
+    expect(MOD_DESTS.length).toBe(DEST_COUNT)
+    expect(MOD_SLOT_COUNT).toBe(MOD_SLOTS)
+    // Spot checks of the shared order
+    expect(MOD_SOURCES[SOURCE_SLIDE]).toBe('Slide')
+    expect(MOD_DESTS[DEST_PITCH].name).toBe('Pitch')
+    expect(MOD_DESTS[DEST_CUTOFF].name).toBe('Cutoff')
+  })
+
+  it('has four knobs for every matrix slot, and none past the last', () => {
+    for (let n = 1; n <= MOD_SLOT_COUNT; n++) {
+      const ids = modSlotIds(n)
+      expect(getParam(ids.dest).choices).toHaveLength(MOD_DESTS.length)
+      expect(getParam(ids.amount).default).toBe(0)
+    }
+    expect(() => modSlotIds(MOD_SLOT_COUNT + 1)).toThrow(RangeError)
   })
 })
 
@@ -132,6 +167,13 @@ describe('formatValue', () => {
     expect(formatValue(getParam('filter.keytrack'), 0.5)).toBe('50%')
   })
 
+  it('renders slow rates to three figures', () => {
+    const rate = getParam('lfo1.rate')
+    expect(formatValue(rate, 0.05)).toBe('0.05 Hz')
+    expect(formatValue(rate, 0.3456)).toBe('0.346 Hz')
+    expect(formatValue(rate, 12.34)).toBe('12.3 Hz')
+  })
+
   it('renders frequencies in hertz below 1 kHz, kilohertz above', () => {
     const cutoff = getParam('filter.cutoff')
     expect(formatValue(cutoff, 20)).toBe('20 Hz')
@@ -149,6 +191,43 @@ describe('formatValue', () => {
     expect(formatValue(decay, 0.9996)).toBe('1 s')
     expect(formatValue(decay, 1.254)).toBe('1.25 s')
     expect(formatValue(decay, 10)).toBe('10 s')
+  })
+})
+
+describe('the bipolar curve', () => {
+  const amount = getParam('mod1.amount')
+
+  it('puts zero at the middle and the ends at the ends', () => {
+    expect(toValue(amount, 0)).toBe(-1)
+    expect(toValue(amount, 0.5)).toBe(0)
+    expect(toValue(amount, 1)).toBe(1)
+  })
+
+  it('is fine near zero and the same both ways', () => {
+    // A tenth of the travel from the middle: 4% of the range, not 20%
+    expect(toValue(amount, 0.6)).toBeCloseTo(0.04, 12)
+    expect(toValue(amount, 0.4)).toBeCloseTo(-0.04, 12)
+  })
+
+  it('inverts', () => {
+    for (const n of [0, 0.1, 0.37, 0.5, 0.62, 0.9, 1]) {
+      expect(toNormalized(amount, toValue(amount, n))).toBeCloseTo(n, 12)
+    }
+  })
+})
+
+describe('formatModAmount', () => {
+  it("speaks the destination's units", () => {
+    expect(formatModAmount(DEST_PITCH, 0.01)).toBe('+0.48 st')
+    expect(formatModAmount(DEST_PITCH, -0.25)).toBe('\u221212.0 st')
+    expect(formatModAmount(DEST_CUTOFF, 0.25)).toBe('+2.50 oct')
+    expect(formatModAmount(DEST_CUTOFF, 0)).toBe('0.00 oct')
+  })
+
+  it('counts a percent destination in percent of its scale', () => {
+    // Width: 100% moves the pulse width by half a cycle
+    expect(formatModAmount(3, 0.5)).toBe('+25%')
+    expect(formatModAmount(12, -0.3)).toBe('\u221230%')
   })
 })
 

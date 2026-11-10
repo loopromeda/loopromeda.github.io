@@ -51,7 +51,7 @@ development runs over the tailnet (`tailscale serve`) instead of LAN + mkcert.
  │ Keyboard / Pads (touch)  │  noteOn   │ SynthProcessor (worklet)      │
  │ Knobs / Sliders          │ ────────▶ │  decode messages              │
  │ Presets                  │  param    │  dsp/Synth.process(block)     │
- │        │                 │           │   ├─ VoiceAllocator (8 voices)│
+ │        │                 │           │   ├─ 16-voice VoiceAllocator  │
  │        ▼                 │           │   ├─ Voice: Osc→Filter→Amp    │
  │ engine/ (AudioContext,   │ ◀──────── │   │        ▲ ADSR  ▲ ADSR     │
  │  unlock, node, latency)  │  meters   │   └─ Master gain + soft clip  │
@@ -196,12 +196,28 @@ and velocity.
         source's level is up. Checked in desktop Chrome: oscillator 2 at
         +7 st adds a 392 Hz peak level with C4's; noise at 49% lifts 5 kHz
         from −197 to −69 dB.
+  - [x] Pulse width, FM and ring, 2026-11-10: each oscillator's square has
+        a Width (5–95%, its DC removed, so a narrow pulse does not shift
+        the filter's input); oscillator 2 phase-modulates oscillator 1 (FM,
+        up to a cycle of deviation at 100%, at any oscillator 2 level), and
+        Ring mixes oscillator 1 × oscillator 2. The OSC tab's pages are
+        1 | 2 | Mix, Mix holding the five levels. A test holds FM's first
+        sideband to the Bessel functions' power ratio to three decimals;
+        in desktop Chrome FM at 9% on C4 adds a sideband at 523 Hz.
   - [x] Oscillator knobs on the test note, asked for by ashon 2026-11-10: Wave,
         Octave, Semi, Fine, Level (`src/ui/Knob.tsx`, `OscillatorPanel.tsx`).
         A knob turns by vertical drag (160 px end to end), double-tap resets
         it, and the arrow, Page and Home/End keys move it. A knob with up to 8
         stops marks each with a white dot (Wave, Octave; not Semi's 25).
-- [ ] ADSR (amp + filter env), exponential segments **[oc]**; pitch envelope; LFO
+- [x] ADSR (amp + filter env), exponential segments **[oc]**; pitch envelope; LFO
+  - [x] Mod envelope and LFOs, 2026-11-10: a third ADSR (ENV tab, Mod page;
+        5 ms, 300 ms, 0%, 300 ms) is the pitch envelope once the matrix
+        routes it to Pitch. Two LFOs per voice (`src/dsp/lfo.ts`, written by
+        opencode from a spec, reviewed here): sine, triangle, saw, square,
+        sample & hold and smooth random, 0.05–50 Hz, a fade-in up to 5 s,
+        and a trigger: Key restarts the cycle with each note, Free keeps
+        every voice on one shared phase. An LFO nothing routes is skipped.
+        LFO tab: three cycles of the shape, fading in as set.
   - [x] Filter envelope, 2026-11-10: the same ADSR, on the ENV tab behind
         an Amp/Filter switch (the storyboard's Envelope board); defaults
         5 ms, 300 ms, 0%, 300 ms, so turning Env up gives a pluck.
@@ -227,6 +243,30 @@ and velocity.
       else the oldest held note. A sounding voice chokes over 3 ms and the
       new note starts on the next block. Desktop Chrome, 9 keys held: 8
       pitches in the output, the first-pressed one gone.
+- [x] Modulation matrix, 2026-11-10 (`src/dsp/mod.ts`, `voice.ts`): 8 slots,
+      each Source → Dest × Amount, scaled by a Via source. Sources: LFO 1
+      and 2, the mod and filter envelopes, velocity, key (C4 = 0, ±1 four
+      octaves away), Slide, a random value per note. Destinations: pitch
+      (both oscillators or one, ±48 st), the pulse widths, FM, the five
+      levels, cutoff (±10 oct), resonance, amp and the LFO rates (±4 oct).
+      Amounts glide (5 ms); a slot without a source or an amount costs
+      nothing. MOD tab: the eight routes in a 4×2 grid (lit while on; a
+      button is 26 px tall, 55 px wide in the narrowest panel) and the
+      picked slot's Source, Dest, Amount (in the destination's units: st,
+      oct, %) and Via. The slots come routed with no amount, so turning
+      Amount is the whole job. Desktop Chrome, C4: LFO 1 → Pitch at
+      +1.92 st swings 237–289 Hz at 5 Hz; Mod Env → Pitch at +23.5 st
+      starts at 808 Hz and lands on 261.6 Hz in about 250 ms (a kick).
+- [x] Glide, mono/legato, velocity and Slide, 2026-11-10: Glide (0–2 s, 95%
+      of the way in the time set) from the last note played. Mono and Legato
+      play one voice from a stack of held keys, last note first, going back
+      to a key still held on release; Mono retriggers the envelopes, LFOs
+      and velocity on every note change, Legato only from silence. Velocity
+      comes from where a key is pressed, lower louder (0.2 at the top, 1 at
+      the bottom), and Velocity sets how much of the loudness it decides
+      (50%). A finger held on a key and slid up or down drives Slide (±1
+      over half the keyboard's height), a matrix source of that note only.
+      VOICE tab: Mode, Glide, Velocity. Hard sync, unison and pan wait.
 - [ ] Param smoothing, master gain, soft clipper (level smoothing done:
       `src/dsp/smoother.ts`, one-pole, 5 ms; a tanh soft clip on the mix,
       each voice at 0.25 so four full voices sum to 1)
@@ -239,6 +279,28 @@ and velocity.
       voices 0.0066 ms a block on an Apple M3 Max, 2026-11-10. With the filter:
       0.012 ms, and 0.016 ms when every voice's cutoff moves each sample (a
       new tan each sample); 0.027 ms with both oscillators and noise on too.
+      With the modulation block, rerunning the previous commit alongside:
+      8 saw voices 0.0133 → 0.0225 ms and all sources 0.029 → 0.044 ms (the
+      mod and filter envelopes run in every voice); 0.118 ms with all eight
+      slots routed, five through a Via, both LFOs, glide, FM, ring, PWM and
+      resonance moving: 13% of the budget. Imported constants stay out of
+      per-sample loops: Vitest's module runner reads an import through a
+      getter, which inflated these numbers by 20–40% and warned.
+- [x] Render time on the device, 2026-11-10: the VOICE tab's Measure CPU
+      (dev server only) has the audio thread itself time the heaviest patch
+      (`src/dsp/stress.ts`, shared with `pnpm bench`) at 8, 16, 24 and 32
+      voices, 300 ms each, the audio stopped meanwhile; the results show in
+      the panel and go to `device-reports.jsonl`. Chrome's worklet has no
+      `performance`, so it times by `Date.now()` over batches of blocks.
+      Desktop Chrome, M3 Max: 0.12, 0.24, 0.37, 0.48 ms, as `pnpm bench`.
+      ashon's Galaxy Fold (SM-F971N, Android 17, Chrome 156), a little
+      faster: 0.107, 0.212, 0.318, 0.426 ms, 4–16% of a 2.67 ms block.
+- [x] 16 voices, 2026-11-10, from those numbers: ten fingers never steal a
+      held note, six more voices keep release tails, and the heaviest patch
+      takes 8% of a block on the Fold, so a phone four times slower still
+      fits the third. A silent voice costs nothing (8 notes on a 32-voice
+      pool time as 8 on 8), and each voice stays at 0.25 into the soft clip:
+      a chord sounds as loud as before, sixteen loud notes clip harder.
 
 **Exit:** vitest green (pitch, envelope timing, no NaN, stealing), WAV renders sound
 right, benchmark within budget.
@@ -253,7 +315,8 @@ right, benchmark within budget.
         note from key to key, keys light through data attributes (no React
         render per touch). Computer keys A–; play and Z/X shift, for desktop
         testing. Checked in desktop Chrome by synthetic pointer and key
-        events; real multi-touch waits for a phone.
+        events; ashon confirmed multi-touch on the Galaxy Fold (Chrome 156)
+        on 2026-11-10.
 - [ ] Knob/Slider components: vertical drag, fine-adjust, double-tap reset; values go
       straight to the engine, React only for structure
 - [ ] Layout: landscape-first for playing, portrait for editing; `viewport-fit=cover` + safe-area insets
@@ -267,6 +330,11 @@ right, benchmark within budget.
         scope's height follows the screen (64–144 px), the keys keep at
         least 112 px. Measured in frames: 930×566 keys 143 px, 390×844 keys
         321 px, neither scrolls.
+  - [x] Six panels, 2026-11-10: from 768 px wide they stand in one row
+        that scrolls sideways a panel at a time (scroll snap), each at
+        least 16rem, instead of wrapping into rows that take the keyboard's
+        height. Measured in frames: 932×566 keys 136 px, 768×1024 keys
+        541 px, 390×844 keys 309 px with the six tabs on one row.
   - [ ] A phone on its side (844×390) still runs 74 px over and scrolls: it
         needs the playing layout this item is about
 - [ ] Kill browser gestures on play surfaces: `touch-action: none`, no double-tap zoom,
