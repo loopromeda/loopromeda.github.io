@@ -25,3 +25,23 @@ test(`renders ${VOICE_COUNT} saw voices well within a block`, async ({
   expect(synth.activeVoices).toBe(VOICE_COUNT)
   expect(result.latency.mean).toBeLessThan(BUDGET_MS)
 })
+
+test(`renders ${VOICE_COUNT} saw voices through moving filters`, async ({
+  bench,
+}) => {
+  const synth = new Synth(SAMPLE_RATE)
+  synth.wave = SAW
+  synth.cutoff = 100
+  synth.resonance = 0.5
+  synth.filterEnvAmount = 1
+  // A 10 s attack: every voice's cutoff moves on every sample, the worst
+  // case (new coefficients, a tan, each sample)
+  synth.setFilterEnv(10, 0.3, 1, 0.3)
+  for (let key = 0; key < VOICE_COUNT; key++) synth.noteOn(key, 48 + 3 * key, 1)
+  const block = new Float32Array(BLOCK)
+  const result = await bench(`${VOICE_COUNT} voices, moving filters`, () =>
+    synth.process(block)
+  ).run({ time: 200, warmupTime: 50 })
+  expect(synth.activeVoices).toBe(VOICE_COUNT)
+  expect(result.latency.mean).toBeLessThan(BUDGET_MS)
+})

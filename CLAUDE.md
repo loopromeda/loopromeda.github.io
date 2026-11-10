@@ -47,7 +47,7 @@ src/engine/   AudioContext lifecycle, unlock, node wiring; protocol.ts is
               the message types both threads share (plain data only)
 src/state/    params.ts: the parameter schema; presets come in M4
 src/viz/      pure display math (scope trigger and decimation, envelope
-              outline, keyboard geometry and hit-testing)
+              outline, filter response, keyboard geometry and hit-testing)
 src/ui/       React components; Scope.tsx draws the output waveform,
               Knob.tsx turns one parameter, Keyboard.tsx plays notes
 scripts/      dev tooling: tailnet.sh, the device-report Vite plugin

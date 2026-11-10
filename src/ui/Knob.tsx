@@ -261,7 +261,7 @@ export function Knob({ engine, id }: { engine: Engine; id: ParamId }) {
       </span>
       <span
         ref={textRef}
-        className="font-mono text-[11px] leading-tight text-zinc-200 tabular-nums"
+        className="font-mono text-[11px] leading-tight whitespace-nowrap text-zinc-200 tabular-nums"
       />
     </div>
   )

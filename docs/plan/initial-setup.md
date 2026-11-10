@@ -175,6 +175,12 @@ recorded; any blocker found here can still change §2 (e.g. Capacitor for iOS).
 
 ### M2 — Synth core DSP (L)
 
+Order, decided by ashon 2026-11-10: the voice's sound blocks come before
+presets (M4), so presets start from a voice that can make the instruments.
+Filter and filter envelope first (the widest change in sound), then the
+second oscillator with detune and noise, the pitch envelope, the LFO, glide
+and velocity.
+
 - [ ] Oscillators: sine, polyBLEP saw/square, triangle; detune; noise **[oc for sine/noise]**
   - [x] `src/dsp/oscillator.ts` 2026-11-10: sine, polyBLAMP triangle, polyBLEP
         saw/square, one phase across wave changes. Measured at 1220 Hz, 48 kHz:
@@ -186,13 +192,25 @@ recorded; any blocker found here can still change §2 (e.g. Capacitor for iOS).
         it, and the arrow, Page and Home/End keys move it. A knob with up to 8
         stops marks each with a white dot (Wave, Octave; not Semi's 25).
 - [ ] ADSR (amp + filter env), exponential segments **[oc]**; pitch envelope; LFO
+  - [x] Filter envelope, 2026-11-10: the same ADSR, on the ENV tab behind
+        an Amp/Filter switch (the storyboard's Envelope board); defaults
+        5 ms, 300 ms, 0%, 300 ms, so turning Env up gives a pluck.
   - [x] Amp ADSR, 2026-11-10 (`src/dsp/adsr.ts`, written by opencode from a
         spec, reviewed here): one-pole segments toward an overshoot target
         (attack curved, decay and release exponential), restarts from the
         current level, a 3 ms linear choke for steals, sustain changes glide
         (5 ms), also mid-decay. Knobs on the ENV tab, times 1 ms–10 s on an
         exponential curve, with an outline drawn from the same curves.
-- [ ] State-variable filter (LP/HP/BP) with resonance and env/keytrack amount
+- [x] State-variable filter (LP/HP/BP) with resonance and env/keytrack amount
+      (2026-11-10). `src/dsp/filter.ts` (written by opencode from a spec,
+      reviewed here): Simper's trapezoidal SVF, stable while the cutoff moves
+      every sample; resonance 0..1 maps to Q 0.71..12 on a log scale, and the
+      lowpass and bandpass peak at Q. Per voice: oscillator → filter → amp;
+      cutoff 20 Hz–20 kHz (glided in log2 Hz), the filter envelope moves it
+      up to ±10 octaves at Env ±100%, keytracking around C4. FILTER tab with
+      the response curve (`src/viz/filter.ts`). Checked in desktop Chrome on
+      a saw at C4: at a 317 Hz cutoff the 2nd harmonic falls 10 dB and the
+      8th 33 dB; Env +50% opens it back to the open sound.
 - [x] 8-voice allocator with oldest-note stealing and click-free release
       (2026-11-10, `src/dsp/allocator.ts`, `voice.ts`, `synth.ts`): a new note
       takes the voice silent longest, else the one released longest ago,
@@ -208,7 +226,9 @@ recorded; any blocker found here can still change §2 (e.g. Capacitor for iOS).
 - [x] Node micro-benchmark: block render time for 8 voices (budget: one 128-frame
       block at 48 kHz = 2.67 ms; aim well under a third of that).
       `pnpm bench` (`src/dsp/synth.bench.ts`, fails over a third): 8 saw
-      voices 0.0066 ms a block on an Apple M3 Max, 2026-11-10
+      voices 0.0066 ms a block on an Apple M3 Max, 2026-11-10. With the filter:
+      0.012 ms, and 0.016 ms when every voice's cutoff moves each sample (a
+      new tan each sample).
 
 **Exit:** vitest green (pitch, envelope timing, no NaN, stealing), WAV renders sound
 right, benchmark within budget.
@@ -227,6 +247,10 @@ right, benchmark within budget.
 - [ ] Knob/Slider components: vertical drag, fine-adjust, double-tap reset; values go
       straight to the engine, React only for structure
 - [ ] Layout: landscape-first for playing, portrait for editing; `viewport-fit=cover` + safe-area insets
+  - [x] Side-by-side panels keep at least 16rem each and wrap (2026-11-10):
+        768 px wide shows two columns, 932 px and up three. Measured with the
+        FILTER panel added: 932×566 keys 132 px, 390×844 keys 309 px,
+        768×1024 keys 317 px, no page overflow.
   - [x] 2026-11-10, after ashon's screenshot from a wide Android screen
         (about 930×566 CSS px) where the keyboard was squeezed to about 20
         px: from 768 px wide the panels stand side by side without tabs, the

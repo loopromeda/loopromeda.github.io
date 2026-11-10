@@ -124,6 +124,24 @@ describe('formatValue', () => {
     expect(formatValue(getParam('osc.level'), 0.25)).toBe('25%')
   })
 
+  it('signs a two-sided percent, not a one-sided one', () => {
+    const amount = getParam('filter.envAmount')
+    expect(formatValue(amount, 0.4)).toBe('+40%')
+    expect(formatValue(amount, -0.404)).toBe('\u221240%')
+    expect(formatValue(amount, 0.001)).toBe('0%')
+    expect(formatValue(getParam('filter.keytrack'), 0.5)).toBe('50%')
+  })
+
+  it('renders frequencies in hertz below 1 kHz, kilohertz above', () => {
+    const cutoff = getParam('filter.cutoff')
+    expect(formatValue(cutoff, 20)).toBe('20 Hz')
+    expect(formatValue(cutoff, 440.4)).toBe('440 Hz')
+    expect(formatValue(cutoff, 999.6)).toBe('1 kHz')
+    expect(formatValue(cutoff, 1234)).toBe('1.23 kHz')
+    expect(formatValue(cutoff, 12345)).toBe('12.3 kHz')
+    expect(formatValue(cutoff, 20000)).toBe('20 kHz')
+  })
+
   it('renders times in milliseconds below a second, seconds above', () => {
     const decay = getParam('amp.decay')
     expect(formatValue(decay, 0.001)).toBe('1 ms')

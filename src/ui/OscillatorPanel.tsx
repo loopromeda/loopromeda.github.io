@@ -19,7 +19,7 @@ export function OscillatorPanel({ engine }: { engine: Engine }) {
     >
       <h2
         id="oscillator-heading"
-        className="mb-2 text-[11px] font-medium tracking-widest text-zinc-500 uppercase"
+        className="mb-2 flex h-7 items-center text-[11px] font-medium tracking-widest text-zinc-500 uppercase"
       >
         Oscillator
       </h2>

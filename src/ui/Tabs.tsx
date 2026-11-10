@@ -14,8 +14,9 @@ export interface Tab {
  *
  * From the md breakpoint (768 px) the tabs go and the panels stand side by
  * side, all visible: a wide screen is short, and the keyboard needs the
- * height (the storyboard's Wide board). CSS only, so each panel, and each
- * knob in it, is still mounted once.
+ * height (the storyboard's Wide board). Each panel keeps at least 16rem, so
+ * its knobs stay big enough to turn; ones that do not fit wrap to another
+ * row. CSS only, so each panel, and each knob in it, is still mounted once.
  */
 export function Tabs({
   tabs,
@@ -67,7 +68,7 @@ export function Tabs({
           )
         })}
       </div>
-      <div className="grid md:auto-cols-fr md:grid-flow-col md:gap-3">
+      <div className="grid md:grid-cols-[repeat(auto-fit,minmax(16rem,1fr))] md:gap-3">
         {tabs.map((tab) => (
           <div
             key={tab.id}

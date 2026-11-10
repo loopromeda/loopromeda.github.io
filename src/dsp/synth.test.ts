@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { CHOKE_TIME } from './adsr'
+import { HIGHPASS } from './filter'
 import { SAW, SINE, SQUARE } from './oscillator'
 import { Synth, VOICE_COUNT } from './synth'
 
@@ -34,6 +35,36 @@ function largestStep(samples: Float32Array): number {
     if (step > largest) largest = step
   }
   return largest
+}
+
+/** Index of the sample at a time, in seconds */
+const at = (seconds: number) => Math.round(seconds * SAMPLE_RATE)
+
+/** RMS of samples[from..to) */
+function rms(samples: Float32Array, from: number, to: number): number {
+  let sum = 0
+  for (let i = from; i < to; i++) sum += (samples[i] as number) ** 2
+  return Math.sqrt(sum / (to - from))
+}
+
+/**
+ * RMS of the change between neighbouring samples over [from..to): it grows
+ * with the high harmonics, so a filter that closes makes it fall
+ */
+function brightness(samples: Float32Array, from: number, to: number): number {
+  let sum = 0
+  for (let i = from; i < to; i++) {
+    sum += ((samples[i] as number) - (samples[i - 1] as number)) ** 2
+  }
+  return Math.sqrt(sum / (to - from))
+}
+
+/** A synth with a saw at full sustain: a held note through the filter */
+function sawSynth(): Synth {
+  const synth = new Synth(SAMPLE_RATE)
+  synth.wave = SAW
+  synth.setAmp(0.005, 0.3, 1, 0.05)
+  return synth
 }
 
 /** A synth with a sine and a full sustain, so a click stands out */
@@ -167,6 +198,87 @@ describe('Synth', () => {
     for (const sample of out) {
       expect(Number.isFinite(sample)).toBe(true)
       expect(Math.abs(sample)).toBeLessThan(1)
+    }
+  })
+
+  it('takes the high harmonics off a saw with a low lowpass cutoff', () => {
+    const open = sawSynth()
+    open.noteOn(1, 48, 1)
+    const bright = render(open, 0.3)
+    const closed = sawSynth()
+    closed.cutoff = 300
+    closed.noteOn(1, 48, 1)
+    const dark = render(closed, 0.3)
+    const from = at(0.1)
+    const to = at(0.3)
+    expect(brightness(dark, from, to)).toBeLessThan(
+      0.2 * brightness(bright, from, to)
+    )
+    // The fundamental, 131 Hz, still passes
+    expect(rms(dark, from, to)).toBeGreaterThan(0.5 * rms(bright, from, to))
+  })
+
+  it('cuts below the cutoff as a highpass', () => {
+    const synth = sineSynth()
+    synth.filterType = HIGHPASS
+    synth.cutoff = 4000
+    synth.noteOn(1, 60, 1)
+    expect(rms(render(synth, 0.2), at(0.1), at(0.2))).toBeLessThan(0.01)
+  })
+
+  it('opens the cutoff with the filter envelope, or closes it', () => {
+    const steady = (amount: number, cutoff: number) => {
+      const synth = sawSynth()
+      synth.cutoff = cutoff
+      synth.filterEnvAmount = amount
+      synth.setFilterEnv(0.001, 0.3, 1, 0.3)
+      synth.noteOn(1, 48, 1)
+      return brightness(render(synth, 0.3), at(0.1), at(0.3))
+    }
+    expect(steady(0.5, 100)).toBeGreaterThan(3 * steady(0, 100))
+    expect(steady(-0.5, 5000)).toBeLessThan(0.3 * steady(0, 5000))
+  })
+
+  it('closes again as the filter envelope decays', () => {
+    const synth = sawSynth()
+    synth.cutoff = 100
+    synth.filterEnvAmount = 0.6
+    synth.setFilterEnv(0.001, 0.3, 0, 0.3)
+    synth.noteOn(1, 48, 1)
+    const out = render(synth, 0.6)
+    // The decay falls by e every 33 ms: open early, shut by 0.5 s
+    expect(brightness(out, at(0.005), at(0.03))).toBeGreaterThan(
+      4 * brightness(out, at(0.5), at(0.6))
+    )
+  })
+
+  it('moves the cutoff with the note when keytracking', () => {
+    const level = (note: number, keytrack: number) => {
+      const synth = sineSynth()
+      synth.cutoff = 400
+      synth.keytrack = keytrack
+      synth.noteOn(1, note, 1)
+      return rms(render(synth, 0.3), at(0.1), at(0.3))
+    }
+    // Two octaves up a fixed 400 Hz cutoff, C6 is mostly gone
+    expect(level(84, 0)).toBeLessThan(0.3 * level(60, 0))
+    // With the cutoff two octaves up too, it sits where C4 sat
+    expect(level(84, 1)).toBeCloseTo(level(60, 1), 2)
+  })
+
+  it('stays finite with every voice through a resonant, sweeping filter', () => {
+    const synth = new Synth(SAMPLE_RATE)
+    synth.wave = SAW
+    synth.level = 1
+    synth.cutoff = 20
+    synth.resonance = 1
+    synth.filterEnvAmount = 1
+    synth.setFilterEnv(0.05, 0.1, 0, 0.1)
+    for (let key = 0; key < VOICE_COUNT; key++) {
+      synth.noteOn(key, 36 + 5 * key, 1)
+    }
+    for (const sample of render(synth, 0.3)) {
+      expect(Number.isFinite(sample)).toBe(true)
     }
   })
 

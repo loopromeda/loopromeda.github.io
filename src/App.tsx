@@ -2,6 +2,7 @@ import { useState, useSyncExternalStore } from 'react'
 import type { Engine } from './engine/engine'
 import type { PlatformReport } from './platform'
 import { EnvelopePanel } from './ui/EnvelopePanel'
+import { FilterPanel } from './ui/FilterPanel'
 import { Keyboard } from './ui/Keyboard'
 import { OscillatorPanel } from './ui/OscillatorPanel'
 import { PlatformChecks } from './ui/PlatformChecks'
@@ -77,6 +78,11 @@ export function App({
             panel: <OscillatorPanel engine={engine} />,
           },
           { id: 'env', label: 'ENV', panel: <EnvelopePanel engine={engine} /> },
+          {
+            id: 'filter',
+            label: 'FILTER',
+            panel: <FilterPanel engine={engine} />,
+          },
         ]}
       />
       <Keyboard engine={engine} />

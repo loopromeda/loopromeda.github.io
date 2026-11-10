@@ -67,6 +67,27 @@ describe('Smoother', () => {
     expect([...out]).toEqual([0.8, 0.8, 0.8, 0.8].map(Math.fround))
   })
 
+  it('fills with the same glide it multiplies by', () => {
+    const multiplied = new Smoother(SAMPLE_RATE, 0.002, 0.25)
+    const filled = new Smoother(SAMPLE_RATE, 0.002, 0.25)
+    multiplied.target = 1
+    filled.target = 1
+    const expected = ones(256)
+    multiplied.apply(expected)
+    const out = new Float32Array(256)
+    filled.fill(out, 0, 128)
+    filled.fill(out, 128, 256)
+    expect(out).toEqual(expected)
+    expect(filled.value).toBe(multiplied.value)
+  })
+
+  it('fills only its range, with a steady value as it is', () => {
+    const smoother = new Smoother(SAMPLE_RATE, 1, 0.5)
+    const out = new Float32Array(6)
+    smoother.fill(out, 2, 4)
+    expect([...out]).toEqual([0, 0, 0.5, 0.5, 0, 0])
+  })
+
   it('rejects a time or sample rate that is not positive', () => {
     expect(() => new Smoother(SAMPLE_RATE, 0)).toThrow(RangeError)
     expect(() => new Smoother(0, 0.01)).toThrow(RangeError)

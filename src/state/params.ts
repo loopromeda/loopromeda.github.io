@@ -9,8 +9,11 @@
  */
 export type Curve = 'linear' | 'quadratic' | 'exponential'
 
-/** How a value is rendered on screen; 's' shows milliseconds below 1 s */
-export type Unit = '' | '%' | 'oct' | 'st' | 'ct' | 's'
+/**
+ * How a value is rendered on screen: 's' shows milliseconds below 1 s, 'Hz'
+ * kilohertz from 1 kHz, and '%' signs the value when the range is two-sided
+ */
+export type Unit = '' | '%' | 'oct' | 'st' | 'ct' | 's' | 'Hz'
 
 /** One knob: its range, its mapping and how to display it */
 export interface ParamSpec {
@@ -121,6 +124,97 @@ export const PARAMS = [
     step: 0,
     unit: 's',
   },
+  {
+    id: 'filter.type',
+    label: 'Type',
+    min: 0,
+    max: 2,
+    default: 0,
+    curve: 'linear',
+    step: 1,
+    unit: '',
+    choices: ['LP', 'HP', 'BP'],
+  },
+  {
+    id: 'filter.cutoff',
+    label: 'Cutoff',
+    min: 20,
+    max: 20000,
+    default: 20000,
+    curve: 'exponential',
+    step: 0,
+    unit: 'Hz',
+  },
+  {
+    id: 'filter.resonance',
+    label: 'Reso',
+    min: 0,
+    max: 1,
+    default: 0,
+    curve: 'linear',
+    step: 0,
+    unit: '%',
+  },
+  {
+    id: 'filter.envAmount',
+    label: 'Env',
+    min: -1,
+    max: 1,
+    default: 0,
+    curve: 'linear',
+    step: 0,
+    unit: '%',
+  },
+  {
+    id: 'filter.keytrack',
+    label: 'Key',
+    min: 0,
+    max: 1,
+    default: 0,
+    curve: 'linear',
+    step: 0,
+    unit: '%',
+  },
+  {
+    id: 'filterEnv.attack',
+    label: 'Attack',
+    min: 0.001,
+    max: 10,
+    default: 0.005,
+    curve: 'exponential',
+    step: 0,
+    unit: 's',
+  },
+  {
+    id: 'filterEnv.decay',
+    label: 'Decay',
+    min: 0.001,
+    max: 10,
+    default: 0.3,
+    curve: 'exponential',
+    step: 0,
+    unit: 's',
+  },
+  {
+    id: 'filterEnv.sustain',
+    label: 'Sustain',
+    min: 0,
+    max: 1,
+    default: 0,
+    curve: 'linear',
+    step: 0,
+    unit: '%',
+  },
+  {
+    id: 'filterEnv.release',
+    label: 'Release',
+    min: 0.001,
+    max: 10,
+    default: 0.3,
+    curve: 'exponential',
+    step: 0,
+    unit: 's',
+  },
 ] as const satisfies readonly ParamSpec[]
 
 export type ParamId = (typeof PARAMS)[number]['id']
@@ -179,18 +273,30 @@ export function formatValue(spec: ParamSpec, value: number): string {
   if (spec.choices) {
     return spec.choices[Math.round(v - spec.min)] as string
   }
-  if (spec.unit === '%') return `${Math.round(v * 100)}%`
+  if (spec.unit === '%') {
+    const r = Math.round(v * 100)
+    return `${spec.min < 0 ? sign(r) : ''}${Math.abs(r)}%`
+  }
   if (spec.unit === 's') {
     const ms = Math.round(v * 1000)
     // Three significant figures: 1.25 s, 10 s
     return ms < 1000 ? `${ms} ms` : `${Number(v.toPrecision(3))} s`
   }
+  if (spec.unit === 'Hz') {
+    const hz = Math.round(v)
+    // Three significant figures: 1.23 kHz, 12.3 kHz, 20 kHz
+    return hz < 1000 ? `${hz} Hz` : `${Number((v / 1000).toPrecision(3))} kHz`
+  }
   if (spec.unit) {
     const r = Math.round(v)
-    const sign = r > 0 ? '+' : r < 0 ? MINUS : ''
-    return `${sign}${Math.abs(r)} ${spec.unit}`
+    return `${sign(r)}${Math.abs(r)} ${spec.unit}`
   }
   return String(v)
+}
+
+/** '+' above zero, a minus sign below it, nothing at zero */
+function sign(rounded: number): string {
+  return rounded > 0 ? '+' : rounded < 0 ? MINUS : ''
 }
 
 /** A fresh array of every default, in PARAMS order */

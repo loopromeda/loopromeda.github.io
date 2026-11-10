@@ -42,6 +42,23 @@ export class Smoother {
     this.current = this.goal
   }
 
+  /** Writes the gliding value into out[start..end), sample by sample */
+  fill(out: Float32Array, start = 0, end = out.length): void {
+    const goal = this.goal
+    let value = this.current
+    if (value === goal) {
+      out.fill(goal, start, end)
+      return
+    }
+    const coefficient = this.coefficient
+    for (let i = start; i < end; i++) {
+      value += (goal - value) * coefficient
+      if (Math.abs(goal - value) < LAND) value = goal
+      out[i] = value
+    }
+    this.current = value
+  }
+
   /** Multiplies out[start..end) by the gliding value, sample by sample */
   apply(out: Float32Array, start = 0, end = out.length): void {
     const goal = this.goal

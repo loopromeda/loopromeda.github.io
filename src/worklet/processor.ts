@@ -11,6 +11,15 @@ const ATTACK = paramIndex('amp.attack')
 const DECAY = paramIndex('amp.decay')
 const SUSTAIN = paramIndex('amp.sustain')
 const RELEASE = paramIndex('amp.release')
+const FILTER_TYPE = paramIndex('filter.type')
+const CUTOFF = paramIndex('filter.cutoff')
+const RESONANCE = paramIndex('filter.resonance')
+const ENV_AMOUNT = paramIndex('filter.envAmount')
+const KEYTRACK = paramIndex('filter.keytrack')
+const FILTER_ATTACK = paramIndex('filterEnv.attack')
+const FILTER_DECAY = paramIndex('filterEnv.decay')
+const FILTER_SUSTAIN = paramIndex('filterEnv.sustain')
+const FILTER_RELEASE = paramIndex('filterEnv.release')
 
 /**
  * The audio thread's shell around src/dsp's Synth: messages in, blocks out.
@@ -79,6 +88,32 @@ class SynthProcessor extends AudioWorkletProcessor {
           this.#value(DECAY),
           this.#value(SUSTAIN),
           this.#value(RELEASE)
+        )
+        break
+      case FILTER_TYPE:
+        this.#synth.filterType = this.#value(FILTER_TYPE)
+        break
+      case CUTOFF:
+        this.#synth.cutoff = this.#value(CUTOFF)
+        break
+      case RESONANCE:
+        this.#synth.resonance = this.#value(RESONANCE)
+        break
+      case ENV_AMOUNT:
+        this.#synth.filterEnvAmount = this.#value(ENV_AMOUNT)
+        break
+      case KEYTRACK:
+        this.#synth.keytrack = this.#value(KEYTRACK)
+        break
+      case FILTER_ATTACK:
+      case FILTER_DECAY:
+      case FILTER_SUSTAIN:
+      case FILTER_RELEASE:
+        this.#synth.setFilterEnv(
+          this.#value(FILTER_ATTACK),
+          this.#value(FILTER_DECAY),
+          this.#value(FILTER_SUSTAIN),
+          this.#value(FILTER_RELEASE)
         )
         break
     }
