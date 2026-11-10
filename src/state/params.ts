@@ -18,10 +18,14 @@ export type Curve = 'linear' | 'quadratic' | 'exponential' | 'bipolar'
 export type Unit = '' | '%' | 'oct' | 'st' | 'ct' | 's' | 'Hz'
 
 /** One knob: its range, its mapping and how to display it */
-export interface ParamSpec {
+export interface ParamSpec extends ValueSpec {
   readonly id: string
   /** Short name under the knob */
   readonly label: string
+}
+
+/** What a value needs to be clamped, mapped and shown: a spec, unnamed */
+export interface ValueSpec {
   readonly min: number
   readonly max: number
   readonly default: number
@@ -588,7 +592,7 @@ export function getParam(id: ParamId): ParamSpec {
 }
 
 /** Value into [min, max] and onto the step grid; NaN or Infinity -> default */
-export function clampValue(spec: ParamSpec, value: number): number {
+export function clampValue(spec: ValueSpec, value: number): number {
   if (!Number.isFinite(value)) return spec.default
   const bounded = Math.min(Math.max(value, spec.min), spec.max)
   if (spec.step <= 0) return bounded
@@ -598,7 +602,7 @@ export function clampValue(spec: ParamSpec, value: number): number {
 }
 
 /** Knob position 0..1 -> value, shaped by the curve and snapped to the step */
-export function toValue(spec: ParamSpec, normalized: number): number {
+export function toValue(spec: ValueSpec, normalized: number): number {
   const n = Number.isNaN(normalized) ? 0 : Math.min(Math.max(normalized, 0), 1)
   if (spec.curve === 'exponential') {
     // n = 1 exactly: min * (max / min) can land a rounding error short of max
@@ -616,7 +620,7 @@ export function toValue(spec: ParamSpec, normalized: number): number {
 }
 
 /** Inverse of toValue: value -> knob position 0..1 */
-export function toNormalized(spec: ParamSpec, value: number): number {
+export function toNormalized(spec: ValueSpec, value: number): number {
   const v = clampValue(spec, value)
   if (spec.max === spec.min) return 0
   if (spec.curve === 'exponential') {
@@ -635,7 +639,7 @@ export function toNormalized(spec: ParamSpec, value: number): number {
 const MINUS = '\u2212'
 
 /** A clamped value as human-readable text, unit included */
-export function formatValue(spec: ParamSpec, value: number): string {
+export function formatValue(spec: ValueSpec, value: number): string {
   const v = clampValue(spec, value)
   if (spec.choices) {
     return spec.choices[Math.round(v - spec.min)] as string

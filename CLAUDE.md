@@ -2,7 +2,9 @@
 
 A polyphonic synthesizer for mobile browsers (iOS Safari, Android Chrome),
 played by touch, installable as a PWA. The plan and the decisions behind it:
-`docs/plan/initial-setup.md`. What real devices did: `docs/platform-notes.md`.
+`docs/plan/initial-setup.md`; the sound built from inputs, chains and
+modulators, under way: `docs/plan/sound-chains.md`. What real devices did:
+`docs/platform-notes.md`.
 
 ## Commands
 
@@ -42,10 +44,13 @@ Before calling a change done: `pnpm typecheck && pnpm lint && pnpm format:check 
 src/dsp/      pure DSP (oscillators, envelopes, LFOs, filters, voices);
               mod.ts numbers the matrix's sources and destinations;
               synth.ts is the whole instrument: voice pool, allocator,
-              mono/legato, matrix, mix
+              mono/legato, matrix, mix; chainSynth.ts and chainVoice.ts
+              are the same for a sound built from parts (slots.ts
+              numbers them), to replace them (not wired in yet)
 src/worklet/  the AudioWorkletProcessor around src/dsp; own globals and
               tsconfig (tsconfig.worklet.json), loaded via ?worker&url;
-              patch.ts maps parameter values onto the Synth (Node-testable)
+              patch.ts maps parameter values onto the Synth, sound.ts a
+              sound document onto the ChainSynth (both Node-testable)
 src/engine/   AudioContext lifecycle, unlock, node wiring; protocol.ts is
               the message types both threads share (plain data only)
 src/state/    params.ts: the parameter schema; presets.ts: the preset and
@@ -53,10 +58,14 @@ src/state/    params.ts: the parameter schema; presets.ts: the preset and
               user presets and the last sound, kept in localStorage;
               surface.ts: keys or pads, the pads' key (root and scale);
               settings.ts: the device's settings (voices, latency,
-              velocity, what the screen shows)
+              velocity, what the screen shows); sound/: a sound as a
+              document of inputs, chains, modulators and routes, its
+              edits, reading it from JSON and from the old parameters
+              (not wired in yet)
 src/viz/      pure display math (scope trigger and decimation, envelope
               and LFO outlines, filter response, keyboard and pad grid
-              geometry, hit-testing, velocity and Slide from a touch's
+              geometry, the sound editor's input column and chain rows
+              in graph.ts, hit-testing, velocity and Slide from a touch's
               position)
 src/ui/       React components; Scope.tsx draws the output waveform,
               Knob.tsx turns one parameter, PlaySurface.tsx plays notes
