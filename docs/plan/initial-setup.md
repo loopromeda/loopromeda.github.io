@@ -335,8 +335,21 @@ right, benchmark within budget.
         least 16rem, instead of wrapping into rows that take the keyboard's
         height. Measured in frames: 932×566 keys 136 px, 768×1024 keys
         541 px, 390×844 keys 309 px with the six tabs on one row.
-  - [ ] A phone on its side (844×390) still runs 74 px over and scrolls: it
-        needs the playing layout this item is about
+  - [x] Control sizes, 2026-11-10, after ashon saw controls of slightly
+        different sizes side by side: two heights only, set in
+        `src/ui/controls.ts`. 44 px (rounded 10 px, 12 px labels) for
+        everything outside a panel: tabs, the keyboard's header, the preset
+        browser. 28 px (rounded 6 px, 11 px labels) in a panel's header and
+        the MOD slots, with a header button's hit area reaching 44 px.
+        Disabled is 40% everywhere. Every knob is sized as one of five to a
+        row (at most 56 px) whatever its row holds, so a five-knob panel no
+        longer has smaller knobs. From 768 px two panels share the width,
+        from 896 px three, so none is cut in half. Measured in frames:
+        knobs 54 px at 360×720, 56 at 390×844, 768×1024 and 1280×800, 47
+        at 930×566 (keys 137 px); the only control heights are 28 and 44.
+  - [ ] A phone on its side (844×390) still runs over and scrolls, by 89
+        px after the size pass (74 before it): it needs the playing layout
+        this item is about
 - [ ] Kill browser gestures on play surfaces: `touch-action: none`, no double-tap zoom,
       no text selection / iOS long-press callout, keep away from edge-swipe zones
 - [ ] Playwright smoke: page loads, start overlay unlocks, keys respond (mobile emulation)
@@ -355,9 +368,40 @@ dragging knobs during notes.
 
 ### M4 — Presets & PWA (M)
 
-- [ ] Factory presets (versioned JSON) + user presets in `localStorage`/IndexedDB:
+- [x] Factory presets (versioned JSON) + user presets in `localStorage`/IndexedDB:
       a starter set across bass, lead, pad, pluck and a drum kit, all from the
       one voice (§3, "Instruments are patches")
+  - [x] 2026-11-10. A preset keeps only the values that differ from the
+        defaults, keyed by parameter id (`src/state/presets.ts`), so a
+        parameter added later loads at its default; a file is
+        `{format: 'loopromeda-presets', version: 1, presets}` and a newer
+        version is refused rather than misread. 21 factory presets
+        (`src/state/factory.ts`) in eight categories: Init; Saw, Sub, Acid,
+        FM and Wobble Bass; Saw and Chip Lead; Warm, PWM and Glass Pad;
+        Soft and Square Pluck; E-Piano, FM Bell, Organ; Kick, Snare,
+        Closed and Open Hat; Blips, Zap. The drum kit is single drum
+        sounds for now: playing several at once, one per pad, needs the
+        Parts of M5. Every preset is rendered in a test (finite, peak
+        0.03–0.9, silent three seconds after the key).
+  - [x] User presets and the sound itself live in `localStorage`
+        (`src/state/library.ts`): the presets as a preset file, the last
+        sound with the preset it came from, written 400 ms after the last
+        change and at once on `pagehide`. A reload brings back the sound,
+        edits and all. A preset loads in one `params` message, so every
+        value applies before the next block (`src/worklet/patch.ts`).
+        `navigator.storage.persist()` is asked on the first save.
+  - [x] The browser opens from the patch name at the left of the
+        keyboard's header and covers the waveform and the controls, not
+        the keyboard, so presets can be tried as they load (a deviation
+        from the storyboard's top header: the Fold's inner screen has no
+        height to spare). Save, Save as… (name and category), Rename,
+        Delete with an inline confirm, Export (the share sheet where the
+        browser can share a file, a download otherwise) and Import, which
+        is how presets move between devices. Checked in desktop Chrome at
+        1000×613 and 360×600: save, reload, rename, delete.
+  - [ ] iOS: Safari clears script-written storage after seven days
+        without a visit, home-screen apps excepted; Export is the backup.
+        Check `persist()` and the file share on an iPhone.
 - [ ] `vite-plugin-pwa`: manifest, icons, offline cache
 - [ ] Screen Wake Lock while the instrument is open (feature-detected)
 

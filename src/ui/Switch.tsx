@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef } from 'react'
 import type { Engine } from '../engine/engine'
 import type { ParamId } from '../state/params'
+import { SMALL_GROUP, SMALL_OPTION } from './controls'
 
 export interface SwitchOption {
   id: string
@@ -47,18 +48,14 @@ export function Switch({
   }, [engine, options])
 
   return (
-    <div
-      role="group"
-      aria-label={label}
-      className="flex overflow-hidden rounded-md bg-white/5"
-    >
+    <div role="group" aria-label={label} className={SMALL_GROUP}>
       {options.map((option, index) => (
         <button
           key={option.id}
           type="button"
           aria-pressed={index === shown}
           onClick={() => onShow(index)}
-          className="flex h-7 items-center gap-1.5 px-3 text-[11px] font-semibold tracking-wider text-zinc-400 aria-pressed:bg-white/10 aria-pressed:text-white"
+          className={SMALL_OPTION}
         >
           {option.label}
           {option.lit && (

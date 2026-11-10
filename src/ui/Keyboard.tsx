@@ -4,6 +4,7 @@ import {
   useRef,
   useState,
   type PointerEvent,
+  type ReactNode,
 } from 'react'
 import type { Engine } from '../engine/engine'
 import {
@@ -15,6 +16,7 @@ import {
   slideFrom,
   velocityAt,
 } from '../viz/keyboard'
+import { IconButton } from './IconButton'
 
 /** The keyboard starts on C1 or higher, and its top C is C8 or lower */
 const LOWEST = 1
@@ -50,6 +52,11 @@ const COMPUTER_KEYS: Readonly<Record<string, number>> = {
 const COMPUTER_ID = -1000
 /** A Slide change smaller than this is not worth a message */
 const SLIDE_STEP = 1 / 256
+
+/** Keys typed into a field (a preset's name) are text, not notes */
+const typing = (target: EventTarget | null): boolean =>
+  target instanceof HTMLElement &&
+  (target.isContentEditable || target.matches('input, select, textarea'))
 
 /**
  * Who holds which note: each touch (by pointerId) and computer key holds one.
@@ -161,9 +168,17 @@ class Hands {
  * The playing surface: as many octaves as fit at a finger's width (one on a
  * phone held upright), shifted an octave at a time. A finger that slides
  * moves its note from key to key. Touches go straight to the engine; React
- * renders only the keys, again when the octave or the width changes.
+ * renders only the keys, again when the octave or the width changes. The
+ * header row holds `patch` (the preset's name) at its left and the octave
+ * controls at its right.
  */
-export function Keyboard({ engine }: { engine: Engine }) {
+export function Keyboard({
+  engine,
+  patch,
+}: {
+  engine: Engine
+  patch?: ReactNode
+}) {
   const [hands] = useState(() => new Hands(engine))
   const [start, setStart] = useState(4)
   const [octaves, setOctaves] = useState(1)
@@ -191,6 +206,7 @@ export function Keyboard({ engine }: { engine: Engine }) {
   useEffect(() => {
     const down = (event: KeyboardEvent) => {
       if (event.repeat || event.metaKey || event.ctrlKey || event.altKey) return
+      if (typing(event.target)) return
       if (event.code === 'KeyZ' || event.code === 'KeyX') {
         const by = event.code === 'KeyZ' ? -1 : 1
         setStart(Math.min(Math.max(first + by, LOWEST), highest))
@@ -251,20 +267,25 @@ export function Keyboard({ engine }: { engine: Engine }) {
       aria-label="Keyboard"
       className="flex min-h-0 flex-1 flex-col gap-2"
     >
-      <div className="flex h-11 shrink-0 items-center justify-between">
-        <OctaveButton
-          label="Octave down"
-          disabled={first <= LOWEST}
-          onClick={() => shift(-1)}
-          path="M11 4l-5 5 5 5"
-        />
-        <span className="font-mono text-[13px] text-zinc-400">{range}</span>
-        <OctaveButton
-          label="Octave up"
-          disabled={first >= highest}
-          onClick={() => shift(1)}
-          path="M7 4l5 5-5 5"
-        />
+      <div className="flex h-11 shrink-0 items-center gap-3">
+        {patch}
+        <div className="ml-auto flex shrink-0 items-center gap-2">
+          <IconButton
+            label="Octave down"
+            disabled={first <= LOWEST}
+            onClick={() => shift(-1)}
+            path="M11 4l-5 5 5 5"
+          />
+          <span className="font-mono text-[13px] whitespace-nowrap text-zinc-400">
+            {range}
+          </span>
+          <IconButton
+            label="Octave up"
+            disabled={first >= highest}
+            onClick={() => shift(1)}
+            path="M7 4l5 5-5 5"
+          />
+        </div>
       </div>
       <div
         ref={surfaceRef}
@@ -302,41 +323,5 @@ export function Keyboard({ engine }: { engine: Engine }) {
         ))}
       </div>
     </section>
-  )
-}
-
-function OctaveButton({
-  label,
-  disabled,
-  onClick,
-  path,
-}: {
-  label: string
-  disabled: boolean
-  onClick: () => void
-  path: string
-}) {
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      disabled={disabled}
-      onClick={onClick}
-      className="flex size-11 items-center justify-center rounded-[10px] bg-white/5 text-zinc-200 disabled:opacity-30"
-    >
-      <svg
-        width="18"
-        height="18"
-        viewBox="0 0 18 18"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        aria-hidden="true"
-      >
-        <path d={path} />
-      </svg>
-    </button>
   )
 }

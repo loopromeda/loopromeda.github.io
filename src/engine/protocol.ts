@@ -18,6 +18,8 @@ export type ToWorklet =
   | { t: 'slide'; id: number; value: number }
   /** A parameter's new value, in its own units (src/state/params.ts) */
   | { t: 'param'; id: ParamId; value: number }
+  /** Every parameter at once, in PARAMS order (a preset, or catching up) */
+  | { t: 'params'; values: readonly number[] }
   /** Everything stops: all notes released */
   | { t: 'panic' }
   /**

@@ -44,15 +44,19 @@ src/dsp/      pure DSP (oscillators, envelopes, LFOs, filters, voices);
               synth.ts is the whole instrument: voice pool, allocator,
               mono/legato, matrix, mix
 src/worklet/  the AudioWorkletProcessor around src/dsp; own globals and
-              tsconfig (tsconfig.worklet.json), loaded via ?worker&url
+              tsconfig (tsconfig.worklet.json), loaded via ?worker&url;
+              patch.ts maps parameter values onto the Synth (Node-testable)
 src/engine/   AudioContext lifecycle, unlock, node wiring; protocol.ts is
               the message types both threads share (plain data only)
-src/state/    params.ts: the parameter schema; presets come in M4
+src/state/    params.ts: the parameter schema; presets.ts: the preset and
+              file format; factory.ts: the shipped presets; library.ts:
+              user presets and the last sound, kept in localStorage
 src/viz/      pure display math (scope trigger and decimation, envelope
               and LFO outlines, filter response, keyboard geometry,
               hit-testing, velocity and Slide from a touch's position)
 src/ui/       React components; Scope.tsx draws the output waveform,
-              Knob.tsx turns one parameter, Keyboard.tsx plays notes
+              Knob.tsx turns one parameter, Keyboard.tsx plays notes,
+              PresetBrowser.tsx loads, saves and moves presets
 scripts/      dev tooling: tailnet.sh, the device-report Vite plugin
 ```
 

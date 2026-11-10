@@ -8,6 +8,7 @@ import {
   filterResponse,
 } from '../viz/filter'
 import { Knob } from './Knob'
+import { KNOB_ROW } from './controls'
 
 const KNOBS: readonly ParamId[] = [
   'filter.type',
@@ -45,7 +46,7 @@ export function FilterPanel({ engine }: { engine: Engine }) {
         Filter
       </h2>
       <Response engine={engine} />
-      <div className="mt-auto grid grid-cols-5 justify-items-center gap-2 pt-2">
+      <div className={`${KNOB_ROW} grid-cols-5`}>
         {KNOBS.map((id) => (
           <Knob key={id} engine={engine} id={id} />
         ))}

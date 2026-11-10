@@ -13,6 +13,7 @@ import {
   type ParamId,
   type ParamSpec,
 } from '../state/params'
+import { KNOB_SIZE } from './controls'
 
 /** CSS pixels of vertical drag that sweep a knob from end to end */
 const TRAVEL = 160
@@ -251,7 +252,7 @@ export function Knob({
         onLostPointerCapture={up}
         onKeyDown={key}
         onContextMenu={(event) => event.preventDefault()}
-        className="aspect-square w-full max-w-14 touch-none rounded-full outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
+        className={`${KNOB_SIZE} aspect-square touch-none rounded-full outline-none focus-visible:ring-2 focus-visible:ring-emerald-400`}
       >
         <svg viewBox="0 0 48 48" className="block size-full" aria-hidden>
           {detents(spec).map(({ x, y }, i) => (

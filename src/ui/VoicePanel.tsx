@@ -2,6 +2,7 @@ import { Fragment, useState } from 'react'
 import type { Engine } from '../engine/engine'
 import type { BenchReport } from '../engine/protocol'
 import type { ParamId } from '../state/params'
+import { KNOB_ROW, SMALL_BUTTON } from './controls'
 import { Knob } from './Knob'
 
 const KNOBS: readonly ParamId[] = ['voice.mode', 'voice.glide', 'amp.velocity']
@@ -65,7 +66,7 @@ export function VoicePanel({
             type="button"
             disabled={bench.state === 'running'}
             onClick={() => void measure()}
-            className="flex h-7 items-center rounded-md bg-white/5 px-3 text-[11px] font-semibold tracking-wider text-zinc-400 disabled:opacity-50"
+            className={SMALL_BUTTON}
           >
             {bench.state === 'running' ? 'Measuring…' : 'Measure CPU'}
           </button>
@@ -80,7 +81,7 @@ export function VoicePanel({
           'Lower on a key plays louder. A finger held on a key and slid up or down drives Slide, a source on the MOD tab.'
         )}
       </p>
-      <div className="mt-auto grid grid-cols-4 justify-items-center gap-2 pt-2">
+      <div className={`${KNOB_ROW} grid-cols-4`}>
         {KNOBS.map((id) => (
           <Knob key={id} engine={engine} id={id} />
         ))}

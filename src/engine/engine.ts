@@ -124,9 +124,7 @@ export class Engine {
       this.#analyser = analyser
       this.#node = node
       // The worklet starts from the defaults: catch it up, ahead of any note
-      PARAMS.forEach((spec, index) =>
-        this.#post({ t: 'param', id: spec.id, value: this.#values[index] ?? 0 })
-      )
+      this.#post({ t: 'params', values: Array.from(this.#values) })
       await resumed
     } catch (error) {
       this.#fail(error)
@@ -199,6 +197,34 @@ export class Engine {
     this.#values[index] = next
     this.#post({ t: 'param', id, value: next })
     for (const listener of this.#paramListeners) listener(id, next)
+  }
+
+  /** Every parameter's value, in PARAMS order: a copy */
+  values(): Float64Array {
+    return this.#values.slice()
+  }
+
+  /**
+   * Sets every parameter at once (a preset loading), from values in PARAMS
+   * order, each clamped and snapped. The audio thread gets them in one
+   * message, so they all apply before the next block; listeners hear about
+   * each one that changed.
+   */
+  setValues(values: ArrayLike<number>): void {
+    const changed: number[] = []
+    PARAMS.forEach((spec, index) => {
+      const next = clampValue(spec, values[index] ?? Number.NaN)
+      if (next === this.#values[index]) return
+      this.#values[index] = next
+      changed.push(index)
+    })
+    if (changed.length === 0) return
+    this.#post({ t: 'params', values: Array.from(this.#values) })
+    for (const index of changed) {
+      const spec = PARAMS[index] as (typeof PARAMS)[number]
+      const value = this.#values[index] ?? 0
+      for (const listener of this.#paramListeners) listener(spec.id, value)
+    }
   }
 
   /**

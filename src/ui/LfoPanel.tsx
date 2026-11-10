@@ -4,6 +4,7 @@ import type { ParamId } from '../state/params'
 import { LFO_POINTS, lfoOutline } from '../viz/lfo'
 import { Knob } from './Knob'
 import { Switch } from './Switch'
+import { KNOB_ROW } from './controls'
 
 /** An LFO's knobs: shape, rate, fade-in, trigger */
 type LfoKnobs = readonly [ParamId, ParamId, ParamId, ParamId]
@@ -56,7 +57,7 @@ export function LfoPanel({ engine }: { engine: Engine }) {
         />
       </div>
       <Outline engine={engine} knobs={lfo.knobs} />
-      <div className="mt-auto grid grid-cols-4 justify-items-center gap-2 pt-2">
+      <div className={`${KNOB_ROW} grid-cols-4`}>
         {lfo.knobs.map((id) => (
           <Knob key={id} engine={engine} id={id} />
         ))}

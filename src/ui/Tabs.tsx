@@ -1,4 +1,5 @@
 import { useRef, type KeyboardEvent, type ReactNode } from 'react'
+import { BAR, BAR_OPTION } from './controls'
 
 export interface Tab {
   id: string
@@ -14,10 +15,11 @@ export interface Tab {
  *
  * From the md breakpoint (768 px) the tabs go and the panels stand side by
  * side in one row: a wide screen is short, and the keyboard needs the
- * height (the storyboard's Wide board). Each panel keeps at least 16rem, so
- * its knobs stay big enough to turn; the row scrolls sideways, a panel at a
- * time, past the ones that do not fit, rather than wrap into a second row
- * that would take the keyboard's height. CSS only, so each panel, and each
+ * height (the storyboard's Wide board). Two panels share the width, three
+ * from 896 px (the Fold's inner screen), so each is wide enough for its
+ * knobs and none is cut in half; the row scrolls sideways, a panel at a
+ * time, to the others, rather than wrap into a second row that would take
+ * the keyboard's height. CSS only, so each panel, and each
  * knob in it, is still mounted once.
  */
 export function Tabs({
@@ -49,7 +51,7 @@ export function Tabs({
         role="tablist"
         aria-label={label}
         onKeyDown={key}
-        className="flex h-11 overflow-hidden rounded-xl bg-white/5 md:hidden"
+        className={`${BAR} md:hidden`}
       >
         {tabs.map((tab) => {
           const selected = tab.id === active
@@ -63,14 +65,14 @@ export function Tabs({
               aria-controls={`panel-${tab.id}`}
               tabIndex={selected ? 0 : -1}
               onClick={() => onChange(tab.id)}
-              className="flex-1 text-xs font-semibold tracking-wider text-zinc-400 aria-selected:bg-white/10 aria-selected:text-white"
+              className={BAR_OPTION}
             >
               {tab.label}
             </button>
           )
         })}
       </div>
-      <div className="grid md:snap-x md:snap-mandatory md:auto-cols-[minmax(16rem,1fr)] md:grid-flow-col md:gap-3 md:overflow-x-auto md:overscroll-x-contain">
+      <div className="grid md:snap-x md:snap-mandatory md:auto-cols-[calc((100%_-_0.75rem)/2)] min-[56rem]:auto-cols-[calc((100%_-_1.5rem)/3)] md:grid-flow-col md:gap-3 md:overflow-x-auto md:overscroll-x-contain">
         {tabs.map((tab) => (
           <div
             key={tab.id}

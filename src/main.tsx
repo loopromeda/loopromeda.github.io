@@ -5,6 +5,8 @@ import { Engine } from './engine/engine'
 import type { BenchReport } from './engine/protocol'
 import './index.css'
 import { readPlatform, sendReport } from './platform'
+import { FACTORY_PRESETS } from './state/factory'
+import { Library } from './state/library'
 import type { ScopeStats } from './ui/Scope'
 
 const root = document.getElementById('root')
@@ -12,6 +14,26 @@ if (!root) throw new Error('index.html has no #root')
 
 const platform = readPlatform()
 const engine = new Engine()
+
+/** localStorage, or none where the browser refuses it (a private window) */
+function localStore(): Storage | undefined {
+  try {
+    return window.localStorage
+  } catch {
+    return undefined
+  }
+}
+
+// The last session's sound (or the first preset) is set before audio
+// starts; the engine hands every value to the worklet as it loads
+const library = new Library(engine, FACTORY_PRESETS, localStore())
+library.restore()
+// The sound is kept a moment after each change; a page going away (a tab
+// closed, a phone switching apps) keeps it at once
+window.addEventListener('pagehide', library.flush)
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') library.flush()
+})
 let reportScope: ((stats: ScopeStats) => void) | undefined
 let reportBench: ((report: BenchReport) => void) | undefined
 
@@ -49,6 +71,7 @@ createRoot(root).render(
     <App
       platform={platform}
       engine={engine}
+      library={library}
       onScopeStats={reportScope}
       onBench={reportBench}
     />

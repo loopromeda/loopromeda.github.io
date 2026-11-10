@@ -8,6 +8,7 @@ import {
   modSlotIds,
 } from '../state/params'
 import { Knob } from './Knob'
+import { KNOB_ROW } from './controls'
 
 const SLOTS = Array.from({ length: MOD_SLOT_COUNT }, (_, i) =>
   modSlotIds(i + 1)
@@ -34,7 +35,7 @@ export function ModPanel({ engine }: { engine: Engine }) {
         Mod
       </h2>
       <Routes engine={engine} shown={shown} onShow={setShown} />
-      <div className="mt-auto grid grid-cols-4 justify-items-center gap-2 pt-2">
+      <div className={`${KNOB_ROW} grid-cols-4`}>
         <Knob key={ids.source} engine={engine} id={ids.source} />
         <Knob key={ids.dest} engine={engine} id={ids.dest} />
         <Knob
@@ -105,7 +106,7 @@ function Routes({
     <div
       role="group"
       aria-label="Modulation slot shown"
-      className="grid h-14 grid-cols-4 grid-rows-2 gap-1"
+      className="grid grid-cols-4 grid-rows-[1.75rem_1.75rem] gap-1"
     >
       {SLOTS.map((ids, slot) => (
         <button
@@ -116,7 +117,7 @@ function Routes({
           type="button"
           aria-pressed={slot === shown}
           onClick={() => onShow(slot)}
-          className="flex min-w-0 flex-col justify-center gap-0.5 rounded bg-white/[0.03] px-1 text-left text-[11px] leading-none text-zinc-500 aria-pressed:bg-white/10 aria-pressed:text-zinc-200 data-[on=true]:text-emerald-300"
+          className="flex min-w-0 flex-col justify-center gap-0.5 rounded-md bg-white/5 px-1.5 text-left text-[11px] leading-none text-zinc-500 aria-pressed:bg-white/10 aria-pressed:text-zinc-200 data-[on=true]:text-emerald-300"
         >
           <span
             ref={(text) => {

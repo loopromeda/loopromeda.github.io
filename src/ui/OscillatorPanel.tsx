@@ -3,6 +3,7 @@ import type { Engine } from '../engine/engine'
 import type { ParamId } from '../state/params'
 import { Knob } from './Knob'
 import { Switch } from './Switch'
+import { KNOB_ROW } from './controls'
 
 /**
  * The panel's pages: each oscillator's tone, then the mixer, where the
@@ -69,7 +70,7 @@ export function OscillatorPanel({ engine }: { engine: Engine }) {
           onShow={setShown}
         />
       </div>
-      <div className="mt-auto grid grid-cols-5 justify-items-center gap-2">
+      <div className={`${KNOB_ROW} grid-cols-5`}>
         {page.knobs.map((id) => (
           <Knob key={id} engine={engine} id={id} />
         ))}

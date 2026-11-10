@@ -4,6 +4,7 @@ import { getParam, toNormalized, type ParamId } from '../state/params'
 import { OUTLINE_POINTS, envelopeOutline } from '../viz/envelope'
 import { Knob } from './Knob'
 import { Switch } from './Switch'
+import { KNOB_ROW } from './controls'
 
 /** An envelope's knobs: attack, decay, sustain, release */
 type Stages = readonly [ParamId, ParamId, ParamId, ParamId]
@@ -72,7 +73,7 @@ export function EnvelopePanel({ engine }: { engine: Engine }) {
         />
       </div>
       <Outline engine={engine} stages={envelope.stages} />
-      <div className="mt-auto grid grid-cols-4 justify-items-center gap-2 pt-2">
+      <div className={`${KNOB_ROW} grid-cols-4`}>
         {envelope.stages.map((id) => (
           <Knob key={id} engine={engine} id={id} />
         ))}
