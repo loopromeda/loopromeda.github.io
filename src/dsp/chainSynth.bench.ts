@@ -1,9 +1,9 @@
 /**
- * The chain engine against the render budget (plan §4, M2), as
- * synth.bench.ts holds the old one to it: one 128-frame block of every
- * voice in under a third of the block's own 2.67 ms at 48 kHz. The old
- * stress patch, built from parts, shows what the parts cost over the
- * fixed voice; the full one, every slot taken, is the worst a sound can
+ * The chain engine against the render budget (plan §4, M2): one
+ * 128-frame block of every voice in under a third of the block's own
+ * 2.67 ms at 48 kHz. The old synth's stress patch, built from parts,
+ * shows what the parts cost over the fixed voice they replaced; the
+ * full one, every slot taken (chainStress.ts), is the worst a sound can
  * ask of it.
  */
 import { expect, test } from 'vitest'
@@ -55,7 +55,7 @@ function sawSynth(): ChainSynth {
   return synth
 }
 
-/** stress.ts's patch, built from parts as soundFromV1 would build it */
+/** The old synth's stress patch, built from parts as soundFromV1 would */
 function oldStressSynth(): ChainSynth {
   const synth = new ChainSynth(SAMPLE_RATE)
   synth.inputCount = 4

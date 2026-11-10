@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { stressSynth, timeBlocks } from './stress'
+import { chainStressSynth, timeBlocks } from './chainStress'
 
-describe('stressSynth', () => {
+describe('chainStressSynth', () => {
   it('holds as many notes as asked, on as many voices as asked', () => {
-    expect(stressSynth(48000, 32).activeVoices).toBe(32)
-    expect(stressSynth(48000, 32, 8).activeVoices).toBe(8)
+    expect(chainStressSynth(48000, 32).activeVoices).toBe(32)
+    expect(chainStressSynth(48000, 32, 8).activeVoices).toBe(8)
   })
 
   it('renders sound, every sample finite, for a second', () => {
-    const synth = stressSynth(48000, 16)
+    const synth = chainStressSynth(48000, 16)
     const block = new Float32Array(128)
     let peak = 0
     for (let n = 0; n < 375; n++) {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { VOICE_COUNT } from '../dsp/synth'
+import { VOICE_COUNT } from '../dsp/chainSynth'
 import {
   DEFAULT_SETTINGS,
   LATENCIES,

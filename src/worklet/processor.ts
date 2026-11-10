@@ -1,5 +1,5 @@
-import { stressSynth, timeBlocks } from '../dsp/stress'
-import { Synth } from '../dsp/synth'
+import { ChainSynth } from '../dsp/chainSynth'
+import { chainStressSynth, timeBlocks } from '../dsp/chainStress'
 import {
   BENCH_MAX_VOICES,
   PROCESSOR_NAME,
@@ -7,21 +7,20 @@ import {
   type FromWorklet,
   type ToWorklet,
 } from '../engine/protocol'
-import { paramIndex } from '../state/params'
-import { PatchedSynth } from './patch'
+import { SoundPlayer } from './sound'
 
 /** A measurement's warm-up and timing, per voice count, in milliseconds */
 const BENCH_WARMUP_MS = 50
 const BENCH_MS = 300
 
 /**
- * The audio thread's shell around src/dsp's Synth: messages in, blocks out.
- * PatchedSynth keeps every parameter's value and hands each change to the
- * synth in its own terms. Nothing is allocated in process().
+ * The audio thread's shell around src/dsp's ChainSynth: messages in,
+ * blocks out. SoundPlayer keeps the sound's knobs and hands each change to
+ * the synth in its own terms. Nothing is allocated in process().
  */
 class SynthProcessor extends AudioWorkletProcessor {
-  readonly #patch = new PatchedSynth(new Synth(sampleRate))
-  readonly #synth = this.#patch.synth
+  readonly #synth = new ChainSynth(sampleRate)
+  readonly #player = new SoundPlayer(this.#synth)
 
   constructor() {
     super()
@@ -40,11 +39,13 @@ class SynthProcessor extends AudioWorkletProcessor {
       case 'slide':
         this.#synth.slide(message.id, message.value)
         break
-      case 'param':
-        this.#patch.set(paramIndex(message.id), message.value)
+      case 'sound':
+        this.#player.load(message.sound)
         break
-      case 'params':
-        this.#patch.setAll(message.values)
+      case 'knobs':
+        for (const { part, key, value } of message.changes) {
+          this.#player.set(part, key, value)
+        }
         break
       case 'panic':
         this.#synth.releaseAll()
@@ -59,7 +60,7 @@ class SynthProcessor extends AudioWorkletProcessor {
   }
 
   /**
-   * Times the heaviest patch at each voice count, here on the audio thread
+   * Times the heaviest sound at each voice count, here on the audio thread
    * (its priority, its core, its JIT), and posts the results back. A
    * measurement asked for by hand: it builds synths, and the audio stops
    * for about a third of a second a count while it runs.
@@ -74,7 +75,7 @@ class SynthProcessor extends AudioWorkletProcessor {
     for (const count of counts) {
       const voices = Math.min(Math.max(Math.round(count), 1), BENCH_MAX_VOICES)
       if (!Number.isFinite(voices)) continue
-      const synth = stressSynth(sampleRate, voices)
+      const synth = chainStressSynth(sampleRate, voices)
       timeBlocks(synth, block, BENCH_WARMUP_MS, now)
       results.push({ voices, ...timeBlocks(synth, block, BENCH_MS, now) })
     }

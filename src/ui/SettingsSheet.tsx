@@ -39,7 +39,7 @@ const RENDER_QUANTUM = 128
  * the audio. It opens from the status line over the waveform and the
  * controls, as the presets do, and Escape closes it.
  *
- * Debug holds Measure CPU: the audio thread times the heaviest patch at 8
+ * Debug holds Measure CPU: the audio thread times the heaviest sound at 8
  * to 32 voices, to choose Voices by. onBench gets its results too (the dev
  * server keeps them in device-reports.jsonl).
  */
@@ -250,7 +250,7 @@ type Bench =
   | { state: 'done'; report: BenchReport; blockMs: number }
 
 /**
- * Times the heaviest patch on the audio thread at each of BENCH_VOICES,
+ * Times the heaviest sound on the audio thread at each of BENCH_VOICES,
  * and shows each count's block time and its share of a block
  */
 function MeasureCpu({
@@ -286,9 +286,9 @@ function MeasureCpu({
         bench.state === 'done' ? (
           <BenchResults report={bench.report} blockMs={bench.blockMs} />
         ) : bench.state === 'running' ? (
-          'The audio stops for a moment while the audio thread times the heaviest patch.'
+          'The audio stops for a moment while the audio thread times the heaviest sound.'
         ) : (
-          'Times the heaviest patch at 8 to 32 voices on the audio thread, to choose Voices by.'
+          'Times the heaviest sound at 8 to 32 voices on the audio thread, to choose Voices by.'
         )
       }
     >
@@ -317,7 +317,7 @@ function BenchResults({
 }) {
   return (
     <>
-      Heaviest patch, a block of {blockMs.toFixed(2)} ms:{' '}
+      Heaviest sound, a block of {blockMs.toFixed(2)} ms:{' '}
       {report.results.map((result, index) => (
         // The line breaks between results, never inside one
         <Fragment key={result.voices}>

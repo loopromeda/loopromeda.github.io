@@ -1,13 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import { LFO_SHAPES } from '../dsp/lfo'
-import {
-  DEST_COUNT,
-  DEST_CUTOFF,
-  DEST_PITCH,
-  MOD_SLOTS,
-  SOURCE_COUNT,
-  SOURCE_SLIDE,
-} from '../dsp/mod'
 import { WAVES } from '../dsp/oscillator'
 import {
   LFO_SHAPE_NAMES,
@@ -25,6 +17,10 @@ import {
   toNormalized,
   toValue,
 } from './params'
+
+/** Two destinations by number, as presets store them */
+const PITCH = 0
+const CUTOFF = 10
 
 describe('PARAMS', () => {
   it('has unique ids', () => {
@@ -56,15 +52,17 @@ describe('PARAMS', () => {
     expect(names).toEqual([...WAVES])
   })
 
-  it("names as many LFO shapes, sources and destinations as the DSP's", () => {
+  it("names as many LFO shapes as the DSP's", () => {
     expect(LFO_SHAPE_NAMES.length).toBe(LFO_SHAPES.length)
-    expect(MOD_SOURCES.length).toBe(SOURCE_COUNT)
-    expect(MOD_DESTS.length).toBe(DEST_COUNT)
-    expect(MOD_SLOT_COUNT).toBe(MOD_SLOTS)
-    // Spot checks of the shared order
-    expect(MOD_SOURCES[SOURCE_SLIDE]).toBe('Slide')
-    expect(MOD_DESTS[DEST_PITCH].name).toBe('Pitch')
-    expect(MOD_DESTS[DEST_CUTOFF].name).toBe('Cutoff')
+  })
+
+  it('keeps the matrix numbered as saved presets number it', () => {
+    expect(MOD_SLOT_COUNT).toBe(8)
+    expect(MOD_SOURCES.length).toBe(9)
+    expect(MOD_DESTS.length).toBe(15)
+    expect(MOD_SOURCES.indexOf('Slide')).toBe(7)
+    expect(MOD_DESTS[PITCH].name).toBe('Pitch')
+    expect(MOD_DESTS[CUTOFF].name).toBe('Cutoff')
   })
 
   it('has four knobs for every matrix slot, and none past the last', () => {
@@ -218,10 +216,10 @@ describe('the bipolar curve', () => {
 
 describe('formatModAmount', () => {
   it("speaks the destination's units", () => {
-    expect(formatModAmount(DEST_PITCH, 0.01)).toBe('+0.48 st')
-    expect(formatModAmount(DEST_PITCH, -0.25)).toBe('\u221212.0 st')
-    expect(formatModAmount(DEST_CUTOFF, 0.25)).toBe('+2.50 oct')
-    expect(formatModAmount(DEST_CUTOFF, 0)).toBe('0.00 oct')
+    expect(formatModAmount(PITCH, 0.01)).toBe('+0.48 st')
+    expect(formatModAmount(PITCH, -0.25)).toBe('\u221212.0 st')
+    expect(formatModAmount(CUTOFF, 0.25)).toBe('+2.50 oct')
+    expect(formatModAmount(CUTOFF, 0)).toBe('0.00 oct')
   })
 
   it('counts a percent destination in percent of its scale', () => {

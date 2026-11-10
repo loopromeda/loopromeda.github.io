@@ -5,6 +5,9 @@ import {
   paramIndex,
   type ParamId,
 } from '../state/params'
+import { knobChanges } from '../state/sound/diff'
+import type { Sound } from '../state/sound/sound'
+import { soundFromV1 } from '../state/sound/v1'
 import processorUrl from '../worklet/processor.ts?worker&url'
 import {
   PROCESSOR_NAME,
@@ -55,7 +58,9 @@ export const WAVEFORM_SIZE = 2048
  * Subscribe-and-snapshot, for useSyncExternalStore.
  *
  * It also holds the main thread's copy of every parameter value, so knobs
- * can be set before the audio starts and a new worklet gets them all.
+ * can be set before the audio starts and a new worklet gets them all. The
+ * audio thread hears them as a sound (src/state/sound/v1.ts): the whole
+ * of it when its structure changes, else only the knobs that moved.
  */
 export class Engine {
   #context: AudioContext | undefined
@@ -65,6 +70,8 @@ export class Engine {
   #snapshot: EngineSnapshot = { state: 'idle' }
   /** Every parameter's value, in PARAMS order */
   readonly #values = defaultValues()
+  /** The sound the worklet plays, as last sent; none before it exists */
+  #sent: Sound | undefined
   readonly #listeners = new Set<() => void>()
   readonly #paramListeners = new Set<(id: ParamId, value: number) => void>()
   /** Who waits for the measurement under way, answered in order */
@@ -127,8 +134,9 @@ export class Engine {
       node.connect(analyser).connect(context.destination)
       this.#analyser = analyser
       this.#node = node
-      // The worklet starts from the defaults: catch it up, ahead of any note
-      this.#post({ t: 'params', values: Array.from(this.#values) })
+      // The worklet starts with no sound: catch it up, ahead of any note
+      this.#sent = undefined
+      this.#sync()
       if (this.#voices !== undefined) {
         this.#post({ t: 'voices', count: this.#voices })
       }
@@ -198,6 +206,7 @@ export class Engine {
     this.#context = undefined
     this.#node = undefined
     this.#analyser = undefined
+    this.#sent = undefined
     // A measurement under way on the old worklet will not answer
     for (const resolve of this.#benchWaiting.splice(0)) resolve(undefined)
     old.close().catch(() => undefined)
@@ -205,7 +214,7 @@ export class Engine {
   }
 
   /**
-   * Times the voice's heaviest patch (src/dsp/stress.ts) at each voice
+   * Times the heaviest sound (src/dsp/chainStress.ts) at each voice
    * count on the audio thread itself, and resolves with how long a block
    * took. The audio stops while it runs, about a third of a second a
    * count. Undefined if the audio has not started.
@@ -234,7 +243,7 @@ export class Engine {
     const next = clampValue(spec, value)
     if (next === this.#values[index]) return
     this.#values[index] = next
-    this.#post({ t: 'param', id, value: next })
+    this.#sync()
     for (const listener of this.#paramListeners) listener(id, next)
   }
 
@@ -258,7 +267,7 @@ export class Engine {
       changed.push(index)
     })
     if (changed.length === 0) return
-    this.#post({ t: 'params', values: Array.from(this.#values) })
+    this.#sync()
     for (const index of changed) {
       const spec = PARAMS[index] as (typeof PARAMS)[number]
       const value = this.#values[index] ?? 0
@@ -313,6 +322,21 @@ export class Engine {
       const { results, clock } = message
       this.#benchWaiting.shift()?.({ results, clock })
     }
+  }
+
+  /**
+   * Brings the worklet's sound up to the parameters: the knobs that moved
+   * since the sound last sent, in one message, or the whole sound if its
+   * structure changed (a part heard or let go, a route added). Nothing
+   * before the worklet exists; start() catches it up.
+   */
+  #sync(): void {
+    if (!this.#node) return
+    const sound = soundFromV1(this.#values)
+    const changes = this.#sent ? knobChanges(this.#sent, sound) : null
+    if (changes === null) this.#post({ t: 'sound', sound })
+    else if (changes.length > 0) this.#post({ t: 'knobs', changes })
+    this.#sent = sound
   }
 
   #post(message: ToWorklet): void {

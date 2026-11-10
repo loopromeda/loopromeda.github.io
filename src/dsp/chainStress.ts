@@ -45,7 +45,9 @@ import {
  * envelopes still in their attack and four LFOs, and sixteen routes, most
  * through a via, moving pitch, widths, FM, levels, sends, cutoffs,
  * resonance, drive, a rate and the amp every sample. Every voice glides.
- * The held notes stay within C2..B5, below any Nyquist.
+ * Shared by `pnpm bench` and the worklet's own measurement (Settings,
+ * Measure CPU), so the two time one sound. The held notes stay within
+ * C2..B5, below any Nyquist.
  */
 export function chainStressSynth(
   sampleRate: number,
@@ -134,4 +136,39 @@ export function chainStressSynth(
     synth.slide(key, 0.5)
   }
   return synth
+}
+
+/** What timeBlocks measured */
+export interface BlockTiming {
+  /** Mean milliseconds a block took */
+  readonly meanMs: number
+  /** Blocks timed */
+  readonly blocks: number
+}
+
+/** Blocks rendered between two clock reads, so a read costs next to none */
+const BATCH = 16
+
+/**
+ * Renders block after block into `block` for at least `ms` milliseconds by
+ * `now` (a clock in milliseconds) and returns the mean time a block took.
+ * The clock is read once per BATCH blocks, so a coarse one (Date.now, 1
+ * ms) still gives the mean to a fraction of a percent over a few hundred
+ * milliseconds.
+ */
+export function timeBlocks(
+  synth: { process(out: Float32Array): void },
+  block: Float32Array,
+  ms: number,
+  now: () => number
+): BlockTiming {
+  const start = now()
+  let elapsed: number
+  let blocks = 0
+  do {
+    for (let i = 0; i < BATCH; i++) synth.process(block)
+    blocks += BATCH
+    elapsed = now() - start
+  } while (elapsed < ms)
+  return { meanMs: elapsed / blocks, blocks }
 }

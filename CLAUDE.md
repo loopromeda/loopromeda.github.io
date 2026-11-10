@@ -16,7 +16,7 @@ pnpm typecheck      # tsc: app, audio thread (tsconfig.worklet.json), configs
 pnpm lint           # eslint
 pnpm format:check   # prettier (pnpm format to fix)
 pnpm test           # vitest, once
-pnpm bench          # render-time budget: 8 voices, one 128-frame block
+pnpm bench          # render-time budget: every voice, one 128-frame block
 pnpm build          # typecheck + vite build into dist/
 ```
 
@@ -32,7 +32,8 @@ Before calling a change done: `pnpm typecheck && pnpm lint && pnpm format:check 
 - **No allocation inside `process()`.** Preallocate voices and buffers; smooth
   parameter changes; never hardcode the sample rate (read `sampleRate`).
 - **One parameter schema** (`src/state/params.ts`, from M2): id, range, default,
-  curve and unit, used by the UI, the worklet and presets alike.
+  curve and unit, used by the UI and presets alike, and by the worklet through
+  the sound they convert to (`src/state/sound/v1.ts`).
 - **Real-time UI bypasses React state.** Knob drags and key presses go straight
   to the engine through refs and pointer events; React renders structure.
 - **Secure context everywhere.** AudioWorklet needs HTTPS: Pages in production,
@@ -42,16 +43,17 @@ Before calling a change done: `pnpm typecheck && pnpm lint && pnpm format:check 
 
 ```
 src/dsp/      pure DSP (oscillators, envelopes, LFOs, filters, voices);
-              mod.ts numbers the matrix's sources and destinations;
-              synth.ts is the whole instrument: voice pool, allocator,
-              mono/legato, matrix, mix; chainSynth.ts and chainVoice.ts
-              are the same for a sound built from parts (slots.ts
-              numbers them), to replace them (not wired in yet)
+              chainSynth.ts is the whole instrument, a sound built from
+              parts: voice pool, allocator, mono/legato, routes, mix;
+              chainVoice.ts one voice of it; slots.ts numbers the parts,
+              sources and destinations; chainStress.ts is the heaviest
+              sound it can hold, for measuring
 src/worklet/  the AudioWorkletProcessor around src/dsp; own globals and
               tsconfig (tsconfig.worklet.json), loaded via ?worker&url;
-              patch.ts maps parameter values onto the Synth, sound.ts a
-              sound document onto the ChainSynth (both Node-testable)
-src/engine/   AudioContext lifecycle, unlock, node wiring; protocol.ts is
+              sound.ts loads a sound document onto the ChainSynth and
+              sets its knobs one by one (Node-testable)
+src/engine/   AudioContext lifecycle, unlock, node wiring; the parameters
+              sent as a sound, or as the knobs that moved; protocol.ts is
               the message types both threads share (plain data only)
 src/state/    params.ts: the parameter schema; presets.ts: the preset and
               file format; factory.ts: the shipped presets; library.ts:
@@ -60,8 +62,9 @@ src/state/    params.ts: the parameter schema; presets.ts: the preset and
               settings.ts: the device's settings (voices, latency,
               velocity, what the screen shows); sound/: a sound as a
               document of inputs, chains, modulators and routes, its
-              edits, reading it from JSON and from the old parameters
-              (not wired in yet)
+              edits, reading it from JSON and from the old parameters,
+              and the knobs that moved between two (diff.ts); the audio
+              plays the old parameters converted, until the editor
 src/viz/      pure display math (scope trigger and decimation, envelope
               and LFO outlines, filter response, keyboard and pad grid
               geometry, the sound editor's input column and chain rows
@@ -79,7 +82,7 @@ Dev-only device reports: every page load, every audio state change and,
 every 5 s while it draws, the waveform display's frame cost on a phone are
 appended to `device-reports.jsonl` (gitignored), and so is the audio
 thread's render time when Settings' Measure CPU is tapped (the
-heaviest patch, `src/dsp/stress.ts`, at 8 to 32 voices). Read it after a
+heaviest sound, `src/dsp/chainStress.ts`, at 8 to 32 voices). Read it after a
 device test instead of asking for numbers to be retyped.
 
 ## Repository

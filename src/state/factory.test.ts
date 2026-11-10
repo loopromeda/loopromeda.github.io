@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { POLY, Synth } from '../dsp/synth'
-import { PatchedSynth } from '../worklet/patch'
+import { ChainSynth, POLY } from '../dsp/chainSynth'
+import { applySound } from '../worklet/sound'
 import { FACTORY_PRESETS } from './factory'
 import { modSlotIds } from './params'
+import { soundFromV1 } from './sound/v1'
 import {
   PRESET_CATEGORIES,
   cleanName,
@@ -14,15 +15,15 @@ import {
 const SAMPLE_RATE = 48000
 const BLOCK = 128
 
-/** The preset's synth, every parameter set as loading it sets them */
-function patched(preset: Preset): PatchedSynth {
-  const patch = new PatchedSynth(new Synth(SAMPLE_RATE))
-  patch.setAll(fullValues(preset.values))
-  return patch
+/** The preset's synth, playing the sound loading the preset sends it */
+function loaded(preset: Preset): ChainSynth {
+  const synth = new ChainSynth(SAMPLE_RATE)
+  applySound(synth, soundFromV1(fullValues(preset.values)))
+  return synth
 }
 
 /** Renders seconds of synth, in blocks, returned end to end */
-function render(synth: Synth, seconds: number): Float32Array {
+function render(synth: ChainSynth, seconds: number): Float32Array {
   const blocks = Math.ceil((seconds * SAMPLE_RATE) / BLOCK)
   const all = new Float32Array(blocks * BLOCK)
   const block = new Float32Array(BLOCK)
@@ -104,11 +105,11 @@ describe('FACTORY_PRESETS', () => {
   it.each(FACTORY_PRESETS.map((preset) => [preset.name, preset] as const))(
     '%s sounds at C4, held and released, without clipping',
     (_, preset) => {
-      const patch = patched(preset)
-      patch.synth.noteOn(1, 60, 0.8)
-      const held = render(patch.synth, 0.5)
-      patch.synth.noteOff(1)
-      const released = render(patch.synth, 3)
+      const synth = loaded(preset)
+      synth.noteOn(1, 60, 0.8)
+      const held = render(synth, 0.5)
+      synth.noteOff(1)
+      const released = render(synth, 3)
       for (const samples of [held, released]) {
         expect(samples.every((sample) => Number.isFinite(sample))).toBe(true)
       }
@@ -126,27 +127,27 @@ describe('FACTORY_PRESETS', () => {
     )
     expect(mono.length).toBeGreaterThan(0)
     for (const preset of mono) {
-      const patch = patched(preset)
-      patch.synth.noteOn(1, 48, 0.8)
-      patch.synth.noteOn(2, 55, 0.8)
-      render(patch.synth, 0.05)
-      expect(patch.synth.activeVoices, preset.name).toBe(1)
+      const synth = loaded(preset)
+      synth.noteOn(1, 48, 0.8)
+      synth.noteOn(2, 55, 0.8)
+      render(synth, 0.05)
+      expect(synth.activeVoices, preset.name).toBe(1)
     }
   })
 
   it('drops the Kick from three octaves up to the key', () => {
-    const patch = patched(named('Kick'))
-    patch.synth.noteOn(1, 60, 1)
-    const out = render(patch.synth, 0.3)
+    const synth = loaded(named('Kick'))
+    synth.noteOn(1, 60, 1)
+    const out = render(synth, 0.3)
     // Near 1 kHz in its first cycle, down to the key's own C3 by 0.1 s
     expect(frequencyAt(out, 0)).toBeGreaterThan(700)
     expect(frequencyAt(out, at(0.2))).toBeCloseTo(130.81, -0.5)
   })
 
   it('stops the Closed Hat while the key is still held', () => {
-    const patch = patched(named('Closed Hat'))
-    patch.synth.noteOn(1, 60, 1)
-    const out = render(patch.synth, 0.5)
+    const synth = loaded(named('Closed Hat'))
+    synth.noteOn(1, 60, 1)
+    const out = render(synth, 0.5)
     expect(peak(out, 0, at(0.05))).toBeGreaterThan(0.03)
     expect(peak(out, at(0.35), at(0.5))).toBeLessThan(0.001)
   })

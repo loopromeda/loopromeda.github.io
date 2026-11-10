@@ -1,29 +1,23 @@
 import { describe, expect, it } from 'vitest'
 import { ChainSynth } from '../dsp/chainSynth'
+import { SQUARE } from '../dsp/oscillator'
 import * as slots from '../dsp/slots'
-import { Synth } from '../dsp/synth'
-import { FACTORY_PRESETS } from '../state/factory'
-import {
-  MOD_SLOT_COUNT,
-  defaultValues,
-  modSlotIds,
-  paramIndex,
-  type ParamId,
-} from '../state/params'
-import { fullValues } from '../state/presets'
+import { knobChanges } from '../state/sound/diff'
 import {
   addChain,
   addInput,
   addItem,
+  addModulator,
+  addRoute,
   setRef,
+  setRoute,
   setSend,
   setValue,
+  type Added,
 } from '../state/sound/edit'
 import * as kinds from '../state/sound/kinds'
-import { initSound, type Sound } from '../state/sound/sound'
-import { soundFromV1 } from '../state/sound/v1'
-import { PatchedSynth } from './patch'
-import { applySound } from './sound'
+import { AMP, VOICE, initSound, type Sound } from '../state/sound/sound'
+import { SoundPlayer, applySound } from './sound'
 
 const SAMPLE_RATE = 48000
 const BLOCK = 128
@@ -76,60 +70,11 @@ function peak(out: Float32Array): number {
   return out.reduce((most, x) => Math.max(most, Math.abs(x)), 0)
 }
 
-/**
- * values with LFO 2 renumbered LFO 1 when LFO 1 is not used: the chain
- * engine seeds a sound's LFOs in their order, so an LFO 2 played alone
- * draws its random shapes (S&H, Smooth) as the old LFO 1 did
- */
-function lfosInOrder(values: Float64Array): Float64Array {
-  const [lfo1, lfo2] = [1, 2]
-  const [rate1, rate2] = [13, 14]
-  const slots = Array.from({ length: MOD_SLOT_COUNT }, (_, n) =>
-    modSlotIds(n + 1)
-  )
-  const at = (id: ParamId) => values[paramIndex(id)] as number
-  // A slot with no amount does nothing (the defaults route a few so)
-  const reads = (lfo: number) =>
-    slots.some(
-      (ids) =>
-        at(ids.amount) !== 0 && (at(ids.source) === lfo || at(ids.via) === lfo)
-    )
-  if (reads(lfo1) || !reads(lfo2)) return values
-  const out = Float64Array.from(values)
-  const set = (id: ParamId, value: number) => (out[paramIndex(id)] = value)
-  for (const key of ['shape', 'rate', 'fade', 'trigger'] as const) {
-    set(`lfo1.${key}`, at(`lfo2.${key}`))
-  }
-  for (const ids of slots) {
-    if (at(ids.source) === lfo2) set(ids.source, lfo1)
-    if (at(ids.via) === lfo2) set(ids.via, lfo1)
-    if (at(ids.dest) === rate2) set(ids.dest, rate1)
-    else if (at(ids.dest) === rate1) set(ids.dest, rate2)
-  }
-  return out
-}
-
-/** What the old synth plays for values (PARAMS order) */
-function oldRender(values: Float64Array): Float32Array {
-  const patch = new PatchedSynth(new Synth(SAMPLE_RATE))
-  patch.setAll(values)
-  return phrase(patch.synth)
-}
-
 /** What the chain synth plays for sound */
 function render(sound: Sound): Float32Array {
   const synth = new ChainSynth(SAMPLE_RATE)
   applySound(synth, sound)
   return phrase(synth)
-}
-
-/** The old defaults with some values changed, by id */
-function old(changes: Partial<Record<ParamId, number>>): Float64Array {
-  const values = defaultValues()
-  for (const [id, value] of Object.entries(changes)) {
-    values[paramIndex(id)] = value as number
-  }
-  return values
 }
 
 describe('the chain engine', () => {
@@ -139,32 +84,6 @@ describe('the chain engine', () => {
     expect(slots.MAX_ITEMS).toBe(kinds.MAX_ITEMS)
     expect(slots.MAX_MODULATORS).toBe(kinds.MAX_MODULATORS)
     expect(slots.MAX_ROUTES).toBe(kinds.MAX_ROUTES)
-  })
-
-  it.each(FACTORY_PRESETS.map((preset) => [preset.name, preset] as const))(
-    'plays the factory preset %s as the old synth did',
-    (_, preset) => {
-      const values = fullValues(preset.values)
-      const before = oldRender(lfosInOrder(values))
-      const after = render(soundFromV1(values))
-      expect(peak(before)).toBeGreaterThan(0.01)
-      expect(maxDifference(before, after)).toBeLessThan(1e-6)
-    }
-  )
-
-  it('plays keytracking as before with osc 1 transposed', () => {
-    const values = old({
-      'osc1.octave': -1,
-      'osc1.semi': 5,
-      'filter.cutoff': 800,
-      'filter.resonance': 0.5,
-      'filter.keytrack': 0.7,
-    })
-    const difference = maxDifference(
-      oldRender(values),
-      render(soundFromV1(values))
-    )
-    expect(difference).toBeLessThan(1e-6)
   })
 
   it('plays nothing without a chain, or with no sends', () => {
@@ -220,5 +139,138 @@ describe('the chain engine', () => {
     )
     const quiet = setValue(two, chain, 'level', 0)
     expect(maxDifference(render(quiet), render(initSound()))).toBe(0)
+  })
+})
+
+/**
+ * Two oscillators (a square and a saw), a noise and a ring of the two into
+ * two chains, a filter and a drive, an LFO, an envelope and two routes
+ */
+function busy(): Sound {
+  let sound = setValue(initSound(), 'i1', 'wave', SQUARE)
+  const step = (added: Added) => {
+    sound = added.sound
+    return added.id as string
+  }
+  const osc2 = step(addInput(sound, 'osc'))
+  const noise = step(addInput(sound, 'noise'))
+  const ring = step(addInput(sound, 'ring'))
+  sound = setRef(setRef(sound, ring, 'a', 'i1'), ring, 'b', osc2)
+  sound = setSend(sound, 'c1', osc2, 0.5)
+  const chain = step(addChain(sound))
+  sound = setSend(setSend(sound, chain, noise, 0.3), chain, ring, 0.6)
+  step(addItem(sound, chain, 'drive'))
+  const lfo = step(addModulator(sound, 'lfo'))
+  const env = step(addModulator(sound, 'env'))
+  step(addRoute(sound, { source: lfo, target: 'x1', key: 'cutoff' }))
+  step(addRoute(sound, { source: env, target: osc2, key: 'pitch', via: lfo }))
+  sound = setRoute(sound, 'r1', { amount: 0.4 })
+  return setRoute(sound, 'r2', { amount: 0.2 })
+}
+
+/** A knob turned of each kind, by name: the sound with it turned */
+const TURNS: readonly (readonly [string, (sound: Sound) => Sound])[] = [
+  ["an oscillator's pitch", (s) => setValue(s, 'i2', 'semi', 7)],
+  ["an oscillator's width", (s) => setValue(s, 'i1', 'width', 0.2)],
+  ['a send', (s) => setSend(s, 'c1', 'i2', 0.8)],
+  ['a send to nothing', (s) => setSend(s, 'c2', 'i4', 0)],
+  ['a send from nothing', (s) => setSend(s, 'c2', 'i1', 0.4)],
+  ["a chain's level", (s) => setValue(s, 'c2', 'level', 0.5)],
+  ["a filter's cutoff", (s) => setValue(s, 'x1', 'cutoff', 600)],
+  ["a filter's resonance", (s) => setValue(s, 'x1', 'resonance', 0.6)],
+  ["a drive's amount", (s) => setValue(s, 'x2', 'drive', 0.8)],
+  ["an LFO's rate", (s) => setValue(s, 'm1', 'rate', 6)],
+  ["an envelope's attack", (s) => setValue(s, 'm2', 'attack', 0.05)],
+  ["a route's amount", (s) => setRoute(s, 'r2', { amount: -0.3 })],
+  ["the amp's release", (s) => setValue(s, AMP, 'release', 0.1)],
+  ['the glide', (s) => setValue(s, VOICE, 'glide', 0.05)],
+  ['the voice mode', (s) => setValue(s, VOICE, 'mode', 1)],
+]
+
+describe('SoundPlayer', () => {
+  /** What a player plays that loaded before and was sent after's knobs */
+  function turned(before: Sound, after: Sound): Float32Array {
+    const synth = new ChainSynth(SAMPLE_RATE)
+    const player = new SoundPlayer(synth)
+    player.load(before)
+    const changes = knobChanges(before, after)
+    expect(changes).not.toBeNull()
+    for (const { part, key, value } of changes ?? []) {
+      player.set(part, key, value)
+    }
+    return phrase(synth)
+  }
+
+  it.each(TURNS)('sets %s as loading the sound with it set', (_, turn) => {
+    const before = busy()
+    const after = turn(before)
+    expect(knobChanges(before, after)).toHaveLength(1)
+    expect(maxDifference(render(after), render(before))).toBeGreaterThan(0)
+    expect(maxDifference(turned(before, after), render(after))).toBe(0)
+  })
+
+  it('sets every kind of knob at once', () => {
+    const before = busy()
+    const after = TURNS.reduce((sound, [, turn]) => turn(sound), before)
+    expect(maxDifference(turned(before, after), render(after))).toBe(0)
+  })
+
+  it('turns a knob under a note that is playing', () => {
+    const play = (cutoff?: number) => {
+      const synth = new ChainSynth(SAMPLE_RATE)
+      const player = new SoundPlayer(synth)
+      player.load(busy())
+      synth.noteOn(1, 48, 1)
+      const out = new Float32Array(BLOCK * 40)
+      const block = new Float32Array(BLOCK)
+      for (let b = 0; b < 40; b++) {
+        if (b === 20 && cutoff !== undefined) player.set('x1', 'cutoff', cutoff)
+        synth.process(block)
+        out.set(block, b * BLOCK)
+      }
+      return out
+    }
+    const still = play()
+    const moved = play(200)
+    const half = BLOCK * 20
+    expect(
+      maxDifference(moved.subarray(0, half), still.subarray(0, half))
+    ).toBe(0)
+    expect(maxDifference(moved, still)).toBeGreaterThan(0.01)
+    expect(peak(moved.subarray(half))).toBeGreaterThan(0.01)
+  })
+
+  it('lets be a part, a knob or a value it does not know', () => {
+    const synth = new ChainSynth(SAMPLE_RATE)
+    const player = new SoundPlayer(synth)
+    player.load(busy())
+    player.set('x9', 'cutoff', 100)
+    player.set('x1', 'nothing', 100)
+    player.set('x1', 'cutoff', Number.NaN)
+    player.set('r1', 'amount', Number.POSITIVE_INFINITY)
+    player.set('c1', 'send.i9', 1)
+    expect(maxDifference(phrase(synth), render(busy()))).toBe(0)
+  })
+
+  it("forgets the last sound's parts when it loads another", () => {
+    const play = (knob: boolean) => {
+      const synth = new ChainSynth(SAMPLE_RATE)
+      const player = new SoundPlayer(synth)
+      player.load(busy())
+      player.load(initSound())
+      // m1 was busy()'s LFO; initSound() has no modulators
+      if (knob) player.set('m1', 'rate', 9)
+      return phrase(synth)
+    }
+    expect(peak(play(false))).toBeGreaterThan(0.01)
+    expect(maxDifference(play(true), play(false))).toBe(0)
+  })
+
+  it('loads the same sound again without a change to what it plays', () => {
+    const synth = new ChainSynth(SAMPLE_RATE)
+    const player = new SoundPlayer(synth)
+    player.load(busy())
+    player.load(busy())
+    expect(maxDifference(phrase(synth), render(busy()))).toBe(0)
   })
 })

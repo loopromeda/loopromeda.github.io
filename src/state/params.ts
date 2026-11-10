@@ -49,8 +49,9 @@ export const LFO_SHAPE_NAMES = [
 ] as const
 
 /**
- * The modulation matrix's sources, in src/dsp/mod.ts's order: the Source
- * and Via knobs' choices. Off as a via scales by 1.
+ * The modulation matrix's sources, numbered as saved presets number them:
+ * the Source and Via knobs' choices. Off as a via scales by 1. The sound
+ * (src/state/sound/v1.ts) reads them by name.
  */
 export const MOD_SOURCES = [
   'Off',
@@ -65,8 +66,9 @@ export const MOD_SOURCES = [
 ] as const
 
 /**
- * The matrix's destinations, in src/dsp/mod.ts's order, and what an amount
- * of 1 (100%) moves each by: `scale` of `unit`, a % unit counting 1 as 100%
+ * The matrix's destinations, numbered as saved presets number them, and
+ * what an amount of 1 (100%) moves each by: `scale` of `unit`, a % unit
+ * counting 1 as 100%
  */
 export const MOD_DESTS = [
   { name: 'Pitch', scale: 48, unit: 'st' },

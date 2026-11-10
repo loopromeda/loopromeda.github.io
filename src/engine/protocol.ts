@@ -4,7 +4,8 @@
  * back. Shared by src/engine (DOM) and src/worklet (AudioWorkletGlobalScope),
  * so it stays free of either: plain data only.
  */
-import type { ParamId } from '../state/params'
+import type { KnobChange } from '../state/sound/diff'
+import type { Sound } from '../state/sound/sound'
 
 /** The name the processor registers under and the node is created with */
 export const PROCESSOR_NAME = 'loopromeda-synth'
@@ -16,10 +17,16 @@ export type ToWorklet =
   | { t: 'noteOff'; id: number }
   /** That touch's finger slid up its key (or down, below 0), -1..1 */
   | { t: 'slide'; id: number; value: number }
-  /** A parameter's new value, in its own units (src/state/params.ts) */
-  | { t: 'param'; id: ParamId; value: number }
-  /** Every parameter at once, in PARAMS order (a preset, or catching up) */
-  | { t: 'params'; values: readonly number[] }
+  /**
+   * The whole sound (src/state/sound): a new one, one whose structure
+   * changed, or catching a new worklet up
+   */
+  | { t: 'sound'; sound: Sound }
+  /**
+   * Knobs of the sound last sent, in its own units: what a knob turned
+   * changes, all applied before the next block
+   */
+  | { t: 'knobs'; changes: readonly KnobChange[] }
   /** Everything stops: all notes released */
   | { t: 'panic' }
   /**
@@ -28,8 +35,8 @@ export type ToWorklet =
    */
   | { t: 'voices'; count: number }
   /**
-   * Time the heaviest patch (src/dsp/stress.ts) at each of these voice
-   * counts on the audio thread. The audio stops while it runs.
+   * Time the heaviest sound (src/dsp/chainStress.ts) at each of these
+   * voice counts on the audio thread. The audio stops while it runs.
    */
   | { t: 'bench'; voices: readonly number[] }
 

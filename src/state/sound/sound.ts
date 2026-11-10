@@ -284,6 +284,11 @@ export function sendInput(key: string): string | undefined {
     : undefined
 }
 
+/** A chain's key for its send from input: i2 → send.i2 */
+export function sendKey(input: string): string {
+  return `${SEND_DEST.key}.${input}`
+}
+
 /** What a route to (target, key) moves, or undefined if nothing there */
 export function destOf(
   sound: Sound,
@@ -389,7 +394,7 @@ export function destinations(sound: Sound): Destination[] {
     for (const input of sound.inputs) {
       out.push({
         target: chain.id,
-        key: `${SEND_DEST.key}.${input.id}`,
+        key: sendKey(input.id),
         label: `${partName(sound, chain.id)} ${partName(sound, input.id)}`,
         dest: SEND_DEST,
       })

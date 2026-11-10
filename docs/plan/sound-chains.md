@@ -162,7 +162,13 @@ as a graph of flat tiles, flowing left to right.
    CPU times `chainStress.ts` (step 3).
 3. The engine and worklet: a sound's structure as one message, a knob as
    (part id, key, value). The old voice, synth and parameter mapping go,
-   with the equivalence test that held the new one to them.
+   with the equivalence test that held the new one to them. Done
+   2026-11-11: the engine converts the parameters to a sound as they
+   change and sends the knobs that moved (`src/state/sound/diff.ts`), or
+   the whole sound when its structure changed; the worklet's
+   `SoundPlayer` (`src/worklet/sound.ts`) loads one and sets the other,
+   as loading the changed sound would. Measure CPU times
+   `chainStress.ts`.
 4. The editor: inputs, chains and modulators on screen, with add, remove
    and reorder; routes from any knob. Drawn first (The editor, above);
    the input column's layout is `src/viz/graph.ts`, 2026-11-11.
