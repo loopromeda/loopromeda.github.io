@@ -181,11 +181,21 @@ Filter and filter envelope first (the widest change in sound), then the
 second oscillator with detune and noise, the pitch envelope, the LFO, glide
 and velocity.
 
-- [ ] Oscillators: sine, polyBLEP saw/square, triangle; detune; noise **[oc for sine/noise]**
+- [x] Oscillators: sine, polyBLEP saw/square, triangle; detune; noise **[oc for sine/noise]**
   - [x] `src/dsp/oscillator.ts` 2026-11-10: sine, polyBLAMP triangle, polyBLEP
         saw/square, one phase across wave changes. Measured at 1220 Hz, 48 kHz:
         aliasing 13–16 dB below the sharp-edged waves (tests hold it above 10).
-  - [ ] detune (second oscillator), noise
+  - [x] Second oscillator and noise, 2026-11-10: oscillator 2 has its own
+        Wave, Octave, Semi, Fine (the detune) and Level, off by default;
+        white noise (`src/dsp/noise.ts`, xorshift32, written by opencode
+        from a spec, reviewed here) is seeded per voice, so voices' noises
+        add in power, not in step. The three levels glide (5 ms) and mix
+        into the filter; a source at level 0 is not computed. Parameter ids
+        renamed `osc.*` → `osc1.*` while no preset depends on them. OSC tab:
+        a 1 | 2 | Noise switch, each button with a dot lit while that
+        source's level is up. Checked in desktop Chrome: oscillator 2 at
+        +7 st adds a 392 Hz peak level with C4's; noise at 49% lifts 5 kHz
+        from −197 to −69 dB.
   - [x] Oscillator knobs on the test note, asked for by ashon 2026-11-10: Wave,
         Octave, Semi, Fine, Level (`src/ui/Knob.tsx`, `OscillatorPanel.tsx`).
         A knob turns by vertical drag (160 px end to end), double-tap resets
@@ -228,7 +238,7 @@ and velocity.
       `pnpm bench` (`src/dsp/synth.bench.ts`, fails over a third): 8 saw
       voices 0.0066 ms a block on an Apple M3 Max, 2026-11-10. With the filter:
       0.012 ms, and 0.016 ms when every voice's cutoff moves each sample (a
-      new tan each sample).
+      new tan each sample); 0.027 ms with both oscillators and noise on too.
 
 **Exit:** vitest green (pitch, envelope timing, no NaN, stealing), WAV renders sound
 right, benchmark within budget.

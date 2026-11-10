@@ -3,6 +3,7 @@ import type { Engine } from '../engine/engine'
 import { getParam, toNormalized, type ParamId } from '../state/params'
 import { OUTLINE_POINTS, envelopeOutline } from '../viz/envelope'
 import { Knob } from './Knob'
+import { Switch } from './Switch'
 
 /** An envelope's knobs: attack, decay, sustain, release */
 type Stages = readonly [ParamId, ParamId, ParamId, ParamId]
@@ -51,23 +52,13 @@ export function EnvelopePanel({ engine }: { engine: Engine }) {
         >
           Envelope
         </h2>
-        <div
-          role="group"
-          aria-label="Envelope shown"
-          className="flex overflow-hidden rounded-md bg-white/5"
-        >
-          {ENVELOPES.map((candidate, index) => (
-            <button
-              key={candidate.id}
-              type="button"
-              aria-pressed={index === shown}
-              onClick={() => setShown(index)}
-              className="h-7 px-3 text-[11px] font-semibold tracking-wider text-zinc-400 aria-pressed:bg-white/10 aria-pressed:text-white"
-            >
-              {candidate.label}
-            </button>
-          ))}
-        </div>
+        <Switch
+          engine={engine}
+          label="Envelope shown"
+          options={ENVELOPES}
+          shown={shown}
+          onShow={setShown}
+        />
       </div>
       <Outline engine={engine} stages={envelope.stages} />
       <div className="mt-auto grid grid-cols-4 justify-items-center gap-2 pt-2">

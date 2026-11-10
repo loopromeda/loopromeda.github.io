@@ -62,7 +62,7 @@ function brightness(samples: Float32Array, from: number, to: number): number {
 /** A synth with a saw at full sustain: a held note through the filter */
 function sawSynth(): Synth {
   const synth = new Synth(SAMPLE_RATE)
-  synth.wave = SAW
+  synth.osc1Wave = SAW
   synth.setAmp(0.005, 0.3, 1, 0.05)
   return synth
 }
@@ -70,7 +70,7 @@ function sawSynth(): Synth {
 /** A synth with a sine and a full sustain, so a click stands out */
 function sineSynth(): Synth {
   const synth = new Synth(SAMPLE_RATE)
-  synth.wave = SINE
+  synth.osc1Wave = SINE
   synth.setAmp(0.005, 0.3, 1, 0.05)
   return synth
 }
@@ -90,9 +90,9 @@ describe('Synth', () => {
     expect(risingZeroCrossings(render(synth, 1))).toBeLessThanOrEqual(441)
   })
 
-  it('transposes every note', () => {
+  it('transposes oscillator 1', () => {
     const synth = sineSynth()
-    synth.transpose = 12
+    synth.osc1Transpose = 12
     synth.noteOn(1, 57, 1) // A3 up an octave: 440 Hz
     const crossings = risingZeroCrossings(render(synth, 1))
     expect(crossings).toBeGreaterThanOrEqual(439)
@@ -175,7 +175,7 @@ describe('Synth', () => {
     const a = sineSynth()
     const b = sineSynth()
     for (const synth of [a, b]) {
-      synth.wave = SAW
+      synth.osc1Wave = SAW
       synth.noteOn(1, 60, 1)
       synth.noteOn(2, 67, 0.5)
     }
@@ -191,14 +191,69 @@ describe('Synth', () => {
 
   it('stays finite and inside ±1 with every voice at full tilt', () => {
     const synth = new Synth(SAMPLE_RATE)
-    synth.wave = SQUARE
-    synth.level = 1
+    synth.osc1Wave = SQUARE
+    synth.osc1Level = 1
     for (let key = 0; key < VOICE_COUNT; key++) synth.noteOn(key, 36, 1)
     const out = render(synth, 0.2)
     for (const sample of out) {
       expect(Number.isFinite(sample)).toBe(true)
       expect(Math.abs(sample)).toBeLessThan(1)
     }
+  })
+
+  it('plays oscillator 2 at its own pitch', () => {
+    const synth = sineSynth()
+    synth.osc1Level = 0
+    synth.osc2Wave = SINE
+    synth.osc2Level = 1
+    synth.osc2Transpose = 12
+    synth.noteOn(1, 57, 1) // A3, oscillator 2 an octave up: 440 Hz
+    const crossings = risingZeroCrossings(render(synth, 1))
+    expect(crossings).toBeGreaterThanOrEqual(439)
+    expect(crossings).toBeLessThanOrEqual(441)
+  })
+
+  it('detunes oscillator 2 by a fraction of a semitone', () => {
+    const synth = sineSynth()
+    synth.osc1Level = 0
+    synth.osc2Wave = SINE
+    synth.osc2Level = 1
+    synth.osc2Transpose = 0.5 // 50 cents over A4: 452.9 Hz
+    synth.noteOn(1, 69, 1)
+    const crossings = risingZeroCrossings(render(synth, 1))
+    expect(crossings).toBeGreaterThanOrEqual(452)
+    expect(crossings).toBeLessThanOrEqual(454)
+  })
+
+  it('adds the two oscillators', () => {
+    const level = (osc2: number) => {
+      const synth = sineSynth()
+      synth.osc1Level = 0.5
+      synth.osc2Wave = SINE
+      synth.osc2Level = osc2
+      synth.noteOn(1, 69, 1)
+      return rms(render(synth, 0.2), at(0.1), at(0.2))
+    }
+    // Same wave and pitch, both from phase 0 at the note's start: twice
+    const ratio = level(0.5) / level(0)
+    expect(ratio).toBeGreaterThan(1.95)
+    expect(ratio).toBeLessThanOrEqual(2)
+  })
+
+  it('adds white noise, a different one in every voice', () => {
+    const noise = (voices: number) => {
+      const synth = sineSynth()
+      synth.osc1Level = 0
+      synth.noiseLevel = 1
+      for (let key = 0; key < voices; key++) synth.noteOn(key, 60, 1)
+      return rms(render(synth, 0.2), at(0.1), at(0.2))
+    }
+    expect(noise(1)).toBeGreaterThan(0.1)
+    // Unrelated noises add in power (by √2); the same noise twice would
+    // add in amplitude (by 2)
+    const ratio = noise(2) / noise(1)
+    expect(ratio).toBeGreaterThan(1.3)
+    expect(ratio).toBeLessThan(1.55)
   })
 
   it('takes the high harmonics off a saw with a low lowpass cutoff', () => {
@@ -268,8 +323,8 @@ describe('Synth', () => {
 
   it('stays finite with every voice through a resonant, sweeping filter', () => {
     const synth = new Synth(SAMPLE_RATE)
-    synth.wave = SAW
-    synth.level = 1
+    synth.osc1Wave = SAW
+    synth.osc1Level = 1
     synth.cutoff = 20
     synth.resonance = 1
     synth.filterEnvAmount = 1
@@ -282,9 +337,9 @@ describe('Synth', () => {
     }
   })
 
-  it('is silent at level 0', () => {
+  it('is silent with every source at level 0', () => {
     const synth = sineSynth()
-    synth.level = 0
+    synth.osc1Level = 0
     synth.noteOn(1, 69, 1)
     expect(render(synth, 0.05).every((sample) => sample === 0)).toBe(true)
   })

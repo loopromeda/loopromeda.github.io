@@ -25,8 +25,8 @@ describe('PARAMS', () => {
     }
   })
 
-  it('names every step of osc.wave', () => {
-    const wave = getParam('osc.wave')
+  it('names every step of osc1.wave', () => {
+    const wave = getParam('osc1.wave')
     expect(wave.choices?.length).toBe((wave.max - wave.min) / wave.step + 1)
   })
 
@@ -36,8 +36,8 @@ describe('PARAMS', () => {
     }
   })
 
-  it("names osc.wave's steps in the oscillator's own order", () => {
-    const names = getParam('osc.wave').choices?.map((c) => c.toLowerCase())
+  it("names osc1.wave's steps in the oscillator's own order", () => {
+    const names = getParam('osc1.wave').choices?.map((c) => c.toLowerCase())
     expect(names).toEqual([...WAVES])
   })
 })
@@ -63,8 +63,8 @@ describe('toValue', () => {
     }
   })
 
-  it('shapes osc.level quadratically', () => {
-    const level = getParam('osc.level')
+  it('shapes osc1.level quadratically', () => {
+    const level = getParam('osc1.level')
     expect(toValue(level, 0.5)).toBe(0.25)
     expect(toNormalized(level, 0.25)).toBe(0.5)
   })
@@ -78,7 +78,7 @@ describe('toValue', () => {
   })
 
   it('snaps osc.semi to whole semitones', () => {
-    const semi = getParam('osc.semi')
+    const semi = getParam('osc1.semi')
     expect(toValue(semi, 0.5)).toBe(0)
     expect(toValue(semi, 0.52)).toBe(0)
     expect(toValue(semi, 0.53)).toBe(1)
@@ -98,30 +98,30 @@ describe('toNormalized', () => {
 
 describe('clampValue', () => {
   it('clamps outside values into the range', () => {
-    expect(clampValue(getParam('osc.semi'), 99)).toBe(12)
+    expect(clampValue(getParam('osc1.semi'), 99)).toBe(12)
   })
 
   it('replaces NaN and Infinity with the default', () => {
-    expect(clampValue(getParam('osc.semi'), NaN)).toBe(0)
-    expect(clampValue(getParam('osc.level'), Infinity)).toBe(1)
+    expect(clampValue(getParam('osc1.semi'), NaN)).toBe(0)
+    expect(clampValue(getParam('osc1.level'), Infinity)).toBe(1)
   })
 })
 
 describe('formatValue', () => {
   it('uses the choice name for enums', () => {
-    expect(formatValue(getParam('osc.wave'), 2)).toBe('Saw')
+    expect(formatValue(getParam('osc1.wave'), 2)).toBe('Saw')
   })
 
   it('signs and units the pitch knobs', () => {
-    expect(formatValue(getParam('osc.octave'), 1)).toBe('+1 oct')
-    expect(formatValue(getParam('osc.octave'), -2)).toBe('\u22122 oct')
-    expect(formatValue(getParam('osc.semi'), 0)).toBe('0 st')
-    expect(formatValue(getParam('osc.fine'), 12.4)).toBe('+12 ct')
-    expect(formatValue(getParam('osc.fine'), -0.4)).toBe('0 ct')
+    expect(formatValue(getParam('osc1.octave'), 1)).toBe('+1 oct')
+    expect(formatValue(getParam('osc1.octave'), -2)).toBe('\u22122 oct')
+    expect(formatValue(getParam('osc1.semi'), 0)).toBe('0 st')
+    expect(formatValue(getParam('osc1.fine'), 12.4)).toBe('+12 ct')
+    expect(formatValue(getParam('osc1.fine'), -0.4)).toBe('0 ct')
   })
 
   it('renders a percent level', () => {
-    expect(formatValue(getParam('osc.level'), 0.25)).toBe('25%')
+    expect(formatValue(getParam('osc1.level'), 0.25)).toBe('25%')
   })
 
   it('signs a two-sided percent, not a one-sided one', () => {
@@ -154,14 +154,14 @@ describe('formatValue', () => {
 
 describe('paramIndex', () => {
   it('finds a parameter by id, or -1 when unknown', () => {
-    expect(paramIndex('osc.semi')).toBe(2)
+    expect(paramIndex('osc1.semi')).toBe(2)
     expect(paramIndex('nope')).toBe(-1)
   })
 })
 
 describe('getParam', () => {
   it('looks up a spec by id', () => {
-    expect(getParam('osc.fine').label).toBe('Fine')
+    expect(getParam('osc1.fine').label).toBe('Fine')
   })
 })
 

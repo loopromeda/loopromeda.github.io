@@ -2,11 +2,17 @@ import { Synth } from '../dsp/synth'
 import { PROCESSOR_NAME, type ToWorklet } from '../engine/protocol'
 import { PARAMS, clampValue, defaultValues, paramIndex } from '../state/params'
 
-const WAVE = paramIndex('osc.wave')
-const OCTAVE = paramIndex('osc.octave')
-const SEMI = paramIndex('osc.semi')
-const FINE = paramIndex('osc.fine')
-const OSC_LEVEL = paramIndex('osc.level')
+const OSC1_WAVE = paramIndex('osc1.wave')
+const OSC1_OCTAVE = paramIndex('osc1.octave')
+const OSC1_SEMI = paramIndex('osc1.semi')
+const OSC1_FINE = paramIndex('osc1.fine')
+const OSC1_LEVEL = paramIndex('osc1.level')
+const OSC2_WAVE = paramIndex('osc2.wave')
+const OSC2_OCTAVE = paramIndex('osc2.octave')
+const OSC2_SEMI = paramIndex('osc2.semi')
+const OSC2_FINE = paramIndex('osc2.fine')
+const OSC2_LEVEL = paramIndex('osc2.level')
+const NOISE_LEVEL = paramIndex('noise.level')
 const ATTACK = paramIndex('amp.attack')
 const DECAY = paramIndex('amp.decay')
 const SUSTAIN = paramIndex('amp.sustain')
@@ -42,6 +48,13 @@ class SynthProcessor extends AudioWorkletProcessor {
     return this.#values[index] ?? 0
   }
 
+  /** An oscillator's pitch offset in semitones, from its three knobs */
+  #semitones(octave: number, semi: number, fine: number): number {
+    return (
+      12 * this.#value(octave) + this.#value(semi) + this.#value(fine) / 100
+    )
+  }
+
   #receive(message: ToWorklet): void {
     switch (message.t) {
       case 'noteOn':
@@ -67,17 +80,38 @@ class SynthProcessor extends AudioWorkletProcessor {
   /** Hands parameter index's value to the synth */
   #apply(index: number): void {
     switch (index) {
-      case WAVE:
-        this.#synth.wave = this.#value(WAVE)
+      case OSC1_WAVE:
+        this.#synth.osc1Wave = this.#value(OSC1_WAVE)
         break
-      case OCTAVE:
-      case SEMI:
-      case FINE:
-        this.#synth.transpose =
-          12 * this.#value(OCTAVE) + this.#value(SEMI) + this.#value(FINE) / 100
+      case OSC1_OCTAVE:
+      case OSC1_SEMI:
+      case OSC1_FINE:
+        this.#synth.osc1Transpose = this.#semitones(
+          OSC1_OCTAVE,
+          OSC1_SEMI,
+          OSC1_FINE
+        )
         break
-      case OSC_LEVEL:
-        this.#synth.level = this.#value(OSC_LEVEL)
+      case OSC1_LEVEL:
+        this.#synth.osc1Level = this.#value(OSC1_LEVEL)
+        break
+      case OSC2_WAVE:
+        this.#synth.osc2Wave = this.#value(OSC2_WAVE)
+        break
+      case OSC2_OCTAVE:
+      case OSC2_SEMI:
+      case OSC2_FINE:
+        this.#synth.osc2Transpose = this.#semitones(
+          OSC2_OCTAVE,
+          OSC2_SEMI,
+          OSC2_FINE
+        )
+        break
+      case OSC2_LEVEL:
+        this.#synth.osc2Level = this.#value(OSC2_LEVEL)
+        break
+      case NOISE_LEVEL:
+        this.#synth.noiseLevel = this.#value(NOISE_LEVEL)
         break
       case ATTACK:
       case DECAY:
