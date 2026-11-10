@@ -2,8 +2,9 @@
 
 /*
  * An instrument, not a document: no page bounce, text selection, long-press
- * callout or tap highlight on touch screens. Play surfaces add
- * touch-action: none themselves.
+ * callout, double-tap zoom or tap highlight on touch screens (main.tsx
+ * also turns away long presses). Play surfaces and knobs add
+ * touch-action: none themselves; pinching to zoom still works elsewhere.
  */
 html,
 body,
@@ -11,13 +12,23 @@ body,
   height: 100%;
 }
 
+/*
+ * No pull-to-refresh (Android Chrome) or overscroll swipe back: a drag down
+ * from the top of the waveform or the tabs is not a reload. The viewport
+ * reads it from html where the document scrolls, so both carry it.
+ */
+html,
+body {
+  overscroll-behavior: none;
+}
+
 body {
   margin: 0;
-  overscroll-behavior: none;
   -webkit-user-select: none;
   user-select: none;
   -webkit-touch-callout: none;
   -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
   background: #0b0b10;
   color: #e7e7ee;
 }

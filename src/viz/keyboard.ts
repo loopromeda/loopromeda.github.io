@@ -43,7 +43,12 @@ export function cNote(octave: number): number {
 /** Note name in scientific pitch notation: 60 is C4, 61 C#4 */
 export function noteName(note: number): string {
   const octave = Math.floor(note / 12) - 1
-  return `${NAMES[((note % 12) + 12) % 12]}${octave}`
+  return `${pitchName(note)}${octave}`
+}
+
+/** A note's name without its octave: 60 is C, 61 C#, 1 (or 13) C# too */
+export function pitchName(note: number): string {
+  return NAMES[((note % 12) + 12) % 12] as string
 }
 
 /** White keys on a keyboard of octaves octaves: each octave, then a top C */

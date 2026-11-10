@@ -251,7 +251,6 @@ export function Knob({
         onPointerCancel={up}
         onLostPointerCapture={up}
         onKeyDown={key}
-        onContextMenu={(event) => event.preventDefault()}
         className={`${KNOB_SIZE} aspect-square touch-none rounded-full outline-none focus-visible:ring-2 focus-visible:ring-emerald-400`}
       >
         <svg viewBox="0 0 48 48" className="block size-full" aria-hidden>

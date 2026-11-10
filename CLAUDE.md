@@ -50,12 +50,15 @@ src/engine/   AudioContext lifecycle, unlock, node wiring; protocol.ts is
               the message types both threads share (plain data only)
 src/state/    params.ts: the parameter schema; presets.ts: the preset and
               file format; factory.ts: the shipped presets; library.ts:
-              user presets and the last sound, kept in localStorage
+              user presets and the last sound, kept in localStorage;
+              surface.ts: keys or pads, the pads' key (root and scale)
 src/viz/      pure display math (scope trigger and decimation, envelope
-              and LFO outlines, filter response, keyboard geometry,
-              hit-testing, velocity and Slide from a touch's position)
+              and LFO outlines, filter response, keyboard and pad grid
+              geometry, hit-testing, velocity and Slide from a touch's
+              position)
 src/ui/       React components; Scope.tsx draws the output waveform,
-              Knob.tsx turns one parameter, Keyboard.tsx plays notes,
+              Knob.tsx turns one parameter, PlaySurface.tsx plays notes
+              on Keys.tsx or Pads.tsx (hands.ts: who holds which note),
               PresetBrowser.tsx loads, saves and moves presets
 scripts/      dev tooling: tailnet.sh, the device-report Vite plugin
 ```

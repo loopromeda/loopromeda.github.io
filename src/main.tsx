@@ -24,9 +24,38 @@ function localStore(): Storage | undefined {
   }
 }
 
+const SELECTABLE = 'input, textarea, select, [contenteditable], .select-text'
+
+/**
+ * What may be selected and long-pressed for its menu: a field to type in
+ * (a preset's name) and text the page marks select-text (the start
+ * screen's error and browser). A text node answers for its element.
+ */
+function selectable(target: EventTarget | null): boolean {
+  const element =
+    target instanceof Element
+      ? target
+      : target instanceof Node
+        ? target.parentElement
+        : null
+  return Boolean(element?.closest(SELECTABLE))
+}
+
+// An instrument, not a document: a long press anywhere else, a pad, a key,
+// the status line under them, selects no text and opens no menu. Android
+// starts a selection from the long press's context menu, iOS (and a mouse)
+// at selectstart; user-select: none (index.css) is the first guard.
+document.addEventListener('contextmenu', (event) => {
+  if (!selectable(event.target)) event.preventDefault()
+})
+document.addEventListener('selectstart', (event) => {
+  if (!selectable(event.target)) event.preventDefault()
+})
+
+const storage = localStore()
 // The last session's sound (or the first preset) is set before audio
 // starts; the engine hands every value to the worklet as it loads
-const library = new Library(engine, FACTORY_PRESETS, localStore())
+const library = new Library(engine, FACTORY_PRESETS, storage)
 library.restore()
 // The sound is kept a moment after each change; a page going away (a tab
 // closed, a phone switching apps) keeps it at once
@@ -72,6 +101,7 @@ createRoot(root).render(
       platform={platform}
       engine={engine}
       library={library}
+      storage={storage}
       onScopeStats={reportScope}
       onBench={reportBench}
     />

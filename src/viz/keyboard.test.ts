@@ -8,6 +8,7 @@ import {
   keyAt,
   keyboardLayout,
   noteName,
+  pitchName,
   slideFrom,
   velocityAt,
   whiteCount,
@@ -20,6 +21,13 @@ describe('noteName', () => {
     expect(noteName(69)).toBe('A4')
     expect(noteName(59)).toBe('B3')
     expect(noteName(12)).toBe('C0')
+  })
+
+  it('names a pitch without its octave', () => {
+    expect(pitchName(60)).toBe('C')
+    expect(pitchName(1)).toBe('C#')
+    expect(pitchName(71)).toBe('B')
+    expect(pitchName(-1)).toBe('B')
   })
 
   it('agrees with cNote', () => {

@@ -47,7 +47,7 @@ export function StatusBar({
     <footer
       aria-label="Audio status"
       title={`Latency: base ${ms(baseLatency)} + output ${ms(outputLatency)}`}
-      className="flex h-4 shrink-0 items-center justify-between gap-3 font-mono text-[11px] text-zinc-400 select-text"
+      className="flex h-4 shrink-0 items-center justify-between gap-3 font-mono text-[11px] text-zinc-400"
     >
       <span className="flex items-center gap-1.5">
         <span

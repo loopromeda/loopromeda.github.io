@@ -317,6 +317,24 @@ right, benchmark within budget.
         testing. Checked in desktop Chrome by synthetic pointer and key
         events; ashon confirmed multi-touch on the Galaxy Fold (Chrome 156)
         on 2026-11-10.
+  - [x] Pads, 2026-11-10, asked for by ashon (piano keys or launchpad
+        pads, either to choose): the button next to the patch opens Keys
+        or Pads, and for the pads a root (C to B) and a scale (eleven,
+        Chromatic to Blues, `src/state/surface.ts`), kept in
+        `localStorage` apart from the sound. The pads play the scale in
+        order from the bottom left, along each row and on up, the roots
+        marked; a pad plays louder pressed nearer its bottom edge, and a
+        finger keeps the pad it pressed (no drifting onto the next one)
+        while moving it up or down sends Slide. At most 16 pads, the grid
+        of them nearest square (`src/viz/pads.ts`): even a five-note scale
+        stays within three octaves, so there is always an octave to shift
+        to, and 16 is the drum kit's size for when Parts come. Keys start
+        on C4, pads on the root in octave 3, each keeping its own octave.
+        Computer keys play the pads too (A–; then Q–P). Measured in frames:
+        360×720 4×3 pads of 79×65 px, 390×844 4×4 of 87×73, 930×566 8×2
+        of 109×66, 768×1024 4×4 of 181×130, 1280×800 8×2 of 153×160,
+        844×390 8×1 of 98×112. A header narrower than 21rem (a 360 px
+        phone) drops the note range so the patch's name fits.
 - [ ] Knob/Slider components: vertical drag, fine-adjust, double-tap reset; values go
       straight to the engine, React only for structure
 - [ ] Layout: landscape-first for playing, portrait for editing; `viewport-fit=cover` + safe-area insets
@@ -347,11 +365,36 @@ right, benchmark within budget.
         from 896 px three, so none is cut in half. Measured in frames:
         knobs 54 px at 360×720, 56 at 390×844, 768×1024 and 1280×800, 47
         at 930×566 (keys 137 px); the only control heights are 28 and 44.
+  - [x] Controls put away, 2026-11-10, after ashon's screenshot from the
+        Fold folded shut (about 490×670 CSS px), where the tabs and knob
+        panel took 270 px and left the pads two rows: the button after the
+        surface's hides the tabs and panels (not the waveform) and is kept
+        with the surface's settings. A sheet (presets, surface) brings them
+        back while it is open, as it needs their room. Measured in frames,
+        shown → hidden: 490×671 pads 6×2 of 73×78 px → 4×4 of 112×107,
+        360×720 4×3 → 4×4, 930×566 pads 66 → 174 px tall, 844×390 8×1 and
+        89 px of scroll → 8×2 and none.
   - [ ] A phone on its side (844×390) still runs over and scrolls, by 89
-        px after the size pass (74 before it): it needs the playing layout
-        this item is about
+        px after the size pass (74 before it), unless the controls are put
+        away: it needs the playing layout this item is about
 - [ ] Kill browser gestures on play surfaces: `touch-action: none`, no double-tap zoom,
       no text selection / iOS long-press callout, keep away from edge-swipe zones
+  - [x] Long presses, 2026-11-10, after ashon saw text selected by a long
+        press on the Fold: the status line under the keys was the one
+        selectable text outside the start screen, and is no longer. Above
+        `user-select: none`, the document turns away `contextmenu` (where
+        Android starts a long press's selection) and `selectstart` (iOS,
+        a mouse) except in a field or text marked `select-text` (the start
+        screen's error and browser), in place of each surface's own
+        handler; `touch-action: manipulation` on the page stops double-tap
+        zoom and leaves pinching. Checked in desktop Chrome: no selection
+        by dragging or triple-clicking the status line or the checks, the
+        browser line still selects, the name field still selects and
+        types. Edge swipes remain.
+  - [x] Pull-to-refresh, 2026-11-10, asked for by ashon:
+        `overscroll-behavior: none` on `html` as well as `body` (only
+        `body` had it, and Chrome reads the viewport's from the root where
+        the document scrolls). To be confirmed on the Fold.
 - [ ] Playwright smoke: page loads, start overlay unlocks, keys respond (mobile emulation)
 - [x] Output waveform display (`src/ui/Scope.tsx`), asked for by ashon
       2026-11-10: AnalyserNode tap in the output path, rising-edge trigger

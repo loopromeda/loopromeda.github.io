@@ -3,19 +3,31 @@ import type { Engine } from './engine/engine'
 import type { BenchReport } from './engine/protocol'
 import type { PlatformReport } from './platform'
 import type { Library } from './state/library'
+import {
+  readSurface,
+  writeSurface,
+  type SurfaceSettings,
+  type SurfaceStorage,
+} from './state/surface'
 import { EnvelopePanel } from './ui/EnvelopePanel'
+import { IconButton } from './ui/IconButton'
 import { FilterPanel } from './ui/FilterPanel'
-import { Keyboard } from './ui/Keyboard'
 import { LfoPanel } from './ui/LfoPanel'
 import { ModPanel } from './ui/ModPanel'
 import { OscillatorPanel } from './ui/OscillatorPanel'
 import { PatchButton } from './ui/PatchButton'
 import { PlatformChecks } from './ui/PlatformChecks'
+import { PlaySurface } from './ui/PlaySurface'
 import { PresetBrowser } from './ui/PresetBrowser'
 import { Scope, type ScopeStats } from './ui/Scope'
 import { StatusBar } from './ui/StatusBar'
+import { SurfaceButton } from './ui/SurfaceButton'
+import { SurfacePicker } from './ui/SurfacePicker'
 import { Tabs } from './ui/Tabs'
 import { VoicePanel } from './ui/VoicePanel'
+
+/** What can open over the waveform and the controls */
+type Sheet = 'presets' | 'surface'
 
 const page =
   'flex h-full flex-col px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]'
@@ -23,20 +35,25 @@ const page =
 /**
  * A start screen (what the browser offers, and the tap that may start
  * audio), then the output waveform, the sound's controls a tab at a time,
- * the keyboard filling the rest, and a status line under it. The patch
- * button on the keyboard's header opens the presets over the waveform and
- * the controls, so the keyboard stays there to try them on.
+ * the keys or pads filling the rest, and a status line under it. The
+ * buttons at the left of the keyboard's header open the presets, and the
+ * choice of keys or pads, over the waveform and the controls: what is
+ * played on stays there to try them on. The third puts the controls away,
+ * for a screen too short to play on under them.
  */
 export function App({
   platform,
   engine,
   library,
+  storage,
   onScopeStats,
   onBench,
 }: {
   platform: PlatformReport
   engine: Engine
   library: Library
+  /** Where the choice of keys or pads is kept */
+  storage?: SurfaceStorage
   onScopeStats?: (stats: ScopeStats) => void
   /** Dev only: offers Measure CPU on the VOICE tab and gets its results */
   onBench?: (report: BenchReport) => void
@@ -44,8 +61,17 @@ export function App({
   const snapshot = useSyncExternalStore(engine.subscribe, engine.getSnapshot)
   const { state } = snapshot
   const [tab, setTab] = useState('osc')
-  const [browsing, setBrowsing] = useState(false)
-  const closeBrowser = useCallback(() => setBrowsing(false), [])
+  const [sheet, setSheet] = useState<Sheet | null>(null)
+  const closeSheet = useCallback(() => setSheet(null), [])
+  const toggle = (which: Sheet) =>
+    setSheet((open) => (open === which ? null : which))
+  const [surface, setSurface] = useState(() => readSurface(storage))
+  const changeSurface = (next: SurfaceSettings) => {
+    setSurface(next)
+    writeSurface(storage, next)
+  }
+  // Put away, the controls still come back under a sheet: it needs room
+  const controls = !surface.hideControls || sheet !== null
 
   if (state === 'idle' || state === 'starting' || state === 'failed') {
     const failed = state === 'failed'
@@ -83,48 +109,92 @@ export function App({
   return (
     <main className={`${page} gap-3`}>
       <div className="relative flex shrink-0 flex-col">
-        <div inert={browsing} className="flex flex-col gap-3">
+        <div inert={sheet !== null} className="flex flex-col gap-3">
           <Scope engine={engine} onStats={onScopeStats} />
-          <Tabs
-            label="Sound"
-            active={tab}
-            onChange={setTab}
-            tabs={[
-              {
-                id: 'osc',
-                label: 'OSC',
-                panel: <OscillatorPanel engine={engine} />,
-              },
-              {
-                id: 'env',
-                label: 'ENV',
-                panel: <EnvelopePanel engine={engine} />,
-              },
-              {
-                id: 'filter',
-                label: 'FILTER',
-                panel: <FilterPanel engine={engine} />,
-              },
-              { id: 'lfo', label: 'LFO', panel: <LfoPanel engine={engine} /> },
-              { id: 'mod', label: 'MOD', panel: <ModPanel engine={engine} /> },
-              {
-                id: 'voice',
-                label: 'VOICE',
-                panel: <VoicePanel engine={engine} onBench={onBench} />,
-              },
-            ]}
-          />
+          {/* Hidden, not unmounted: each panel keeps its page and state */}
+          <div id="controls" hidden={!controls}>
+            <Tabs
+              label="Sound"
+              active={tab}
+              onChange={setTab}
+              tabs={[
+                {
+                  id: 'osc',
+                  label: 'OSC',
+                  panel: <OscillatorPanel engine={engine} />,
+                },
+                {
+                  id: 'env',
+                  label: 'ENV',
+                  panel: <EnvelopePanel engine={engine} />,
+                },
+                {
+                  id: 'filter',
+                  label: 'FILTER',
+                  panel: <FilterPanel engine={engine} />,
+                },
+                {
+                  id: 'lfo',
+                  label: 'LFO',
+                  panel: <LfoPanel engine={engine} />,
+                },
+                {
+                  id: 'mod',
+                  label: 'MOD',
+                  panel: <ModPanel engine={engine} />,
+                },
+                {
+                  id: 'voice',
+                  label: 'VOICE',
+                  panel: <VoicePanel engine={engine} onBench={onBench} />,
+                },
+              ]}
+            />
+          </div>
         </div>
-        {browsing && <PresetBrowser library={library} onClose={closeBrowser} />}
-      </div>
-      <Keyboard
-        engine={engine}
-        patch={
-          <PatchButton
-            library={library}
-            open={browsing}
-            onToggle={() => setBrowsing((open) => !open)}
+        {sheet === 'presets' && (
+          <PresetBrowser library={library} onClose={closeSheet} />
+        )}
+        {sheet === 'surface' && (
+          <SurfacePicker
+            settings={surface}
+            onChange={changeSurface}
+            onClose={closeSheet}
           />
+        )}
+      </div>
+      <PlaySurface
+        engine={engine}
+        settings={surface}
+        menus={
+          <>
+            <PatchButton
+              library={library}
+              open={sheet === 'presets'}
+              onToggle={() => toggle('presets')}
+            />
+            <SurfaceButton
+              settings={surface}
+              open={sheet === 'surface'}
+              onToggle={() => toggle('surface')}
+            />
+            <IconButton
+              label="Hide controls"
+              pressed={surface.hideControls}
+              onClick={() =>
+                changeSurface({
+                  ...surface,
+                  hideControls: !surface.hideControls,
+                })
+              }
+              // Up: the surface rises into their room; down: they come back
+              path={
+                surface.hideControls
+                  ? 'M5 4.5l4 4 4-4M5 9.5l4 4 4-4'
+                  : 'M5 8.5l4-4 4 4M5 13.5l4-4 4 4'
+              }
+            />
+          </>
         }
       />
       <StatusBar engine={engine} snapshot={snapshot} />
