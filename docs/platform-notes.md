@@ -28,6 +28,13 @@ findings are added by hand during the M1 checklist.
   audio flows), so about 27 ms from the context to the speaker, before touch
   input latency. Whether the tone sounded, and lock / background / other-app
   behavior: not checked yet.
+- Keyboard, 2026-11-10: through the built-in speaker the touch-to-sound
+  latency feels negligible; through Bluetooth earphones it is clearly late
+  (ashon, by ear; not measured). Chrome reported `baseLatency` 3 ms and
+  `outputLatency` 8 ms once settled. Right at `running` it twice read
+  240-248 ms for about two seconds before settling, so the first reading is
+  not to be trusted. Whether `outputLatency` includes the Bluetooth delay on
+  this device: not checked.
 
 ## Desktop baseline: macOS · Chrome (desktop)
 

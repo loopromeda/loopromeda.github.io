@@ -30,6 +30,12 @@ describe('PARAMS', () => {
     expect(wave.choices?.length).toBe((wave.max - wave.min) / wave.step + 1)
   })
 
+  it('gives every exponential parameter a positive minimum', () => {
+    for (const spec of PARAMS) {
+      if (spec.curve === 'exponential') expect(spec.min).toBeGreaterThan(0)
+    }
+  })
+
   it("names osc.wave's steps in the oscillator's own order", () => {
     const names = getParam('osc.wave').choices?.map((c) => c.toLowerCase())
     expect(names).toEqual([...WAVES])
@@ -61,6 +67,14 @@ describe('toValue', () => {
     const level = getParam('osc.level')
     expect(toValue(level, 0.5)).toBe(0.25)
     expect(toNormalized(level, 0.25)).toBe(0.5)
+  })
+
+  it('spends equal travel on each decade of an envelope time', () => {
+    const attack = getParam('amp.attack')
+    expect(toValue(attack, 0.25)).toBeCloseTo(0.01, 12)
+    expect(toValue(attack, 0.5)).toBeCloseTo(0.1, 12)
+    expect(toValue(attack, 0.75)).toBeCloseTo(1, 12)
+    expect(toNormalized(attack, 0.1)).toBeCloseTo(0.5, 12)
   })
 
   it('snaps osc.semi to whole semitones', () => {
@@ -108,6 +122,15 @@ describe('formatValue', () => {
 
   it('renders a percent level', () => {
     expect(formatValue(getParam('osc.level'), 0.25)).toBe('25%')
+  })
+
+  it('renders times in milliseconds below a second, seconds above', () => {
+    const decay = getParam('amp.decay')
+    expect(formatValue(decay, 0.001)).toBe('1 ms')
+    expect(formatValue(decay, 0.2404)).toBe('240 ms')
+    expect(formatValue(decay, 0.9996)).toBe('1 s')
+    expect(formatValue(decay, 1.254)).toBe('1.25 s')
+    expect(formatValue(decay, 10)).toBe('10 s')
   })
 })
 

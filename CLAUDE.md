@@ -14,6 +14,7 @@ pnpm typecheck      # tsc: app, audio thread (tsconfig.worklet.json), configs
 pnpm lint           # eslint
 pnpm format:check   # prettier (pnpm format to fix)
 pnpm test           # vitest, once
+pnpm bench          # render-time budget: 8 voices, one 128-frame block
 pnpm build          # typecheck + vite build into dist/
 ```
 
@@ -38,15 +39,17 @@ Before calling a change done: `pnpm typecheck && pnpm lint && pnpm format:check 
 ## Layout
 
 ```
-src/dsp/      pure DSP (oscillators, envelopes, filters, voices)
+src/dsp/      pure DSP (oscillators, envelopes, filters, voices); synth.ts
+              is the whole instrument: voice pool, allocator, mix
 src/worklet/  the AudioWorkletProcessor around src/dsp; own globals and
               tsconfig (tsconfig.worklet.json), loaded via ?worker&url
 src/engine/   AudioContext lifecycle, unlock, node wiring; protocol.ts is
               the message types both threads share (plain data only)
 src/state/    params.ts: the parameter schema; presets come in M4
-src/viz/      pure display math (trigger, decimation), allocation-free
+src/viz/      pure display math (scope trigger and decimation, envelope
+              outline, keyboard geometry and hit-testing)
 src/ui/       React components; Scope.tsx draws the output waveform,
-              Knob.tsx turns one parameter
+              Knob.tsx turns one parameter, Keyboard.tsx plays notes
 scripts/      dev tooling: tailnet.sh, the device-report Vite plugin
 ```
 

@@ -15,7 +15,7 @@ export function OscillatorPanel({ engine }: { engine: Engine }) {
   return (
     <section
       aria-labelledby="oscillator-heading"
-      className="shrink-0 rounded-xl bg-white/5 px-3 pt-2 pb-3"
+      className="flex h-full flex-col rounded-xl bg-white/5 px-3 pt-2 pb-3"
     >
       <h2
         id="oscillator-heading"
@@ -23,7 +23,7 @@ export function OscillatorPanel({ engine }: { engine: Engine }) {
       >
         Oscillator
       </h2>
-      <div className="grid grid-cols-5 justify-items-center gap-2">
+      <div className="mt-auto grid grid-cols-5 justify-items-center gap-2">
         {KNOBS.map((id) => (
           <Knob key={id} engine={engine} id={id} />
         ))}

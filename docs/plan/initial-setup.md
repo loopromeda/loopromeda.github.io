@@ -161,7 +161,9 @@ see `docs/platform-notes.md`). The Pages URL and green CI wait for a remote.
       loads in dev and in the production build (desktop Chrome, 2026-11-09)
 - [x] Handle `statechange` (incl. Safari's `interrupted`) and `visibilitychange` → resume
 - [x] DebugHUD: `sampleRate`, `baseLatency`, `outputLatency`, context state; every
-      engine state change also lands in `device-reports.jsonl`
+      engine state change also lands in `device-reports.jsonl`. Since
+      2026-11-10, asked for by ashon, a one-line status bar under the
+      keyboard (`src/ui/StatusBar.tsx`); the base/output split is its title
 - [ ] Real-device checklist (iPhone Safari, Android Chrome, plus installed-PWA mode):
       sound with silent switch on, after lock/unlock, after a phone call / other app
       audio, after backgrounding; touch-to-sound latency feel; glitches under load
@@ -184,15 +186,29 @@ recorded; any blocker found here can still change §2 (e.g. Capacitor for iOS).
         it, and the arrow, Page and Home/End keys move it. A knob with up to 8
         stops marks each with a white dot (Wave, Octave; not Semi's 25).
 - [ ] ADSR (amp + filter env), exponential segments **[oc]**; pitch envelope; LFO
+  - [x] Amp ADSR, 2026-11-10 (`src/dsp/adsr.ts`, written by opencode from a
+        spec, reviewed here): one-pole segments toward an overshoot target
+        (attack curved, decay and release exponential), restarts from the
+        current level, a 3 ms linear choke for steals, sustain changes glide
+        (5 ms), also mid-decay. Knobs on the ENV tab, times 1 ms–10 s on an
+        exponential curve, with an outline drawn from the same curves.
 - [ ] State-variable filter (LP/HP/BP) with resonance and env/keytrack amount
-- [ ] 8-voice allocator with oldest-note stealing and click-free release
+- [x] 8-voice allocator with oldest-note stealing and click-free release
+      (2026-11-10, `src/dsp/allocator.ts`, `voice.ts`, `synth.ts`): a new note
+      takes the voice silent longest, else the one released longest ago,
+      else the oldest held note. A sounding voice chokes over 3 ms and the
+      new note starts on the next block. Desktop Chrome, 9 keys held: 8
+      pitches in the output, the first-pressed one gone.
 - [ ] Param smoothing, master gain, soft clipper (level smoothing done:
-      `src/dsp/smoother.ts`, one-pole, 5 ms)
+      `src/dsp/smoother.ts`, one-pole, 5 ms; a tanh soft clip on the mix,
+      each voice at 0.25 so four full voices sum to 1)
 - [x] `params.ts` schema (single source) + normalized↔real mapping tests **[oc]**
       (2026-11-10; osc params so far, more as the voice grows)
 - [ ] `scripts/render-wav.ts` (WAV writer **[oc]**) for listening checks
-- [ ] Node micro-benchmark: block render time for 8 voices (budget: one 128-frame
-      block at 48 kHz = 2.67 ms; aim well under a third of that)
+- [x] Node micro-benchmark: block render time for 8 voices (budget: one 128-frame
+      block at 48 kHz = 2.67 ms; aim well under a third of that).
+      `pnpm bench` (`src/dsp/synth.bench.ts`, fails over a third): 8 saw
+      voices 0.0066 ms a block on an Apple M3 Max, 2026-11-10
 
 **Exit:** vitest green (pitch, envelope timing, no NaN, stealing), WAV renders sound
 right, benchmark within budget.
@@ -201,9 +217,24 @@ right, benchmark within budget.
 
 - [ ] Multi-touch keyboard: pointer events, `pointerId`→voice map, pointer capture,
       octave shift; optional scale-locked pad mode
+  - [x] `src/ui/Keyboard.tsx`, 2026-11-10, laid out as in the storyboard:
+        as many octaves as fit at 40 px a white key (one on an upright
+        phone, three on a laptop), octave arrows, a sliding finger moves its
+        note from key to key, keys light through data attributes (no React
+        render per touch). Computer keys A–; play and Z/X shift, for desktop
+        testing. Checked in desktop Chrome by synthetic pointer and key
+        events; real multi-touch waits for a phone.
 - [ ] Knob/Slider components: vertical drag, fine-adjust, double-tap reset; values go
       straight to the engine, React only for structure
 - [ ] Layout: landscape-first for playing, portrait for editing; `viewport-fit=cover` + safe-area insets
+  - [x] 2026-11-10, after ashon's screenshot from a wide Android screen
+        (about 930×566 CSS px) where the keyboard was squeezed to about 20
+        px: from 768 px wide the panels stand side by side without tabs, the
+        scope's height follows the screen (64–144 px), the keys keep at
+        least 112 px. Measured in frames: 930×566 keys 143 px, 390×844 keys
+        321 px, neither scrolls.
+  - [ ] A phone on its side (844×390) still runs 74 px over and scrolls: it
+        needs the playing layout this item is about
 - [ ] Kill browser gestures on play surfaces: `touch-action: none`, no double-tap zoom,
       no text selection / iOS long-press callout, keep away from edge-swipe zones
 - [ ] Playwright smoke: page loads, start overlay unlocks, keys respond (mobile emulation)

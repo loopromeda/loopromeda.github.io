@@ -3,11 +3,14 @@
  * Pure TypeScript: no DOM, no Web Audio, no imports from other modules.
  */
 
-/** How knob travel (0..1) maps onto a value */
-export type Curve = 'linear' | 'quadratic'
+/**
+ * How knob travel (0..1) maps onto a value. Exponential spends equal travel
+ * on each doubling, for ranges over decades (times); it needs min > 0.
+ */
+export type Curve = 'linear' | 'quadratic' | 'exponential'
 
-/** How a value is rendered on screen */
-export type Unit = '' | '%' | 'oct' | 'st' | 'ct'
+/** How a value is rendered on screen; 's' shows milliseconds below 1 s */
+export type Unit = '' | '%' | 'oct' | 'st' | 'ct' | 's'
 
 /** One knob: its range, its mapping and how to display it */
 export interface ParamSpec {
@@ -78,6 +81,46 @@ export const PARAMS = [
     step: 0,
     unit: '%',
   },
+  {
+    id: 'amp.attack',
+    label: 'Attack',
+    min: 0.001,
+    max: 10,
+    default: 0.005,
+    curve: 'exponential',
+    step: 0,
+    unit: 's',
+  },
+  {
+    id: 'amp.decay',
+    label: 'Decay',
+    min: 0.001,
+    max: 10,
+    default: 0.3,
+    curve: 'exponential',
+    step: 0,
+    unit: 's',
+  },
+  {
+    id: 'amp.sustain',
+    label: 'Sustain',
+    min: 0,
+    max: 1,
+    default: 0.7,
+    curve: 'linear',
+    step: 0,
+    unit: '%',
+  },
+  {
+    id: 'amp.release',
+    label: 'Release',
+    min: 0.001,
+    max: 10,
+    default: 0.3,
+    curve: 'exponential',
+    step: 0,
+    unit: 's',
+  },
 ] as const satisfies readonly ParamSpec[]
 
 export type ParamId = (typeof PARAMS)[number]['id']
@@ -107,6 +150,11 @@ export function clampValue(spec: ParamSpec, value: number): number {
 /** Knob position 0..1 -> value, shaped by the curve and snapped to the step */
 export function toValue(spec: ParamSpec, normalized: number): number {
   const n = Number.isNaN(normalized) ? 0 : Math.min(Math.max(normalized, 0), 1)
+  if (spec.curve === 'exponential') {
+    // n = 1 exactly: min * (max / min) can land a rounding error short of max
+    if (n >= 1) return clampValue(spec, spec.max)
+    return clampValue(spec, spec.min * Math.pow(spec.max / spec.min, n))
+  }
   const shaped = spec.curve === 'quadratic' ? n * n : n
   return clampValue(spec, spec.min + shaped * (spec.max - spec.min))
 }
@@ -115,6 +163,9 @@ export function toValue(spec: ParamSpec, normalized: number): number {
 export function toNormalized(spec: ParamSpec, value: number): number {
   const v = clampValue(spec, value)
   if (spec.max === spec.min) return 0
+  if (spec.curve === 'exponential') {
+    return Math.log(v / spec.min) / Math.log(spec.max / spec.min)
+  }
   const r = (v - spec.min) / (spec.max - spec.min)
   return spec.curve === 'quadratic' ? Math.sqrt(r) : r
 }
@@ -129,6 +180,11 @@ export function formatValue(spec: ParamSpec, value: number): string {
     return spec.choices[Math.round(v - spec.min)] as string
   }
   if (spec.unit === '%') return `${Math.round(v * 100)}%`
+  if (spec.unit === 's') {
+    const ms = Math.round(v * 1000)
+    // Three significant figures: 1.25 s, 10 s
+    return ms < 1000 ? `${ms} ms` : `${Number(v.toPrecision(3))} s`
+  }
   if (spec.unit) {
     const r = Math.round(v)
     const sign = r > 0 ? '+' : r < 0 ? MINUS : ''

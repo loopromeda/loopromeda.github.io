@@ -61,6 +61,7 @@ export class Engine {
   /** Every parameter's value, in PARAMS order */
   readonly #values = defaultValues()
   readonly #listeners = new Set<() => void>()
+  readonly #paramListeners = new Set<(id: ParamId, value: number) => void>()
 
   get snapshot(): EngineSnapshot {
     return this.#snapshot
@@ -169,6 +170,19 @@ export class Engine {
     if (next === this.#values[index]) return
     this.#values[index] = next
     this.#post({ t: 'param', id, value: next })
+    for (const listener of this.#paramListeners) listener(id, next)
+  }
+
+  /**
+   * Calls listener after each parameter change, for displays that redraw
+   * outside React (an envelope's outline under its knobs). Returns the
+   * unsubscribe function.
+   */
+  onParam(listener: (id: ParamId, value: number) => void): () => void {
+    this.#paramListeners.add(listener)
+    return () => {
+      this.#paramListeners.delete(listener)
+    }
   }
 
   /**

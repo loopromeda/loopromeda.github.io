@@ -1,22 +1,21 @@
-import { useSyncExternalStore } from 'react'
+import { useState, useSyncExternalStore } from 'react'
 import type { Engine } from './engine/engine'
 import type { PlatformReport } from './platform'
-import { DebugHud } from './ui/DebugHud'
+import { EnvelopePanel } from './ui/EnvelopePanel'
+import { Keyboard } from './ui/Keyboard'
 import { OscillatorPanel } from './ui/OscillatorPanel'
 import { PlatformChecks } from './ui/PlatformChecks'
 import { Scope, type ScopeStats } from './ui/Scope'
-import { TestPad } from './ui/TestPad'
-
-/** The test note is the tuning reference, A4: 440 Hz with the knobs at 0 */
-const TEST_NOTE = 69
+import { StatusBar } from './ui/StatusBar'
+import { Tabs } from './ui/Tabs'
 
 const page =
   'flex h-full flex-col px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]'
 
 /**
  * A start screen (what the browser offers, and the tap that may start
- * audio), then the audio path's numbers, the output waveform and the
- * oscillator's knobs above a pad that sounds a test note.
+ * audio), then the output waveform, the sound's controls a tab at a time,
+ * the keyboard filling the rest, and a status line under it.
  */
 export function App({
   platform,
@@ -29,6 +28,7 @@ export function App({
 }) {
   const snapshot = useSyncExternalStore(engine.subscribe, engine.getSnapshot)
   const { state } = snapshot
+  const [tab, setTab] = useState('osc')
 
   if (state === 'idle' || state === 'starting' || state === 'failed') {
     const failed = state === 'failed'
@@ -65,10 +65,22 @@ export function App({
 
   return (
     <main className={`${page} gap-3`}>
-      <DebugHud engine={engine} snapshot={snapshot} />
       <Scope engine={engine} onStats={onScopeStats} />
-      <OscillatorPanel engine={engine} />
-      <TestPad engine={engine} note={TEST_NOTE} label="Hold to play A4" />
+      <Tabs
+        label="Sound"
+        active={tab}
+        onChange={setTab}
+        tabs={[
+          {
+            id: 'osc',
+            label: 'OSC',
+            panel: <OscillatorPanel engine={engine} />,
+          },
+          { id: 'env', label: 'ENV', panel: <EnvelopePanel engine={engine} /> },
+        ]}
+      />
+      <Keyboard engine={engine} />
+      <StatusBar engine={engine} snapshot={snapshot} />
       {state !== 'running' && (
         <button
           type="button"

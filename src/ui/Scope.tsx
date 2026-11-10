@@ -279,7 +279,7 @@ export function Scope({
   }, [engine])
 
   return (
-    <div className="relative h-36 shrink-0 overflow-hidden rounded-xl contain-strict">
+    <div className="relative h-[clamp(4rem,16dvh,9rem)] shrink-0 overflow-hidden rounded-xl contain-strict">
       <canvas
         ref={canvasRef}
         role="img"
