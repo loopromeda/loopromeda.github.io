@@ -16,6 +16,10 @@ export interface Sounding {
  * It only picks. The caller starts the note on the voice it gets, and a voice
  * still sounding fades out before the new note begins. A key is released
  * (noteOff) before it is pressed again. Allocates nothing after construction.
+ *
+ * New notes may be held to the first `limit` voices (a slow phone plays
+ * fewer at once). A voice past a lowered limit plays its note out: it is
+ * still let go, but never handed out again until the limit rises.
  */
 export class VoiceAllocator {
   readonly #voices: readonly Sounding[]
@@ -26,6 +30,7 @@ export class VoiceAllocator {
   /** When each voice was last pressed or released, in allocator events */
   readonly #stamp: Float64Array
   #clock = 0
+  #limit: number
 
   constructor(voices: readonly Sounding[]) {
     if (voices.length === 0) throw new RangeError('needs at least one voice')
@@ -33,11 +38,25 @@ export class VoiceAllocator {
     this.#held = new Uint8Array(voices.length)
     this.#key = new Float64Array(voices.length)
     this.#stamp = new Float64Array(voices.length)
+    this.#limit = voices.length
   }
 
   /** Number of voices */
   get size(): number {
     return this.#voices.length
+  }
+
+  /** How many voices, from the first, new notes may take */
+  get limit(): number {
+    return this.#limit
+  }
+
+  /** Rounded and held to 1..size; anything not a number means every voice */
+  set limit(count: number) {
+    const whole = Math.round(count)
+    this.#limit = Number.isFinite(whole)
+      ? Math.min(Math.max(whole, 1), this.#voices.length)
+      : this.#voices.length
   }
 
   /** True while a key holds voice index */
@@ -86,7 +105,7 @@ export class VoiceAllocator {
     let silent = -1
     let releasing = -1
     let oldest = -1
-    for (let i = 0; i < this.#voices.length; i++) {
+    for (let i = 0; i < this.#limit; i++) {
       if (this.#held[i] === 1) oldest = this.#older(i, oldest)
       else if ((this.#voices[i] as Sounding).active) {
         releasing = this.#older(i, releasing)

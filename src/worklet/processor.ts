@@ -49,6 +49,9 @@ class SynthProcessor extends AudioWorkletProcessor {
       case 'panic':
         this.#synth.releaseAll()
         break
+      case 'voices':
+        this.#synth.voiceLimit = message.count
+        break
       case 'bench':
         this.#bench(message.voices)
         break

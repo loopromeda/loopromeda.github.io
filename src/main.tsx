@@ -7,6 +7,7 @@ import './index.css'
 import { readPlatform, sendReport } from './platform'
 import { FACTORY_PRESETS } from './state/factory'
 import { Library } from './state/library'
+import { readSettings } from './state/settings'
 import type { ScopeStats } from './ui/Scope'
 
 const root = document.getElementById('root')
@@ -53,6 +54,11 @@ document.addEventListener('selectstart', (event) => {
 })
 
 const storage = localStore()
+// The device's settings that reach the audio go in before it starts: a
+// latency is the context's for life, and the voices go to each new worklet
+const settings = readSettings(storage)
+engine.setVoices(settings.voices)
+engine.setLatency(settings.latency)
 // The last session's sound (or the first preset) is set before audio
 // starts; the engine hands every value to the worklet as it loads
 const library = new Library(engine, FACTORY_PRESETS, storage)
@@ -74,7 +80,7 @@ if (import.meta.env.DEV) {
     lastScope = stats.at
     void sendReport('scope', stats)
   }
-  // The audio thread's render time, measured by hand on the VOICE tab
+  // The audio thread's render time, measured by hand in the settings
   reportBench = (report) =>
     void sendReport('bench', { ...engine.snapshot, ...report })
   void sendReport('platform', platform)

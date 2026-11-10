@@ -104,4 +104,42 @@ describe('VoiceAllocator', () => {
     }
     expect(allocator.noteOff(1)).toBe(-1)
   })
+
+  it('hands new notes only the first limit voices', () => {
+    const set = voices(4)
+    const allocator = new VoiceAllocator(set)
+    allocator.limit = 2
+    const a = allocator.noteOn(1)
+    const b = allocator.noteOn(2)
+    expect([a, b].sort()).toEqual([0, 1])
+    for (const voice of set) voice.active = true
+    // Two voices still silent past the limit, yet the oldest note is stolen
+    expect(allocator.noteOn(3)).toBe(a)
+  })
+
+  it('holds the limit to 1..size', () => {
+    const allocator = new VoiceAllocator(voices(4))
+    expect(allocator.limit).toBe(4)
+    allocator.limit = 0
+    expect(allocator.limit).toBe(1)
+    allocator.limit = 9
+    expect(allocator.limit).toBe(4)
+    allocator.limit = 2.4
+    expect(allocator.limit).toBe(2)
+    allocator.limit = Number.NaN
+    expect(allocator.limit).toBe(4)
+  })
+
+  it('still lets go of a voice held past a lowered limit', () => {
+    const allocator = new VoiceAllocator(voices(4))
+    for (const key of [1, 2, 3, 4]) allocator.noteOn(key)
+    const last = allocator.voiceOf(4)
+    allocator.limit = 2
+    expect(allocator.voiceOf(4)).toBe(last)
+    expect(allocator.noteOff(4)).toBe(last)
+    // Released, it is not handed out again
+    allocator.noteOff(1)
+    allocator.noteOff(2)
+    expect(allocator.noteOn(5)).toBeLessThan(2)
+  })
 })

@@ -68,7 +68,11 @@ export class Engine {
   readonly #listeners = new Set<() => void>()
   readonly #paramListeners = new Set<(id: ParamId, value: number) => void>()
   /** Who waits for the measurement under way, answered in order */
-  readonly #benchWaiting: ((report: BenchReport) => void)[] = []
+  readonly #benchWaiting: ((report: BenchReport | undefined) => void)[] = []
+  /** The context's latencyHint: the next context's, once one is running */
+  #latency: AudioContextLatencyCategory = 'interactive'
+  /** The most voices at once, if the player limited them */
+  #voices: number | undefined
 
   get snapshot(): EngineSnapshot {
     return this.#snapshot
@@ -95,7 +99,7 @@ export class Engine {
 
     let context: AudioContext
     try {
-      context = new AudioContext({ latencyHint: 'interactive' })
+      context = new AudioContext({ latencyHint: this.#latency })
     } catch (error) {
       this.#fail(error)
       return
@@ -125,6 +129,9 @@ export class Engine {
       this.#node = node
       // The worklet starts from the defaults: catch it up, ahead of any note
       this.#post({ t: 'params', values: Array.from(this.#values) })
+      if (this.#voices !== undefined) {
+        this.#post({ t: 'voices', count: this.#voices })
+      }
       await resumed
     } catch (error) {
       this.#fail(error)
@@ -163,6 +170,38 @@ export class Engine {
 
   panic(): void {
     this.#post({ t: 'panic' })
+  }
+
+  /** The most voices playing at once (the synth's whole pool at most) */
+  setVoices(count: number): void {
+    this.#voices = count
+    this.#post({ t: 'voices', count })
+  }
+
+  /** The latencyHint the audio runs with */
+  get latency(): AudioContextLatencyCategory {
+    return this.#latency
+  }
+
+  /**
+   * Sets the latencyHint. A context keeps its hint for life, so audio that
+   * has started starts again on a new context: call this from a click, as
+   * start(). The notes playing stop; every parameter carries over.
+   */
+  setLatency(latency: AudioContextLatencyCategory): void {
+    if (latency === this.#latency) return
+    this.#latency = latency
+    const old = this.#context
+    if (!old || this.#snapshot.state === 'failed') return
+    old.removeEventListener('statechange', this.refresh)
+    this.#node?.disconnect()
+    this.#context = undefined
+    this.#node = undefined
+    this.#analyser = undefined
+    // A measurement under way on the old worklet will not answer
+    for (const resolve of this.#benchWaiting.splice(0)) resolve(undefined)
+    old.close().catch(() => undefined)
+    void this.start()
   }
 
   /**

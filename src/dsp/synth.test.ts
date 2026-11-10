@@ -215,6 +215,20 @@ describe('Synth', () => {
     expect(synth.activeVoices).toBe(VOICE_COUNT - 1)
   })
 
+  it('plays no more voices at once than its limit', () => {
+    const synth = sineSynth()
+    synth.voiceLimit = 4
+    for (let key = 0; key < 6; key++) synth.noteOn(key, 48 + key, 1)
+    render(synth, CHOKE_TIME + (2 * BLOCK) / SAMPLE_RATE)
+    expect(synth.activeVoices).toBe(4)
+    // Raised again, the pool is whole: two more keys sound beside them
+    synth.voiceLimit = VOICE_COUNT
+    synth.noteOn(6, 60, 1)
+    synth.noteOn(7, 61, 1)
+    render(synth, 0.01)
+    expect(synth.activeVoices).toBe(6)
+  })
+
   it('steals without a click', () => {
     const synth = sineSynth()
     for (let key = 0; key < VOICE_COUNT; key++) synth.noteOn(key, 48 + key, 1)

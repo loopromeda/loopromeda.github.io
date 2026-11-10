@@ -51,7 +51,9 @@ src/engine/   AudioContext lifecycle, unlock, node wiring; protocol.ts is
 src/state/    params.ts: the parameter schema; presets.ts: the preset and
               file format; factory.ts: the shipped presets; library.ts:
               user presets and the last sound, kept in localStorage;
-              surface.ts: keys or pads, the pads' key (root and scale)
+              surface.ts: keys or pads, the pads' key (root and scale);
+              settings.ts: the device's settings (voices, latency,
+              velocity, what the screen shows)
 src/viz/      pure display math (scope trigger and decimation, envelope
               and LFO outlines, filter response, keyboard and pad grid
               geometry, hit-testing, velocity and Slide from a touch's
@@ -59,14 +61,15 @@ src/viz/      pure display math (scope trigger and decimation, envelope
 src/ui/       React components; Scope.tsx draws the output waveform,
               Knob.tsx turns one parameter, PlaySurface.tsx plays notes
               on Keys.tsx or Pads.tsx (hands.ts: who holds which note),
-              PresetBrowser.tsx loads, saves and moves presets
+              PresetBrowser.tsx loads, saves and moves presets,
+              SettingsSheet.tsx holds the settings and Measure CPU
 scripts/      dev tooling: tailnet.sh, the device-report Vite plugin
 ```
 
 Dev-only device reports: every page load, every audio state change and,
 every 5 s while it draws, the waveform display's frame cost on a phone are
 appended to `device-reports.jsonl` (gitignored), and so is the audio
-thread's render time when the VOICE tab's Measure CPU is tapped (the
+thread's render time when Settings' Measure CPU is tapped (the
 heaviest patch, `src/dsp/stress.ts`, at 8 to 32 voices). Read it after a
 device test instead of asking for numbers to be retyped.
 

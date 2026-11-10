@@ -1,0 +1,147 @@
+/**
+ * The player's own settings: how hard the phone is asked to work, how a
+ * key or a pad answers a touch, and what the screen shows about the audio.
+ * These belong to the player and the phone they hold rather than to a
+ * preset, so they are kept apart from the sound.
+ */
+
+/** Voice counts the player may limit the synth to; the last is VOICE_COUNT */
+export const VOICE_LIMITS = [4, 8, 12, 16] as const
+export type VoiceLimit = (typeof VOICE_LIMITS)[number]
+
+/** AudioContext latencyHint values, lowest latency first */
+export const LATENCIES = ['interactive', 'balanced', 'playback'] as const
+export type Latency = (typeof LATENCIES)[number]
+
+/** How a touch sets a note's velocity: where it lands, or always full */
+export const VELOCITY_MODES = ['touch', 'full'] as const
+export type VelocityMode = (typeof VELOCITY_MODES)[number]
+
+export interface AppSettings {
+  /** The most voices the synth plays at once (fewer for a slow phone) */
+  readonly voices: VoiceLimit
+  /**
+   * The AudioContext's latencyHint: higher gives more time per block, and
+   * more delay
+   */
+  readonly latency: Latency
+  /** The output waveform is drawn */
+  readonly waveform: boolean
+  /**
+   * touch: where a finger lands on a key or pad sets velocity;
+   * full: every note at full velocity
+   */
+  readonly velocity: VelocityMode
+  /** The status line shows sample rate, block and latency */
+  readonly audioDetails: boolean
+  /** The waveform shows what a frame costs to draw */
+  readonly waveformTiming: boolean
+}
+
+/** The whole synth at once, the lowest delay, everything shown */
+export const DEFAULT_SETTINGS: AppSettings = {
+  voices: 16,
+  latency: 'interactive',
+  waveform: true,
+  velocity: 'touch',
+  audioDetails: true,
+  waveformTiming: true,
+}
+
+/** Where the settings are kept */
+export const SETTINGS_KEY = 'loopromeda.settings'
+
+/** The part of Web Storage the settings use (localStorage) */
+export type SettingsStorage = Pick<Storage, 'getItem' | 'setItem'>
+
+/**
+ * The settings kept in storage: whatever is stored well, with a default for
+ * every field that is missing or wrong, and the defaults whole when the
+ * whole is not an object at all
+ */
+export function readSettings(storage?: SettingsStorage): AppSettings {
+  let text: string | null
+  try {
+    text = storage?.getItem(SETTINGS_KEY) ?? null
+  } catch {
+    return { ...DEFAULT_SETTINGS }
+  }
+  if (text === null) return { ...DEFAULT_SETTINGS }
+
+  let saved: unknown
+  try {
+    saved = JSON.parse(text)
+  } catch {
+    return { ...DEFAULT_SETTINGS }
+  }
+  if (typeof saved !== 'object' || saved === null || Array.isArray(saved)) {
+    return { ...DEFAULT_SETTINGS }
+  }
+
+  const { voices, latency, waveform, velocity, audioDetails, waveformTiming } =
+    saved as {
+      voices: unknown
+      latency: unknown
+      waveform: unknown
+      velocity: unknown
+      audioDetails: unknown
+      waveformTiming: unknown
+    }
+  return {
+    voices: isVoiceLimit(voices) ? voices : DEFAULT_SETTINGS.voices,
+    latency: isLatency(latency) ? latency : DEFAULT_SETTINGS.latency,
+    waveform:
+      typeof waveform === 'boolean' ? waveform : DEFAULT_SETTINGS.waveform,
+    velocity: isVelocityMode(velocity) ? velocity : DEFAULT_SETTINGS.velocity,
+    audioDetails:
+      typeof audioDetails === 'boolean'
+        ? audioDetails
+        : DEFAULT_SETTINGS.audioDetails,
+    waveformTiming:
+      typeof waveformTiming === 'boolean'
+        ? waveformTiming
+        : DEFAULT_SETTINGS.waveformTiming,
+  }
+}
+
+/**
+ * Keep the settings in storage, the version alongside them. Failing to
+ * write is ignored: a convenience setting is no reason to spoil playing.
+ */
+export function writeSettings(
+  storage: SettingsStorage | undefined,
+  settings: AppSettings
+): void {
+  if (!storage) return
+  try {
+    storage.setItem(
+      SETTINGS_KEY,
+      JSON.stringify({
+        version: 1,
+        voices: settings.voices,
+        latency: settings.latency,
+        waveform: settings.waveform,
+        velocity: settings.velocity,
+        audioDetails: settings.audioDetails,
+        waveformTiming: settings.waveformTiming,
+      })
+    )
+  } catch {
+    // A full storage, or a private window that refuses writes
+  }
+}
+
+/** True for one of the voice counts the player may choose */
+function isVoiceLimit(value: unknown): value is VoiceLimit {
+  return VOICE_LIMITS.some((limit) => limit === value)
+}
+
+/** True for one of the latencyHint values */
+function isLatency(value: unknown): value is Latency {
+  return LATENCIES.some((latency) => latency === value)
+}
+
+/** True for one of the velocity modes */
+function isVelocityMode(value: unknown): value is VelocityMode {
+  return VELOCITY_MODES.some((mode) => mode === value)
+}

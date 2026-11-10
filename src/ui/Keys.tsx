@@ -11,19 +11,22 @@ import type { Hands } from './hands'
 
 /**
  * Piano keys, octaves octaves from the C of octave first to the C above. A
- * key plays louder pressed nearer its front edge; a finger that slides
- * moves its note from key to key, and up or down the keys sends Slide.
+ * key plays louder pressed nearer its front edge (every key at full
+ * velocity, given fullVelocity); a finger that slides moves its note from
+ * key to key, and up or down the keys sends Slide.
  */
 export function Keys({
   hands,
   first,
   octaves,
   label,
+  fullVelocity = false,
 }: {
   hands: Hands
   first: number
   octaves: number
   label: string
+  fullVelocity?: boolean
 }) {
   /** The keys' box, measured as each touch starts */
   const boxRef = useRef<DOMRect | null>(null)
@@ -45,7 +48,8 @@ export function Keys({
     event.currentTarget.setPointerCapture(event.pointerId)
     boxRef.current = event.currentTarget.getBoundingClientRect()
     const { y, note } = pointAt(event)
-    hands.press(event.pointerId, note, velocityAt(note, y), y)
+    const velocity = fullVelocity ? 1 : velocityAt(note, y)
+    hands.press(event.pointerId, note, velocity, y)
   }
 
   const move = (event: PointerEvent<HTMLDivElement>) => {

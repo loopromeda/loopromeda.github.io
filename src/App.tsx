@@ -3,6 +3,7 @@ import type { Engine } from './engine/engine'
 import type { BenchReport } from './engine/protocol'
 import type { PlatformReport } from './platform'
 import type { Library } from './state/library'
+import { readSettings, writeSettings, type AppSettings } from './state/settings'
 import {
   readSurface,
   writeSurface,
@@ -20,6 +21,8 @@ import { PlatformChecks } from './ui/PlatformChecks'
 import { PlaySurface } from './ui/PlaySurface'
 import { PresetBrowser } from './ui/PresetBrowser'
 import { Scope, type ScopeStats } from './ui/Scope'
+import { SettingsButton } from './ui/SettingsButton'
+import { SettingsSheet } from './ui/SettingsSheet'
 import { StatusBar } from './ui/StatusBar'
 import { SurfaceButton } from './ui/SurfaceButton'
 import { SurfacePicker } from './ui/SurfacePicker'
@@ -27,7 +30,7 @@ import { Tabs } from './ui/Tabs'
 import { VoicePanel } from './ui/VoicePanel'
 
 /** What can open over the waveform and the controls */
-type Sheet = 'presets' | 'surface'
+type Sheet = 'presets' | 'surface' | 'settings'
 
 const page =
   'flex h-full flex-col px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]'
@@ -39,7 +42,9 @@ const page =
  * buttons at the left of the keyboard's header open the presets, and the
  * choice of keys or pads, over the waveform and the controls: what is
  * played on stays there to try them on. The third puts the controls away,
- * for a screen too short to play on under them.
+ * for a screen too short to play on under them. The settings (this
+ * device's: voices, latency, what the screen shows) open from the status
+ * line's right end, in the same place.
  */
 export function App({
   platform,
@@ -52,10 +57,10 @@ export function App({
   platform: PlatformReport
   engine: Engine
   library: Library
-  /** Where the choice of keys or pads is kept */
+  /** Where the choice of keys or pads, and the settings, are kept */
   storage?: SurfaceStorage
   onScopeStats?: (stats: ScopeStats) => void
-  /** Dev only: offers Measure CPU on the VOICE tab and gets its results */
+  /** Gets the results of Measure CPU, in the settings */
   onBench?: (report: BenchReport) => void
 }) {
   const snapshot = useSyncExternalStore(engine.subscribe, engine.getSnapshot)
@@ -70,10 +75,27 @@ export function App({
     setSurface(next)
     writeSurface(storage, next)
   }
+  const [settings, setSettings] = useState(() => readSettings(storage))
+  // Called from a click: a new latency starts the audio again, which only
+  // a click may do
+  const changeSettings = (next: AppSettings) => {
+    setSettings(next)
+    writeSettings(storage, next)
+    if (next.voices !== settings.voices) engine.setVoices(next.voices)
+    if (next.latency !== settings.latency) engine.setLatency(next.latency)
+  }
   // Put away, the controls still come back under a sheet: it needs room
   const controls = !surface.hideControls || sheet !== null
+  // Once the audio has run, starting it again (a new latency) keeps the
+  // instrument on screen, under a note, instead of the start screen
+  const [ran, setRan] = useState(false)
+  if (state === 'running' && !ran) setRan(true)
 
-  if (state === 'idle' || state === 'starting' || state === 'failed') {
+  if (
+    state === 'idle' ||
+    state === 'failed' ||
+    (state === 'starting' && !ran)
+  ) {
     const failed = state === 'failed'
     return (
       <main className={`${page} items-center justify-center gap-6`}>
@@ -110,7 +132,13 @@ export function App({
     <main className={`${page} gap-3`}>
       <div className="relative flex shrink-0 flex-col">
         <div inert={sheet !== null} className="flex flex-col gap-3">
-          <Scope engine={engine} onStats={onScopeStats} />
+          {settings.waveform && (
+            <Scope
+              engine={engine}
+              timing={settings.waveformTiming}
+              onStats={onScopeStats}
+            />
+          )}
           {/* Hidden, not unmounted: each panel keeps its page and state */}
           <div id="controls" hidden={!controls}>
             <Tabs
@@ -146,7 +174,7 @@ export function App({
                 {
                   id: 'voice',
                   label: 'VOICE',
-                  panel: <VoicePanel engine={engine} onBench={onBench} />,
+                  panel: <VoicePanel engine={engine} />,
                 },
               ]}
             />
@@ -162,10 +190,20 @@ export function App({
             onClose={closeSheet}
           />
         )}
+        {sheet === 'settings' && (
+          <SettingsSheet
+            engine={engine}
+            settings={settings}
+            onChange={changeSettings}
+            onClose={closeSheet}
+            onBench={onBench}
+          />
+        )}
       </div>
       <PlaySurface
         engine={engine}
         settings={surface}
+        fullVelocity={settings.velocity === 'full'}
         menus={
           <>
             <PatchButton
@@ -197,19 +235,34 @@ export function App({
           </>
         }
       />
-      <StatusBar engine={engine} snapshot={snapshot} />
-      {state !== 'running' && (
-        <button
-          type="button"
-          onClick={() =>
-            state === 'closed' ? location.reload() : void engine.resume()
-          }
-          className="fixed inset-0 bg-black/80 px-8 text-lg"
-        >
-          Audio is {state}.
-          <br />
-          {state === 'closed' ? 'Tap to reload' : 'Tap to resume'}
-        </button>
+      <StatusBar
+        engine={engine}
+        snapshot={snapshot}
+        details={settings.audioDetails}
+      >
+        <SettingsButton
+          open={sheet === 'settings'}
+          onToggle={() => toggle('settings')}
+        />
+      </StatusBar>
+      {state === 'starting' ? (
+        <p className="fixed inset-0 flex items-center justify-center bg-black/80 px-8 text-lg">
+          Starting the audio again…
+        </p>
+      ) : (
+        state !== 'running' && (
+          <button
+            type="button"
+            onClick={() =>
+              state === 'closed' ? location.reload() : void engine.resume()
+            }
+            className="fixed inset-0 bg-black/80 px-8 text-lg"
+          >
+            Audio is {state}.
+            <br />
+            {state === 'closed' ? 'Tap to reload' : 'Tap to resume'}
+          </button>
+        )
       )}
     </main>
   )

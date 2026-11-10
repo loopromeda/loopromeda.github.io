@@ -62,9 +62,12 @@ export interface ScopeStats {
  */
 export function Scope({
   engine,
+  timing = true,
   onStats,
 }: {
   engine: Engine
+  /** The cost readout is shown */
+  timing?: boolean
   onStats?: (stats: ScopeStats) => void
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -288,6 +291,7 @@ export function Scope({
       />
       <span
         ref={readoutRef}
+        hidden={!timing}
         className="pointer-events-none absolute top-1.5 right-2.5 font-mono text-[10px] text-zinc-500"
       />
     </div>

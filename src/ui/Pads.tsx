@@ -18,8 +18,9 @@ const OTHER_PAD = `${PAD} bg-[#2a2a31] text-zinc-500`
 /**
  * A grid of pads, notes[i] on pad i: the lowest at the bottom left, up
  * along each row, then on to the row above. A pad plays louder pressed
- * nearer its bottom edge. A finger keeps the pad it pressed, so a pad is
- * never played by a finger that drifts: moving it up or down sends Slide.
+ * nearer its bottom edge (every pad at full velocity, given fullVelocity).
+ * A finger keeps the pad it pressed, so a pad is never played by a finger
+ * that drifts: moving it up or down sends Slide.
  */
 export function Pads({
   hands,
@@ -27,6 +28,7 @@ export function Pads({
   notes,
   root,
   label,
+  fullVelocity = false,
 }: {
   hands: Hands
   grid: PadGrid
@@ -34,6 +36,7 @@ export function Pads({
   /** The key's root, semitones above C: its pads are marked */
   root: number
   label: string
+  fullVelocity?: boolean
 }) {
   /** The grid's box, measured as each touch starts */
   const boxRef = useRef<DOMRect | null>(null)
@@ -59,7 +62,8 @@ export function Pads({
     const { index, within } = padAt(x, y, grid)
     const note = notes[index]
     if (note === undefined) return
-    hands.press(event.pointerId, note, padVelocity(within), y)
+    const velocity = fullVelocity ? 1 : padVelocity(within)
+    hands.press(event.pointerId, note, velocity, y)
   }
 
   const move = (event: PointerEvent<HTMLDivElement>) => {

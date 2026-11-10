@@ -111,16 +111,19 @@ const sameFit = (a: Fit, b: Fit) =>
  * Touches go straight to the engine; React renders only the keys or pads,
  * again when the octave, the key or the size changes. The header row holds
  * `menus` (the patch, the surface) at its left and the octave controls at
- * its right.
+ * its right. Given fullVelocity, every note plays at full velocity, wherever
+ * a finger lands.
  */
 export function PlaySurface({
   engine,
   settings,
   menus,
+  fullVelocity = false,
 }: {
   engine: Engine
   settings: SurfaceSettings
   menus?: ReactNode
+  fullVelocity?: boolean
 }) {
   const [hands] = useState(() => new Hands(engine))
   const [starts, setStarts] = useState(STARTS)
@@ -244,6 +247,7 @@ export function PlaySurface({
             grid={grid}
             notes={notes}
             root={root}
+            fullVelocity={fullVelocity}
             label={`Pads ${range} in ${pitchName(root)} ${scaleName(scale)}. Computer keys A to ; and Q to P play them; Z and X shift the octave`}
           />
         ) : (
@@ -251,6 +255,7 @@ export function PlaySurface({
             hands={hands}
             first={first}
             octaves={fit.octaves}
+            fullVelocity={fullVelocity}
             label={`Keys ${range}. Computer keys A to K play them; Z and X shift the octave`}
           />
         )}

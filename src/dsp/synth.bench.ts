@@ -2,7 +2,7 @@
  * The render budget (plan §4, M2): one 128-frame block of every voice must
  * take under a third of the block's own 2.67 ms at 48 kHz, the rest left
  * for the browser's own work on the audio thread and for slower phones.
- * The VOICE tab's Measure CPU (dev server) times the same heaviest patch
+ * Measure CPU, in the settings, times the same heaviest patch
  * (stress.ts) on a phone's audio thread: ashon's Galaxy Fold ran it a
  * little faster than an M3 Max here, so these numbers stand for a recent
  * flagship, not for a low-end phone.

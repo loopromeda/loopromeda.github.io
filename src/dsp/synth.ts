@@ -16,7 +16,8 @@ import { Voice, VoiceSettings } from './voice'
 /**
  * Voices in the pool (plan §4, M2): ten fingers never steal a held note,
  * with six more for release tails. The heaviest patch at 16 voices took 8%
- * of a block on ashon's Galaxy Fold (VOICE tab, Measure CPU, 2026-11-10).
+ * of a block on ashon's Galaxy Fold (Measure CPU, 2026-11-10). The player
+ * may limit it (Settings, voiceLimit).
  */
 export const VOICE_COUNT = 16
 /**
@@ -110,6 +111,18 @@ export class Synth {
       this.#cutoff,
       ...this.#amounts,
     ]
+  }
+
+  /**
+   * The most voices playing at once, 1 to the pool's size: fewer for a
+   * phone too slow for them all. A note past a lowered limit plays out.
+   */
+  get voiceLimit(): number {
+    return this.#allocator.limit
+  }
+
+  set voiceLimit(count: number) {
+    this.#allocator.limit = count
   }
 
   /** Voices sounding now, held or releasing */

@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, type ReactNode } from 'react'
 import type { Engine, EngineSnapshot, EngineState } from '../engine/engine'
 
 /** Frames rendered per worklet call: the Web Audio render quantum */
@@ -18,23 +18,29 @@ const ms = (seconds: number | undefined): string =>
   seconds === undefined ? '—' : `${(seconds * 1000).toFixed(1)} ms`
 
 /**
- * One quiet line under the keyboard: the audio state and what the audio path
- * reports about itself (the M1 device checklist). The latency's split into
- * base and output is in the title, and the dev server logs it with every
- * state change. outputLatency changes without an event, so the engine is
- * re-read twice a second while this is shown.
+ * One quiet line under the keyboard: the audio state and, given details,
+ * what the audio path reports about itself (the M1 device checklist), with
+ * `children` (the settings button) at its right end. The latency's split
+ * into base and output is in the title, and the dev server logs it with
+ * every state change. outputLatency changes without an event, so the engine
+ * is re-read twice a second while the details are shown.
  */
 export function StatusBar({
   engine,
   snapshot,
+  details = true,
+  children,
 }: {
   engine: Engine
   snapshot: EngineSnapshot
+  details?: boolean
+  children?: ReactNode
 }) {
   useEffect(() => {
+    if (!details) return
     const timer = setInterval(engine.refresh, 500)
     return () => clearInterval(timer)
-  }, [engine])
+  }, [engine, details])
 
   const { state, sampleRate, baseLatency, outputLatency } = snapshot
   const total =
@@ -46,7 +52,11 @@ export function StatusBar({
   return (
     <footer
       aria-label="Audio status"
-      title={`Latency: base ${ms(baseLatency)} + output ${ms(outputLatency)}`}
+      title={
+        details
+          ? `Latency: base ${ms(baseLatency)} + output ${ms(outputLatency)}`
+          : undefined
+      }
       className="flex h-4 shrink-0 items-center justify-between gap-3 font-mono text-[11px] text-zinc-400"
     >
       <span className="flex items-center gap-1.5">
@@ -56,9 +66,14 @@ export function StatusBar({
         />
         {state}
       </span>
-      <span className="truncate">
-        {sampleRate ? `${sampleRate / 1000} kHz` : '—'} · block {ms(block)} ·
-        latency {ms(total)}
+      <span className="flex min-w-0 items-center gap-3">
+        {details && (
+          <span className="truncate">
+            {sampleRate ? `${sampleRate / 1000} kHz` : '—'} · block {ms(block)}{' '}
+            · latency {ms(total)}
+          </span>
+        )}
+        {children}
       </span>
     </footer>
   )

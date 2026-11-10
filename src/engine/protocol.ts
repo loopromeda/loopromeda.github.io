@@ -23,6 +23,11 @@ export type ToWorklet =
   /** Everything stops: all notes released */
   | { t: 'panic' }
   /**
+   * The most voices playing at once: the player's setting for their
+   * device, not part of a sound
+   */
+  | { t: 'voices'; count: number }
+  /**
    * Time the heaviest patch (src/dsp/stress.ts) at each of these voice
    * counts on the audio thread. The audio stops while it runs.
    */

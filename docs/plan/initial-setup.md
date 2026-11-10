@@ -405,6 +405,20 @@ right, benchmark within budget.
       purpose: `desynchronized` (an input-latency hint, no throughput gain, tearing risk)
       and an OffscreenCanvas worker (the analyser lives on the main thread, so
       every frame would be copied across for less work than it saves).
+- [x] Settings, 2026-11-10, asked for by ashon (performance, debug and
+      personal settings in a menu of their own, ahead of the drum kit):
+      a sheet opened from the status line's right end, kept in
+      `localStorage` apart from the sound (`src/state/settings.ts`).
+      Performance: Voices (4, 8, 12 or 16: new notes take only the first
+      that many, a note past a lowered limit plays out), Latency (the
+      context's `latencyHint`; a context keeps it for life, so a change
+      starts the audio again on a new one, inside the click, the
+      instrument staying on screen) and the waveform on or off. Playing:
+      velocity from where a finger lands, or always full. Debug: the status
+      line's audio details, the waveform's frame timing, and Measure CPU,
+      moved there from the VOICE tab and offered in every build (only the
+      dev server records it). Desktop Chrome: Balanced moved the latency
+      from 37.3 to 50.0 ms.
 
 **Exit:** 3+ finger chords play with no scrolling or zooming, UI stays smooth while
 dragging knobs during notes.
