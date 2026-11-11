@@ -183,7 +183,13 @@ as a graph of flat tiles, flowing left to right.
    Measure CPU times it at 0.51, 1.03, 1.57 and 2.13 ms for 8, 16, 24
    and 32 voices, 19% to 80% of a 2.67 ms block, as desktop Chrome on
    the M3 Max does (0.52 to 2.03 ms): at the default 16 voices the worst
-   sound fits the block but not its third.
+   sound fits the block but not its third. Made cheaper 2026-11-11, by
+   what it spent on Math (a profile: about half the time): a moving
+   cutoff's coefficients and a moving pitch's step worked out every 8
+   samples and glided in between (`Filter.sweep`, `pitchesToSteps`), the
+   filter's loop in locals, and drive's tanh and the sines approximated
+   (`src/dsp/fastMath.ts`). Here, 16 voices: every slot 0.79 ms, under
+   the budget; the old stress patch 0.20 ms; a saw 0.038 ms.
 3. The engine and worklet: a sound's structure as one message, a knob as
    (part id, key, value). The old voice, synth and parameter mapping go,
    with the equivalence test that held the new one to them. Done

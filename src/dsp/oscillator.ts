@@ -1,4 +1,4 @@
-const TWO_PI = 2 * Math.PI
+import { sinCycles } from './fastMath'
 
 /** Waveforms, in the order the Wave knob steps through them */
 export const WAVES = ['sine', 'triangle', 'saw', 'square'] as const
@@ -67,6 +67,9 @@ export class Oscillator {
     end = out.length
   ): void {
     const dt = increment(frequency / this.sampleRate)
+    // A local, not the import: the benchmark's module runner reads an
+    // import through a getter
+    const sin = sinCycles
     let t = this.phaseInCycles
     switch (wave) {
       case SAW:
@@ -94,7 +97,7 @@ export class Oscillator {
         break
       default:
         for (let i = start; i < end; i++) {
-          out[i] = Math.sin(TWO_PI * t)
+          out[i] = sin(t)
           t += dt
           t -= Math.floor(t)
         }
@@ -121,6 +124,9 @@ export class Oscillator {
     widths?: Float32Array,
     offsets?: Float32Array
   ): void {
+    // A local, not the import: the benchmark's module runner reads an
+    // import through a getter
+    const sin = sinCycles
     let t = this.phaseInCycles
     let last = this.lastOffset
     const width = clampWidth(this.width)
@@ -148,7 +154,7 @@ export class Oscillator {
           out[i] = triangle(read, dt)
           break
         default:
-          out[i] = Math.sin(TWO_PI * read)
+          out[i] = sin(read)
       }
       t += step
       t -= Math.floor(t)

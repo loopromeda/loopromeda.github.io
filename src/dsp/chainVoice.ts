@@ -1,4 +1,5 @@
 import { Adsr, AdsrShape } from './adsr'
+import { tanhApprox } from './fastMath'
 import { Filter, LOWPASS } from './filter'
 import { Lfo } from './lfo'
 import { Noise } from './noise'
@@ -54,6 +55,12 @@ export const DRIVE_GAIN = 10
 const GLIDE_LAND = 1e-4
 /** Velocity and slide changes glide over about 5 × this many seconds */
 const SMOOTHING = 0.005
+/**
+ * A moving pitch's phase step is worked out exactly every this many
+ * samples, linear in between (pitchesToSteps): as a filter's cutoff
+ * sweeps (SWEEP_STEP)
+ */
+const PITCH_STEP = 8
 /**
  * Seeds for each voice's LFOs, the first of a sound's LFOs taking the
  * first: spread over the 32-bit range with each voice's own seed
@@ -180,6 +187,9 @@ export class ChainSettings {
   readonly widths: Float32Array
   readonly offsets: Float32Array
   readonly glide: Float32Array
+  /** And a filter's: its cutoff (log2 of hertz) and resonance per sample */
+  readonly octaves: Float32Array
+  readonly resonances: Float32Array
 
   constructor(sampleRate: number, chunk: number) {
     const buffers = (count: number, into: Float32Array[]) => {
@@ -204,6 +214,8 @@ export class ChainSettings {
     this.widths = new Float32Array(chunk)
     this.offsets = new Float32Array(chunk)
     this.glide = new Float32Array(chunk)
+    this.octaves = new Float32Array(chunk)
+    this.resonances = new Float32Array(chunk)
   }
 }
 
@@ -583,12 +595,14 @@ export class ChainVoice {
       const glide = settings.glide
       const both = used[DEST_PITCH] === 1 ? dests[DEST_PITCH] : undefined
       const own = used[pitchDest] === 1 ? dests[pitchDest] : undefined
+      // The pitch per sample first, then its steps, a few samples apart
       for (let j = 0; j < length; j++) {
         let pitch = (gliding ? (glide[j] as number) : this.#pitch) + transpose
         if (both) pitch += both[j] as number
         if (own) pitch += own[j] as number
-        increments[j] = step * 2 ** (pitch / 12)
+        increments[j] = pitch
       }
+      pitchesToSteps(increments, length, step)
     } else {
       const pitch = this.#pitch + transpose
       increments.fill(step * 2 ** (pitch / 12), 0, length)
@@ -689,34 +703,45 @@ export class ChainVoice {
       used[cutoffDest] === 1 ? settings.dests[cutoffDest] : undefined
     const resonanceMod =
       used[resonanceDest] === 1 ? settings.dests[resonanceDest] : undefined
-    let last = Number.NaN
-    let lastResonance = resonance
-    for (let i = 0; i < length; i++) {
-      let octaves = (cutoff[i] as number) + key
-      if (cutoffMod) octaves += cutoffMod[i] as number
-      let q = resonance
-      if (resonanceMod) q = clamp01(resonance + (resonanceMod[i] as number))
-      // New coefficients (a tan) only when the cutoff moved: once a held
-      // note's envelope settles, once a chunk
-      if (octaves !== last || q !== lastResonance) {
-        filter.set(Math.pow(2, octaves), q)
-        last = octaves
-        lastResonance = q
-      }
-      chain[i] = filter.tick(chain[i] as number)
+    // Held still: the knob's glide only ever moves one way, so ends alike
+    // mean the whole chunk alike
+    const first = cutoff[0] as number
+    if (!cutoffMod && !resonanceMod && cutoff[length - 1] === first) {
+      filter.steady(chain, first + key, resonance, length)
+      return
     }
+    // Where the cutoff and resonance stand each sample; the filter works
+    // its coefficients out a few samples apart (Filter.sweep)
+    const octaves = settings.octaves
+    const resonances = settings.resonances
+    for (let i = 0; i < length; i++) {
+      octaves[i] =
+        (cutoff[i] as number) + key + (cutoffMod ? (cutoffMod[i] as number) : 0)
+    }
+    if (resonanceMod) {
+      for (let i = 0; i < length; i++) {
+        resonances[i] = clamp01(resonance + (resonanceMod[i] as number))
+      }
+    } else {
+      resonances.fill(resonance, 0, length)
+    }
+    filter.sweep(chain, octaves, resonances, length)
   }
 
   /**
    * Item k of chain c, a drive, over chain[0..length): tanh(g·x) / tanh(g),
    * g = DRIVE_GAIN × drive, so a full-scale peak stays at full scale while
-   * quieter parts rise; nothing at a drive of 0
+   * quieter parts rise; nothing at a drive of 0. tanh is tanhApprox, a
+   * Math.tanh a sample being most of what a drive costs.
    */
   #drive(c: number, k: number, chain: Float32Array, length: number): void {
     const settings = this.#settings
     const drive = settings.itemValue[c * MAX_ITEMS + k] as Float32Array
     const dest = itemDest(c, k, ITEM_DRIVE_AMOUNT)
     const mod = settings.destUsed[dest] === 1 ? settings.dests[dest] : undefined
+    // A local, not the import: the benchmark's module runner reads an
+    // import through a getter
+    const tanh = tanhApprox
     let lastGain = Number.NaN
     let norm = 0
     for (let i = 0; i < length; i++) {
@@ -725,9 +750,9 @@ export class ChainVoice {
       const gain = DRIVE_GAIN * amount
       if (gain !== lastGain) {
         lastGain = gain
-        norm = gain < 1e-3 ? 0 : 1 / Math.tanh(gain)
+        norm = gain < 1e-3 ? 0 : 1 / tanh(gain)
       }
-      if (norm !== 0) chain[i] = Math.tanh(gain * (chain[i] as number)) * norm
+      if (norm !== 0) chain[i] = tanh(gain * (chain[i] as number)) * norm
     }
   }
 
@@ -785,6 +810,30 @@ function addAt(
     for (let i = 0; i < length; i++) {
       to[i] = (to[i] as number) + (signal[i] as number) * (level[i] as number)
     }
+  }
+}
+
+/**
+ * Turns pitches (semitones from MIDI note 0, per sample) in
+ * buffer[0..length) into phase steps, step × 2^(pitch / 12), in place:
+ * exact every PITCH_STEP samples and at the last, linear in between, so a
+ * moving pitch costs a pow every PITCH_STEP samples, not every sample
+ */
+export function pitchesToSteps(
+  buffer: Float32Array,
+  length: number,
+  step: number
+): void {
+  if (length <= 0) return
+  let from = step * 2 ** ((buffer[0] as number) / 12)
+  for (let start = 0; start < length; start += PITCH_STEP) {
+    const end = start + PITCH_STEP < length ? start + PITCH_STEP : length
+    // The next exact point: the next stretch's first sample, or the last
+    const at = end < length ? end : length - 1
+    const to = step * 2 ** ((buffer[at] as number) / 12)
+    const slope = at > start ? (to - from) / (at - start) : 0
+    for (let i = start; i < end; i++) buffer[i] = from + slope * (i - start)
+    from = to
   }
 }
 

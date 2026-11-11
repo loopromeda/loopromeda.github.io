@@ -1,6 +1,5 @@
+import { sinCycles } from './fastMath'
 import { Noise } from './noise'
-
-const TWO_PI = 2 * Math.PI
 
 /** The shapes in selector order, indexed by the constants below */
 export const LFO_SHAPES = [
@@ -99,6 +98,9 @@ export class Lfo {
     const dt = this.step(rate)
     const fadeEnd = fadeSamples(fade, this.sampleRate)
     const noise = this.noise
+    // A local, not the import: the benchmark's module runner reads an
+    // import through a getter
+    const sin = sinCycles
     let t = this.phaseInCycles
     let age = this.age
     let held = this.held
@@ -122,10 +124,10 @@ export class Lfo {
           break
         case LFO_SMOOTH:
           // from to the cycle's end value along a cosine, flat at both ends
-          value = from + ((to - from) * (1 - Math.cos(Math.PI * t))) / 2
+          value = from + ((to - from) * (1 - sin(t / 2 + 0.25))) / 2
           break
         default:
-          value = Math.sin(TWO_PI * t)
+          value = sin(t)
       }
       out[i] = value * (age < fadeEnd ? age / fadeEnd : 1)
       age = age < MAX_AGE ? age + 1 : MAX_AGE

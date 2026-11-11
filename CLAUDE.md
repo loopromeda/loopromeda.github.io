@@ -49,7 +49,8 @@ src/dsp/      pure DSP (oscillators, envelopes, LFOs, filters, voices);
               parts: voice pool, allocator, mono/legato, routes, mix;
               chainVoice.ts one voice of it; slots.ts numbers the parts,
               sources and destinations; chainStress.ts is the heaviest
-              sound it can hold, for measuring
+              sound it can hold, for measuring; fastMath.ts the cheaper
+              tanh and sine the voices call per sample
 src/worklet/  the AudioWorkletProcessor around src/dsp; own globals and
               tsconfig (tsconfig.worklet.json), loaded via ?worker&url;
               sound.ts loads a sound document onto the ChainSynth and

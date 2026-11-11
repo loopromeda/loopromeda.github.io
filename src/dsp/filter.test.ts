@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   BANDPASS,
   Filter,
@@ -7,6 +7,7 @@ import {
   MAX_Q,
   MIN_CUTOFF,
   MIN_Q,
+  SWEEP_STEP,
   resonanceToQ,
 } from './filter'
 
@@ -162,6 +163,115 @@ describe('Filter', () => {
     for (let i = 10; i < 20; i++) {
       // The buffer keeps float32, so round the same way it does
       expect(buffer[i]).toBe(Math.fround(other.tick(before[i] as number)))
+    }
+  })
+})
+
+describe('Filter.sweep', () => {
+  const LENGTH = 128
+  /** A chord of three sines, for something to filter */
+  const input = () => {
+    const buffer = new Float32Array(LENGTH)
+    for (let n = 0; n < LENGTH; n++) {
+      const at = (TWO_PI * n) / SAMPLE_RATE
+      buffer[n] =
+        0.4 * Math.sin(220 * at) +
+        0.3 * Math.sin(1700 * at) +
+        0.3 * Math.sin(5300 * at)
+    }
+    return buffer
+  }
+  /** Cutoffs (log2 Hz) from `from` to `to` octaves along the chunk */
+  const ramp = (from: number, to: number) =>
+    Float32Array.from(
+      { length: LENGTH },
+      (_, n) => from + ((to - from) * n) / (LENGTH - 1)
+    )
+
+  it('filters a still cutoff exactly as set and process do', () => {
+    for (const type of [LOWPASS, HIGHPASS, BANDPASS]) {
+      const swept = input()
+      const filter = new Filter(SAMPLE_RATE)
+      filter.type = type
+      const octaves = new Float32Array(LENGTH).fill(Math.log2(900))
+      const resonances = new Float32Array(LENGTH).fill(0.6)
+      filter.sweep(swept, octaves, resonances, LENGTH)
+
+      const plain = input()
+      const other = new Filter(SAMPLE_RATE)
+      other.type = type
+      // The resonance as the buffer holds it, in float32
+      other.set(2 ** (octaves[0] as number), resonances[0] as number)
+      other.process(plain)
+      expect(swept).toEqual(plain)
+
+      // And steady() is the same again
+      const held = input()
+      const third = new Filter(SAMPLE_RATE)
+      third.type = type
+      third.steady(held, octaves[0] as number, resonances[0] as number, LENGTH)
+      expect(held).toEqual(plain)
+    }
+  })
+
+  it('follows a fast sweep closely: as setting every sample would', () => {
+    for (const type of [LOWPASS, HIGHPASS, BANDPASS]) {
+      // Six octaves down and the resonance up, in under 3 ms
+      const octaves = ramp(Math.log2(12000), Math.log2(12000 / 64))
+      const resonances = Float32Array.from(
+        { length: LENGTH },
+        (_, n) => n / (LENGTH - 1)
+      )
+      const swept = input()
+      const filter = new Filter(SAMPLE_RATE)
+      filter.type = type
+      filter.sweep(swept, octaves, resonances, LENGTH)
+
+      const exact = input()
+      const other = new Filter(SAMPLE_RATE)
+      other.type = type
+      for (let n = 0; n < LENGTH; n++) {
+        other.set(2 ** (octaves[n] as number), resonances[n] as number)
+        exact[n] = other.tick(exact[n] as number)
+      }
+      let worst = 0
+      for (let n = 0; n < LENGTH; n++) {
+        worst = Math.max(worst, Math.abs((swept[n] as number) - exact[n]!))
+      }
+      // About 50 dB under the signal, at the fastest a sweep goes
+      expect(worst).toBeLessThan(3e-3)
+    }
+  })
+
+  it('works out a moving cutoff a step apart, and a settled one once', () => {
+    const tan = vi.spyOn(Math, 'tan')
+    try {
+      const filter = new Filter(SAMPLE_RATE)
+      const resonances = new Float32Array(LENGTH)
+      tan.mockClear()
+      filter.sweep(input(), ramp(10, 12), resonances, LENGTH)
+      // Each step's first sample, and the last
+      expect(tan).toHaveBeenCalledTimes(LENGTH / SWEEP_STEP + 1)
+      tan.mockClear()
+      const still = new Float32Array(LENGTH).fill(12)
+      filter.sweep(input(), still, resonances, LENGTH)
+      filter.sweep(input(), still, resonances, LENGTH)
+      // Where the last sweep ended: nothing new to work out
+      expect(tan).toHaveBeenCalledTimes(0)
+    } finally {
+      tan.mockRestore()
+    }
+  })
+
+  it('stays finite sweeping the whole range at full resonance', () => {
+    const filter = new Filter(SAMPLE_RATE)
+    const resonances = new Float32Array(LENGTH).fill(1)
+    for (let chunk = 0; chunk < 40; chunk++) {
+      const up = chunk % 2 === 0
+      const octaves = up ? ramp(Math.log2(MIN_CUTOFF), 15) : ramp(15, 4)
+      const buffer = input()
+      filter.sweep(buffer, octaves, resonances, LENGTH)
+      for (const y of buffer) expect(Number.isFinite(y)).toBe(true)
     }
   })
 })
