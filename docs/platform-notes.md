@@ -35,6 +35,18 @@ findings are added by hand during the M1 checklist.
   240-248 ms for about two seconds before settling, so the first reading is
   not to be trusted. Whether `outputLatency` includes the Bluetooth delay on
   this device: not checked.
+- Long press, 2026-11-11 (Chrome 157): Android's own long press comes
+  just after the app's 450 ms hold, on whatever stands under the finger
+  by then. Holding a knob put its routes in the panel's place, and the
+  long press then selected the text of the route card's "via" select and
+  opened the copy menu (ashon). A held touch now opens no menu and
+  selects nothing until it lets go (`src/ui/held.ts`), and a select's
+  label is never selectable.
+- `outputLatency`, 2026-11-11 (Chrome 157): after a reload it read 42 s
+  at `running`, then fell by about 0.7 s each second (36.8 s after eight
+  seconds; the status line showed 26867 ms a little later). Before that
+  reload it had read 24 ms. The audio sounded as usual, so the reading,
+  not the output, was wrong.
 
 ## Desktop baseline: macOS · Chrome (desktop)
 

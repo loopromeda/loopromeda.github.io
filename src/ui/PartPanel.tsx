@@ -646,6 +646,7 @@ function viewOf(
           { label: 'Move right ▸', run: move(1) },
           { label: 'Remove', run: remove(chain.id), danger: true },
         ],
+        actionNote: 'Or hold the tile and drag it, into another chain too.',
       }
     }
     case 'chain': {
@@ -668,7 +669,8 @@ function viewOf(
           { label: 'Move down ▾', run: move(1) },
           { label: 'Remove', run: remove(), danger: true },
         ],
-        actionNote: 'Removing a chain removes its items.',
+        actionNote:
+          'Removing a chain removes its items. Or hold its letter and drag the row up or down.',
       }
     }
     case 'modulator': {
@@ -699,7 +701,8 @@ function viewOf(
           { label: 'Later ▸', run: move(1) },
           { label: 'Remove', run: remove(), danger: true },
         ],
-        actionNote: 'Removing a modulator removes its routes.',
+        actionNote:
+          'Removing a modulator removes its routes. Or hold the tile and drag it along the rack.',
       }
     }
     case 'input': {

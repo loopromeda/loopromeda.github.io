@@ -72,15 +72,16 @@ src/state/    params.ts: the knob schema and the old parameters;
 src/viz/      pure display math (scope trigger and decimation, envelope
               and LFO outlines, filter response, keyboard and pad grid
               geometry, the sound editor's input column and chain rows
-              in graph.ts, hit-testing, velocity and Slide from a touch's
-              position)
+              in graph.ts and where a tile dragged goes in drop.ts,
+              hit-testing, velocity and Slide from a touch's position)
 src/ui/       React components; SoundEditor.tsx the sound as tiles
               (editor.ts: their names, lines, pictograms and colours),
               its amp holding Scope.tsx, the output waveform;
               PartPanel.tsx the picked tile's knobs, adds and moves
               (outline.ts: its picture); RoutePanels.tsx routing in the
               panel's place: the routes into a knob held, or a source's
-              depths on the tiles picked; Knob.tsx turns one knob of one
+              depths on the tiles picked; tileDrag.ts holds a tile and
+              drags it to a new place; Knob.tsx turns one knob of one
               part (or a source's depth into one), PlaySurface.tsx plays
               notes on Keys.tsx or Pads.tsx (hands.ts: who holds which
               note),

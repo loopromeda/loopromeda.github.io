@@ -8,6 +8,7 @@ import { readPlatform, sendReport } from './platform'
 import { FACTORY_PRESETS } from './state/factory'
 import { Library } from './state/library'
 import { readSettings } from './state/settings'
+import { touchHeld } from './ui/held'
 import type { ScopeStats } from './ui/Scope'
 
 const root = document.getElementById('root')
@@ -25,12 +26,13 @@ function localStore(): Storage | undefined {
   }
 }
 
-const SELECTABLE = 'input, textarea, select, [contenteditable], .select-text'
+const SELECTABLE = 'input, textarea, [contenteditable], .select-text'
 
 /**
  * What may be selected and long-pressed for its menu: a field to type in
  * (a preset's name) and text the page marks select-text (the start
- * screen's error and browser). A text node answers for its element.
+ * screen's error and browser), not a select's label. A text node answers
+ * for its element.
  */
 function selectable(target: EventTarget | null): boolean {
   const element =
@@ -45,13 +47,14 @@ function selectable(target: EventTarget | null): boolean {
 // An instrument, not a document: a long press anywhere else, a pad, a key,
 // the status line under them, selects no text and opens no menu. Android
 // starts a selection from the long press's context menu, iOS (and a mouse)
-// at selectstart; user-select: none (index.css) is the first guard.
-document.addEventListener('contextmenu', (event) => {
-  if (!selectable(event.target)) event.preventDefault()
-})
-document.addEventListener('selectstart', (event) => {
-  if (!selectable(event.target)) event.preventDefault()
-})
+// at selectstart; user-select: none (index.css) is the first guard. A
+// touch held (a knob's, a tile's) selects nothing even over a field: what
+// is under it changed when it was held (held.ts).
+const guard = (event: Event) => {
+  if (touchHeld() || !selectable(event.target)) event.preventDefault()
+}
+document.addEventListener('contextmenu', guard)
+document.addEventListener('selectstart', guard)
 
 const storage = localStore()
 // The device's settings that reach the audio go in before it starts: a

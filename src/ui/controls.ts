@@ -38,6 +38,12 @@ export const ICON_BUTTON =
 export const FIELD =
   'h-11 min-w-0 rounded-[10px] bg-black/40 px-3 text-[13px] text-zinc-100 outline-none focus-visible:shadow-[inset_0_0_0_1px_#34d399]'
 
+/**
+ * A touch kept still this long (ms) is held, not tapped: a knob held
+ * routes to it, a tile held lifts to be dragged
+ */
+export const HOLD = 450
+
 /** Reaches a 28 px button's hit area 8 px above and below it: 44 px */
 export const TALL_HIT =
   'relative before:absolute before:inset-x-0 before:-top-2 before:-bottom-2'

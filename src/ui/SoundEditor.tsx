@@ -5,8 +5,10 @@ import {
   useSyncExternalStore,
   type CSSProperties,
   type ReactNode,
+  type RefObject,
 } from 'react'
 import type { Engine } from '../engine/engine'
+import { moveItem, movePart } from '../state/sound/edit'
 import {
   MAX_CHAINS,
   MAX_INPUTS,
@@ -21,6 +23,7 @@ import {
   partName,
   type Sound,
 } from '../state/sound/sound'
+import { MARK, chainDrop, itemDrop, spanDrop } from '../viz/drop'
 import { GRAPH, graphGeometry, type Box } from '../viz/graph'
 import {
   MOD_LOOK,
@@ -41,6 +44,7 @@ import {
 import { PartPanel } from './PartPanel'
 import { RoutesFrom, RoutesInto, type RouteTarget } from './RoutePanels'
 import { Scope, type ScopeStats } from './Scope'
+import { useTileDrag, type DragProps, type Spot } from './tileDrag'
 
 /** The output waveform the amp's tile holds, if it shows one */
 export interface AmpScope {
@@ -60,6 +64,11 @@ const ADD_TEXT = '#71717a'
 const ADD_LINE = 'rgba(255,255,255,0.16)'
 
 const LIMITS = { inputs: MAX_INPUTS, chains: MAX_CHAINS, items: MAX_ITEMS }
+/** The space between the rack's tiles (gap-1) */
+const RACK_GAP = 4
+
+/** Where a tile dragged goes: its index, and the chain an item goes into */
+type Place = Spot & { readonly to: number; readonly chain?: string }
 
 /** What the editor's parts share: the engine, what is picked, picking */
 interface Picking {
@@ -87,6 +96,11 @@ interface Picking {
  * The panel turns to routing in two ways (RoutePanels.tsx). Holding a
  * knob shows the routes into it. A modulator's Route shows the picked
  * tile's knobs as depths from it, while tiles are picked as before.
+ *
+ * Held, a tile lifts to be dragged (tileDrag.ts): an item along its chain
+ * or into another, a chain's head (its row with it) up or down, a
+ * modulator along the rack. Inputs stand beside the chains they feed, so
+ * only the panel moves them.
  */
 export function SoundEditor({
   engine,
@@ -188,7 +202,7 @@ export function SoundEditor({
  * The modulators in a row, a "+" while there is room, the voice last. The
  * row scrolls sideways, which clips at its padding: there is room in it
  * for a tile's rings (a reach ring stands 3.5 px out). The source being
- * routed from is outlined in sky.
+ * routed from is outlined in sky. A modulator dragged moves along it.
  */
 function Rack({
   engine,
@@ -199,42 +213,82 @@ function Rack({
   source,
 }: Picking & { source: string | null }) {
   const routed = modulated(sound)
+  const scrollerRef = useRef<HTMLDivElement>(null)
+  const contentRef = useRef<HTMLDivElement>(null)
+  const markerRef = useRef<HTMLSpanElement>(null)
+  const drag = useTileDrag<Place>({
+    scroller: scrollerRef,
+    content: contentRef,
+    marker: markerRef,
+    axis: () => 'x',
+    // Measured: the tiles stand in a row of their own sizes
+    locate: (id, x) => {
+      const tiles = Array.from(
+        contentRef.current?.querySelectorAll<HTMLElement>('[data-drag]') ?? []
+      )
+      const from = tiles.findIndex((tile) => tile.dataset.drag === id)
+      const tile = tiles[from]
+      const spans = tiles.map((each) => ({
+        start: each.offsetLeft,
+        end: each.offsetLeft + each.offsetWidth,
+      }))
+      const at = tile && spanDrop(spans, from, x, RACK_GAP, 0)
+      if (!tile || !at) return undefined
+      return {
+        to: at.to,
+        color: MOD_LOOK.ink,
+        marker: {
+          x: at.middle - MARK / 2,
+          y: tile.offsetTop,
+          w: MARK,
+          h: tile.offsetHeight,
+        },
+      }
+    },
+    drop: (id, at) => engine.edit((current) => movePart(current, id, at.to)),
+    lift: (id) => pick(id),
+  })
   return (
     <div className="mx-2 mt-2 mb-1 flex h-10 shrink-0 items-center gap-1.5 rounded-lg bg-white/[0.03] pr-1.5 pl-0.5">
       <div
+        ref={scrollerRef}
         aria-label="Modulators"
-        className="flex min-w-0 flex-1 gap-1 overflow-x-auto overscroll-x-contain px-1 py-1.5"
+        className="flex min-w-0 flex-1 overflow-x-auto overscroll-x-contain px-1 py-1.5"
       >
-        {sound.modulators.map((modulator) => (
-          <Tile
-            key={modulator.id}
-            engine={engine}
-            label={tileLabel(sound, modulator.id)}
-            glyph={glyphOf(sound, modulator.id)}
-            look={MOD_LOOK}
-            picked={picked === modulator.id}
-            member={source === modulator.id}
-            reach={reach.has(modulator.id)}
-            routed={routed.has(modulator.id)}
-            aria={partName(sound, modulator.id)}
-            onClick={() => pick(modulator.id)}
-            className="h-[26px] w-16 shrink-0 gap-1.5 px-1.5"
-            small
-          />
-        ))}
-        {sound.modulators.length < MAX_MODULATORS && (
-          <Tile
-            engine={engine}
-            label="+"
-            look={MOD_LOOK}
-            picked={picked === addId('modulator')}
-            dashed="add"
-            aria="Add a modulator"
-            onClick={() => pick(addId('modulator'))}
-            className="h-[26px] w-[26px] shrink-0"
-            small
-          />
-        )}
+        <div ref={contentRef} className="relative flex shrink-0 gap-1">
+          {sound.modulators.map((modulator) => (
+            <Tile
+              key={modulator.id}
+              engine={engine}
+              drag={drag(modulator.id)}
+              label={tileLabel(sound, modulator.id)}
+              glyph={glyphOf(sound, modulator.id)}
+              look={MOD_LOOK}
+              picked={picked === modulator.id}
+              member={source === modulator.id}
+              reach={reach.has(modulator.id)}
+              routed={routed.has(modulator.id)}
+              aria={partName(sound, modulator.id)}
+              onClick={() => pick(modulator.id)}
+              className="h-[26px] w-16 shrink-0 gap-1.5 px-1.5"
+              small
+            />
+          ))}
+          {sound.modulators.length < MAX_MODULATORS && (
+            <Tile
+              engine={engine}
+              label="+"
+              look={MOD_LOOK}
+              picked={picked === addId('modulator')}
+              dashed="add"
+              aria="Add a modulator"
+              onClick={() => pick(addId('modulator'))}
+              className="h-[26px] w-[26px] shrink-0"
+              small
+            />
+          )}
+          <Marker ref={markerRef} />
+        </div>
       </div>
       <span aria-hidden className="h-[22px] w-px shrink-0 bg-white/10" />
       <Tile
@@ -288,6 +342,41 @@ function Graph({
     chainOf.set(chain.id, c)
     for (const item of chain.items) chainOf.set(item.id, c)
   })
+  const isChain = (id: string) => sound.chains.some((chain) => chain.id === id)
+  const contentRef = useRef<HTMLDivElement>(null)
+  const markerRef = useRef<HTMLSpanElement>(null)
+  const drag = useTileDrag<Place>({
+    scroller: frameRef,
+    content: contentRef,
+    marker: markerRef,
+    axis: (id) => (isChain(id) ? 'y' : 'xy'),
+    // A chain's head takes its row along: everything marked with its id
+    moving: (id, tile) =>
+      isChain(id)
+        ? Array.from(
+            contentRef.current?.querySelectorAll<HTMLElement>(
+              `[data-row="${id}"]`
+            ) ?? []
+          )
+        : [tile],
+    // Marked in the colour of the chain moved, or the item's new one
+    locate: (id, x, y) => {
+      const ink = (chain: string) => chainLook(chainOf.get(chain) ?? 0).ink
+      if (isChain(id)) {
+        const at = chainDrop(geometry, id, y)
+        return at && { ...at, color: ink(id) }
+      }
+      const at = itemDrop(geometry, id, x, y, MAX_ITEMS)
+      return at && { ...at, color: ink(at.chain) }
+    },
+    drop: (id, at) =>
+      engine.edit((current) =>
+        at.chain === undefined
+          ? movePart(current, id, at.to)
+          : moveItem(current, id, at.chain, at.to)
+      ),
+    lift: (id) => pick(id),
+  })
 
   return (
     <div
@@ -295,6 +384,7 @@ function Graph({
       className="relative max-h-[min(22rem,45dvh)] min-h-0 overflow-auto overscroll-contain md:max-h-[22rem]"
     >
       <div
+        ref={contentRef}
         className="relative min-w-full"
         style={{ width: geometry.width, height: geometry.height }}
       >
@@ -360,6 +450,8 @@ function Graph({
             <div key={chain.id} className="contents">
               <Tile
                 engine={engine}
+                drag={drag(chain.id)}
+                row={chain.id}
                 label=""
                 mark={letter}
                 line={chain.id}
@@ -375,6 +467,8 @@ function Graph({
                 <Tile
                   key={item}
                   engine={engine}
+                  drag={drag(item)}
+                  row={chain.id}
                   label={tileLabel(sound, item)}
                   line={item}
                   glyph={box.h >= 60 ? glyphOf(sound, item) : undefined}
@@ -391,6 +485,7 @@ function Graph({
               {row.add && (
                 <Tile
                   engine={engine}
+                  row={chain.id}
                   label={row.add.w < 60 ? '+' : '+ Item'}
                   look={look}
                   picked={picked === addId(chain.id)}
@@ -404,6 +499,7 @@ function Graph({
               {row.joints.slice(0, last).map((x, k) => (
                 <Joint
                   key={x}
+                  row={chain.id}
                   x={x}
                   y={cy}
                   height={18}
@@ -414,6 +510,7 @@ function Graph({
               <LevelJoint
                 engine={engine}
                 chain={chain.id}
+                row={chain.id}
                 x={row.joints[last] ?? 0}
                 y={cy}
                 look={look}
@@ -488,8 +585,23 @@ function Graph({
             />
           )
         })}
+        <Marker ref={markerRef} />
       </div>
     </div>
+  )
+}
+
+/**
+ * Where a tile dragged would go: a bar on a seam, placed and coloured by
+ * the drag (tileDrag.ts), hidden until then
+ */
+function Marker({ ref }: { ref: RefObject<HTMLSpanElement | null> }) {
+  return (
+    <span
+      ref={ref}
+      aria-hidden
+      className="pointer-events-none absolute z-[9] hidden rounded-full"
+    />
   )
 }
 
@@ -534,12 +646,15 @@ function pillStyle(look: Look, lit: boolean, ring = false): CSSProperties {
 
 /** The joint between two tiles of a chain */
 function Joint({
+  row,
   x,
   y,
   height,
   look,
   lit,
 }: {
+  /** The chain whose row it moves with */
+  row: string
   x: number
   y: number
   height: number
@@ -549,6 +664,7 @@ function Joint({
   return (
     <span
       aria-hidden
+      data-row={row}
       className="pointer-events-none absolute z-[3] w-2 rounded"
       style={{
         left: x - 4,
@@ -565,6 +681,7 @@ function Joint({
 function LevelJoint({
   engine,
   chain,
+  row,
   x,
   y,
   look,
@@ -572,6 +689,8 @@ function LevelJoint({
 }: {
   engine: Engine
   chain: string
+  /** The chain whose row it moves with */
+  row: string
   x: number
   y: number
   look: Look
@@ -584,6 +703,7 @@ function LevelJoint({
   return (
     <span
       aria-hidden
+      data-row={row}
       className="pointer-events-none absolute z-[3] w-2 rounded"
       style={{
         left: x - 4,
@@ -648,10 +768,13 @@ function SendPeg({
  * look. Picked, the ring is heavier and the face takes the tint; a member
  * of the picked chain is outlined in its ink; reached by the modulation
  * picked, a sky ring stands outside it. Dashed: a "+" that adds, or a
- * copy of an input standing in another chain's row.
+ * copy of an input standing in another chain's row. Given drag, it is
+ * held to be dragged (tileDrag.ts).
  */
 function Tile({
   engine,
+  drag,
+  row,
   label,
   line,
   glyph,
@@ -671,6 +794,9 @@ function Tile({
   aside,
 }: {
   engine: Engine
+  drag?: DragProps
+  /** The chain whose row it moves with, when that is dragged */
+  row?: string
   label: string
   /** The part whose line (tileLine) shows under the label, live */
   line?: string
@@ -807,6 +933,8 @@ function Tile({
   return (
     <button
       type="button"
+      {...drag}
+      data-row={row}
       aria-label={aria}
       aria-pressed={picked}
       onClick={onClick}

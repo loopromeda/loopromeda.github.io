@@ -26,8 +26,9 @@ import {
   setKnob,
   type PartDest,
 } from '../state/sound/knob'
-import { KNOB_SIZE } from './controls'
+import { HOLD, KNOB_SIZE } from './controls'
 import { MOD_COLOR } from './editor'
+import { keepHeld } from './held'
 
 /** CSS pixels of vertical drag that sweep a knob from end to end */
 const TRAVEL = 160
@@ -35,8 +36,6 @@ const TRAVEL = 160
 const DOUBLE_TAP = 300
 /** A touch that moves less than this (CSS px) is a tap, not a drag */
 const TAP_SLOP = 4
-/** A touch held this long (ms) without moving routes to the knob */
-const HOLD = 450
 /** Knob travel the arrow keys move a continuous knob by */
 const KEY_STEP = 0.01
 /** The knob turns through 270°, from 7:30 to 4:30 on a clock face */
@@ -378,6 +377,7 @@ function Dial({
           target.releasePointerCapture(pointerId)
         }
         navigator.vibrate?.(10)
+        keepHeld(pointerId)
         hold()
       }, HOLD)
     }

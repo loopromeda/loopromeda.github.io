@@ -354,6 +354,34 @@ export function movePart(sound: Sound, id: string, to: number): Sound {
   }
 }
 
+/**
+ * Moves item id to index to among the items of chain (an id), which may be
+ * its own; nothing else changes, as everything names it by id. A chain
+ * holding as many items as it may takes no more.
+ */
+export function moveItem(
+  sound: Sound,
+  id: string,
+  chain: string,
+  to: number
+): Sound {
+  const found = findPart(sound, id)
+  if (found?.type !== 'item') return sound
+  if (found.chain.id === chain) return movePart(sound, id, to)
+  const into = sound.chains.find((each) => each.id === chain)
+  if (!into || into.items.length >= MAX_ITEMS) return sound
+  const items = [...into.items]
+  items.splice(clampIndex(to, items.length), 0, found.part)
+  return {
+    ...sound,
+    chains: sound.chains.map((each) => {
+      if (each.id === chain) return { ...each, items }
+      if (each.id !== found.chain.id) return each
+      return { ...each, items: each.items.filter((item) => item.id !== id) }
+    }),
+  }
+}
+
 /** True when a route's source, via and destination are all in sound */
 function routeValid(sound: Sound, route: Route): boolean {
   return (

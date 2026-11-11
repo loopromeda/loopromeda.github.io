@@ -6,6 +6,7 @@ import {
   addItem,
   addModulator,
   addRoute,
+  moveItem,
   movePart,
   removePart,
   setRef,
@@ -185,6 +186,31 @@ describe('moving', () => {
     const { sound } = addItem(initSound(), 'c1', 'drive')
     const moved = movePart(sound, 'x2', 0)
     expect(moved.chains[0]?.items.map((item) => item.id)).toEqual(['x2', 'x1'])
+  })
+
+  it('moves an item into another chain, its routes going with it', () => {
+    const sound = busy()
+    const moved = moveItem(sound, 'x1', 'c2', 0)
+    expect(
+      moved.chains.map((chain) => chain.items.map((item) => item.id))
+    ).toEqual([[], ['x1', 'x2']])
+    expect(moved.chains[1]?.items[0]).toBe(sound.chains[0]?.items[0])
+    expect(moved.routes).toBe(sound.routes)
+    // Past the end is the end; its own chain is a move within it
+    expect(
+      moveItem(sound, 'x1', 'c2', 9).chains[1]?.items.map((item) => item.id)
+    ).toEqual(['x2', 'x1'])
+    expect(moveItem(sound, 'x1', 'c1', 0)).toBe(sound)
+  })
+
+  it('moves no item into a full chain, nor what is not an item', () => {
+    let sound = busy()
+    for (let i = sound.chains[1]?.items.length ?? 0; i < MAX_ITEMS; i++) {
+      sound = addItem(sound, 'c2', 'drive').sound
+    }
+    expect(moveItem(sound, 'x1', 'c2', 0)).toBe(sound)
+    expect(moveItem(sound, 'i1', 'c2', 0)).toBe(sound)
+    expect(moveItem(sound, 'x1', 'c9', 0)).toBe(sound)
   })
 })
 

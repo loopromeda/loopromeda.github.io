@@ -149,6 +149,16 @@ as a graph of flat tiles, flowing left to right.
   over the whole editor too big, 2026-11-11): hold a knob for the routes
   into it, or tap a modulator's Route and pick tiles, their knobs turned
   into depths from it.
+- **Dragging.** A tile held (a touch kept still 450 ms, as a knob is
+  held; a mouse moved with its button down) lifts and follows the
+  finger, picked; a bar on a seam shows where it would go, and near an
+  edge the graph pans. An item moves along its chain or into another
+  that has room, a chain's letter takes its row up or down (its letter
+  and colour follow its new place), a modulator moves along the rack.
+  Let go off the graph, or Escape, and it goes back. A touch that moves
+  first pans, as before. Inputs are not dragged: each stands beside the
+  chains it feeds, wherever it is in their order, so the panel's buttons
+  move them (renaming them).
 - **Later:** colour themes, as a personal choice (ashon): the colours
   are roles (chains A to D, modulation, neutral, accent, status), so a
   theme gives each a value and passes the same checks.
@@ -217,7 +227,10 @@ as a graph of flat tiles, flowing left to right.
      (`knobReach` in `src/state/sound/knob.ts`: octaves multiply, the
      rest add). A modulator's panel lists where it goes. The panel's
      header pictures an envelope, an LFO or a filter's response
-     (`src/ui/outline.ts`). Not done: dragging tiles to reorder; the
-     panel's buttons move parts.
+     (`src/ui/outline.ts`). Dragging tiles, 2026-11-11 (The editor,
+     above): `src/ui/tileDrag.ts` lifts and moves them, setting styles
+     straight on the elements as a knob does; `src/viz/drop.ts` finds
+     the seam a tile goes into; `moveItem` in `src/state/sound/edit.ts`
+     takes an item into another chain.
 5. The factory presets rebuilt as sounds.
 6. The drum kit on top: sixteen sounds, one per pad.
