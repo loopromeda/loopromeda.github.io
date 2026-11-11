@@ -64,11 +64,14 @@ export function Scope({
   engine,
   timing = true,
   onStats,
+  className = '',
 }: {
   engine: Engine
   /** The cost readout is shown */
   timing?: boolean
   onStats?: (stats: ScopeStats) => void
+  /** Its size and shape where it stands (the amp's tile) */
+  className?: string
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const readoutRef = useRef<HTMLSpanElement>(null)
@@ -282,7 +285,7 @@ export function Scope({
   }, [engine])
 
   return (
-    <div className="relative h-[clamp(4rem,16dvh,9rem)] shrink-0 overflow-hidden rounded-xl contain-strict">
+    <div className={`relative overflow-hidden contain-strict ${className}`}>
       <canvas
         ref={canvasRef}
         role="img"
@@ -292,7 +295,7 @@ export function Scope({
       <span
         ref={readoutRef}
         hidden={!timing}
-        className="pointer-events-none absolute top-1.5 right-2.5 font-mono text-[10px] text-zinc-500"
+        className="pointer-events-none absolute top-0.5 right-1 font-mono text-[9px] leading-none text-zinc-500"
       />
     </div>
   )

@@ -338,7 +338,7 @@ export const AMP_SPEC: KindSpec = {
     },
   ],
   // The voice's gain: 1 plus this, never below 0
-  dests: [{ key: 'gain', label: 'Amp', scale: 1, unit: '%' }],
+  dests: [{ key: 'gain', label: 'Gain', scale: 1, unit: '%' }],
   refs: [],
 }
 

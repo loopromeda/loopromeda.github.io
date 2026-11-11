@@ -433,10 +433,7 @@ export function destinations(sound: Sound): Destination[] {
   for (const modulator of sound.modulators) {
     add(modulator.id, MODULATOR_KINDS[modulator.kind])
   }
-  // The amp's one destination reads as Amp, not Amp Amp
-  for (const dest of AMP_SPEC.dests) {
-    out.push({ target: AMP, key: dest.key, label: dest.label, dest })
-  }
+  add(AMP, AMP_SPEC)
   return out
 }
 

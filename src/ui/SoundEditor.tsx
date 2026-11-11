@@ -1,4 +1,6 @@
 import {
+  useLayoutEffect,
+  useRef,
   useState,
   useSyncExternalStore,
   type CSSProperties,
@@ -11,8 +13,15 @@ import {
   MAX_ITEMS,
   MAX_MODULATORS,
 } from '../state/sound/kinds'
-import { AMP, VOICE, partName, type Sound } from '../state/sound/sound'
-import { graphGeometry, type Box } from '../viz/graph'
+import {
+  AMP,
+  VOICE,
+  destOf,
+  isSource,
+  partName,
+  type Sound,
+} from '../state/sound/sound'
+import { GRAPH, graphGeometry, type Box } from '../viz/graph'
 import {
   MOD_LOOK,
   NEUTRAL_LOOK,
@@ -30,6 +39,15 @@ import {
   type Look,
 } from './editor'
 import { PartPanel } from './PartPanel'
+import { RoutesFrom, RoutesInto, type RouteTarget } from './RoutePanels'
+import { Scope, type ScopeStats } from './Scope'
+
+/** The output waveform the amp's tile holds, if it shows one */
+export interface AmpScope {
+  /** Its drawing cost is shown */
+  readonly timing: boolean
+  readonly onStats?: (stats: ScopeStats) => void
+}
 
 /** The graph's background: tiles are cut from it by a ring of it */
 const GROUND = '#111116'
@@ -50,6 +68,8 @@ interface Picking {
   readonly picked: string
   /** Picks id; a chain's peg picks the chain with the input it is for */
   readonly pick: (id: string, input?: string) => void
+  /** The tiles in a sky ring: what the picked part reaches (reachOf) */
+  readonly reach: ReadonlySet<string>
 }
 
 /**
@@ -63,50 +83,127 @@ interface Picking {
  * It redraws when the sound's shape changes (shapeKey: a part added, an
  * input feeding a chain, a wave changed); a knob turning redraws only the
  * knob and the line or peg that shows it.
+ *
+ * The panel turns to routing in two ways (RoutePanels.tsx). Holding a
+ * knob shows the routes into it. A modulator's Route shows the picked
+ * tile's knobs as depths from it, while tiles are picked as before.
  */
-export function SoundEditor({ engine }: { engine: Engine }) {
+export function SoundEditor({
+  engine,
+  scope,
+}: {
+  engine: Engine
+  scope?: AmpScope
+}) {
   useSyncExternalStore(engine.subscribeSound, () => shapeKey(engine.getSound()))
   const sound = engine.getSound()
   const [chosen, setChosen] = useState('')
   const [focus, setFocus] = useState<string | undefined>(undefined)
   const [menu, setMenu] = useState(false)
+  const [routing, setRouting] = useState<RouteTarget | null>(null)
+  /** The source routed from while tiles are picked, if any */
+  const [mapping, setMapping] = useState<string | null>(null)
   const picked = stillPicked(sound, chosen)
+  // Either goes with what it names: a part removed, another preset
+  const into =
+    routing && destOf(sound, routing.target, routing.key) ? routing : null
+  const from = mapping !== null && isSource(sound, mapping) ? mapping : null
+
   const pick = (id: string, input?: string) => {
     setChosen(id)
     setFocus(input)
     setMenu(false)
+    setRouting(null)
   }
-  const picking: Picking = { engine, sound, picked, pick }
+  const picking: Picking = {
+    engine,
+    sound,
+    picked,
+    pick,
+    reach: reachOf(sound, from ?? picked),
+  }
+  const closeRoutes = () => setRouting(null)
+  const closeMap = () => setMapping(null)
+  const route = (target: string, key: string) => {
+    setMapping(null)
+    setRouting({ target, key })
+  }
+  /** Routes source from here on, into target's knobs if given */
+  const map = (source: string, target?: string) => {
+    setRouting(null)
+    setMapping(source)
+    if (target !== undefined) pick(target)
+  }
 
+  // Short of room, the graph gives way first, down to a row of tiles; the
+  // panel scrolls only past that (its room: all but the graph's least and
+  // the gap). Beside the graph, each takes the row's height and scrolls.
   return (
-    <div className="flex flex-col gap-3 md:grid md:grid-cols-[minmax(0,1fr)_minmax(0,22rem)]">
+    <div className="flex min-h-0 flex-col gap-3 md:grid md:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] md:grid-rows-[minmax(0,1fr)]">
       <section
         aria-label="The sound, flowing left to right"
         style={{ background: GROUND }}
-        className="flex min-w-0 flex-col overflow-hidden rounded-xl shadow-[inset_0_0_0_1px_rgba(255,255,255,0.06)]"
+        className="flex min-h-28 min-w-0 flex-col overflow-hidden rounded-xl shadow-[inset_0_0_0_1px_rgba(255,255,255,0.06)]"
       >
-        <Rack {...picking} />
-        <Graph {...picking} focus={picked === chosen ? focus : undefined} />
+        <Rack {...picking} source={from} />
+        <Graph
+          {...picking}
+          focus={picked === chosen ? focus : undefined}
+          scope={scope}
+        />
       </section>
-      <PartPanel
-        {...picking}
-        focus={picked === chosen ? focus : undefined}
-        menu={menu}
-        onMenu={setMenu}
-      />
+      <div className="grid max-h-[calc(100%-7.75rem)] min-h-0 shrink-0 overflow-y-auto overscroll-contain rounded-xl md:max-h-none">
+        {into ? (
+          <RoutesInto
+            engine={engine}
+            sound={sound}
+            at={into}
+            onClose={closeRoutes}
+          />
+        ) : from !== null ? (
+          <RoutesFrom
+            engine={engine}
+            sound={sound}
+            source={from}
+            picked={picked}
+            onSource={setMapping}
+            onClose={closeMap}
+          />
+        ) : (
+          <PartPanel
+            {...picking}
+            focus={picked === chosen ? focus : undefined}
+            menu={menu}
+            onMenu={setMenu}
+            onRoute={route}
+            onMap={map}
+          />
+        )}
+      </div>
     </div>
   )
 }
 
-/** The modulators in a row, a "+" while there is room, the voice last */
-function Rack({ engine, sound, picked, pick }: Picking) {
-  const reach = reachOf(sound, picked)
+/**
+ * The modulators in a row, a "+" while there is room, the voice last. The
+ * row scrolls sideways, which clips at its padding: there is room in it
+ * for a tile's rings (a reach ring stands 3.5 px out). The source being
+ * routed from is outlined in sky.
+ */
+function Rack({
+  engine,
+  sound,
+  picked,
+  pick,
+  reach,
+  source,
+}: Picking & { source: string | null }) {
   const routed = modulated(sound)
   return (
-    <div className="mx-2 mt-2 mb-1 flex h-10 shrink-0 items-center gap-1.5 rounded-lg bg-white/[0.03] px-1.5">
+    <div className="mx-2 mt-2 mb-1 flex h-10 shrink-0 items-center gap-1.5 rounded-lg bg-white/[0.03] pr-1.5 pl-0.5">
       <div
         aria-label="Modulators"
-        className="flex min-w-0 flex-1 gap-1 overflow-x-auto overscroll-x-contain py-1.5"
+        className="flex min-w-0 flex-1 gap-1 overflow-x-auto overscroll-x-contain px-1 py-1.5"
       >
         {sound.modulators.map((modulator) => (
           <Tile
@@ -116,6 +213,7 @@ function Rack({ engine, sound, picked, pick }: Picking) {
             glyph={glyphOf(sound, modulator.id)}
             look={MOD_LOOK}
             picked={picked === modulator.id}
+            member={source === modulator.id}
             reach={reach.has(modulator.id)}
             routed={routed.has(modulator.id)}
             aria={partName(sound, modulator.id)}
@@ -155,16 +253,34 @@ function Rack({ engine, sound, picked, pick }: Picking) {
   )
 }
 
-/** The inputs, the chains and the amp, laid out by graphGeometry */
+/**
+ * The inputs, the chains and the amp, laid out by graphGeometry: the amp
+ * fills the frame's width, holding the output waveform. The frame takes
+ * the room the page leaves it, up to a cap, and pans what it cannot show.
+ */
 function Graph({
   engine,
   sound,
   picked,
   pick,
+  reach,
   focus,
-}: Picking & { focus: string | undefined }) {
-  const geometry = graphGeometry(sound, LIMITS)
-  const reach = reachOf(sound, picked)
+  scope,
+}: Picking & { focus: string | undefined; scope: AmpScope | undefined }) {
+  const frameRef = useRef<HTMLDivElement>(null)
+  /** The frame's width, measured: 0 until it is */
+  const [frame, setFrame] = useState(0)
+  useLayoutEffect(() => {
+    const element = frameRef.current
+    if (!element) return
+    const observer = new ResizeObserver((entries) => {
+      setFrame(Math.floor(entries[0]?.contentRect.width ?? 0))
+    })
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [])
+  const geometry = graphGeometry(sound, LIMITS, frame || undefined)
+  const showScope = scope !== undefined && geometry.amp.w >= GRAPH.ampFill
   const routed = modulated(sound)
   /** The chain each item stands in, for its look and its neighbours */
   const chainOf = new Map<string, number>()
@@ -174,7 +290,10 @@ function Graph({
   })
 
   return (
-    <div className="relative max-h-[min(15rem,32vh)] min-h-0 overflow-auto overscroll-contain md:max-h-[18rem]">
+    <div
+      ref={frameRef}
+      className="relative max-h-[min(22rem,45dvh)] min-h-0 overflow-auto overscroll-contain md:max-h-[22rem]"
+    >
       <div
         className="relative min-w-full"
         style={{ width: geometry.width, height: geometry.height }}
@@ -316,6 +435,16 @@ function Graph({
           aria="Amp, out"
           onClick={() => pick(AMP)}
           style={place(geometry.amp)}
+          aside={
+            showScope && (
+              <Scope
+                engine={engine}
+                timing={scope.timing}
+                onStats={scope.onStats}
+                className="h-full min-w-0 flex-1 rounded-[5px]"
+              />
+            )
+          }
         />
         {geometry.addInput && (
           <Tile
@@ -539,6 +668,7 @@ function Tile({
   style,
   className = '',
   small = false,
+  aside,
 }: {
   engine: Engine
   label: string
@@ -559,6 +689,8 @@ function Tile({
   style?: CSSProperties
   className?: string
   small?: boolean
+  /** Beside the label, filling the rest of the tile: the amp's waveform */
+  aside?: ReactNode
 }) {
   const height = typeof style?.height === 'number' ? style.height : 26
   const tall = !dashed && !small && height >= 60
@@ -679,11 +811,22 @@ function Tile({
       aria-pressed={picked}
       onClick={onClick}
       style={{ ...style, ...face }}
-      className={`relative flex items-center justify-center overflow-hidden rounded-[7px] ${
-        column ? 'flex-col gap-1 px-1' : 'gap-[7px] px-1.5'
+      className={`relative flex items-center overflow-hidden rounded-[7px] ${
+        aside
+          ? 'justify-start gap-2 py-1.5 pr-3 pl-2'
+          : `justify-center ${column ? 'flex-col gap-1 px-1' : 'gap-[7px] px-1.5'}`
       } ${picked ? 'z-[2]' : 'z-[1]'} ${className}`}
     >
-      {content}
+      {aside ? (
+        <>
+          <span className="flex shrink-0 flex-col items-center gap-1">
+            {content}
+          </span>
+          {aside}
+        </>
+      ) : (
+        content
+      )}
       {routed && (
         <span
           aria-hidden

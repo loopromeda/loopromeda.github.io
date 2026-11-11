@@ -136,8 +136,19 @@ as a graph of flat tiles, flowing left to right.
   purpose: rings, pegs and 6 px dots, not fills. Letters stay, so colour
   is never the only cue. A fifth colour would fail those checks: more
   chains than four would want letters on neutral tiles.
-- **The panel** under the graph holds the picked tile's knobs; hold a
-  knob to route a modulator to it.
+- **The amp** takes the graph's spare width and holds the output
+  waveform, which stood above the editor until 2026-11-11: on a phone
+  the editor, the keys and the status line did not fit under it (ashon,
+  on the Fold). The graph took the room: its tiles are 44 tall. The keys
+  keep their least height (7rem under their header): on a short screen
+  the graph gives way first, panning, down to a row of tiles, then the
+  panel scrolls. With four chains the keys had been squeezed to nothing
+  (ashon, on the Fold, 2026-11-11: about 480 by 660).
+- **The panel** under the graph holds the picked tile's knobs. Routing
+  happens in its place, the graph still in view (ashon found a sheet
+  over the whole editor too big, 2026-11-11): hold a knob for the routes
+  into it, or tap a modulator's Route and pick tiles, their knobs turned
+  into depths from it.
 - **Later:** colour themes, as a personal choice (ashon): the colours
   are roles (chains A to D, modulation, neutral, accent, status), so a
   theme gives each a value and passes the same checks.
@@ -189,10 +200,24 @@ as a graph of flat tiles, flowing left to right.
      is read). The editor redraws only when the sound's shape changes
      (`shapeKey` in `src/ui/editor.ts`); a knob turned redraws itself, a
      tile's line and a peg.
-   - 4b: routes, by holding a knob while a modulator is picked (the MOD
-     tab's matrix went with 4a: until then a sound keeps the routes it
-     came with, but none can be made); dragging to reorder; the panel's
-     outlines of an envelope, an LFO and a filter's response, which
-     `src/viz` still draws for it.
+   - 4b, routes and outlines done 2026-11-11. Routing takes the panel's
+     place (`src/ui/RoutePanels.tsx`), two ways. Holding a knob (a touch
+     kept still 450 ms, a right click, or Enter) shows the routes into
+     its destination: a card per route, its amount a knob read in the
+     destination's units, its via and removal, then the sources to add
+     one from, at nothing. A modulator's Route turns the panel into the
+     picked tile's destinations as depths from it (`DepthKnob`,
+     `setDepth` in `src/state/sound/knob.ts`): turned from Off a route
+     is made, back to Off it goes; tiles are picked as before, the ones
+     it moves in a sky ring, and any source (a note's too) is chosen in
+     the header. An oscillator's Octave, Semi and Fine route to its
+     pitch; the voice's pitch and the amp's gain, which no knob holds,
+     are tapped beside the knobs. A routed knob carries a
+     sky count and an arc to where its routes take it at full
+     (`knobReach` in `src/state/sound/knob.ts`: octaves multiply, the
+     rest add). A modulator's panel lists where it goes. The panel's
+     header pictures an envelope, an LFO or a filter's response
+     (`src/ui/outline.ts`). Not done: dragging tiles to reorder; the
+     panel's buttons move parts.
 5. The factory presets rebuilt as sounds.
 6. The drum kit on top: sixteen sounds, one per pad.

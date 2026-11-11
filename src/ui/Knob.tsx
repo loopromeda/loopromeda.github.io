@@ -1,18 +1,33 @@
 import {
+  useEffect,
   useLayoutEffect,
   useRef,
   type KeyboardEvent,
+  type MouseEvent,
   type PointerEvent,
 } from 'react'
 import type { Engine } from '../engine/engine'
 import {
+  formatAmount,
   formatValue,
   toNormalized,
   toValue,
   type ValueSpec,
 } from '../state/params'
-import { knobSpec, knobValue, setKnob } from '../state/sound/knob'
+import { AMOUNT_SPEC } from '../state/sound/kinds'
+import {
+  depthOf,
+  knobDest,
+  knobReach,
+  knobSpec,
+  knobValue,
+  routesTo,
+  setDepth,
+  setKnob,
+  type PartDest,
+} from '../state/sound/knob'
 import { KNOB_SIZE } from './controls'
+import { MOD_COLOR } from './editor'
 
 /** CSS pixels of vertical drag that sweep a knob from end to end */
 const TRAVEL = 160
@@ -20,6 +35,8 @@ const TRAVEL = 160
 const DOUBLE_TAP = 300
 /** A touch that moves less than this (CSS px) is a tap, not a drag */
 const TAP_SLOP = 4
+/** A touch held this long (ms) without moving routes to the knob */
+const HOLD = 450
 /** Knob travel the arrow keys move a continuous knob by */
 const KEY_STEP = 0.01
 /** The knob turns through 270°, from 7:30 to 4:30 on a clock face */
@@ -34,6 +51,11 @@ const CENTER = 24
 const MAX_DETENTS = 8
 /** The dots sit just outside the arc, which is 4 wide around RADIUS */
 const DETENT_RADIUS = 22.5
+/**
+ * Where the routes take a knob: a thin sky arc outside its own, where a
+ * stepped knob's dots would be (none of those is a destination)
+ */
+const REACH_RADIUS = 22.5
 
 /** Where on the arc (in degrees from 12 o'clock) a knob position falls */
 const angleOf = (normalized: number) => (normalized - 0.5) * SWEEP
@@ -47,13 +69,16 @@ const polar = (degrees: number, radius: number) => {
   }
 }
 
-const pointOn = (degrees: number) => {
-  const { x, y } = polar(degrees, RADIUS)
-  return `${x.toFixed(3)} ${y.toFixed(3)}`
+/** The arc at radius; a value is a dash along it (pathLength 100) */
+const arcAt = (radius: number) => {
+  const at = (degrees: number) => {
+    const { x, y } = polar(degrees, radius)
+    return `${x.toFixed(3)} ${y.toFixed(3)}`
+  }
+  return `M ${at(-SWEEP / 2)} A ${radius} ${radius} 0 1 1 ${at(SWEEP / 2)}`
 }
-
-/** The whole arc; the value arc is a dash along it (pathLength 100) */
-const ARC = `M ${pointOn(-SWEEP / 2)} A ${RADIUS} ${RADIUS} 0 1 1 ${pointOn(SWEEP / 2)}`
+const ARC = arcAt(RADIUS)
+const REACH_ARC = arcAt(REACH_RADIUS)
 
 const clamp01 = (n: number) => (n < 0 ? 0 : n > 1 ? 1 : n)
 
@@ -84,6 +109,11 @@ function detents(spec: ValueSpec): { x: number; y: number }[] {
  * knob with a few stops (Wave, Octave) marks each with a white dot around
  * the arc. A `hot` label is drawn in that colour (the input a chain's
  * peg was tapped for).
+ *
+ * A knob that a route can move (knobDest) is held to route to it: a touch
+ * kept still for HOLD, a right click, or Enter calls onHold. Sky marks
+ * the routes into it: a count, and an arc outside its own from where it
+ * stands to where they take it at full.
  */
 export function Knob({
   engine,
@@ -91,50 +121,122 @@ export function Knob({
   knob,
   color = NEUTRAL_ARC,
   hot,
+  onHold,
+  label,
+  format,
 }: {
   engine: Engine
   part: string
   knob: string
   color?: string
   hot?: string
+  /** Opens the routes into the knob's destination */
+  onHold?: (dest: string) => void
+  /** Its name, if not the knob's own (a route's amount by its source) */
+  label?: string
+  /** Its readout, if not the knob's own (an amount in its target's units) */
+  format?: (value: number) => string
 }) {
   const spec = knobSpec(engine.getSound(), part, knob)
   if (!spec) return null
   return (
     <Dial
       engine={engine}
-      part={part}
-      knob={knob}
-      spec={spec}
+      address={`${part} ${knob}`}
+      turns={{
+        spec: label === undefined ? spec : { ...spec, label },
+        read: () => knobValue(engine.getSound(), part, knob),
+        write: (value) =>
+          engine.edit((sound) => setKnob(sound, part, knob, value)),
+        format: format ?? ((value) => formatValue(spec, value)),
+      }}
       color={color}
       hot={hot}
+      routed={{ part, knob, onHold }}
     />
   )
 }
 
-function Dial({
+/**
+ * How far source moves a destination of target, as a sky knob from -100%
+ * to +100% around nothing, read in the destination's units: turned from
+ * 0 it adds the route, turned back (or double-tapped) it removes it
+ * (setDepth). The editor's knobs turn into these while it routes a source.
+ */
+export function DepthKnob({
   engine,
-  part,
-  knob,
-  spec,
-  color,
-  hot,
+  source,
+  target,
+  at: { key, label, dest },
 }: {
   engine: Engine
-  part: string
-  knob: string
-  spec: ValueSpec & { readonly label: string }
+  source: string
+  target: string
+  at: PartDest
+}) {
+  return (
+    <Dial
+      engine={engine}
+      address={`${source} ${target} ${key}`}
+      turns={{
+        spec: { ...AMOUNT_SPEC, label },
+        read: () => depthOf(engine.getSound(), source, target, key),
+        write: (amount) =>
+          engine.edit((sound) => setDepth(sound, source, target, key, amount)),
+        format: (amount) => (amount === 0 ? 'Off' : formatAmount(dest, amount)),
+      }}
+      color={MOD_COLOR}
+      hot={undefined}
+    />
+  )
+}
+
+/** What a dial turns: a value in its spec's range, read and written */
+interface Turns {
+  readonly spec: ValueSpec & { readonly label: string }
+  readonly read: () => number
+  readonly write: (value: number) => void
+  readonly format: (value: number) => string
+}
+
+/** The knob of the sound a dial turns: its routes drawn, held to route */
+interface Routed {
+  readonly part: string
+  readonly knob: string
+  readonly onHold: ((dest: string) => void) | undefined
+}
+
+function Dial({
+  engine,
+  address,
+  turns,
+  color,
+  hot,
+  routed,
+}: {
+  engine: Engine
+  /** What it turns, as a key: a new one, a new listener */
+  address: string
+  turns: Turns
   color: string
   hot: string | undefined
+  routed?: Routed
 }) {
-  /** The latest spec, for the listener set up once per knob */
-  const specRef = useRef(spec)
+  const { spec } = turns
+  /** The latest of what it turns, for the listener set up once per dial */
+  const turnsRef = useRef(turns)
   /** The value drawn last, so a change elsewhere in the sound draws nothing */
   const shownRef = useRef(Number.NaN)
   const rootRef = useRef<HTMLDivElement>(null)
   const arcRef = useRef<SVGPathElement>(null)
   const pointerRef = useRef<SVGLineElement>(null)
   const textRef = useRef<HTMLSpanElement>(null)
+  const reachRef = useRef<SVGPathElement>(null)
+  const badgeRef = useRef<HTMLSpanElement>(null)
+  /** The routes drawn last, as a key, so an unrelated change draws nothing */
+  const routesShownRef = useRef('')
+  /** The latest knob it turns, for a hold that fires after a redraw */
+  const routedRef = useRef(routed)
   /** The drag in progress, and when the last tap ended */
   const gesture = useRef({
     pointerId: -1,
@@ -142,15 +244,17 @@ function Dial({
     startN: 0,
     moved: false,
     lastTap: -Infinity,
+    /** The pending hold's timer, 0 for none */
+    hold: 0,
   })
 
   const origin = spec.min < 0 && spec.max > 0 ? toNormalized(spec, 0) : 0
 
-  const read = () => knobValue(engine.getSound(), part, knob)
+  const read = () => turnsRef.current.read()
 
   /** Draws `value` into the SVG, the readout and the slider's ARIA state */
   const show = (value: number) => {
-    const spec = specRef.current
+    const { spec, format } = turnsRef.current
     shownRef.current = value
     const normalized = toNormalized(spec, value)
     const from = Math.min(origin, normalized) * 100
@@ -161,7 +265,7 @@ function Dial({
       'transform',
       `rotate(${angleOf(normalized)} ${CENTER} ${CENTER})`
     )
-    const text = formatValue(spec, value)
+    const text = format(value)
     if (textRef.current) textRef.current.textContent = text
     const root = rootRef.current
     if (root) {
@@ -170,28 +274,82 @@ function Dial({
     }
   }
 
+  /**
+   * Draws the routes into the knob: their count on the badge, and the arc
+   * from where it stands to where they take it (none when they move it as
+   * another destination, a pitch)
+   */
+  const showRoutes = () => {
+    const at = routedRef.current
+    if (!at) return
+    const { part, knob } = at
+    const sound = engine.getSound()
+    const dest = knobDest(sound, part, knob)
+    const count = dest === undefined ? 0 : routesTo(sound, part, dest).length
+    const reach = knobReach(sound, part, knob)
+    const key = `${dest} ${count} ${reach?.join(' ')}`
+    if (key === routesShownRef.current) return
+    routesShownRef.current = key
+    const arc = reachRef.current
+    if (arc) {
+      const [from, to] = reach ?? [0, 0]
+      const low = Math.min(from, to) * 100
+      const high = Math.max(from, to) * 100
+      arc.setAttribute('stroke-dasharray', `${high - low} 200`)
+      arc.setAttribute('stroke-dashoffset', `${-low}`)
+      arc.style.display = reach && high > low ? '' : 'none'
+    }
+    const badge = badgeRef.current
+    if (badge) {
+      badge.textContent = `${count}`
+      badge.style.display = count > 0 ? '' : 'none'
+    }
+    const root = rootRef.current
+    if (root) {
+      const routes =
+        count === 0 ? '' : count === 1 ? '1 route. ' : `${count} routes. `
+      if (dest === undefined) root.removeAttribute('aria-description')
+      else root.setAttribute('aria-description', `${routes}Hold to route.`)
+    }
+  }
+
   const set = (value: number) => {
-    engine.edit((sound) => setKnob(sound, part, knob, value))
+    turnsRef.current.write(value)
     show(read())
+  }
+
+  /** Opens the routes into the knob, if it has a destination */
+  const hold = () => {
+    const at = routedRef.current
+    if (!at?.onHold) return
+    const dest = knobDest(engine.getSound(), at.part, at.knob)
+    if (dest !== undefined) at.onHold(dest)
   }
 
   // Before the first paint: the knob never flashes a wrong position
   useLayoutEffect(() => {
-    specRef.current = spec
+    turnsRef.current = turns
+    routedRef.current = routed
     show(read())
+    showRoutes()
   })
 
-  // A value set elsewhere: a preset loaded, the sound read back
+  // A value set elsewhere: a preset loaded, the sound read back; a route
+  // added, turned or removed
   useLayoutEffect(
     () =>
       engine.subscribeSound(() => {
         const value = read()
         if (value !== shownRef.current) show(value)
+        showRoutes()
       }),
-    // show and read use only refs and the knob's address
+    // show, showRoutes and read use only refs; address names what they read
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [engine, part, knob]
+    [engine, address]
   )
+
+  // A hold still pending when the knob goes away fires nothing
+  useEffect(() => () => window.clearTimeout(gesture.current.hold), [])
 
   const down = (event: PointerEvent<HTMLDivElement>) => {
     const g = gesture.current
@@ -202,11 +360,27 @@ function Dial({
       return
     }
     // Keep receiving this finger's moves even when it leaves the knob
-    event.currentTarget.setPointerCapture(event.pointerId)
-    g.pointerId = event.pointerId
+    const target = event.currentTarget
+    const { pointerId } = event
+    target.setPointerCapture(pointerId)
+    g.pointerId = pointerId
     g.startY = event.clientY
     g.startN = toNormalized(spec, read())
     g.moved = false
+    if (routedRef.current?.onHold) {
+      g.hold = window.setTimeout(() => {
+        g.hold = 0
+        if (g.pointerId !== pointerId || g.moved) return
+        // Held: this touch neither turns the knob nor counts as a tap
+        g.pointerId = -1
+        g.lastTap = -Infinity
+        if (target.hasPointerCapture(pointerId)) {
+          target.releasePointerCapture(pointerId)
+        }
+        navigator.vibrate?.(10)
+        hold()
+      }, HOLD)
+    }
   }
 
   const move = (event: PointerEvent<HTMLDivElement>) => {
@@ -217,6 +391,7 @@ function Dial({
       // A drag from here on; measured from here, so the knob does not jump
       g.moved = true
       g.startY = event.clientY
+      window.clearTimeout(g.hold)
     }
     // Up turns it up; the start position, not the snapped value, keeps a
     // stepped knob following the finger between steps
@@ -229,8 +404,16 @@ function Dial({
     const g = gesture.current
     // pointerup is followed by lostpointercapture: act on the first only
     if (event.pointerId !== g.pointerId) return
+    window.clearTimeout(g.hold)
     g.pointerId = -1
     g.lastTap = g.moved ? -Infinity : event.timeStamp
+  }
+
+  // A right click holds the knob too; a touch's long press is the timer's
+  const menu = (event: MouseEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    const { pointerType } = event.nativeEvent as globalThis.PointerEvent
+    if (pointerType !== 'touch' && pointerType !== 'pen') hold()
   }
 
   const key = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -263,6 +446,10 @@ function Dial({
       case 'End':
         next = spec.max
         break
+      case 'Enter':
+        event.preventDefault()
+        hold()
+        return
       default:
         return
     }
@@ -284,10 +471,21 @@ function Dial({
         onPointerUp={up}
         onPointerCancel={up}
         onLostPointerCapture={up}
+        onContextMenu={menu}
         onKeyDown={key}
-        className={`${KNOB_SIZE} aspect-square touch-none rounded-full outline-none focus-visible:ring-2 focus-visible:ring-emerald-400`}
+        className={`${KNOB_SIZE} relative aspect-square touch-none rounded-full outline-none focus-visible:ring-2 focus-visible:ring-emerald-400`}
       >
         <svg viewBox="0 0 48 48" className="block size-full" aria-hidden>
+          <path
+            ref={reachRef}
+            d={REACH_ARC}
+            pathLength={100}
+            fill="none"
+            stroke={MOD_COLOR}
+            strokeWidth={2}
+            strokeLinecap="round"
+            style={{ display: 'none' }}
+          />
           {detents(spec).map(({ x, y }, i) => (
             <circle key={i} cx={x} cy={y} r={1.25} className="fill-white" />
           ))}
@@ -321,6 +519,12 @@ function Dial({
             className="text-zinc-100"
           />
         </svg>
+        <span
+          ref={badgeRef}
+          aria-hidden
+          style={{ display: 'none', background: MOD_COLOR }}
+          className="absolute -top-0.5 -right-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full px-0.5 text-[9px] leading-none font-bold text-zinc-950"
+        />
       </div>
       <span
         style={hot ? { color: hot } : undefined}

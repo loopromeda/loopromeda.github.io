@@ -15,7 +15,7 @@ import { PatchButton } from './ui/PatchButton'
 import { PlatformChecks } from './ui/PlatformChecks'
 import { PlaySurface } from './ui/PlaySurface'
 import { PresetBrowser } from './ui/PresetBrowser'
-import { Scope, type ScopeStats } from './ui/Scope'
+import type { ScopeStats } from './ui/Scope'
 import { SettingsButton } from './ui/SettingsButton'
 import { SettingsSheet } from './ui/SettingsSheet'
 import { SoundEditor } from './ui/SoundEditor'
@@ -23,7 +23,7 @@ import { StatusBar } from './ui/StatusBar'
 import { SurfaceButton } from './ui/SurfaceButton'
 import { SurfacePicker } from './ui/SurfacePicker'
 
-/** What can open over the waveform and the controls */
+/** What can open over the controls */
 type Sheet = 'presets' | 'surface' | 'settings'
 
 const page =
@@ -31,12 +31,12 @@ const page =
 
 /**
  * A start screen (what the browser offers, and the tap that may start
- * audio), then the output waveform, the sound's editor (its parts as
- * tiles, the picked one's knobs under them), the keys or pads filling the
- * rest, and a status line under it. The
- * buttons at the left of the keyboard's header open the presets, and the
- * choice of keys or pads, over the waveform and the controls: what is
- * played on stays there to try them on. The third puts the controls away,
+ * audio), then the sound's editor (its parts as tiles, the output
+ * waveform in the amp's, the picked one's knobs under them), the keys or
+ * pads filling the rest, and a status line under it. The buttons at the
+ * left of the keyboard's header open the presets, and the choice of keys
+ * or pads, over the controls: what is played on stays there to try them
+ * on. The third puts the controls away,
  * for a screen too short to play on under them. The settings (this
  * device's: voices, latency, what the screen shows) open from the status
  * line's right end, in the same place.
@@ -124,18 +124,26 @@ export function App({
 
   return (
     <main className={`${page} gap-3`}>
-      <div className="relative flex shrink-0 flex-col">
-        <div inert={sheet !== null} className="flex flex-col gap-3">
-          {settings.waveform && (
-            <Scope
-              engine={engine}
-              timing={settings.waveformTiming}
-              onStats={onScopeStats}
-            />
-          )}
+      {/* Shrinks when the page is short (the graph pans), so the keys and
+          the status line stay on screen; a sheet open over it has room */}
+      <div
+        className={`relative flex flex-col ${sheet !== null ? 'min-h-[min(22rem,50dvh)]' : 'min-h-0'}`}
+      >
+        <div inert={sheet !== null} className="flex min-h-0 flex-col">
           {/* Hidden, not unmounted: the editor keeps the tile picked */}
-          <div id="controls" hidden={!controls}>
-            <SoundEditor engine={engine} />
+          <div
+            id="controls"
+            hidden={!controls}
+            className="flex min-h-0 flex-col"
+          >
+            <SoundEditor
+              engine={engine}
+              scope={
+                settings.waveform
+                  ? { timing: settings.waveformTiming, onStats: onScopeStats }
+                  : undefined
+              }
+            />
           </div>
         </div>
         {sheet === 'presets' && (

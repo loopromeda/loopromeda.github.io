@@ -12,8 +12,11 @@ import {
 import {
   AMP,
   VOICE,
+  destOf,
   findPart,
+  isSource,
   partName,
+  sendInput,
   type Sound,
 } from '../state/sound/sound'
 
@@ -102,6 +105,7 @@ export const GLYPHS = {
   smooth: 'M1 8 C4 2 6 2 9 6 S14 10 17 4',
   sum: 'M13 2 H5 L10 6 L5 10 H13',
   plus: 'M9 2 V10 M5 6 H13',
+  route: 'M1 8 C4 2 7 2 9 6 S13 10 16 6 M13 4 L16 6 L14 9',
 } as const
 
 const WAVE_GLYPHS = [GLYPHS.sine, GLYPHS.triangle, GLYPHS.saw, GLYPHS.square]
@@ -194,11 +198,12 @@ export function tileLine(sound: Sound, id: string): string {
 }
 
 /**
- * What lights up in sky around picked: a modulator's targets, or the
- * modulators that move the part picked (as source or via)
+ * What lights up in sky around picked: a source's targets (a modulator's,
+ * velocity's), or the modulators that move the part picked (as source or
+ * via)
  */
 export function reachOf(sound: Sound, picked: string): Set<string> {
-  if (findPart(sound, picked)?.type === 'modulator') {
+  if (isSource(sound, picked)) {
     return new Set(
       sound.routes
         .filter((route) => route.source === picked || route.via === picked)
@@ -285,4 +290,17 @@ export function addId(what: string): string {
 /** What a "+" tile's id adds (input, chain, modulator, a chain's id) */
 export function addingTo(id: string): string | undefined {
   return id.startsWith('add:') ? id.slice('add:'.length) : undefined
+}
+
+/**
+ * A route's destination by name: A Filter · Cutoff, Voice · Pitch, Chain
+ * A · IN 2 (a send); its key where the sound has no such destination
+ */
+export function destName(sound: Sound, target: string, key: string): string {
+  const input = sendInput(key)
+  const label =
+    input === undefined
+      ? (destOf(sound, target, key)?.label ?? key)
+      : partName(sound, input)
+  return `${partName(sound, target)} · ${label}`
 }

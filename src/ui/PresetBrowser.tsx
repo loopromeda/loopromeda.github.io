@@ -52,7 +52,7 @@ interface Row {
 const FILE_NAME = 'loopromeda-presets.json'
 
 /**
- * The presets, over the waveform and the sound's controls while the
+ * The presets, over the sound's controls while the
  * keyboard below stays playable: a tap on a row loads that preset, so
  * presets can be tried one after another. The header saves (over the
  * user's preset, or as a new one), the next row filters by category or

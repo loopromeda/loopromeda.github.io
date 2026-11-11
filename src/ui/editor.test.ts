@@ -18,6 +18,7 @@ import {
   NEUTRAL_LOOK,
   addId,
   chainLook,
+  destName,
   glyphOf,
   lookOf,
   modulated,
@@ -121,6 +122,8 @@ describe('tiles', () => {
     expect(reachOf(sound, 'i1')).toEqual(new Set(['velocity', 'm1']))
     expect(reachOf(sound, 'x2')).toEqual(new Set(['m1']))
     expect(reachOf(sound, 'c1')).toEqual(new Set())
+    // A note's source reaches what it moves too
+    expect(reachOf(sound, 'velocity')).toEqual(new Set(['i1']))
   })
 })
 
@@ -172,5 +175,15 @@ describe('stillPicked', () => {
     const bare = removePart(removePart(sound, 'x1'), 'x2')
     expect(stillPicked(bare, 'x2')).toBe('c1')
     expect(stillPicked(removePart(bare, 'c1'), 'c1')).toBe(AMP)
+  })
+})
+
+describe('destName', () => {
+  it('names a destination by its part and label, a send by its input', () => {
+    const sound = busy()
+    expect(destName(sound, 'x2', 'cutoff')).toBe('A Filter 2 · Cutoff')
+    expect(destName(sound, VOICE, 'pitch')).toBe('Voice · Pitch')
+    expect(destName(sound, AMP, 'gain')).toBe('Amp · Gain')
+    expect(destName(sound, 'c1', 'send.i2')).toBe('Chain A · IN 2')
   })
 })

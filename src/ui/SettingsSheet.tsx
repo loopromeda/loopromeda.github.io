@@ -36,8 +36,8 @@ const RENDER_QUANTUM = 128
 /**
  * The player's settings for this device, apart from the sound: what the
  * phone is asked to do, how a touch plays, and what the screen shows about
- * the audio. It opens from the status line over the waveform and the
- * controls, as the presets do, and Escape closes it.
+ * the audio. It opens from the status line over the controls, as the
+ * presets do, and Escape closes it.
  *
  * Debug holds Measure CPU: the audio thread times the heaviest sound at 8
  * to 32 voices, to choose Voices by. onBench gets its results too (the dev

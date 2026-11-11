@@ -67,19 +67,23 @@ src/state/    params.ts: the knob schema and the old parameters;
               velocity, what the screen shows); sound/: a sound as a
               document of inputs, chains, modulators and routes, its
               edits, reading it from JSON and from the old parameters,
-              a knob by part and key (knob.ts), and the knobs that moved
-              between two (diff.ts)
+              a knob by part and key and the routes into it (knob.ts),
+              and the knobs that moved between two (diff.ts)
 src/viz/      pure display math (scope trigger and decimation, envelope
               and LFO outlines, filter response, keyboard and pad grid
               geometry, the sound editor's input column and chain rows
               in graph.ts, hit-testing, velocity and Slide from a touch's
               position)
-src/ui/       React components; Scope.tsx draws the output waveform,
-              SoundEditor.tsx the sound as tiles (editor.ts: their
-              names, lines, pictograms and colours), PartPanel.tsx the
-              picked tile's knobs, adds and moves, Knob.tsx turns one
-              knob of one part, PlaySurface.tsx plays notes
-              on Keys.tsx or Pads.tsx (hands.ts: who holds which note),
+src/ui/       React components; SoundEditor.tsx the sound as tiles
+              (editor.ts: their names, lines, pictograms and colours),
+              its amp holding Scope.tsx, the output waveform;
+              PartPanel.tsx the picked tile's knobs, adds and moves
+              (outline.ts: its picture); RoutePanels.tsx routing in the
+              panel's place: the routes into a knob held, or a source's
+              depths on the tiles picked; Knob.tsx turns one knob of one
+              part (or a source's depth into one), PlaySurface.tsx plays
+              notes on Keys.tsx or Pads.tsx (hands.ts: who holds which
+              note),
               PresetBrowser.tsx loads, saves and moves presets,
               SettingsSheet.tsx holds the settings and Measure CPU
 scripts/      dev tooling: tailnet.sh, the device-report Vite plugin

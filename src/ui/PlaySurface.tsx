@@ -214,11 +214,10 @@ export function PlaySurface({
     }
   }, [hands, pads, notes, first, shift])
 
+  // Its header and the surface's least height are its minimum: on a short
+  // screen the controls above give way (their graph pans), not the keys
   return (
-    <section
-      aria-label="Play surface"
-      className="flex min-h-0 flex-1 flex-col gap-2"
-    >
+    <section aria-label="Play surface" className="flex flex-1 flex-col gap-2">
       {/* A narrow header keeps the patch's name and drops the range */}
       <div className="@container flex h-11 shrink-0 items-center gap-3">
         <div className="flex min-w-0 items-center gap-2">{menus}</div>

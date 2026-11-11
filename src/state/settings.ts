@@ -25,7 +25,7 @@ export interface AppSettings {
    * more delay
    */
   readonly latency: Latency
-  /** The output waveform is drawn */
+  /** The output waveform is drawn, in the amp's tile */
   readonly waveform: boolean
   /**
    * touch: where a finger lands on a key or pad sets velocity;

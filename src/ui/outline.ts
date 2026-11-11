@@ -1,0 +1,93 @@
+/**
+ * A part's picture beside its name in the panel: an envelope's shape (the
+ * amp's, an Env's), an LFO's cycles, a filter's response. Pure: it reads
+ * the sound and returns SVG path data, drawn by the panel as knobs turn.
+ */
+import { toNormalized } from '../state/params'
+import { knobSpec, knobValue } from '../state/sound/knob'
+import { AMP, findPart, type Sound } from '../state/sound/sound'
+import { OUTLINE_POINTS, envelopeOutline } from '../viz/envelope'
+import { RESPONSE_POINTS, filterResponse } from '../viz/filter'
+import { LFO_POINTS, lfoOutline } from '../viz/lfo'
+
+/** The box an outline is drawn in, in SVG units */
+export const OUTLINE_WIDTH = 96
+export const OUTLINE_HEIGHT = 24
+/** Room above and below for the stroke */
+const PAD = 2
+
+/** Reused between drawings: a knob drag draws many */
+const ENVELOPE = new Float32Array(OUTLINE_POINTS * 2)
+const LFO = new Float32Array(LFO_POINTS * 2)
+const RESPONSE = new Float32Array(RESPONSE_POINTS * 2)
+
+type OutlineKind = 'envelope' | 'lfo' | 'filter'
+
+/** What picture part has, if any */
+export function outlineKind(
+  sound: Sound,
+  part: string
+): OutlineKind | undefined {
+  if (part === AMP) return 'envelope'
+  const found = findPart(sound, part)
+  if (found?.type === 'modulator') {
+    return found.part.kind === 'env' ? 'envelope' : 'lfo'
+  }
+  if (found?.type === 'item' && found.part.kind === 'filter') return 'filter'
+  return undefined
+}
+
+/**
+ * The outline of part as path data in OUTLINE_WIDTH by OUTLINE_HEIGHT,
+ * y down; '' for a part with none. The fill under it closes the same line
+ * along the bottom (outlineFill).
+ */
+export function outlinePath(sound: Sound, part: string): string {
+  const value = (key: string) => knobValue(sound, part, key)
+  const travel = (key: string) => {
+    const spec = knobSpec(sound, part, key)
+    return spec ? toNormalized(spec, value(key)) : 0
+  }
+  switch (outlineKind(sound, part)) {
+    case 'envelope':
+      envelopeOutline(
+        ENVELOPE,
+        travel('attack'),
+        travel('decay'),
+        value('sustain'),
+        travel('release')
+      )
+      return path(ENVELOPE, OUTLINE_POINTS)
+    case 'lfo':
+      lfoOutline(LFO, value('shape'), value('fade') * value('rate'))
+      return path(LFO, LFO_POINTS)
+    case 'filter':
+      filterResponse(
+        RESPONSE,
+        value('type'),
+        value('cutoff'),
+        value('resonance')
+      )
+      return path(RESPONSE, RESPONSE_POINTS)
+    default:
+      return ''
+  }
+}
+
+/** The area under an outline's path, closed along the bottom */
+export function outlineFill(line: string): string {
+  return line === ''
+    ? ''
+    : `${line}L${OUTLINE_WIDTH} ${OUTLINE_HEIGHT}L0 ${OUTLINE_HEIGHT}Z`
+}
+
+/** count x, y pairs (0..1, y up) as path data in the outline's box */
+function path(points: Float32Array, count: number): string {
+  let d = ''
+  for (let i = 0; i < count; i++) {
+    const x = (points[2 * i] ?? 0) * OUTLINE_WIDTH
+    const y = PAD + (1 - (points[2 * i + 1] ?? 0)) * (OUTLINE_HEIGHT - 2 * PAD)
+    d += `${i === 0 ? 'M' : 'L'}${x.toFixed(1)} ${y.toFixed(1)}`
+  }
+  return d
+}

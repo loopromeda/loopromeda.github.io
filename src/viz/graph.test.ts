@@ -260,31 +260,31 @@ describe('graphGeometry', () => {
       LIMITS
     )
     expect(geometry.inputs.map((tile) => [tile.input, tile.box])).toEqual([
-      ['i1', { x: 8, y: 6, w: 68, h: 39 }],
-      ['i2', { x: 8, y: 52, w: 68, h: 85 }],
-      ['i3', { x: 8, y: 144, w: 68, h: 39 }],
+      ['i1', { x: 8, y: 6, w: 68, h: 44 }],
+      ['i2', { x: 8, y: 56, w: 68, h: 94 }],
+      ['i3', { x: 8, y: 156, w: 68, h: 44 }],
     ])
     const [a, b] = geometry.chains
-    expect(a?.head).toEqual({ x: 80, y: 6, w: 36, h: 85 })
-    expect(b?.head).toEqual({ x: 80, y: 98, w: 36, h: 85 })
+    expect(a?.head).toEqual({ x: 80, y: 6, w: 36, h: 94 })
+    expect(b?.head).toEqual({ x: 80, y: 106, w: 36, h: 94 })
     expect(a?.items.map(({ box }) => box.x)).toEqual([119, 182])
     // The amp after A's two items and its "+", 44 wide
-    expect(a?.add).toEqual({ x: 245, y: 6, w: 44, h: 85 })
-    expect(b?.add).toEqual({ x: 182, y: 98, w: 107, h: 85 })
-    expect(geometry.amp).toEqual({ x: 292, y: 6, w: 52, h: 177 })
+    expect(a?.add).toEqual({ x: 245, y: 6, w: 44, h: 94 })
+    expect(b?.add).toEqual({ x: 182, y: 106, w: 107, h: 94 })
+    expect(geometry.amp).toEqual({ x: 292, y: 6, w: 52, h: 194 })
     expect(a?.joints).toEqual([117.5, 180.5, 290.5])
     expect(b?.joints).toEqual([117.5, 290.5])
     // Each peg on the seam, beside its input in that chain's row
     expect(geometry.pegs.map((peg) => [peg.input, peg.chain, peg.y])).toEqual([
-      ['i1', 'c1', 25.5],
-      ['i2', 'c1', 71.5],
-      ['i2', 'c2', 117.5],
-      ['i3', 'c2', 163.5],
+      ['i1', 'c1', 28],
+      ['i2', 'c1', 78],
+      ['i2', 'c2', 128],
+      ['i3', 'c2', 178],
     ])
     expect(geometry.pegs.every((peg) => peg.x === 78)).toBe(true)
-    expect(geometry.addInput).toEqual({ x: 8, y: 190, w: 68, h: 30 })
-    expect(geometry.addChain).toEqual({ x: 80, y: 190, w: 209, h: 30 })
-    expect([geometry.width, geometry.height]).toEqual([352, 228])
+    expect(geometry.addInput).toEqual({ x: 8, y: 206, w: 68, h: 30 })
+    expect(geometry.addChain).toEqual({ x: 80, y: 206, w: 209, h: 30 })
+    expect([geometry.width, geometry.height]).toEqual([352, 244])
   })
 
   it('leaves out the "+" tiles at the limits', () => {
@@ -301,15 +301,29 @@ describe('graphGeometry', () => {
     expect(geometry.chains[1]?.add?.w).toBe(6 * 63 - 3)
     // i5 and i6 feed nothing: their tiles stand after the rows
     expect(geometry.inputs.slice(-2).map((tile) => tile.box.y)).toEqual([
-      190, 236,
+      206, 256,
     ])
-    expect(geometry.height).toBe(236 + 39 + 8)
+    expect(geometry.height).toBe(256 + 44 + 8)
   })
 
   it('draws an amp one slot tall when there are no chains', () => {
     const geometry = graphGeometry(built([], [], []), LIMITS)
     expect(geometry.chains).toEqual([])
-    expect(geometry.amp).toEqual({ x: 166, y: 6, w: 52, h: 39 })
+    expect(geometry.amp).toEqual({ x: 166, y: 6, w: 52, h: 44 })
     expect(geometry.addChain).toEqual({ x: 80, y: 6, w: 83, h: 30 })
+  })
+
+  it('stretches the amp to fill a frame, keeping room for its waveform', () => {
+    const one = built(['i1'], [['i1']], [1])
+    // One item and its "+": the amp at 119 + 63 + 47
+    const wide = graphGeometry(one, LIMITS, 520)
+    expect(wide.amp).toMatchObject({ x: 229, w: 520 - 229 - 8 })
+    expect(wide.width).toBe(520)
+    // A frame too narrow pans: the amp keeps its waveform's room
+    const narrow = graphGeometry(one, LIMITS, 300)
+    expect(narrow.amp.w).toBe(96)
+    expect(narrow.width).toBe(229 + 96 + 8)
+    // The rest stands where it did
+    expect(wide.chains).toEqual(graphGeometry(one, LIMITS).chains)
   })
 })

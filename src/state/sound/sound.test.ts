@@ -78,7 +78,7 @@ describe('destinations and sources', () => {
       'Chain B IN 2',
       'LFO 1 Rate',
       'LFO 2 Rate',
-      'Amp',
+      'Amp Gain',
     ])
   })
 

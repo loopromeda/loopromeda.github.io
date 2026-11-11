@@ -9,7 +9,7 @@ import {
   PARAMS,
   clampValue,
   defaultValues,
-  formatModAmount,
+  formatAmount,
   formatValue,
   getParam,
   modSlotIds,
@@ -214,18 +214,18 @@ describe('the bipolar curve', () => {
   })
 })
 
-describe('formatModAmount', () => {
+describe('formatAmount', () => {
   it("speaks the destination's units", () => {
-    expect(formatModAmount(PITCH, 0.01)).toBe('+0.48 st')
-    expect(formatModAmount(PITCH, -0.25)).toBe('\u221212.0 st')
-    expect(formatModAmount(CUTOFF, 0.25)).toBe('+2.50 oct')
-    expect(formatModAmount(CUTOFF, 0)).toBe('0.00 oct')
+    expect(formatAmount(MOD_DESTS[PITCH], 0.01)).toBe('+0.48 st')
+    expect(formatAmount(MOD_DESTS[PITCH], -0.25)).toBe('\u221212.0 st')
+    expect(formatAmount(MOD_DESTS[CUTOFF], 0.25)).toBe('+2.50 oct')
+    expect(formatAmount(MOD_DESTS[CUTOFF], 0)).toBe('0.00 oct')
   })
 
   it('counts a percent destination in percent of its scale', () => {
     // Width: 100% moves the pulse width by half a cycle
-    expect(formatModAmount(3, 0.5)).toBe('+25%')
-    expect(formatModAmount(12, -0.3)).toBe('\u221230%')
+    expect(formatAmount(MOD_DESTS[3], 0.5)).toBe('+25%')
+    expect(formatAmount(MOD_DESTS[12], -0.3)).toBe('\u221230%')
   })
 })
 

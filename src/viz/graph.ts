@@ -233,15 +233,18 @@ export interface GraphGeometry {
 }
 
 /**
- * The editor drawn on the design canvas, in pixels: a slot is a tile 39
- * tall with 7 between slots; inputs stand in a column 68 wide, a chain's
- * head is 36 and each item 60, 3 apart; the amp, 52 wide, stands after
- * the longest chain and its "+", which is 44 wide at least.
+ * The editor drawn on the design canvas, in pixels: a slot is a tile 44
+ * tall (a touch's height; the canvas drew 39, before the waveform moved
+ * into the amp and left the graph more room) with 6 between slots; inputs
+ * stand in a column 68 wide, a chain's head is 36 and each item 60, 3
+ * apart; the amp, 52 wide, stands after the longest chain and its "+",
+ * which is 44 wide at least. Filling a frame, the amp takes the room left
+ * in it, at least ampFill: room for the waveform it holds.
  */
 export const GRAPH = {
   top: 6,
-  slot: 39,
-  slotGap: 7,
+  slot: 44,
+  slotGap: 6,
   inputX: 8,
   inputW: 68,
   headX: 80,
@@ -251,14 +254,20 @@ export const GRAPH = {
   seam: 3,
   addMin: 44,
   ampW: 52,
+  ampFill: 96,
   addRow: 30,
   end: 8,
 } as const
 
-/** Where everything in the sound's graph is drawn */
+/**
+ * Where everything in the sound's graph is drawn; given the width of its
+ * frame, the amp stretches to fill it (at least GRAPH.ampFill wide), else
+ * it is GRAPH.ampW
+ */
 export function graphGeometry(
   sound: GeometrySound,
-  limits: GraphLimits
+  limits: GraphLimits,
+  fill?: number
 ): GraphGeometry {
   const g = GRAPH
   const layout = graphLayout(sound)
@@ -334,12 +343,14 @@ export function graphGeometry(
       ? addY + g.addRow
       : Math.max(rowsEnd, slotY(layout.slots) - g.slotGap)
 
+  const ampW =
+    fill === undefined ? g.ampW : Math.max(g.ampFill, fill - ampX - g.end)
   return {
-    width: ampX + g.ampW + g.end,
+    width: ampX + ampW + g.end,
     height: bottom + g.end,
     inputs,
     chains,
-    amp: { x: ampX, y: g.top, w: g.ampW, h: rowsEnd - g.top },
+    amp: { x: ampX, y: g.top, w: ampW, h: rowsEnd - g.top },
     pegs,
     addInput,
     addChain,

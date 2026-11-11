@@ -673,20 +673,22 @@ function sign(rounded: number): string {
 }
 
 /**
- * A matrix amount (-1..1) as what it does to destination dest (an index
- * into MOD_DESTS): +0.48 st, −2.50 oct, +25%
+ * A route's amount (-1..1) as what it does to a destination of that scale
+ * and unit (a matrix destination, or a sound's): +0.48 st, −2.50 oct, +25%
  */
-export function formatModAmount(dest: number, amount: number): string {
-  const spec = MOD_DESTS[Math.round(dest)] ?? MOD_DESTS[0]
-  const v = Number.isFinite(amount) ? amount * spec.scale : 0
-  if (spec.unit === '%') {
+export function formatAmount(
+  dest: { readonly scale: number; readonly unit: string },
+  amount: number
+): string {
+  const v = Number.isFinite(amount) ? amount * dest.scale : 0
+  if (dest.unit === '%') {
     const r = Math.round(v * 100)
     return `${sign(r)}${Math.abs(r)}%`
   }
   // Two decimals below 10, one above: 0.48 st, 12.0 st
   const digits = Math.abs(v) < 9.995 ? 2 : 1
   const r = Number(v.toFixed(digits))
-  return `${sign(r)}${Math.abs(r).toFixed(digits)} ${spec.unit}`
+  return `${sign(r)}${Math.abs(r).toFixed(digits)} ${dest.unit}`
 }
 
 /** The ids of matrix slot n's knobs (1..MOD_SLOT_COUNT) */

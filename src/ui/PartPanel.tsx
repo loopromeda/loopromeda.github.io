@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useLayoutEffect, useRef, type ReactNode } from 'react'
 import type { Engine } from '../engine/engine'
 import {
   addChain,
@@ -23,6 +23,7 @@ import {
   MODULATOR_KINDS,
   SEND_SPEC,
   VOICE_SPEC,
+  type DestSpec,
   type InputKind,
   type ItemKind,
   type ModulatorKind,
@@ -40,22 +41,33 @@ import {
   BUTTON,
   BUTTON_DANGER,
   KNOB_ROW,
+  KNOB_SIZE,
   SMALL_BUTTON,
   TALL_HIT,
 } from './controls'
 import {
   GLYPHS,
+  MOD_COLOR,
   MOD_LOOK,
   NEUTRAL_LOOK,
   VOICE_LOOK,
   addingTo,
   chainLetter,
   chainLook,
+  destName,
   glyphOf,
   lookOf,
   type Look,
 } from './editor'
 import { Knob, NEUTRAL_ARC } from './Knob'
+import { knoblessDests, routesTo } from '../state/sound/knob'
+import {
+  OUTLINE_HEIGHT,
+  OUTLINE_WIDTH,
+  outlineFill,
+  outlineKind,
+  outlinePath,
+} from './outline'
 
 /** One kind a "+" offers: its pictogram, name and what it does */
 interface Choice {
@@ -83,6 +95,23 @@ interface Feed {
   readonly toggle: () => void
 }
 
+/** A destination that no knob holds, beside the knobs: tap to route */
+interface Knobless {
+  readonly part: string
+  readonly dest: DestSpec
+  readonly count: number
+}
+
+/** Where a modulator's route goes */
+interface Target {
+  readonly id: string
+  readonly label: string
+  readonly target: string
+  readonly key: string
+  /** The modulator only scales this route, another source's */
+  readonly via: boolean
+}
+
 /** What the panel shows for the tile picked */
 interface View {
   readonly title: string
@@ -91,9 +120,15 @@ interface View {
   readonly knobs: readonly { part: string; key: string; hot?: string }[]
   /** The knobs' arc: a chain's colour on its own parts, else neutral */
   readonly color: string
+  /** A picture of the part beside its name, in this colour */
+  readonly outline?: string
   readonly refs?: ReactNode
   /** An input's chains, each a toggle: which ones it feeds */
   readonly feeds?: readonly Feed[]
+  /** Destinations no knob holds (the voice's pitch), routed by a tap */
+  readonly knobless?: readonly Knobless[]
+  /** A modulator's routes, by where each goes; it routes from source */
+  readonly targets?: { source: string; to: readonly Target[] }
   readonly note?: string
   readonly choices?: readonly Choice[]
   readonly choiceNote?: string
@@ -138,6 +173,8 @@ export function PartPanel({
   focus,
   menu,
   onMenu,
+  onRoute,
+  onMap,
 }: {
   engine: Engine
   sound: Sound
@@ -146,6 +183,10 @@ export function PartPanel({
   focus: string | undefined
   menu: boolean
   onMenu: (open: boolean) => void
+  /** Opens the routes into a destination: a knob held, a target tapped */
+  onRoute: (target: string, key: string) => void
+  /** Routes from source into the tiles picked, starting at target */
+  onMap: (source: string, target?: string) => void
 }) {
   const view = viewOf(engine, sound, picked, focus, pick)
   const open = menu && view.actions !== undefined
@@ -194,6 +235,9 @@ export function PartPanel({
           {view.kind}
         </span>
         <span className="ml-auto flex shrink-0 items-center gap-1.5">
+          {view.outline && (
+            <Outline engine={engine} part={picked} color={view.outline} />
+          )}
           {view.refs}
           {view.actions && (
             <button
@@ -272,7 +316,7 @@ export function PartPanel({
           {view.feeds && view.feeds.length > 0 && (
             <Feeds title={view.title} feeds={view.feeds} />
           )}
-          {view.knobs.length > 0 ? (
+          {view.knobs.length > 0 || view.knobless?.length ? (
             <div className={KNOB_ROW}>
               {view.knobs.map(({ part, key, hot }) => (
                 <Knob
@@ -282,13 +326,53 @@ export function PartPanel({
                   knob={key}
                   color={view.color}
                   hot={hot}
+                  onHold={(dest) => onRoute(part, dest)}
                 />
+              ))}
+              {view.knobless?.map(({ part, dest, count }) => (
+                <button
+                  key={`${part} ${dest.key}`}
+                  type="button"
+                  aria-label={`Route to ${view.title} ${dest.label}`}
+                  onClick={() => onRoute(part, dest.key)}
+                  className="flex min-w-0 flex-col items-center gap-0.5"
+                >
+                  <span
+                    aria-hidden
+                    style={{ border: `1.5px dashed ${MOD_LOOK.ring}` }}
+                    className={`${KNOB_SIZE} relative flex aspect-square items-center justify-center rounded-full`}
+                  >
+                    <svg viewBox="0 0 18 12" width={18} height={12}>
+                      <path
+                        d={GLYPHS.route}
+                        fill="none"
+                        stroke={MOD_COLOR}
+                        strokeWidth={1.6}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  </span>
+                  <span className="text-[11px] leading-tight whitespace-nowrap text-zinc-400">
+                    {dest.label}
+                  </span>
+                  <span className="font-mono text-[11px] leading-tight whitespace-nowrap text-zinc-200">
+                    {count === 0
+                      ? 'Route'
+                      : count === 1
+                        ? '1 route'
+                        : `${count} routes`}
+                  </span>
+                </button>
               ))}
             </div>
           ) : (
             view.note && (
               <p className="text-xs leading-snug text-zinc-400">{view.note}</p>
             )
+          )}
+          {view.targets && (
+            <Targets {...view.targets} onRoute={onRoute} onMap={onMap} />
           )}
         </>
       )}
@@ -343,6 +427,126 @@ function Feeds({ title, feeds }: { title: string; feeds: readonly Feed[] }) {
   )
 }
 
+/**
+ * The part's picture (outline.ts): an envelope, an LFO's cycles, a
+ * filter's response. It follows the knobs by setting the path itself, so
+ * a knob turning re-renders nothing.
+ */
+function Outline({
+  engine,
+  part,
+  color,
+}: {
+  engine: Engine
+  part: string
+  color: string
+}) {
+  const lineRef = useRef<SVGPathElement>(null)
+  const fillRef = useRef<SVGPathElement>(null)
+  useLayoutEffect(() => {
+    let shown = ''
+    const draw = () => {
+      const line = outlinePath(engine.getSound(), part)
+      if (line === shown) return
+      shown = line
+      lineRef.current?.setAttribute('d', line)
+      fillRef.current?.setAttribute('d', outlineFill(line))
+    }
+    draw()
+    return engine.subscribeSound(draw)
+  }, [engine, part])
+  return (
+    <svg
+      viewBox={`0 0 ${OUTLINE_WIDTH} ${OUTLINE_HEIGHT}`}
+      preserveAspectRatio="none"
+      aria-hidden
+      className="h-6 w-24 shrink"
+    >
+      <path ref={fillRef} fill={color} fillOpacity={0.12} />
+      <path
+        ref={lineRef}
+        fill="none"
+        stroke={color}
+        strokeWidth={1.5}
+        strokeLinejoin="round"
+        vectorEffect="non-scaling-stroke"
+      />
+    </svg>
+  )
+}
+
+/**
+ * Where a modulator goes: Route, which turns the panel into its depths on
+ * each tile picked, then a chip per route, which does so on that route's
+ * tile (or, for a route the modulator only scales, opens that route's
+ * destination)
+ */
+function Targets({
+  source,
+  to,
+  onRoute,
+  onMap,
+}: {
+  source: string
+  to: readonly Target[]
+  onRoute: (target: string, key: string) => void
+  onMap: (source: string, target?: string) => void
+}) {
+  return (
+    <div
+      role="group"
+      aria-label="Routes"
+      className="flex shrink-0 items-center gap-1.5 overflow-x-auto overscroll-x-contain"
+    >
+      <button
+        type="button"
+        onClick={() => onMap(source)}
+        style={{
+          background: MOD_LOOK.tint,
+          boxShadow: `inset 0 0 0 1.5px ${MOD_COLOR}`,
+        }}
+        className={`${TALL_HIT} flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-[11px] font-semibold tracking-wider text-sky-100`}
+      >
+        <svg viewBox="0 0 18 12" width={15} height={10} aria-hidden>
+          <path
+            d={GLYPHS.route}
+            fill="none"
+            stroke={MOD_COLOR}
+            strokeWidth={1.8}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+        Route
+      </button>
+      {to.length === 0 ? (
+        <span className="text-[11px] leading-snug text-zinc-500">
+          then tap a tile and turn its knobs
+        </span>
+      ) : (
+        <>
+          <span className="mx-0.5 text-[11px] text-zinc-500">To</span>
+          {to.map((target) => (
+            <button
+              key={target.id}
+              type="button"
+              onClick={() =>
+                target.via
+                  ? onRoute(target.target, target.key)
+                  : onMap(source, target.target)
+              }
+              style={{ boxShadow: `inset 0 0 0 1.5px ${MOD_LOOK.ring}` }}
+              className={`${TALL_HIT} flex h-7 shrink-0 items-center rounded-md px-2.5 text-[11px] font-semibold whitespace-nowrap text-sky-100`}
+            >
+              {target.label}
+            </button>
+          ))}
+        </>
+      )}
+    </div>
+  )
+}
+
 /** Whether chain chainId of sound takes input inputId at all */
 function feeds(sound: Sound, chainId: string, inputId: string): boolean {
   const chain = sound.chains.find((each) => each.id === chainId)
@@ -368,6 +572,12 @@ function viewOf(
   }
   const knobsOf = (part: string, keys: readonly { key: string }[]) =>
     keys.map(({ key }) => ({ part, key }))
+  const knoblessOf = (part: string): Knobless[] =>
+    knoblessDests(sound, part).map((dest) => ({
+      part,
+      dest,
+      count: routesTo(sound, part, dest.key).length,
+    }))
 
   const adding = addingTo(picked)
   if (adding !== undefined) {
@@ -379,7 +589,9 @@ function viewOf(
       kind: 'Out',
       chip: { look: NEUTRAL_LOOK, glyph: GLYPHS.env },
       knobs: knobsOf(AMP, AMP_SPEC.knobs),
+      knobless: knoblessOf(AMP),
       color: NEUTRAL_ARC,
+      outline: NEUTRAL_LOOK.ink,
     }
   }
   if (picked === VOICE) {
@@ -388,6 +600,7 @@ function viewOf(
       kind: 'Mode and glide',
       chip: { look: VOICE_LOOK, mark: 'V' },
       knobs: knobsOf(VOICE, VOICE_SPEC.knobs),
+      knobless: knoblessOf(VOICE),
       color: NEUTRAL_ARC,
     }
   }
@@ -427,6 +640,7 @@ function viewOf(
         chip: { look, glyph: glyphOf(sound, picked) },
         knobs: knobsOf(picked, ITEM_KINDS[part.kind].knobs),
         color: look.ink,
+        outline: outlineKind(sound, picked) ? look.ink : undefined,
         actions: [
           { label: '◂ Move left', run: move(-1) },
           { label: 'Move right ▸', run: move(1) },
@@ -458,16 +672,28 @@ function viewOf(
       }
     }
     case 'modulator': {
-      const count = sound.routes.filter(
+      const routes = sound.routes.filter(
         (route) => route.source === picked || route.via === picked
-      ).length
+      )
+      const count = routes.length
       const kind = MODULATOR_KINDS[found.part.kind].label
       return {
         title,
         kind: `${kind} · ${count === 0 ? 'routed nowhere yet' : count === 1 ? '1 route' : `${count} routes`}`,
         chip: { look: MOD_LOOK, glyph: glyphOf(sound, picked) },
         knobs: knobsOf(picked, MODULATOR_KINDS[found.part.kind].knobs),
+        targets: {
+          source: picked,
+          to: routes.map((route) => ({
+            id: route.id,
+            label: `${destName(sound, route.target, route.key)}${route.source === picked ? '' : ' (via)'}`,
+            target: route.target,
+            key: route.key,
+            via: route.source !== picked,
+          })),
+        },
         color: NEUTRAL_ARC,
+        outline: MOD_COLOR,
         actions: [
           { label: '◂ Earlier', run: move(-1) },
           { label: 'Later ▸', run: move(1) },
