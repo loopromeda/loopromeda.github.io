@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, type ReactNode } from 'react'
 import type { Engine, EngineSnapshot, EngineState } from '../engine/engine'
 
 /** Frames rendered per worklet call: the Web Audio render quantum */
@@ -24,9 +24,45 @@ const ms = (seconds: number | undefined): string =>
   seconds === undefined ? '—' : `${(seconds * 1000).toFixed(1)} ms`
 
 /**
+ * From these loads on, the reading turns amber, then red: little of each
+ * block left to spare, then none (the audio may break up)
+ */
+const BUSY = 0.7
+const FULL = 0.9
+
+/**
+ * The audio thread's load, "DSP 12%": the share of each block's time the
+ * synth took over the last half second, set straight from the engine's
+ * reports (twice a second) with no re-render; its title also counts the
+ * voices sounding
+ */
+function DspLoad({ engine }: { engine: Engine }) {
+  const ref = useRef<HTMLSpanElement>(null)
+  useLayoutEffect(() => {
+    const show = () => {
+      const span = ref.current
+      if (!span) return
+      const report = engine.load
+      const percent = report ? Math.round(report.load * 100) : undefined
+      span.textContent = `DSP ${percent === undefined ? '—' : `${percent}%`}`
+      span.title = report
+        ? `The synth took ${percent}% of each block's time over the last half second; ${report.voices} ${report.voices === 1 ? 'voice' : 'voices'} sounding`
+        : "The synth's share of each block's time"
+      const load = report?.load ?? 0
+      span.classList.toggle('text-amber-400', load >= BUSY && load < FULL)
+      span.classList.toggle('text-red-400', load >= FULL)
+    }
+    show()
+    return engine.subscribeLoad(show)
+  }, [engine])
+  return <span ref={ref} className="shrink-0" />
+}
+
+/**
  * One quiet line under the keyboard: the audio state and, given details,
- * what the audio path reports about itself (the M1 device checklist), with
- * `children` (the settings button) at its right end. The latency's split
+ * the synth's load (DspLoad) and what the audio path reports about itself
+ * (the M1 device checklist), with `children` (the settings button) at its
+ * right end. The latency's split
  * into base and output is in the title, and the dev server logs it with
  * every state change. outputLatency changes without an event, so the engine
  * is re-read twice a second while the details are shown; a reading past
@@ -77,9 +113,12 @@ export function StatusBar({
       </span>
       <span className="flex min-w-0 items-center gap-3">
         {details && (
-          <span className="truncate">
-            {sampleRate ? `${sampleRate / 1000} kHz` : '—'} · block {ms(block)}{' '}
-            · latency {ms(total)}
+          <span className="flex min-w-0 items-center gap-[1ch]">
+            <DspLoad engine={engine} />
+            <span className="truncate">
+              · {sampleRate ? `${sampleRate / 1000} kHz` : '—'} · block{' '}
+              {ms(block)} · latency {ms(total)}
+            </span>
           </span>
         )}
         {children}

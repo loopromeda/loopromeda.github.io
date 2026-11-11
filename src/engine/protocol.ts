@@ -1,8 +1,9 @@
 /**
  * What the two threads say to each other over the worklet's port: intents
- * to the audio thread, and the answer to a measurement asked for by hand
- * back. Shared by src/engine (DOM) and src/worklet (AudioWorkletGlobalScope),
- * so it stays free of either: plain data only.
+ * to the audio thread, and back its load twice a second and the answer to
+ * a measurement asked for by hand. Shared by src/engine (DOM) and
+ * src/worklet (AudioWorkletGlobalScope), so it stays free of either: plain
+ * data only.
  */
 import type { KnobChange } from '../state/sound/diff'
 import type { Sound } from '../state/sound/sound'
@@ -59,4 +60,15 @@ export interface BenchReport {
   readonly clock: 'performance' | 'date'
 }
 
-export type FromWorklet = { t: 'bench' } & BenchReport
+/**
+ * The audio thread's load over the last half second (src/worklet/load.ts)
+ * and the voices sounding at its end
+ */
+export interface LoadReport {
+  /** The share of the blocks' own time their rendering took: 0.25 a quarter */
+  readonly load: number
+  readonly voices: number
+}
+
+export type FromWorklet =
+  ({ t: 'bench' } & BenchReport) | ({ t: 'load' } & LoadReport)

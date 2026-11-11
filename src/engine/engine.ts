@@ -5,6 +5,7 @@ import {
   PROCESSOR_NAME,
   type BenchReport,
   type FromWorklet,
+  type LoadReport,
   type ToWorklet,
 } from './protocol'
 
@@ -68,6 +69,9 @@ export class Engine {
   readonly #soundListeners = new Set<() => void>()
   /** Who waits for the measurement under way, answered in order */
   readonly #benchWaiting: ((report: BenchReport | undefined) => void)[] = []
+  /** The audio thread's last load, and who follows it */
+  #load: LoadReport | undefined
+  readonly #loadListeners = new Set<() => void>()
   /** The context's latencyHint: the next context's, once one is running */
   #latency: AudioContextLatencyCategory = 'interactive'
   /** The most voices at once, if the player limited them */
@@ -201,6 +205,7 @@ export class Engine {
     this.#sent = undefined
     // A measurement under way on the old worklet will not answer
     for (const resolve of this.#benchWaiting.splice(0)) resolve(undefined)
+    this.#setLoad(undefined)
     old.close().catch(() => undefined)
     void this.start()
   }
@@ -217,6 +222,24 @@ export class Engine {
       this.#benchWaiting.push(resolve)
       this.#post({ t: 'bench', voices })
     })
+  }
+
+  /**
+   * The audio thread's load over the last half second and the voices
+   * sounding, as it reports them twice a second; undefined until the
+   * first report of the audio running now
+   */
+  get load(): LoadReport | undefined {
+    return this.#load
+  }
+
+  /**
+   * Calls listener after each load report, outside React (a display that
+   * sets its own text): returns the unsubscribe function
+   */
+  readonly subscribeLoad = (listener: () => void): (() => void) => {
+    this.#loadListeners.add(listener)
+    return () => this.#loadListeners.delete(listener)
   }
 
   /** The sound playing: a document never changed in place */
@@ -284,7 +307,15 @@ export class Engine {
     if (message.t === 'bench') {
       const { results, clock } = message
       this.#benchWaiting.shift()?.({ results, clock })
+    } else if (message.t === 'load') {
+      const { load, voices } = message
+      this.#setLoad({ load, voices })
     }
+  }
+
+  #setLoad(load: LoadReport | undefined): void {
+    this.#load = load
+    for (const listener of this.#loadListeners) listener()
   }
 
   /**

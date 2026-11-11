@@ -54,7 +54,8 @@ src/dsp/      pure DSP (oscillators, envelopes, LFOs, filters, voices);
 src/worklet/  the AudioWorkletProcessor around src/dsp; own globals and
               tsconfig (tsconfig.worklet.json), loaded via ?worker&url;
               sound.ts loads a sound document onto the ChainSynth and
-              sets its knobs one by one (Node-testable)
+              sets its knobs one by one (Node-testable); load.ts the
+              share of its time the synth takes, for the status line
 src/engine/   AudioContext lifecycle, unlock, node wiring; the sound,
               held here and edited, sent whole or as the knobs that
               moved; protocol.ts is the message types both threads share

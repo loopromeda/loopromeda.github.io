@@ -7,6 +7,7 @@ import {
   type FromWorklet,
   type ToWorklet,
 } from '../engine/protocol'
+import { LoadMeter } from './load'
 import { SoundPlayer } from './sound'
 
 /** A measurement's warm-up and timing, per voice count, in milliseconds */
@@ -14,13 +15,28 @@ const BENCH_WARMUP_MS = 50
 const BENCH_MS = 300
 
 /**
+ * The worklet's clock in milliseconds: performance.now where its global
+ * scope has one (not every browser's does), else Date.now
+ */
+const clock = (globalThis as { performance?: { now(): number } }).performance
+const now = clock ? () => clock.now() : () => Date.now()
+
+/**
  * The audio thread's shell around src/dsp's ChainSynth: messages in,
- * blocks out. SoundPlayer keeps the sound's knobs and hands each change to
- * the synth in its own terms. Nothing is allocated in process().
+ * blocks out, and its load (LoadMeter) out twice a second. SoundPlayer
+ * keeps the sound's knobs and hands each change to the synth in its own
+ * terms. Nothing is allocated in process(): the load goes out in one
+ * message object, reused (postMessage copies it).
  */
 class SynthProcessor extends AudioWorkletProcessor {
   readonly #synth = new ChainSynth(sampleRate)
   readonly #player = new SoundPlayer(this.#synth)
+  readonly #meter = new LoadMeter(sampleRate)
+  readonly #load: { t: 'load'; load: number; voices: number } = {
+    t: 'load',
+    load: 0,
+    voices: 0,
+  }
 
   constructor() {
     super()
@@ -66,10 +82,6 @@ class SynthProcessor extends AudioWorkletProcessor {
    * for about a third of a second a count while it runs.
    */
   #bench(counts: readonly number[]): void {
-    // AudioWorkletGlobalScope has no performance in every browser
-    const clock = (globalThis as { performance?: { now(): number } })
-      .performance
-    const now = clock ? () => clock.now() : () => Date.now()
     const block = new Float32Array(128)
     const results: BenchResult[] = []
     for (const count of counts) {
@@ -89,7 +101,16 @@ class SynthProcessor extends AudioWorkletProcessor {
 
   process(_inputs: Float32Array[][], outputs: Float32Array[][]): boolean {
     const out = outputs[0]?.[0]
-    if (out) this.#synth.process(out)
+    if (!out) return true
+    const meter = this.#meter
+    meter.begin(now())
+    this.#synth.process(out)
+    if (meter.end(now())) {
+      const report = this.#load
+      report.load = meter.load
+      report.voices = this.#synth.activeVoices
+      this.port.postMessage(report satisfies FromWorklet)
+    }
     return true
   }
 }
