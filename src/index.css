@@ -14,6 +14,21 @@
 }
 
 /*
+ * Wide enough for the editor's panel beside its graph (md) and tall enough
+ * for both over the keys: a tablet, a Fold open, not a phone on its side.
+ * There the keys stop at a playing height and the editor takes the room
+ * (App.tsx).
+ */
+@custom-variant roomy (@media (width >= 48rem) and (height >= 30rem));
+
+/*
+ * Wider still, and tall enough for three rows (a desktop's window): the
+ * editor's panel moves from beside the graph to under it, a row of knobs
+ * over the keys, and the graph has the whole width (SoundEditor.tsx)
+ */
+@custom-variant wide (@media (width >= 80rem) and (height >= 48rem));
+
+/*
  * An instrument, not a document: no page bounce, text selection, long-press
  * callout, double-tap zoom or tap highlight on touch screens (main.tsx
  * also turns away long presses). Play surfaces and knobs add

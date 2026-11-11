@@ -68,25 +68,34 @@ export const TALL_HIT =
 /** A 28 px button in a panel's header row */
 export const SMALL_BUTTON = `${TALL_HIT} flex h-7 shrink-0 items-center gap-1.5 rounded-md bg-white/5 px-3 text-[11px] font-semibold tracking-wider whitespace-nowrap text-zinc-200 disabled:opacity-40`
 
-/** Columns for one to six knobs, written out for Tailwind to find */
+/**
+ * Columns for one to seven knobs, written out for Tailwind to find:
+ * across the panel, or 9rem each in the row a wide screen gives it
+ */
 const KNOB_COLUMNS = [
-  'grid-cols-1',
-  'grid-cols-2',
-  'grid-cols-3',
-  'grid-cols-4',
-  'grid-cols-5',
-  'grid-cols-6',
+  'grid-cols-1 wide:grid-cols-[repeat(1,9rem)]',
+  'grid-cols-2 wide:grid-cols-[repeat(2,9rem)]',
+  'grid-cols-3 wide:grid-cols-[repeat(3,9rem)]',
+  'grid-cols-4 wide:grid-cols-[repeat(4,9rem)]',
+  'grid-cols-5 wide:grid-cols-[repeat(5,9rem)]',
+  'grid-cols-6 wide:grid-cols-[repeat(6,9rem)]',
+  'grid-cols-7 wide:grid-cols-[repeat(7,9rem)]',
 ] as const
 
 /**
  * A panel's count knobs, spread across its width: a column each, six at
- * most, wrapping past that, so a part with few knobs leaves no empty
- * stretch at the right. Every knob is the size it would be six to a row,
- * at most 48 px, whatever its row holds: knobs match from part to part.
+ * most, so a part with few knobs leaves no empty stretch at the right. In
+ * the row under the graph on a wide screen, where that would scatter
+ * them, each column is 9rem from the left. Every knob is the size
+ * KNOB_SIZE gives its row's width, whatever the row holds: knobs match
+ * from part to part. Seven (a chain's level and six inputs) stand in one
+ * row too, a little smaller, rather than leave one alone under six; past
+ * seven they wrap.
  */
 export function knobRow(count: number): string {
-  const columns = KNOB_COLUMNS[Math.min(Math.max(count, 1), 6) - 1]
-  return `@container grid ${columns} justify-items-center gap-x-1 gap-y-2`
+  const columns = KNOB_COLUMNS[Math.min(Math.max(count, 1), 7) - 1]
+  const seven = count >= 7 ? ' [--knob-columns:7]' : ''
+  return `@container grid ${columns} justify-items-center gap-x-1 gap-y-2${seven}`
 }
 
 /**
@@ -97,5 +106,12 @@ export function knobRow(count: number): string {
  */
 export const PANEL_BODY = 'my-auto flex flex-col gap-2'
 
-/** A knob's width in a knobRow: a sixth of the row, less five gaps */
-export const KNOB_SIZE = 'w-[min(3rem,calc((100cqw_-_1.25rem)/6))]'
+/**
+ * A knob's width in a knobRow: --knob, or a sixth of the row (less five
+ * gaps) where six would not fit; a seventh in a row of seven
+ * (--knob-columns). The panel sets --knob with its height (SoundEditor):
+ * 48 px beside the graph, up to 72 px under it on a wide screen held
+ * upright, 72 px in a wide screen's row; 48 px elsewhere.
+ */
+export const KNOB_SIZE =
+  'w-[min(var(--knob,3rem),calc((100cqw_-_(var(--knob-columns,6)_-_1)_*_0.25rem)/var(--knob-columns,6)))]'

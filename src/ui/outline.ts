@@ -1,8 +1,8 @@
 /**
  * A part's picture: an envelope's shape (the amp's, an Env's), an LFO's
- * cycles, a filter's response, a drive's curve. The panel draws it beside
- * the part's name, and a chain's items on their tiles too, as knobs turn
- * (Picture.tsx). Pure: it reads the sound and returns SVG path data.
+ * cycles, a filter's response, a drive's curve. Their tiles draw it as
+ * knobs turn (Picture.tsx): a chain's items, the amp, the modulators in
+ * the rack. Pure: it reads the sound and returns SVG path data.
  */
 import { toNormalized } from '../state/params'
 import { knobSpec, knobValue } from '../state/sound/knob'

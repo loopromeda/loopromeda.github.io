@@ -81,9 +81,9 @@ src/viz/      pure display math (scope trigger and decimation, envelope
 src/ui/       React components; SoundEditor.tsx the sound as tiles
               (editor.ts: their names, lines, pictograms and colours), its
               amp holding Scope.tsx, the output waveform over the amp's
-              envelope, its filters and drives their pictures (Picture.tsx,
-              drawn from outline.ts); PartPanel.tsx the picked tile's knobs,
-              adds and moves, a modulator's picture by its name;
+              envelope, its filters, drives and modulators their pictures
+              (Picture.tsx, drawn from outline.ts); PartPanel.tsx the
+              picked tile's knobs, adds and moves;
               RoutePanels.tsx routing in the panel's place: the routes into
               a knob held, or a source's depths on the tiles picked;
               tileDrag.ts holds a tile and drags it to a new place; Knob.tsx

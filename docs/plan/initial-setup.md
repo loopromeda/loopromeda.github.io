@@ -326,7 +326,12 @@ right, benchmark within budget.
         render per touch). Computer keys A–; play and Z/X shift, for desktop
         testing. Checked in desktop Chrome by synthetic pointer and key
         events; ashon confirmed multi-touch on the Galaxy Fold (Chrome 156)
-        on 2026-11-10.
+        on 2026-11-10. 2026-11-11, after ashon found the keys too big on
+        the Fold open and on a Mac window: past three octaves only where
+        a white key would be wider than 60 px (four in a 1754 px window),
+        and on a roomy screen (md wide, 30rem tall) the keys stand 5.5
+        times as long as a white key is wide, at most 45% of the screen,
+        the editor taking the rest (`keysFit` in `src/viz/keyboard.ts`).
   - [x] Pads, 2026-11-10, asked for by ashon (piano keys or launchpad
         pads, either to choose): the button next to the patch opens Keys
         or Pads, and for the pads a root (C to B) and a scale (eleven,

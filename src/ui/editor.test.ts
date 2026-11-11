@@ -91,6 +91,8 @@ describe('tiles', () => {
     )
     expect(tileLine(sound, 'c1')).toBe('70%')
     expect(tileLine(sound, AMP)).toBe('Out')
+    expect(tileLine(sound, VOICE)).toBe('Poly')
+    expect(tileLine(setValue(sound, VOICE, 'mode', 2), VOICE)).toBe('Legato')
   })
 
   it("draws a tile's pictogram from its kind and shape", () => {

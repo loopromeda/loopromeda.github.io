@@ -112,8 +112,11 @@ as a graph of flat tiles, flowing left to right.
 
 - **Tiles.** Inputs stand in the first column; each chain is a row: its
   head (letter and level), then its items side by side, then the amp,
-  which stands at the end of every row. Modulators sit in a rack above,
-  the voice at its end. A tile is flat, outlined by a ring; picked, its
+  which stands at the end of every row (since 2026-11-12 at most two
+  slots tall, or three fifths of its width: past that it stands in the
+  rows' middle and a bus down the seam takes every row to it). Modulators sit in a rack above,
+  the voice at its end (since 2026-11-12 at its start, over the inputs
+  whose pitch it sets). A tile is flat, outlined by a ring; picked, its
   ring is heavier and it takes a tint. A dashed "+" fills a row's free
   place; a longer chain pans the graph right.
 - **Pegs.** The joints between tiles carry pegs: an input's send into a
@@ -232,11 +235,12 @@ as a graph of flat tiles, flowing left to right.
      sky count and an arc to where its routes take it at full
      (`knobReach` in `src/state/sound/knob.ts`: octaves multiply, the
      rest add). A modulator's panel lists where it goes. The panel's
-     header pictures an envelope, an LFO or a filter's response
-     (`src/ui/outline.ts`). Dragging tiles, 2026-11-11 (The editor,
-     above): `src/ui/tileDrag.ts` lifts and moves them, setting styles
-     straight on the elements as a knob does; `src/viz/drop.ts` finds
-     the seam a tile goes into; `moveItem` in `src/state/sound/edit.ts`
-     takes an item into another chain.
+     header pictured an envelope, an LFO or a filter's response
+     (`src/ui/outline.ts`); since 2026-11-12 the tiles draw them
+     instead, the modulators' in the rack under their names. Dragging
+     tiles, 2026-11-11 (The editor, above): `src/ui/tileDrag.ts` lifts
+     and moves them, setting styles straight on the elements as a knob
+     does; `src/viz/drop.ts` finds the seam a tile goes into; `moveItem`
+     in `src/state/sound/edit.ts` takes an item into another chain.
 5. The factory presets rebuilt as sounds.
 6. The drum kit on top: sixteen sounds, one per pad.

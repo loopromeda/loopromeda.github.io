@@ -28,15 +28,35 @@ const page =
   'flex h-full flex-col px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]'
 
 /**
+ * How the height is shared, the controls out. The keys stand at most as
+ * long as their width asks (PlaySurface's --key-length, 14rem until it is
+ * measured), and at most 45% of the screen, under their header and its
+ * gap (3.25rem). On a roomy screen (index.css) they stand at that and the
+ * editor takes the rest: the keys stay put as inputs and chains come and
+ * go, and the graph pans when they do not fit. Held upright (under md),
+ * the editor keeps what it needs first and the keys take the rest up to
+ * that length; past it, the editor grows, its tiles with it (graph.ts),
+ * and what they cannot fill is left an empty canvas.
+ */
+const EDITOR_SIZE = 'max-md:grow roomy:flex-1'
+// Written out whole, for Tailwind to find
+const KEYS_SIZE = [
+  'flex-1 max-md:grow-[999]',
+  'max-md:max-h-[calc(3.25rem_+_min(var(--key-length,14rem),45dvh))]',
+  'roomy:flex-[0_0_calc(3.25rem_+_min(var(--key-length,14rem),45dvh))]',
+].join(' ')
+
+/**
  * The sound's editor (its parts as tiles, the output waveform in the
  * amp's, the picked one's knobs under them), the keys or pads filling the
- * rest, and a status line under it. The buttons at the left of the
- * keyboard's header open the presets, and the choice of keys or pads, over
- * the controls: what is played on stays there to try them on. The third
- * puts the controls away, for a screen too short to play on under them.
- * The settings (this device's: voices, latency, what the screen shows, and
- * what the browser offers) open from the status line's right end, in the
- * same place.
+ * rest (on a tablet or a Fold open, the editor takes what the keys do not
+ * need: KEYS_SIZE), and a status line under it. The buttons at the left
+ * of the keyboard's header open the presets, and the choice of keys or
+ * pads, over the controls: what is played on stays there to try them on.
+ * The third puts the controls away, for a screen too short to play on
+ * under them. The settings (this device's: voices, latency, what the
+ * screen shows, and what the browser offers) open from the status line's
+ * right end, in the same place.
  *
  * A reload comes back to the same view: each sheet has an address
  * (pages.ts), the sound and the device's choices are kept, and the editor
@@ -147,14 +167,17 @@ export function App({
       {/* Shrinks when the page is short (the graph pans), so the keys and
           the status line stay on screen; a sheet open over it has room */}
       <div
-        className={`relative flex flex-col ${covered ? 'min-h-[min(22rem,50dvh)]' : 'min-h-0'}`}
+        className={`relative flex flex-col ${covered ? 'min-h-[min(22rem,50dvh)]' : 'min-h-0'} ${controls ? EDITOR_SIZE : ''}`}
       >
-        <div inert={covered} className="flex min-h-0 flex-col">
+        <div
+          inert={covered}
+          className="flex min-h-0 flex-col max-md:flex-1 roomy:flex-1"
+        >
           {/* Hidden, not unmounted: the editor keeps the tile picked */}
           <div
             id="controls"
             hidden={!controls}
-            className="flex min-h-0 flex-col"
+            className="flex min-h-0 flex-col max-md:flex-1 roomy:flex-1"
           >
             <SoundEditor
               engine={engine}
@@ -179,6 +202,7 @@ export function App({
       </div>
       <PlaySurface
         engine={engine}
+        className={controls ? KEYS_SIZE : 'flex-1'}
         settings={surface}
         fullVelocity={settings.velocity === 'full'}
         menus={

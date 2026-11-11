@@ -272,7 +272,10 @@ describe('graphGeometry', () => {
     // The amp after A's two items and its "+", 44 wide
     expect(a?.add).toEqual({ x: 245, y: 6, w: 44, h: 94 })
     expect(b?.add).toEqual({ x: 182, y: 106, w: 107, h: 94 })
-    expect(geometry.amp).toEqual({ x: 292, y: 6, w: 52, h: 194 })
+    // Two slots tall at most, in the rows' middle: the bus takes A and B
+    // to it from their middles
+    expect(geometry.amp).toEqual({ x: 292, y: 56, w: 52, h: 94 })
+    expect(geometry.bus).toEqual({ x: 290.5, y: 53, h: 100 })
     expect(a?.joints).toEqual([117.5, 180.5, 290.5])
     expect(b?.joints).toEqual([117.5, 290.5])
     // Each peg on the seam, beside its input in that chain's row
@@ -307,14 +310,31 @@ describe('graphGeometry', () => {
     expect(geometry.height).toBe(256 + 44 + 8)
   })
 
+  it('stands the amp in the middle of many rows, a bus taking them to it', () => {
+    const four = built(['i1'], [['i1'], ['i1'], ['i1'], ['i1']], [1, 1, 1, 1])
+    // Four rows 194 tall: the amp two slots, the bus from A's middle to D's
+    const rest = graphGeometry(four, LIMITS)
+    expect(rest.amp).toMatchObject({ y: 56, h: 94 })
+    expect(rest.bus).toMatchObject({ y: 28, h: 150 })
+    // A wider amp stands taller, three fifths of its width
+    const wide = graphGeometry(four, LIMITS, 1000)
+    expect(wide.amp.w).toBe(GRAPH.ampFill * GRAPH.stretch)
+    expect(wide.amp).toMatchObject({ y: 45, h: 115 })
+    // Two rows of one slot: the amp as tall as they are, no bus
+    const two = built(['i1'], [['i1'], ['i1']], [1, 1])
+    expect(graphGeometry(two, LIMITS).amp).toMatchObject({ y: 6, h: 94 })
+    expect(graphGeometry(two, LIMITS).bus).toBeUndefined()
+  })
+
   it('draws an amp one slot tall when there are no chains', () => {
     const geometry = graphGeometry(built([], [], []), LIMITS)
     expect(geometry.chains).toEqual([])
     expect(geometry.amp).toEqual({ x: 166, y: 6, w: 52, h: 44 })
+    expect(geometry.bus).toBeUndefined()
     expect(geometry.addChain).toEqual({ x: 80, y: 6, w: 83, h: 30 })
   })
 
-  it('shares a wider frame among the tiles, the amp holding the rest', () => {
+  it('shares a wider frame among the tiles, up to twice their width', () => {
     const one = built(['i1'], [['i1']], [1])
     // At rest, one item and its "+": the amp at 119 + 63 + 47, 96 wide
     const rest = graphGeometry(one, LIMITS, 333)
@@ -334,10 +354,40 @@ describe('graphGeometry', () => {
     expect(wide.amp).toMatchObject({ x: 347, w: 165 })
     expect(wide.width).toBe(520)
     expect(wide.pegs[0]?.x).toBe((8 + 115 + 127) / 2)
-    // At most twice as wide; past that the amp takes the rest
+    // At most twice as wide, the amp too; past that the frame's rest is
+    // left empty
     const huge = graphGeometry(one, LIMITS, 1000)
     expect(huge.inputs[0]?.box.w).toBe(GRAPH.inputW * GRAPH.stretch)
     expect(huge.chains[0]?.items[0]?.box.w).toBe(GRAPH.itemW * GRAPH.stretch)
-    expect(huge.amp).toMatchObject({ x: 401, w: 1000 - 401 - 8 })
+    expect(huge.amp).toMatchObject({ x: 401, w: GRAPH.ampFill * GRAPH.stretch })
+    expect(huge.width).toBe(401 + 192 + 8)
+  })
+
+  it('grows the slots in a taller frame, up to twice their height', () => {
+    const one = built(['i1'], [['i1']], [1])
+    const rest = graphGeometry(one, LIMITS, 333)
+    expect(rest.rest).toBe(rest.height)
+    // A frame no taller than the graph keeps every slot 44 tall
+    expect(graphGeometry(one, LIMITS, 333, rest.height)).toEqual(rest)
+    // 30 more: the one slot takes them all, its peg in its middle
+    const taller = graphGeometry(one, LIMITS, 333, rest.height + 30)
+    expect(taller.inputs[0]?.box.h).toBe(74)
+    expect(taller.chains[0]?.items[0]?.box.h).toBe(74)
+    expect(taller.amp.h).toBe(74)
+    expect(taller.pegs[0]?.y).toBe(GRAPH.top + 37)
+    expect(taller.height).toBe(rest.height + 30)
+    expect(taller.rest).toBe(rest.height)
+    // Two rows share 30 more, 15 each, and the gap between them stays
+    const two = built(['i1'], [['i1'], ['i1']], [1, 1])
+    const both = graphGeometry(two, LIMITS, 333)
+    const shared = graphGeometry(two, LIMITS, 333, both.height + 30)
+    expect(shared.chains.map((chain) => chain.row)).toMatchObject([
+      { y: GRAPH.top, h: 59 },
+      { y: GRAPH.top + 59 + GRAPH.slotGap, h: 59 },
+    ])
+    // At most twice as tall, the frame's rest left empty
+    const huge = graphGeometry(one, LIMITS, 333, 1000)
+    expect(huge.inputs[0]?.box.h).toBe(GRAPH.slot * GRAPH.stretch)
+    expect(huge.height).toBe(rest.height + GRAPH.slot)
   })
 })

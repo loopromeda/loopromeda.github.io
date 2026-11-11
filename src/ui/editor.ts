@@ -7,6 +7,7 @@ import {
   FILTER_TYPE_NAMES,
   INPUT_KINDS,
   ITEM_KINDS,
+  VOICE_SPEC,
   WAVE_NAMES,
 } from '../state/sound/kinds'
 import {
@@ -170,12 +171,18 @@ function shortHz(hz: number): string {
 
 const percent = (level: number) => `${Math.round(level * 100)}%`
 
+/** The voice's modes, as its Mode knob names them */
+const VOICE_MODES =
+  VOICE_SPEC.knobs.find((knob) => knob.key === 'mode')?.choices ?? []
+
 /**
  * A tile's second line, from its knobs: an oscillator's wave, a filter's
- * type and cutoff, a drive's amount, a chain's level, the amp's Out
+ * type and cutoff, a drive's amount, a chain's level, the amp's Out,
+ * the voice's mode
  */
 export function tileLine(sound: Sound, id: string): string {
   if (id === AMP) return 'Out'
+  if (id === VOICE) return VOICE_MODES[Math.round(sound.voice.mode ?? 0)] ?? ''
   const found = findPart(sound, id)
   switch (found?.type) {
     case 'input': {

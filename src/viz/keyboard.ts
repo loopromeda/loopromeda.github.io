@@ -56,6 +56,41 @@ export function whiteCount(octaves: number): number {
   return 7 * octaves + 1
 }
 
+/** Fewer octaves when a white key would be narrower than this (CSS px) */
+export const MIN_WHITE = 40
+/** More octaves when a white key would be wider than this (CSS px) */
+export const MAX_WHITE = 60
+/** Octaves where they fit, with no more unless the keys are wide */
+const OCTAVES = 3
+/** C1 to C8, the notes the keys reach */
+const RANGE = 7
+/** How long a white key is for its width, where the page lets it choose */
+export const KEY_LENGTH = 5.5
+
+/** What keys a box holds: how many octaves, and how long they would be */
+export interface KeysFit {
+  readonly octaves: number
+  /** KEY_LENGTH times a white key's width (CSS px) */
+  readonly length: number
+}
+
+/**
+ * The keys for a box width wide: as many octaves as fit at MIN_WHITE a
+ * white key (one on an upright phone), three at most, unless a white key
+ * would then be wider than MAX_WHITE (a desktop's window): then as few
+ * more as bring it under that, up to RANGE
+ */
+export function keysFit(width: number): KeysFit {
+  const fit = Math.floor((width / MIN_WHITE - 1) / 7)
+  const narrow = Math.ceil((width / MAX_WHITE - 1) / 7)
+  const octaves = Math.min(
+    Math.max(Math.min(fit, Math.max(OCTAVES, narrow)), 1),
+    RANGE
+  )
+  const white = width / whiteCount(octaves)
+  return { octaves, length: Math.round(white * KEY_LENGTH) }
+}
+
 /**
  * Every key from C in octave start, octaves octaves up, to the C above:
  * white keys first, then black (the order to draw them in)

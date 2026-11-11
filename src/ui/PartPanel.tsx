@@ -63,7 +63,6 @@ import {
 } from './editor'
 import { Knob, NEUTRAL_ARC } from './Knob'
 import { knoblessDests, routesTo } from '../state/sound/knob'
-import { Picture } from './Picture'
 
 /** One kind a "+" offers: its pictogram, name and what it does */
 interface Choice {
@@ -116,11 +115,6 @@ interface View {
   readonly knobs: readonly { part: string; key: string; hot?: string }[]
   /** The knobs' arc: a chain's colour on its own parts, else neutral */
   readonly color: string
-  /**
-   * A picture of the part beside its name, in this colour: for a part whose
-   * tile has no room for its own (a modulator's, in the rack)
-   */
-  readonly outline?: string
   readonly refs?: ReactNode
   /** An input's chains, each a toggle: which ones it feeds */
   readonly feeds?: readonly Feed[]
@@ -234,14 +228,6 @@ export function PartPanel({
           {view.kind}
         </span>
         <span className="ml-auto flex shrink-0 items-center gap-1.5">
-          {view.outline && (
-            <Picture
-              engine={engine}
-              part={picked}
-              color={view.outline}
-              className="h-6 w-24 shrink"
-            />
-          )}
           {view.refs}
           {view.actions && (
             <button
@@ -661,7 +647,6 @@ function viewOf(
           })),
         },
         color: NEUTRAL_ARC,
-        outline: MOD_COLOR,
         actions: [
           { label: '◂ Earlier', run: move(-1) },
           { label: 'Later ▸', run: move(1) },

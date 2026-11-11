@@ -2,11 +2,15 @@ import { describe, expect, it } from 'vitest'
 import {
   BLACK_LENGTH,
   BLACK_WIDTH,
+  KEY_LENGTH,
+  MAX_WHITE,
   MIN_VELOCITY,
+  MIN_WHITE,
   cNote,
   isBlack,
   keyAt,
   keyboardLayout,
+  keysFit,
   noteName,
   pitchName,
   slideFrom,
@@ -71,6 +75,33 @@ describe('keyboardLayout', () => {
       12
     )
     expect(cSharp?.width).toBeCloseTo(BLACK_WIDTH * width, 12)
+  })
+})
+
+describe('keysFit', () => {
+  // Widths of the keys' box: a page less its 16 px sides
+  it('holds as many octaves as fit at a finger, three at most', () => {
+    expect(keysFit(358).octaves).toBe(1) // an upright phone
+    expect(keysFit(15 * MIN_WHITE).octaves).toBe(2)
+    expect(keysFit(898).octaves).toBe(3) // a Fold open
+    expect(keysFit(1148).octaves).toBe(3) // a tablet on its side
+  })
+
+  it('adds octaves where a white key would be wider than a hand wants', () => {
+    // A desktop window: 3 octaves would make 78 px white keys
+    expect(keysFit(1722)).toEqual({
+      octaves: 4,
+      length: Math.round((1722 / 29) * KEY_LENGTH),
+    })
+    expect(1722 / 29).toBeLessThanOrEqual(MAX_WHITE)
+    expect(keysFit(1888).octaves).toBe(5)
+    // No more than C1 to C8
+    expect(keysFit(10000).octaves).toBe(7)
+  })
+
+  it('asks for keys KEY_LENGTH times as long as a white key is wide', () => {
+    expect(keysFit(898).length).toBe(Math.round((898 / 22) * KEY_LENGTH))
+    expect(keysFit(0)).toEqual({ octaves: 1, length: 0 })
   })
 })
 

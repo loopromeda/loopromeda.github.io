@@ -173,17 +173,26 @@ export function SoundEditor({
   }
 
   // Under the graph, the panel stands at one height whatever is picked,
-  // so the keys below it stay put: 10.5rem holds the tallest panel most
-  // parts make (a header, a row of chains or routes, a row of knobs), and
-  // more scrolls in it. Short of room, the graph gives way first, down to
-  // a row of tiles; the panel shrinks only past that (its room: all but
-  // the graph's least and the gap). Beside the graph, the panel takes the
-  // graph's height and never makes the row taller: it scrolls instead.
+  // so the keys below it stay put: 7.5rem and a knob (--knob, KNOB_SIZE)
+  // hold the tallest panel most parts make (a header, a row of chains or
+  // routes, a row of knobs), and more scrolls in it. The knob is 48 px, or
+  // on a wider screen held upright (a Fold open) up to 72 px with the
+  // width, the keys giving up the height. Short of room, the graph gives
+  // way first, down to a row of tiles; the panel shrinks only past that
+  // (its room: all but the graph's least and the gap). Beside the graph,
+  // the panel takes the graph's height and never makes the row taller: it
+  // scrolls instead, its knobs at 48 px. It is 22rem wide, and on a wider
+  // screen a little over a third of the row, up to 40rem. On a roomy
+  // screen both fill the height the page gives the editor (App.tsx), the
+  // tiles at the top of theirs, and the graph pans only past it. On a wide
+  // one (index.css) the panel stands under the graph again, the whole
+  // width, its knobs 72 px in a row over the keys (knobRow), and the graph
+  // takes the rest of the height.
   return (
-    <div className="flex min-h-0 flex-col gap-3 md:grid md:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] md:grid-rows-[minmax(0,1fr)]">
+    <div className="flex min-h-0 flex-col gap-3 md:grid md:grid-cols-[minmax(0,1fr)_clamp(22rem,36%,40rem)] md:grid-rows-[minmax(0,1fr)] max-md:flex-1 roomy:flex-1 wide:flex">
       <section
         aria-label="The sound, flowing left to right"
-        className={`flex min-h-28 min-w-0 flex-col overflow-hidden ${CARD}`}
+        className={`flex min-h-[8.75rem] min-w-0 flex-col overflow-hidden max-md:flex-1 wide:flex-1 ${CARD}`}
       >
         <Rack {...picking} source={from} />
         <Graph
@@ -192,7 +201,7 @@ export function SoundEditor({
           scope={scope}
         />
       </section>
-      <div className="grid h-[10.5rem] max-h-[calc(100%-7.75rem)] min-h-0 shrink-0 overflow-y-auto overscroll-contain rounded-xl md:h-0 md:max-h-none md:min-h-full">
+      <div className="grid h-[calc(7.5rem_+_var(--knob))] max-h-[calc(100%-9.5rem)] min-h-0 shrink-0 overflow-y-auto overscroll-contain rounded-xl [--knob:clamp(3rem,calc((100vw_-_4.5rem)/8.5),4.5rem)] md:h-0 md:max-h-none md:min-h-full md:[--knob:3rem] wide:h-[calc(7.5rem_+_var(--knob))] wide:min-h-0 wide:[--knob:4.5rem]">
         {into ? (
           <RoutesInto
             engine={engine}
@@ -225,10 +234,13 @@ export function SoundEditor({
 }
 
 /**
- * The modulators in a row, a "+" while there is room, the voice last. The
- * row scrolls sideways, which clips at its padding: there is room in it
- * for a tile's rings (a reach ring stands 3.5 px out). The source being
- * routed from is outlined in sky. A modulator dragged moves along it.
+ * The voice first, a block over the inputs, whose pitch it sets: where a
+ * note comes in, its mode under its name. Then the modulators in a row,
+ * each a block drawing its shape, and a "+" while there is room. The row
+ * scrolls sideways under the voice, which clips at its padding: there is
+ * room in it for a tile's rings (a reach ring stands 3.5 px out). The
+ * source being routed from is outlined in sky. A modulator dragged moves
+ * along it.
  */
 function Rack({
   engine,
@@ -275,7 +287,21 @@ function Rack({
     lift: (id) => pick(id),
   })
   return (
-    <div className="mx-2 mt-2 mb-1 flex h-10 shrink-0 items-center gap-1.5 rounded-lg bg-white/[0.03] pr-1.5 pl-0.5">
+    <div className="mx-2 mt-2 mb-1 flex h-[4.25rem] shrink-0 items-center gap-1.5 rounded-lg bg-white/[0.03] pr-0.5 pl-1.5">
+      <Tile
+        engine={engine}
+        label="Voice"
+        line={VOICE}
+        look={VOICE_LOOK}
+        picked={picked === VOICE}
+        routed={routed.has(VOICE)}
+        reach={reach.has(VOICE)}
+        aria="Voice"
+        onClick={() => pick(VOICE)}
+        className="size-14 shrink-0"
+        small
+      />
+      <span aria-hidden className="h-10 w-px shrink-0 bg-white/10" />
       <div
         ref={scrollerRef}
         aria-label="Modulators"
@@ -288,7 +314,6 @@ function Rack({
               engine={engine}
               drag={drag(modulator.id)}
               label={tileLabel(sound, modulator.id)}
-              glyph={glyphOf(sound, modulator.id)}
               look={MOD_LOOK}
               picked={picked === modulator.id}
               member={source === modulator.id}
@@ -296,7 +321,10 @@ function Rack({
               routed={routed.has(modulator.id)}
               aria={partName(sound, modulator.id)}
               onClick={() => pick(modulator.id)}
-              className="h-[26px] w-16 shrink-0 gap-1.5 px-1.5"
+              // A block, its shape under its name, as its knobs turn
+              picture={modulator.id}
+              stacked
+              className="size-14 shrink-0"
               small
             />
           ))}
@@ -309,26 +337,13 @@ function Rack({
               dashed="add"
               aria="Add a modulator"
               onClick={() => pick(addId('modulator'))}
-              className="h-[26px] w-[26px] shrink-0"
+              className="h-14 w-7 shrink-0"
               small
             />
           )}
           <Marker ref={markerRef} />
         </div>
       </div>
-      <span aria-hidden className="h-[22px] w-px shrink-0 bg-white/10" />
-      <Tile
-        engine={engine}
-        label="Voice"
-        look={VOICE_LOOK}
-        picked={picked === VOICE}
-        routed={routed.has(VOICE)}
-        reach={reach.has(VOICE)}
-        aria="Voice"
-        onClick={() => pick(VOICE)}
-        className="h-[26px] w-[54px] shrink-0"
-        small
-      />
     </div>
   )
 }
@@ -350,18 +365,26 @@ function Graph({
   scope,
 }: Picking & { focus: string | undefined; scope: AmpScope | undefined }) {
   const frameRef = useRef<HTMLDivElement>(null)
-  /** The frame's width, measured: 0 until it is */
-  const [frame, setFrame] = useState(0)
+  /** The frame's size, measured: 0 until it is */
+  const [frame, setFrame] = useState({ w: 0, h: 0 })
   useLayoutEffect(() => {
     const element = frameRef.current
     if (!element) return
     const observer = new ResizeObserver((entries) => {
-      setFrame(Math.floor(entries[0]?.contentRect.width ?? 0))
+      const box = entries[0]?.contentRect
+      const w = Math.floor(box?.width ?? 0)
+      const h = Math.floor(box?.height ?? 0)
+      setFrame((was) => (was.w === w && was.h === h ? was : { w, h }))
     })
     observer.observe(element)
     return () => observer.disconnect()
   }, [])
-  const geometry = graphGeometry(sound, LIMITS, frame || undefined)
+  const geometry = graphGeometry(
+    sound,
+    LIMITS,
+    frame.w || undefined,
+    frame.h || undefined
+  )
   const showScope = scope !== undefined && geometry.amp.w >= GRAPH.ampFill
   const routed = modulated(sound)
   /** The chain each item stands in, for its look and its neighbours */
@@ -409,7 +432,11 @@ function Graph({
   return (
     <div
       ref={frameRef}
-      className="relative max-h-[min(22rem,45dvh)] min-h-0 overflow-auto overscroll-contain md:max-h-[22rem]"
+      // Its height at rest is what it asks of the card, the slots grown or
+      // not (held upright, at most 45% of the screen): a card given more
+      // (the editor filling the page) grows it, and the slots fill it
+      style={{ '--rest': `${geometry.rest}px` } as CSSProperties}
+      className="relative min-h-0 grow basis-(--rest) overflow-auto overscroll-contain max-md:basis-[min(var(--rest),22rem,45dvh)] md:max-h-[22rem] roomy:max-h-none"
     >
       <div
         ref={contentRef}
@@ -461,6 +488,19 @@ function Graph({
           )
         })}
 
+        {geometry.bus && (
+          // Down the seam before the amp, under the chains' level pegs
+          <span
+            aria-hidden
+            className="pointer-events-none absolute z-[2] w-0.5 rounded-full"
+            style={{
+              left: geometry.bus.x - 1,
+              top: geometry.bus.y,
+              height: geometry.bus.h,
+              background: NEUTRAL_LOOK.ring,
+            }}
+          />
+        )}
         {geometry.chains.map((row, c) => {
           const chain = sound.chains[c]
           if (!chain) return null
@@ -830,6 +870,7 @@ function Tile({
   small = false,
   aside,
   picture,
+  stacked = false,
 }: {
   engine: Engine
   drag?: DragProps
@@ -860,15 +901,17 @@ function Tile({
   aside?: ReactNode
   /** The part whose picture fills the tile: a filter's response, a drive's */
   picture?: string
+  /** Its picture under its label however tall it is: a modulator's block */
+  stacked?: boolean
 }) {
   const height = typeof style?.height === 'number' ? style.height : 26
   const tall = !dashed && !small && height >= 60
-  const under = picture !== undefined && tall
+  const under = picture !== undefined && (tall || stacked)
   // A picture stands in for the pictogram
   const pictogram = picture === undefined ? glyph : undefined
   // A short tile stacks a line under its label only without a pictogram
   const column =
-    tall || mark !== undefined || (line !== undefined && !pictogram)
+    under || tall || mark !== undefined || (line !== undefined && !pictogram)
 
   let shadow = `inset 0 0 0 1.5px ${look.ring}`
   if (picked) shadow = `inset 0 0 0 2px ${look.ink}, 0 0 0 3px ${look.tint}`
@@ -993,7 +1036,9 @@ function Tile({
         aside
           ? 'justify-start gap-2 py-[3px] pr-[3px] pl-2'
           : under
-            ? 'flex-col justify-start gap-1 px-[3px] pt-2.5 pb-[3px]'
+            ? tall
+              ? 'flex-col justify-start gap-1 px-[3px] pt-2.5 pb-[3px]'
+              : 'flex-col justify-start gap-[3px] px-[3px] pt-1.5 pb-[3px]'
             : `justify-center ${column ? 'flex-col gap-1 px-1' : 'gap-[7px] px-1.5'}`
       } ${picked ? 'z-[2]' : 'z-[1]'} ${className}`}
     >

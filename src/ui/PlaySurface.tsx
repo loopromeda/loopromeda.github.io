@@ -5,6 +5,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type ReactNode,
 } from 'react'
 import type { Engine } from '../engine/engine'
@@ -14,7 +15,7 @@ import {
   type SurfaceKind,
   type SurfaceSettings,
 } from '../state/surface'
-import { cNote, noteName, pitchName } from '../viz/keyboard'
+import { cNote, keysFit, noteName, pitchName } from '../viz/keyboard'
 import { padGrid, padNote, type PadGrid } from '../viz/pads'
 import { COMPUTER_ID, Hands } from './hands'
 import { IconButton } from './IconButton'
@@ -29,9 +30,6 @@ const TOP = 8
  * more of them) an octave lower. Each keeps its own octave.
  */
 const STARTS: Readonly<Record<SurfaceKind, number>> = { keys: 4, pads: 3 }
-/** Fewer octaves of keys when a white key would be narrower (CSS px) */
-const MIN_WHITE = 40
-const MAX_OCTAVES = 3
 
 /**
  * Computer keys (KeyboardEvent.code) for the keys: each plays as many
@@ -95,18 +93,24 @@ const typing = (target: EventTarget | null): boolean =>
 /** What the surface's box has room for */
 interface Fit {
   octaves: number
+  /** How tall the keys would be, keysFit's length */
+  length: number
   grid: PadGrid
 }
 
 const sameFit = (a: Fit, b: Fit) =>
   a.octaves === b.octaves &&
+  a.length === b.length &&
   a.grid.columns === b.grid.columns &&
   a.grid.rows === b.grid.rows
 
 /**
- * Where notes are played, on piano keys or on pads (settings.kind), filling
- * the rest of the screen. Keys: as many octaves as fit at a finger's width
- * (one on a phone held upright). Pads: as many as fit at a fingertip's
+ * Where notes are played, on piano keys or on pads (settings.kind), sized
+ * by className in the page's column: App gives it the rest, or, on a roomy
+ * screen, the keys' own length, which the section holds as --key-length
+ * (the pads stand as tall). Keys: as many octaves as fit at a finger's
+ * width (one on a phone held upright, more on a wide window: keysFit).
+ * Pads: as many as fit at a fingertip's
  * size, playing the notes of settings' key. Both shift an octave at a time.
  * Touches go straight to the engine; React renders only the keys or pads,
  * again when the octave, the key or the size changes. The header row holds
@@ -119,16 +123,20 @@ export function PlaySurface({
   settings,
   menus,
   fullVelocity = false,
+  className = 'flex-1',
 }: {
   engine: Engine
   settings: SurfaceSettings
   menus?: ReactNode
   fullVelocity?: boolean
+  /** Its height in the page's column */
+  className?: string
 }) {
   const [hands] = useState(() => new Hands(engine))
   const [starts, setStarts] = useState(STARTS)
   const [fit, setFit] = useState<Fit>({
     octaves: 1,
+    length: 0,
     grid: { columns: 4, rows: 4 },
   })
   const surfaceRef = useRef<HTMLDivElement>(null)
@@ -162,11 +170,7 @@ export function PlaySurface({
     const observer = new ResizeObserver(([entry]) => {
       const width = entry?.contentRect.width ?? 0
       const height = entry?.contentRect.height ?? 0
-      const octaves = Math.floor((width / MIN_WHITE - 1) / 7)
-      const next = {
-        octaves: Math.min(Math.max(octaves, 1), MAX_OCTAVES),
-        grid: padGrid(width, height),
-      }
+      const next = { ...keysFit(width), grid: padGrid(width, height) }
       setFit((was) => (sameFit(was, next) ? was : next))
     })
     observer.observe(surface)
@@ -217,7 +221,15 @@ export function PlaySurface({
   // Its header and the surface's least height are its minimum: on a short
   // screen the controls above give way (their graph pans), not the keys
   return (
-    <section aria-label="Play surface" className="flex flex-1 flex-col gap-2">
+    <section
+      aria-label="Play surface"
+      className={`flex flex-col gap-2 ${className}`}
+      style={
+        fit.length > 0
+          ? ({ '--key-length': `${fit.length}px` } as CSSProperties)
+          : undefined
+      }
+    >
       {/* A narrow header keeps the patch's name and drops the range */}
       <div className="@container flex h-11 shrink-0 items-center gap-3">
         <div className="flex min-w-0 items-center gap-2">{menus}</div>

@@ -218,10 +218,19 @@ export interface GraphGeometry {
   /** The content, which pans when wider or taller than its frame */
   readonly width: number
   readonly height: number
+  /** Its height at rest (slots GRAPH.slot tall): what it asks of a frame */
+  readonly rest: number
   readonly inputs: readonly InputBox[]
   readonly chains: readonly ChainBoxes[]
-  /** The amp, at the end of every row */
+  /** The amp, at the end of every row: in their middle, past its cap */
   readonly amp: Box
+  /**
+   * When the amp stands shorter than the rows, the bus down the seam
+   * before it, from the first row's middle to the last's: every chain's
+   * level peg stands on it
+   */
+  readonly bus:
+    { readonly x: number; readonly y: number; readonly h: number } | undefined
   /** Each send's peg, on the seam between the inputs and the chains */
   readonly pegs: readonly (SendPeg & {
     readonly x: number
@@ -242,9 +251,17 @@ export interface GraphGeometry {
  *
  * Unframed, the amp is 52 wide. A frame wider than the graph needs is
  * shared: the inputs, the items, the "+" and the amp widen together (a
- * head keeps its 36), up to stretch times their width, and past that the
- * amp takes the rest. A frame too narrow keeps the amp at ampFill, room
- * for the waveform it holds, and pans.
+ * head keeps its 36), up to stretch times their width, and stay so past
+ * that: the rest of the frame is left for chains to grow into, every
+ * block in proportion. A frame too narrow keeps the amp at ampFill, room
+ * for the waveform it holds, and pans. A frame taller than the graph
+ * needs is shared the same way: every slot grows (the gaps, the "+" row
+ * and the margins keep theirs), up to stretch times its height, and
+ * past that the frame's rest is left empty too.
+ *
+ * The amp stands as tall as the rows, up to two slots or ampTall times
+ * its width, whichever is more: past that it stands in their middle, and
+ * a bus down the seam takes every row to it.
  */
 export const GRAPH = {
   top: 6,
@@ -260,6 +277,7 @@ export const GRAPH = {
   ampW: 52,
   ampFill: 96,
   stretch: 2,
+  ampTall: 0.6,
   addRow: 30,
   end: 8,
 } as const
@@ -318,25 +336,69 @@ function stretchFor(
   return Math.min(GRAPH.stretch, s)
 }
 
+/** The graph's height with slots slot tall, as graphGeometry draws it */
+function heightAt(
+  sound: GeometrySound,
+  limits: GraphLimits,
+  layout: GraphLayout,
+  slot: number
+): number {
+  const g = GRAPH
+  const pitch = slot + g.slotGap
+  const last = layout.rows[layout.rows.length - 1]
+  const rowsEnd = last
+    ? g.top + last.first * pitch + last.slots * pitch - g.slotGap
+    : g.top + slot
+  const addY = g.top + layout.slots * pitch
+  const adds =
+    sound.inputs.length < limits.inputs || sound.chains.length < limits.chains
+  const bottom = adds ? addY + g.addRow : Math.max(rowsEnd, addY - g.slotGap)
+  return bottom + g.end
+}
+
+/**
+ * How tall a slot is in a frame room tall: GRAPH.slot when it is no
+ * taller than the graph needs, up to GRAPH.stretch times that. The
+ * graph's height grows in step with the slot, so it is read off the
+ * heights at 1 and 2.
+ */
+function slotFor(
+  sound: GeometrySound,
+  limits: GraphLimits,
+  layout: GraphLayout,
+  room: number
+): number {
+  const g = GRAPH
+  const at1 = heightAt(sound, limits, layout, g.slot)
+  const at2 = heightAt(sound, limits, layout, g.slot * 2)
+  if (room <= at1 || at2 <= at1) return g.slot
+  // Whole pixels, the frame's rest left over
+  const grown = g.slot + Math.floor(((room - at1) * g.slot) / (at2 - at1))
+  return Math.min(grown, g.slot * g.stretch)
+}
+
 /**
  * Where everything in the sound's graph is drawn. Given the width of its
  * frame, the tiles share it (see GRAPH): the amp fills what they leave, at
- * least GRAPH.ampFill wide; unframed, the amp is GRAPH.ampW.
+ * least GRAPH.ampFill wide and at most GRAPH.stretch times that, the
+ * frame's rest left empty; unframed, the amp is GRAPH.ampW. Given its
+ * height too (room), the slots share that.
  */
 export function graphGeometry(
   sound: GeometrySound,
   limits: GraphLimits,
-  fill?: number
+  fill?: number,
+  room?: number
 ): GraphGeometry {
   const g = GRAPH
   const layout = graphLayout(sound)
-  const pitch = g.slot + g.slotGap
-  const slotY = (slot: number) => g.top + slot * pitch
+  const slot =
+    room === undefined ? g.slot : slotFor(sound, limits, layout, room)
+  const pitch = slot + g.slotGap
+  const slotY = (n: number) => g.top + n * pitch
   const tall = (slots: number) => slots * pitch - g.slotGap
-  const w = widths(
-    fill === undefined ? 1 : stretchFor(sound, limits, fill),
-    Math.floor
-  )
+  const stretch = fill === undefined ? 1 : stretchFor(sound, limits, fill)
+  const w = widths(stretch, Math.floor)
   const itemPitch = w.item + g.seam
   const { headX, itemsX, ampX } = columns(sound, limits, w)
 
@@ -369,7 +431,7 @@ export function graphGeometry(
   const lastRow = layout.rows[layout.rows.length - 1]
   const rowsEnd = lastRow
     ? slotY(lastRow.first) + tall(lastRow.slots)
-    : g.top + g.slot
+    : g.top + slot
   const inputs = layout.tiles.map((tile) => ({
     ...tile,
     box: {
@@ -382,7 +444,7 @@ export function graphGeometry(
   const pegs = layout.pegs.map((peg) => ({
     ...peg,
     x: (g.inputX + w.input + headX) / 2,
-    y: slotY(peg.slot) + g.slot / 2,
+    y: slotY(peg.slot) + slot / 2,
   }))
 
   const addY = slotY(layout.slots)
@@ -399,14 +461,40 @@ export function graphGeometry(
       ? addY + g.addRow
       : Math.max(rowsEnd, slotY(layout.slots) - g.slotGap)
 
+  // Short of the most stretch, the amp takes what rounding leaves; at it,
+  // the widths are whole and the graph stops short of the frame
   const ampW =
-    fill === undefined ? g.ampW : Math.max(w.amp, fill - ampX - g.end)
+    fill === undefined
+      ? g.ampW
+      : stretch < g.stretch
+        ? Math.max(w.amp, fill - ampX - g.end)
+        : w.amp
+  const span = rowsEnd - g.top
+  const ampH = Math.min(
+    span,
+    Math.max(2 * slot + g.slotGap, Math.round(ampW * g.ampTall))
+  )
+  const middle = (row: ChainBoxes) => row.row.y + row.row.h / 2
+  const firstRow = chains[0]
+  const endRow = chains[chains.length - 1]
+  const busTop = firstRow ? middle(firstRow) : 0
+  const busEnd = endRow ? middle(endRow) : 0
   return {
     width: ampX + ampW + g.end,
     height: bottom + g.end,
+    rest: heightAt(sound, limits, layout, g.slot),
     inputs,
     chains,
-    amp: { x: ampX, y: g.top, w: ampW, h: rowsEnd - g.top },
+    amp: {
+      x: ampX,
+      y: g.top + Math.floor((span - ampH) / 2),
+      w: ampW,
+      h: ampH,
+    },
+    bus:
+      ampH < span && busEnd > busTop
+        ? { x: ampX - g.seam / 2, y: busTop, h: busEnd - busTop }
+        : undefined,
     pegs,
     addInput,
     addChain,
