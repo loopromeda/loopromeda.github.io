@@ -2,15 +2,11 @@ import { describe, expect, it } from 'vitest'
 import { ChainSynth, POLY } from '../dsp/chainSynth'
 import { applySound } from '../worklet/sound'
 import { FACTORY_PRESETS } from './factory'
-import { modSlotIds } from './params'
+import { defaultValues } from './params'
+import { PRESET_CATEGORIES, cleanName, type Preset } from './presets'
+import { readSound } from './sound/read'
+import { VOICE } from './sound/sound'
 import { soundFromV1 } from './sound/v1'
-import {
-  PRESET_CATEGORIES,
-  cleanName,
-  fullValues,
-  sparseValues,
-  type Preset,
-} from './presets'
 
 const SAMPLE_RATE = 48000
 const BLOCK = 128
@@ -18,7 +14,7 @@ const BLOCK = 128
 /** The preset's synth, playing the sound loading the preset sends it */
 function loaded(preset: Preset): ChainSynth {
   const synth = new ChainSynth(SAMPLE_RATE)
-  applySound(synth, soundFromV1(fullValues(preset.values)))
+  applySound(synth, preset.sound)
   return synth
 }
 
@@ -63,11 +59,11 @@ const named = (name: string): Preset => {
 }
 
 describe('FACTORY_PRESETS', () => {
-  it('starts with Init, the defaults', () => {
+  it('starts with Init, the old defaults', () => {
     expect(FACTORY_PRESETS[0]).toEqual({
       name: 'Init',
       category: 'Basic',
-      values: {},
+      sound: soundFromV1(defaultValues()),
     })
   })
 
@@ -88,10 +84,11 @@ describe('FACTORY_PRESETS', () => {
     }
   })
 
-  it('keeps only in-range values that differ from the defaults', () => {
+  it('keeps sounds that read back unchanged from a file', () => {
     for (const preset of FACTORY_PRESETS) {
-      expect(sparseValues(fullValues(preset.values)), preset.name).toEqual(
-        preset.values
+      const { sound } = preset
+      expect(readSound(JSON.parse(JSON.stringify(sound))), preset.name).toEqual(
+        sound
       )
     }
   })
@@ -99,7 +96,10 @@ describe('FACTORY_PRESETS', () => {
   it('writes a route amount in its destination units', () => {
     // 36 semitones on Pitch, which spans 48 at full amount
     const kick = named('Kick')
-    expect(kick.values[modSlotIds(2).amount]).toBe(0.75)
+    const drop = kick.sound.routes.find(
+      (route) => route.target === VOICE && route.key === 'pitch'
+    )
+    expect(drop?.amount).toBe(0.75)
   })
 
   it.each(FACTORY_PRESETS.map((preset) => [preset.name, preset] as const))(
@@ -123,7 +123,7 @@ describe('FACTORY_PRESETS', () => {
 
   it('plays monophonic presets on one voice', () => {
     const mono = FACTORY_PRESETS.filter(
-      (preset) => (preset.values['voice.mode'] ?? POLY) !== POLY
+      (preset) => (preset.sound.voice.mode ?? POLY) !== POLY
     )
     expect(mono.length).toBeGreaterThan(0)
     for (const preset of mono) {

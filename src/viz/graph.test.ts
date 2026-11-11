@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { graphLayout, type GraphLayout, type GraphSound } from './graph'
+import {
+  graphGeometry,
+  graphLayout,
+  type GeometrySound,
+  type GraphLayout,
+  type GraphSound,
+} from './graph'
 
 /** A sound from input ids and, per chain, the inputs it takes */
 function sound(inputs: string[], chains: string[][]): GraphSound {
@@ -216,5 +222,94 @@ describe('graphLayout', () => {
         expect(on?.chains).toContain(peg.chain)
       }
     }
+  })
+})
+
+describe('graphGeometry', () => {
+  const LIMITS = { inputs: 6, chains: 4, items: 6 }
+
+  /** sound() with each chain holding the given number of items */
+  function built(
+    inputs: string[],
+    chains: string[][],
+    items: number[]
+  ): GeometrySound {
+    const base = sound(inputs, chains)
+    return {
+      ...base,
+      chains: base.chains.map((chain, c) => ({
+        ...chain,
+        items: Array.from({ length: items[c] ?? 0 }, (_, k) => ({
+          id: `x${c + 1}${k + 1}`,
+        })),
+      })),
+    }
+  }
+
+  it('places the mockup where the design canvas drew it', () => {
+    // IN 1 into A, IN 2 into A and B, IN 3 into B; A holds two items
+    const geometry = graphGeometry(
+      built(
+        ['i1', 'i2', 'i3'],
+        [
+          ['i1', 'i2'],
+          ['i2', 'i3'],
+        ],
+        [2, 1]
+      ),
+      LIMITS
+    )
+    expect(geometry.inputs.map((tile) => [tile.input, tile.box])).toEqual([
+      ['i1', { x: 8, y: 6, w: 68, h: 39 }],
+      ['i2', { x: 8, y: 52, w: 68, h: 85 }],
+      ['i3', { x: 8, y: 144, w: 68, h: 39 }],
+    ])
+    const [a, b] = geometry.chains
+    expect(a?.head).toEqual({ x: 80, y: 6, w: 36, h: 85 })
+    expect(b?.head).toEqual({ x: 80, y: 98, w: 36, h: 85 })
+    expect(a?.items.map(({ box }) => box.x)).toEqual([119, 182])
+    // The amp after A's two items and its "+", 44 wide
+    expect(a?.add).toEqual({ x: 245, y: 6, w: 44, h: 85 })
+    expect(b?.add).toEqual({ x: 182, y: 98, w: 107, h: 85 })
+    expect(geometry.amp).toEqual({ x: 292, y: 6, w: 52, h: 177 })
+    expect(a?.joints).toEqual([117.5, 180.5, 290.5])
+    expect(b?.joints).toEqual([117.5, 290.5])
+    // Each peg on the seam, beside its input in that chain's row
+    expect(geometry.pegs.map((peg) => [peg.input, peg.chain, peg.y])).toEqual([
+      ['i1', 'c1', 25.5],
+      ['i2', 'c1', 71.5],
+      ['i2', 'c2', 117.5],
+      ['i3', 'c2', 163.5],
+    ])
+    expect(geometry.pegs.every((peg) => peg.x === 78)).toBe(true)
+    expect(geometry.addInput).toEqual({ x: 8, y: 190, w: 68, h: 30 })
+    expect(geometry.addChain).toEqual({ x: 80, y: 190, w: 209, h: 30 })
+    expect([geometry.width, geometry.height]).toEqual([352, 228])
+  })
+
+  it('leaves out the "+" tiles at the limits', () => {
+    const inputs = ['i1', 'i2', 'i3', 'i4', 'i5', 'i6']
+    const geometry = graphGeometry(
+      built(inputs, [['i1'], ['i2'], ['i3'], ['i4']], [6, 0, 0, 0]),
+      LIMITS
+    )
+    expect(geometry.addInput).toBeUndefined()
+    expect(geometry.addChain).toBeUndefined()
+    expect(geometry.chains[0]?.add).toBeUndefined()
+    // A full chain reaches as far as its six items
+    expect(geometry.amp.x).toBe(119 + 6 * 63)
+    expect(geometry.chains[1]?.add?.w).toBe(6 * 63 - 3)
+    // i5 and i6 feed nothing: their tiles stand after the rows
+    expect(geometry.inputs.slice(-2).map((tile) => tile.box.y)).toEqual([
+      190, 236,
+    ])
+    expect(geometry.height).toBe(236 + 39 + 8)
+  })
+
+  it('draws an amp one slot tall when there are no chains', () => {
+    const geometry = graphGeometry(built([], [], []), LIMITS)
+    expect(geometry.chains).toEqual([])
+    expect(geometry.amp).toEqual({ x: 166, y: 6, w: 52, h: 39 })
+    expect(geometry.addChain).toEqual({ x: 80, y: 6, w: 83, h: 30 })
   })
 })

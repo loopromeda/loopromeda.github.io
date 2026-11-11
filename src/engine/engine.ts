@@ -1,13 +1,5 @@
-import {
-  PARAMS,
-  clampValue,
-  defaultValues,
-  paramIndex,
-  type ParamId,
-} from '../state/params'
 import { knobChanges } from '../state/sound/diff'
-import type { Sound } from '../state/sound/sound'
-import { soundFromV1 } from '../state/sound/v1'
+import { initSound, type Sound } from '../state/sound/sound'
 import processorUrl from '../worklet/processor.ts?worker&url'
 import {
   PROCESSOR_NAME,
@@ -57,10 +49,10 @@ export const WAVEFORM_SIZE = 2048
  * all of the DSP (src/worklet). The main thread only sends it intents.
  * Subscribe-and-snapshot, for useSyncExternalStore.
  *
- * It also holds the main thread's copy of every parameter value, so knobs
- * can be set before the audio starts and a new worklet gets them all. The
- * audio thread hears them as a sound (src/state/sound/v1.ts): the whole
- * of it when its structure changes, else only the knobs that moved.
+ * It also holds the sound (src/state/sound), the one copy the editor and
+ * the presets change, so it can be set before the audio starts and a new
+ * worklet gets all of it. The audio thread hears each change as the knobs
+ * that moved, or the whole sound when its structure changed.
  */
 export class Engine {
   #context: AudioContext | undefined
@@ -68,12 +60,12 @@ export class Engine {
   /** Taps the output for displays; passes the signal through unchanged */
   #analyser: AnalyserNode | undefined
   #snapshot: EngineSnapshot = { state: 'idle' }
-  /** Every parameter's value, in PARAMS order */
-  readonly #values = defaultValues()
+  /** The sound, as the main thread has it */
+  #sound: Sound = initSound()
   /** The sound the worklet plays, as last sent; none before it exists */
   #sent: Sound | undefined
   readonly #listeners = new Set<() => void>()
-  readonly #paramListeners = new Set<(id: ParamId, value: number) => void>()
+  readonly #soundListeners = new Set<() => void>()
   /** Who waits for the measurement under way, answered in order */
   readonly #benchWaiting: ((report: BenchReport | undefined) => void)[] = []
   /** The context's latencyHint: the next context's, once one is running */
@@ -194,7 +186,7 @@ export class Engine {
   /**
    * Sets the latencyHint. A context keeps its hint for life, so audio that
    * has started starts again on a new context: call this from a click, as
-   * start(). The notes playing stop; every parameter carries over.
+   * start(). The notes playing stop; the sound carries over.
    */
   setLatency(latency: AudioContextLatencyCategory): void {
     if (latency === this.#latency) return
@@ -227,64 +219,35 @@ export class Engine {
     })
   }
 
-  /** A parameter's current value, in its own units */
-  getParam(id: ParamId): number {
-    return this.#values[paramIndex(id)] ?? 0
-  }
+  /** The sound playing: a document never changed in place */
+  readonly getSound = (): Sound => this.#sound
 
   /**
-   * Sets a parameter, clamped to its range and snapped to its steps, and
-   * sends it to the audio thread if that changed it
+   * Plays sound instead: built by the edits (src/state/sound/edit.ts) or
+   * read from storage (read.ts), never one changed in place. The audio
+   * thread gets what changed in one message, so it all applies before the
+   * next block; listeners hear of it after.
    */
-  setParam(id: ParamId, value: number): void {
-    const index = paramIndex(id)
-    const spec = PARAMS[index]
-    if (!spec) return
-    const next = clampValue(spec, value)
-    if (next === this.#values[index]) return
-    this.#values[index] = next
+  setSound(sound: Sound): void {
+    if (sound === this.#sound) return
+    this.#sound = sound
     this.#sync()
-    for (const listener of this.#paramListeners) listener(id, next)
+    for (const listener of this.#soundListeners) listener()
   }
 
-  /** Every parameter's value, in PARAMS order: a copy */
-  values(): Float64Array {
-    return this.#values.slice()
-  }
-
-  /**
-   * Sets every parameter at once (a preset loading), from values in PARAMS
-   * order, each clamped and snapped. The audio thread gets them in one
-   * message, so they all apply before the next block; listeners hear about
-   * each one that changed.
-   */
-  setValues(values: ArrayLike<number>): void {
-    const changed: number[] = []
-    PARAMS.forEach((spec, index) => {
-      const next = clampValue(spec, values[index] ?? Number.NaN)
-      if (next === this.#values[index]) return
-      this.#values[index] = next
-      changed.push(index)
-    })
-    if (changed.length === 0) return
-    this.#sync()
-    for (const index of changed) {
-      const spec = PARAMS[index] as (typeof PARAMS)[number]
-      const value = this.#values[index] ?? 0
-      for (const listener of this.#paramListeners) listener(spec.id, value)
-    }
+  /** Plays what edit makes of the sound: setSound(edit(getSound())) */
+  edit(edit: (sound: Sound) => Sound): void {
+    this.setSound(edit(this.#sound))
   }
 
   /**
-   * Calls listener after each parameter change, for displays that redraw
-   * outside React (an envelope's outline under its knobs). Returns the
-   * unsubscribe function.
+   * Calls listener after each change to the sound, a knob's or the whole
+   * of it: for useSyncExternalStore, and for displays that redraw outside
+   * React (a knob turned by a preset). Returns the unsubscribe function.
    */
-  onParam(listener: (id: ParamId, value: number) => void): () => void {
-    this.#paramListeners.add(listener)
-    return () => {
-      this.#paramListeners.delete(listener)
-    }
+  readonly subscribeSound = (listener: () => void): (() => void) => {
+    this.#soundListeners.add(listener)
+    return () => this.#soundListeners.delete(listener)
   }
 
   /**
@@ -325,14 +288,14 @@ export class Engine {
   }
 
   /**
-   * Brings the worklet's sound up to the parameters: the knobs that moved
-   * since the sound last sent, in one message, or the whole sound if its
-   * structure changed (a part heard or let go, a route added). Nothing
-   * before the worklet exists; start() catches it up.
+   * Brings the worklet's sound up to date: the knobs that moved since the
+   * sound last sent, in one message, or the whole sound if its structure
+   * changed (a part added or removed, a route connected). Nothing before
+   * the worklet exists; start() catches it up.
    */
   #sync(): void {
     if (!this.#node) return
-    const sound = soundFromV1(this.#values)
+    const sound = this.#sound
     const changes = this.#sent ? knobChanges(this.#sent, sound) : null
     if (changes === null) this.#post({ t: 'sound', sound })
     else if (changes.length > 0) this.#post({ t: 'knobs', changes })

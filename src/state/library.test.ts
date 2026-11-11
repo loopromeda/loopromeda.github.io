@@ -3,55 +3,51 @@ import {
   Library,
   SESSION_KEY,
   USER_KEY,
-  type ParamHost,
   type PresetStorage,
+  type SoundHost,
 } from './library'
-import {
-  PARAMS,
-  clampValue,
-  defaultValues,
-  paramIndex,
-  type ParamId,
-} from './params'
-import { fullValues, presetFile, type Preset } from './presets'
+import { presetFile, type Preset } from './presets'
+import { setValue } from './sound/edit'
+import { knobValue, setKnob } from './sound/knob'
+import { readSound } from './sound/read'
+import { AMP, initSound, type Sound } from './sound/sound'
 
-/** The engine's part, as the engine does it: clamped, and told of changes */
-class FakeHost implements ParamHost {
-  readonly current = defaultValues()
-  readonly #listeners = new Set<(id: ParamId, value: number) => void>()
-  /** How many times every parameter was set at once */
+/** The engine's part, as the engine does it: told of each change */
+class FakeHost implements SoundHost {
+  current: Sound = initSound()
+  readonly #listeners = new Set<() => void>()
+  /** How many times a whole sound was set */
   loads = 0
 
-  values(): Float64Array {
-    return this.current.slice()
+  getSound(): Sound {
+    return this.current
   }
 
-  setValues(values: ArrayLike<number>): void {
+  setSound(sound: Sound): void {
     this.loads++
-    PARAMS.forEach((spec, index) => {
-      const next = clampValue(spec, values[index] ?? Number.NaN)
-      if (next === this.current[index]) return
-      this.current[index] = next
-      for (const listener of this.#listeners) listener(spec.id, next)
-    })
+    if (sound === this.current) return
+    this.current = sound
+    for (const listener of this.#listeners) listener()
   }
 
   /** A knob turned */
-  set(id: ParamId, value: number): void {
-    const index = paramIndex(id)
-    this.current[index] = value
-    for (const listener of this.#listeners) listener(id, value)
+  set(part: string, key: string, value: number): void {
+    this.current = setKnob(this.current, part, key, value)
+    for (const listener of this.#listeners) listener()
   }
 
-  get(id: ParamId): number {
-    return this.current[paramIndex(id)] ?? Number.NaN
+  get(part: string, key: string): number {
+    return knobValue(this.current, part, key)
   }
 
-  onParam(listener: (id: ParamId, value: number) => void): () => void {
+  subscribeSound(listener: () => void): () => void {
     this.#listeners.add(listener)
     return () => this.#listeners.delete(listener)
   }
 }
+
+/** A sound as JSON would bring it back */
+const json = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T
 
 /** localStorage in a Map; a write throws `fail` while it is set */
 class FakeStorage implements PresetStorage {
@@ -74,10 +70,23 @@ class FakeStorage implements PresetStorage {
 }
 
 const FACTORY: readonly Preset[] = [
-  { name: 'Init', category: 'Basic', values: {} },
-  { name: 'Bass', category: 'Bass', values: { 'filter.cutoff': 400 } },
-  { name: 'Lead', category: 'Lead', values: { 'osc1.wave': 2 } },
+  { name: 'Init', category: 'Basic', sound: initSound() },
+  {
+    name: 'Bass',
+    category: 'Bass',
+    sound: setValue(initSound(), 'x1', 'cutoff', 400),
+  },
+  {
+    name: 'Lead',
+    category: 'Lead',
+    sound: setValue(initSound(), 'i1', 'wave', 3),
+  },
 ]
+
+/** The sound the session in storage keeps, read back */
+function sessionSound(storage: FakeStorage): Sound {
+  return readSound((storage.json(SESSION_KEY) as { sound?: unknown }).sound)
+}
 
 /**
  * A library on storage (null: a browser without any), restored, as a
@@ -107,16 +116,16 @@ describe('Library', () => {
     })
     expect(library.snapshot.edited).toBe(false)
     expect(library.snapshot.user).toEqual([])
-    expect(host.values()).toEqual(defaultValues())
+    expect(host.getSound()).toEqual(initSound())
   })
 
-  it('loads a preset with every parameter set at once', () => {
+  it("loads a preset's sound, all of it at once", () => {
     const { host, library } = open()
-    host.set('osc2.level', 0.5)
+    host.set('x1', 'resonance', 0.5)
     const loads = host.loads
     library.load({ source: 'factory', name: 'Bass' })
     expect(host.loads).toBe(loads + 1)
-    expect(host.values()).toEqual(fullValues(FACTORY[1]?.values ?? {}))
+    expect(host.getSound()).toBe(FACTORY[1]?.sound)
     expect(library.snapshot.current?.name).toBe('Bass')
     expect(library.snapshot.edited).toBe(false)
   })
@@ -132,9 +141,9 @@ describe('Library', () => {
   it('marks the sound edited until it matches the preset again', () => {
     const { host, library } = open()
     library.load({ source: 'factory', name: 'Bass' })
-    host.set('filter.cutoff', 600)
+    host.set('x1', 'cutoff', 600)
     expect(library.snapshot.edited).toBe(true)
-    host.set('filter.cutoff', 400)
+    host.set('x1', 'cutoff', 400)
     expect(library.snapshot.edited).toBe(false)
   })
 
@@ -142,10 +151,10 @@ describe('Library', () => {
     const { host, library } = open()
     const listener = vi.fn()
     const unsubscribe = library.subscribe(listener)
-    host.set('filter.cutoff', 600)
+    host.set('x1', 'cutoff', 600)
     expect(listener).toHaveBeenCalledTimes(1)
     // Still edited: nothing new to tell
-    host.set('filter.cutoff', 700)
+    host.set('x1', 'cutoff', 700)
     expect(listener).toHaveBeenCalledTimes(1)
     unsubscribe()
     library.load({ source: 'factory', name: 'Lead' })
@@ -156,22 +165,25 @@ describe('Library', () => {
     const storage = new FakeStorage()
     const first = open(storage)
     first.library.load({ source: 'factory', name: 'Bass' })
-    first.host.set('filter.resonance', 0.6)
+    first.host.set('x1', 'resonance', 0.6)
     // Written a moment after the last change, not on every one
     vi.advanceTimersByTime(399)
-    expect(storage.json(SESSION_KEY)).toMatchObject({
-      values: { 'filter.cutoff': 400 },
+    expect(storage.json(SESSION_KEY)).toEqual({
+      version: 2,
+      sound: json(FACTORY[1]?.sound),
+      current: { source: 'factory', name: 'Bass' },
     })
     vi.advanceTimersByTime(1)
     expect(storage.json(SESSION_KEY)).toEqual({
-      version: 1,
-      values: { 'filter.cutoff': 400, 'filter.resonance': 0.6 },
+      version: 2,
+      sound: json(first.host.getSound()),
       current: { source: 'factory', name: 'Bass' },
     })
 
     const again = open(storage)
-    expect(again.host.get('filter.cutoff')).toBe(400)
-    expect(again.host.get('filter.resonance')).toBe(0.6)
+    expect(again.host.getSound()).toEqual(first.host.getSound())
+    expect(again.host.get('x1', 'cutoff')).toBe(400)
+    expect(again.host.get('x1', 'resonance')).toBe(0.6)
     expect(again.library.snapshot.current?.name).toBe('Bass')
     expect(again.library.snapshot.edited).toBe(true)
   })
@@ -179,32 +191,32 @@ describe('Library', () => {
   it('writes a pending session at once when flushed', () => {
     const storage = new FakeStorage()
     const { host, library } = open(storage)
-    host.set('osc1.semi', 5)
+    host.set('i1', 'semi', 5)
     library.flush()
-    expect(storage.json(SESSION_KEY)).toMatchObject({
-      values: { 'osc1.semi': 5 },
-    })
+    expect(knobValue(sessionSound(storage), 'i1', 'semi')).toBe(5)
   })
 
   it('saves the sound as a preset of its own that survives a reload', () => {
     const storage = new FakeStorage()
     const { host, library } = open(storage)
-    host.set('osc1.semi', 7)
+    host.set('i1', 'semi', 7)
     const ref = library.saveAs('  My   Fifth ', 'Lead')
     expect(ref).toEqual({ source: 'user', name: 'My Fifth' })
     expect(library.snapshot.current).toEqual(ref)
     expect(library.snapshot.edited).toBe(false)
     expect(storage.json(USER_KEY)).toEqual(
-      presetFile([
-        { name: 'My Fifth', category: 'Lead', values: { 'osc1.semi': 7 } },
-      ])
+      json(
+        presetFile([
+          { name: 'My Fifth', category: 'Lead', sound: host.getSound() },
+        ])
+      )
     )
 
     const again = open(storage)
     expect(again.library.snapshot.user).toEqual(library.snapshot.user)
     expect(again.library.snapshot.current).toEqual(ref)
     expect(again.library.snapshot.edited).toBe(false)
-    expect(again.host.get('osc1.semi')).toBe(7)
+    expect(again.host.get('i1', 'semi')).toBe(7)
   })
 
   it('numbers a name the user has already taken', () => {
@@ -220,11 +232,11 @@ describe('Library', () => {
     const { host, library } = open()
     expect(library.save()).toBe(false)
     library.saveAs('Mine', 'Basic')
-    host.set('amp.release', 1.5)
+    host.set(AMP, 'release', 1.5)
     expect(library.snapshot.edited).toBe(true)
     expect(library.save()).toBe(true)
     expect(library.snapshot.edited).toBe(false)
-    expect(library.snapshot.user[0]?.values).toEqual({ 'amp.release': 1.5 })
+    expect(library.snapshot.user[0]?.sound).toBe(host.getSound())
   })
 
   it('renames a preset and follows it as the current one', () => {
@@ -254,16 +266,16 @@ describe('Library', () => {
 
   it('deletes a preset and keeps playing its sound, unsaved', () => {
     const { host, library } = open()
-    host.set('osc1.semi', 3)
+    host.set('i1', 'semi', 3)
     library.saveAs('Brief', 'Basic')
     library.remove('Brief')
     expect(library.snapshot.user).toEqual([])
     expect(library.snapshot.current).toBeUndefined()
     expect(library.snapshot.edited).toBe(true)
-    expect(host.get('osc1.semi')).toBe(3)
+    expect(host.get('i1', 'semi')).toBe(3)
   })
 
-  it('restores a session whose preset was deleted without a current', () => {
+  it('restores a version 1 session, its preset deleted, without one', () => {
     const storage = new FakeStorage()
     storage.setItem(
       SESSION_KEY,
@@ -274,7 +286,8 @@ describe('Library', () => {
       })
     )
     const { host, library } = open(storage)
-    expect(host.get('osc1.semi')).toBe(2)
+    // The old parameters, played as the sound they convert to
+    expect(host.get('i1', 'semi')).toBe(2)
     expect(library.snapshot.current).toBeUndefined()
     expect(library.snapshot.edited).toBe(true)
   })
@@ -286,7 +299,7 @@ describe('Library', () => {
     const { host, library } = open(storage)
     expect(library.snapshot.user).toEqual([])
     expect(library.snapshot.current?.name).toBe('Init')
-    expect(host.values()).toEqual(defaultValues())
+    expect(host.getSound()).toEqual(initSound())
   })
 
   it('exports the user presets and imports them with fresh names', () => {
@@ -329,15 +342,11 @@ describe('Library', () => {
   it('stops following the engine when disposed', () => {
     const storage = new FakeStorage()
     const { host, library } = open(storage)
-    host.set('osc1.semi', 4)
+    host.set('i1', 'semi', 4)
     library.dispose()
-    expect(storage.json(SESSION_KEY)).toMatchObject({
-      values: { 'osc1.semi': 4 },
-    })
-    host.set('osc1.semi', 9)
+    expect(knobValue(sessionSound(storage), 'i1', 'semi')).toBe(4)
+    host.set('i1', 'semi', 9)
     vi.advanceTimersByTime(1000)
-    expect(storage.json(SESSION_KEY)).toMatchObject({
-      values: { 'osc1.semi': 4 },
-    })
+    expect(knobValue(sessionSound(storage), 'i1', 'semi')).toBe(4)
   })
 })

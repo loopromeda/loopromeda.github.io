@@ -188,6 +188,35 @@ export function initSound(): Sound {
   }
 }
 
+/**
+ * True when a and b are the same sound: the same parts, knobs and routes,
+ * whatever order their objects' keys were written in
+ */
+export function sameSound(a: Sound, b: Sound): boolean {
+  return same(a, b)
+}
+
+/** Deep equality of plain data: arrays in order, objects by key */
+function same(a: unknown, b: unknown): boolean {
+  if (a === b) return true
+  if (typeof a !== 'object' || typeof b !== 'object' || !a || !b) return false
+  if (Array.isArray(a) || Array.isArray(b)) {
+    return (
+      Array.isArray(a) &&
+      Array.isArray(b) &&
+      a.length === b.length &&
+      a.every((entry, i) => same(entry, b[i]))
+    )
+  }
+  const x = a as Record<string, unknown>
+  const y = b as Record<string, unknown>
+  const keys = Object.keys(x)
+  return (
+    keys.length === Object.keys(y).length &&
+    keys.every((key) => Object.hasOwn(y, key) && same(x[key], y[key]))
+  )
+}
+
 /** The one reference that may name its own input: feedback FM */
 export const SELF_REF = 'fmSource'
 

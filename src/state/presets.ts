@@ -1,9 +1,14 @@
 /**
- * The preset format: naming, sparse parameter values and the shape of a
- * saved file. Pure TypeScript: no DOM, no storage, no I/O.
+ * The preset format: naming, the sound a preset keeps and the shape of a
+ * saved file, which holds sounds (src/state/sound) from version 2 and the
+ * old parameters before it, read as sounds (src/state/sound/v1.ts). Pure
+ * TypeScript: no DOM, no storage, no I/O.
  */
 
 import { PARAMS, clampValue, type ParamId } from './params'
+import { readSound } from './sound/read'
+import type { Sound } from './sound/sound'
+import { soundFromV1 } from './sound/v1'
 
 /** Preset categories, in the order a browser lists them */
 export const PRESET_CATEGORIES = [
@@ -23,21 +28,27 @@ export type PresetCategory = (typeof PRESET_CATEGORIES)[number]
 /** Longest preset name, in characters, after cleanName */
 export const MAX_NAME_LENGTH = 32
 
-/** A preset's values: only parameters that differ from their default */
+/**
+ * The old parameters' values, as version 1 kept a preset: only those that
+ * differ from their default
+ */
 export type PresetValues = Readonly<Partial<Record<ParamId, number>>>
 
-/** One saved patch: a cleaned name, a category and its non-default values */
+/** One saved sound: a cleaned name, a category and the sound */
 export interface Preset {
   readonly name: string
   readonly category: PresetCategory
-  readonly values: PresetValues
+  readonly sound: Sound
 }
 
 /** The format tag a preset file carries */
 export const PRESET_FILE_FORMAT = 'loopromeda-presets'
 
-/** The version readPresetFile writes, and reads up to */
-export const PRESET_FILE_VERSION = 1
+/**
+ * The version presetFile writes, and readPresetFile reads up to: 2 keeps
+ * each preset's sound, 1 kept the old parameters' values
+ */
+export const PRESET_FILE_VERSION = 2
 
 /** A whole saved file: the header and the presets, in the order to list */
 export interface PresetFile {
@@ -81,18 +92,6 @@ export function sparseValues(values: ArrayLike<number>): PresetValues {
   return out
 }
 
-/** Whether two PARAMS-ordered arrays hold exactly the same entries */
-export function sameValues(
-  a: ArrayLike<number>,
-  b: ArrayLike<number>
-): boolean {
-  if (a.length !== PARAMS.length || b.length !== PARAMS.length) return false
-  for (let i = 0; i < PARAMS.length; i++) {
-    if (a[i] !== b[i]) return false
-  }
-  return true
-}
-
 /** Trim, collapse inner whitespace runs, cut to MAX_NAME_LENGTH, trim */
 export function cleanName(name: string): string {
   const collapsed = name.trim().replace(/\s+/g, ' ')
@@ -124,7 +123,10 @@ function trimNumber(name: string): string {
   return base === '' ? name : base
 }
 
-/** The file object to save: the header plus copies of the given presets */
+/**
+ * The file object to save: the header plus each preset's name, category
+ * and sound (never changed in place, so shared, not copied)
+ */
 export function presetFile(presets: readonly Preset[]): PresetFile {
   return {
     format: PRESET_FILE_FORMAT,
@@ -132,7 +134,7 @@ export function presetFile(presets: readonly Preset[]): PresetFile {
     presets: presets.map((preset) => ({
       name: preset.name,
       category: preset.category,
-      values: { ...preset.values },
+      sound: preset.sound,
     })),
   }
 }
@@ -140,6 +142,8 @@ export function presetFile(presets: readonly Preset[]): PresetFile {
 /**
  * Read parsed JSON as a preset file. Throws PresetFileError when the file
  * itself is not one; unreadable entries are skipped and counted instead.
+ * An entry's sound is read as untrusted (src/state/sound/read.ts); one
+ * with none, as version 1 wrote it, has its values converted.
  */
 export function readPresetFile(data: unknown): {
   presets: Preset[]
@@ -178,7 +182,9 @@ export function readPresetFile(data: unknown): {
     presets.push({
       name,
       category: readCategory(entry.category),
-      values: readValues(entry.values),
+      sound: isPlainObject(entry.sound)
+        ? readSound(entry.sound)
+        : soundFromV1(fullValues(readValues(entry.values))),
     })
   }
   return { presets, skipped }

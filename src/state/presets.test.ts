@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { PARAMS, defaultValues, paramIndex } from './params'
+import { defaultValues, paramIndex } from './params'
+import { setValue } from './sound/edit'
+import { knobValue } from './sound/knob'
+import { initSound } from './sound/sound'
+import { soundFromV1 } from './sound/v1'
 import {
   MAX_NAME_LENGTH,
   PRESET_CATEGORIES,
@@ -10,7 +14,6 @@ import {
   fullValues,
   presetFile,
   readPresetFile,
-  sameValues,
   sparseValues,
   uniqueName,
   type Preset,
@@ -18,13 +21,12 @@ import {
 } from './presets'
 
 /** A whole file object to hand to readPresetFile */
-function file(presets: readonly unknown[]): unknown {
-  return {
-    format: PRESET_FILE_FORMAT,
-    version: PRESET_FILE_VERSION,
-    presets,
-  }
+function file(presets: readonly unknown[], version = PRESET_FILE_VERSION) {
+  return { format: PRESET_FILE_FORMAT, version, presets }
 }
+
+/** The sound the old parameters' values convert to */
+const fromV1 = (values: PresetValues) => soundFromV1(fullValues(values))
 
 describe('PRESET_CATEGORIES', () => {
   it('lists eight unique categories', () => {
@@ -80,25 +82,6 @@ describe('sparseValues', () => {
   })
 })
 
-describe('sameValues', () => {
-  it('is true for two identical PARAMS-ordered arrays', () => {
-    expect(sameValues(defaultValues(), defaultValues())).toBe(true)
-  })
-
-  it('is false when one entry differs', () => {
-    const other = defaultValues()
-    other[paramIndex('osc1.fine')] = 1
-    expect(sameValues(defaultValues(), other)).toBe(false)
-  })
-
-  it('is false when an array has the wrong length', () => {
-    const short = new Float64Array(PARAMS.length - 1)
-    const long = new Float64Array(PARAMS.length + 1)
-    expect(sameValues(defaultValues(), short)).toBe(false)
-    expect(sameValues(long, defaultValues())).toBe(false)
-  })
-})
-
 describe('cleanName', () => {
   it('trims and collapses inner runs of whitespace', () => {
     expect(cleanName('  Fat   Bass ')).toBe('Fat Bass')
@@ -145,18 +128,18 @@ describe('uniqueName', () => {
 })
 
 describe('presetFile', () => {
-  it('writes the header and copies only name, category and values', () => {
+  it('writes the header and only name, category and sound', () => {
     const source = [
-      { name: 'A', category: 'FX', values: {}, extra: 'x' },
+      { name: 'A', category: 'FX', sound: initSound(), extra: 'x' },
     ] as unknown as Preset[]
     const data = presetFile(source)
     expect(Object.keys(data)).toEqual(['format', 'version', 'presets'])
     expect(data.format).toBe(PRESET_FILE_FORMAT)
-    expect(data.version).toBe(PRESET_FILE_VERSION)
+    expect(data.version).toBe(2)
     expect(Object.keys(data.presets[0] ?? {})).toEqual([
       'name',
       'category',
-      'values',
+      'sound',
     ])
     expect(source[0] && 'extra' in source[0]).toBe(true)
   })
@@ -165,17 +148,42 @@ describe('presetFile', () => {
 describe('readPresetFile', () => {
   it('round trips through presetFile and JSON', () => {
     const presets: Preset[] = [
-      { name: 'Init', category: 'Basic', values: {} },
+      { name: 'Init', category: 'Basic', sound: initSound() },
       {
         name: 'Fat Bass',
         category: 'Bass',
-        values: { 'osc1.wave': 2, 'filter.cutoff': 800 },
+        sound: setValue(initSound(), 'x1', 'cutoff', 800),
       },
     ]
     const json = JSON.stringify(presetFile(presets))
     const read = readPresetFile(JSON.parse(json))
     expect(read.presets).toEqual(presets)
     expect(read.skipped).toBe(0)
+  })
+
+  it("reads a version 1 file's values as the sound they convert to", () => {
+    const read = readPresetFile(
+      file([{ name: 'Old', category: 'Lead', values: { 'osc1.semi': 7 } }], 1)
+    )
+    const sound = read.presets[0]?.sound ?? initSound()
+    expect(sound).toEqual(fromV1({ 'osc1.semi': 7 }))
+    expect(knobValue(sound, 'i1', 'semi')).toBe(7)
+  })
+
+  it("reads a sound as untrusted: what is not one's goes", () => {
+    const read = readPresetFile(
+      file([
+        {
+          name: 'Odd',
+          category: 'FX',
+          sound: { ...initSound(), inputs: 'nope', extra: 1 },
+        },
+      ])
+    )
+    const sound = read.presets[0]?.sound ?? initSound()
+    expect(sound.inputs).toEqual([])
+    expect(sound.chains[0]?.sends).toEqual({})
+    expect(Object.keys(sound)).not.toContain('extra')
   })
 
   it('throws PresetFileError for a file that is not one', () => {
@@ -185,7 +193,7 @@ describe('readPresetFile', () => {
       'presets',
       {},
       { format: 'something-else', version: 1, presets: [] },
-      { format: PRESET_FILE_FORMAT, version: 2, presets: [] },
+      { format: PRESET_FILE_FORMAT, version: 3, presets: [] },
       { format: PRESET_FILE_FORMAT, version: 0, presets: [] },
       { format: PRESET_FILE_FORMAT, version: 1.5, presets: [] },
       { format: PRESET_FILE_FORMAT, version: 1, presets: 'nope' },
@@ -194,7 +202,7 @@ describe('readPresetFile', () => {
       expect(() => readPresetFile(data)).toThrow(PresetFileError)
     }
     expect(() =>
-      readPresetFile({ format: PRESET_FILE_FORMAT, version: 2, presets: [] })
+      readPresetFile({ format: PRESET_FILE_FORMAT, version: 3, presets: [] })
     ).toThrow(/newer version/)
   })
 
@@ -214,38 +222,37 @@ describe('readPresetFile', () => {
     )
     expect(read.skipped).toBe(4)
     expect(read.presets).toEqual([
-      { name: 'OK', category: 'Basic', values: {} },
+      { name: 'OK', category: 'Basic', sound: fromV1({}) },
     ])
   })
 
-  it('reads categories and values conservatively', () => {
+  it("reads categories and a version 1 file's values conservatively", () => {
     const read = readPresetFile(
-      file([
-        {
-          name: ' Weird  Name ',
-          category: 'Spaceship',
-          values: {
-            'osc1.wave': 99,
-            nope: 1,
-            'osc1.fine': 'loud',
-            'osc1.semi': NaN,
-            'amp.sustain': 0.7,
-            'filter.cutoff': 800,
+      file(
+        [
+          {
+            name: ' Weird  Name ',
+            category: 'Spaceship',
+            values: {
+              'osc1.wave': 99,
+              nope: 1,
+              'osc1.fine': 'loud',
+              'osc1.semi': NaN,
+              'amp.sustain': 0.7,
+              'filter.cutoff': 800,
+            },
           },
-        },
-        { name: 'Plain', category: 'FX', values: 42 },
-      ])
+          { name: 'Plain', category: 'FX', values: 42 },
+        ],
+        1
+      )
     )
     expect(read.skipped).toBe(0)
     expect(read.presets[0]).toEqual({
       name: 'Weird Name',
       category: 'Basic',
-      values: { 'osc1.wave': 3, 'filter.cutoff': 800 },
+      sound: fromV1({ 'osc1.wave': 3, 'filter.cutoff': 800 }),
     })
-    expect(Object.keys(read.presets[0]?.values ?? {})).toEqual([
-      'osc1.wave',
-      'filter.cutoff',
-    ])
-    expect(read.presets[1]?.values).toEqual({})
+    expect(read.presets[1]?.sound).toEqual(fromV1({}))
   })
 })

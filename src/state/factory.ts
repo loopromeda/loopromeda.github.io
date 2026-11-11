@@ -8,10 +8,11 @@ import {
 } from './params'
 import {
   fullValues,
-  sparseValues,
   type Preset,
   type PresetCategory,
+  type PresetValues,
 } from './presets'
+import { soundFromV1 } from './sound/v1'
 
 /** A value as a preset is written here: a number, or a choice ('Saw') */
 type Written = number | string
@@ -34,10 +35,13 @@ interface Route {
 type Slot = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8
 
 /**
- * A factory preset from what differs from the defaults. A choice is
- * written by its name and a route by its slot, in its destination's
- * units; a slot not routed keeps its default routing at no amount. An
- * unknown id or choice throws, so a typo fails the tests, not a phone.
+ * A factory preset, written as the old parameters that differ from their
+ * defaults and played as the sound they convert to (src/state/sound/v1.ts),
+ * until the factory set is rebuilt as sounds (docs/plan/sound-chains.md,
+ * step 5). A choice is written by its name and a route by its slot, in
+ * its destination's units; a slot not routed keeps its default routing at
+ * no amount. An unknown id or choice throws, so a typo fails the tests,
+ * not a phone.
  */
 function preset(
   name: string,
@@ -45,6 +49,16 @@ function preset(
   written: Partial<Record<ParamId, Written>>,
   routes: Partial<Record<Slot, Route>> = {}
 ): Preset {
+  const values = v1Values(name, written, routes)
+  return { name, category, sound: soundFromV1(fullValues(values)) }
+}
+
+/** What preset() writes, as the old parameters' values */
+function v1Values(
+  name: string,
+  written: Partial<Record<ParamId, Written>>,
+  routes: Partial<Record<Slot, Route>>
+): PresetValues {
   const values: Partial<Record<ParamId, number>> = {}
   for (const [id, value] of Object.entries(written) as [ParamId, Written][]) {
     values[id] = typeof value === 'number' ? value : choice(id, value)
@@ -61,7 +75,7 @@ function preset(
   for (const id of Object.keys(values)) {
     if (paramIndex(id) < 0) throw new RangeError(`${name}: no parameter ${id}`)
   }
-  return { name, category, values: sparseValues(fullValues(values)) }
+  return values
 }
 
 /** The index of a choice by its name ('Saw' on a wave) */

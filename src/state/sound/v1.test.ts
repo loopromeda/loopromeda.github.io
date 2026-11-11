@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { defaultValues, modSlotIds, paramIndex, type ParamId } from '../params'
 import { FACTORY_PRESETS } from '../factory'
-import { fullValues } from '../presets'
 import { readSound } from './read'
 import { AMP, VOICE } from './sound'
 import { soundFromV1 } from './v1'
@@ -190,7 +189,7 @@ describe('soundFromV1', () => {
   it.each(FACTORY_PRESETS.map((preset) => [preset.name, preset] as const))(
     'converts the factory preset %s into a well-formed sound',
     (_, preset) => {
-      const sound = soundFromV1(fullValues(preset.values))
+      const { sound } = preset
       expect(readSound(JSON.parse(JSON.stringify(sound)))).toEqual(sound)
     }
   )

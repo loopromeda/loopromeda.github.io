@@ -10,12 +10,7 @@ import {
   type SurfaceSettings,
   type SurfaceStorage,
 } from './state/surface'
-import { EnvelopePanel } from './ui/EnvelopePanel'
 import { IconButton } from './ui/IconButton'
-import { FilterPanel } from './ui/FilterPanel'
-import { LfoPanel } from './ui/LfoPanel'
-import { ModPanel } from './ui/ModPanel'
-import { OscillatorPanel } from './ui/OscillatorPanel'
 import { PatchButton } from './ui/PatchButton'
 import { PlatformChecks } from './ui/PlatformChecks'
 import { PlaySurface } from './ui/PlaySurface'
@@ -23,11 +18,10 @@ import { PresetBrowser } from './ui/PresetBrowser'
 import { Scope, type ScopeStats } from './ui/Scope'
 import { SettingsButton } from './ui/SettingsButton'
 import { SettingsSheet } from './ui/SettingsSheet'
+import { SoundEditor } from './ui/SoundEditor'
 import { StatusBar } from './ui/StatusBar'
 import { SurfaceButton } from './ui/SurfaceButton'
 import { SurfacePicker } from './ui/SurfacePicker'
-import { Tabs } from './ui/Tabs'
-import { VoicePanel } from './ui/VoicePanel'
 
 /** What can open over the waveform and the controls */
 type Sheet = 'presets' | 'surface' | 'settings'
@@ -37,8 +31,9 @@ const page =
 
 /**
  * A start screen (what the browser offers, and the tap that may start
- * audio), then the output waveform, the sound's controls a tab at a time,
- * the keys or pads filling the rest, and a status line under it. The
+ * audio), then the output waveform, the sound's editor (its parts as
+ * tiles, the picked one's knobs under them), the keys or pads filling the
+ * rest, and a status line under it. The
  * buttons at the left of the keyboard's header open the presets, and the
  * choice of keys or pads, over the waveform and the controls: what is
  * played on stays there to try them on. The third puts the controls away,
@@ -65,7 +60,6 @@ export function App({
 }) {
   const snapshot = useSyncExternalStore(engine.subscribe, engine.getSnapshot)
   const { state } = snapshot
-  const [tab, setTab] = useState('osc')
   const [sheet, setSheet] = useState<Sheet | null>(null)
   const closeSheet = useCallback(() => setSheet(null), [])
   const toggle = (which: Sheet) =>
@@ -139,45 +133,9 @@ export function App({
               onStats={onScopeStats}
             />
           )}
-          {/* Hidden, not unmounted: each panel keeps its page and state */}
+          {/* Hidden, not unmounted: the editor keeps the tile picked */}
           <div id="controls" hidden={!controls}>
-            <Tabs
-              label="Sound"
-              active={tab}
-              onChange={setTab}
-              tabs={[
-                {
-                  id: 'osc',
-                  label: 'OSC',
-                  panel: <OscillatorPanel engine={engine} />,
-                },
-                {
-                  id: 'env',
-                  label: 'ENV',
-                  panel: <EnvelopePanel engine={engine} />,
-                },
-                {
-                  id: 'filter',
-                  label: 'FILTER',
-                  panel: <FilterPanel engine={engine} />,
-                },
-                {
-                  id: 'lfo',
-                  label: 'LFO',
-                  panel: <LfoPanel engine={engine} />,
-                },
-                {
-                  id: 'mod',
-                  label: 'MOD',
-                  panel: <ModPanel engine={engine} />,
-                },
-                {
-                  id: 'voice',
-                  label: 'VOICE',
-                  panel: <VoicePanel engine={engine} />,
-                },
-              ]}
-            />
+            <SoundEditor engine={engine} />
           </div>
         </div>
         {sheet === 'presets' && (

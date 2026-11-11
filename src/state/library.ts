@@ -1,28 +1,24 @@
-import type { ParamId } from './params'
 import {
   PRESET_FILE_FORMAT,
   PRESET_FILE_VERSION,
   cleanName,
-  fullValues,
   presetFile,
   readPresetFile,
-  sameValues,
-  sparseValues,
   uniqueName,
   type Preset,
   type PresetCategory,
   type PresetFile,
-  type PresetValues,
 } from './presets'
+import { sameSound, type Sound } from './sound/sound'
 
 /** What the library needs of the engine */
-export interface ParamHost {
-  /** Every parameter's value, in PARAMS order (a copy) */
-  values(): Float64Array
-  /** Sets every parameter at once, from values in PARAMS order */
-  setValues(values: ArrayLike<number>): void
-  /** Calls listener after each parameter change; returns the unsubscribe */
-  onParam(listener: (id: ParamId, value: number) => void): () => void
+export interface SoundHost {
+  /** The sound playing */
+  getSound(): Sound
+  /** Plays sound instead */
+  setSound(sound: Sound): void
+  /** Calls listener after each change to the sound; returns unsubscribe */
+  subscribeSound(listener: () => void): () => void
 }
 
 /** The part of Web Storage the library uses (localStorage) */
@@ -55,10 +51,13 @@ export const SESSION_KEY = 'loopromeda.session'
 /** The session is written this long after the last change */
 const SESSION_DELAY_MS = 400
 
-/** What the session keeps: the sound, and the preset it came from */
+/**
+ * What the session keeps: the sound, and the preset it came from.
+ * Version 1 kept the old parameters' values instead, read as a sound.
+ */
 interface Session {
-  readonly version: 1
-  readonly values: PresetValues
+  readonly version: 2
+  readonly sound: Sound
   readonly current?: PresetRef
 }
 
@@ -67,24 +66,24 @@ interface Session {
  * preset file), and which one the sound came from. The sound itself is
  * kept too, a moment after each change, so a reload or a phone dropping
  * the tab brings back what was playing, edits and all. Loading a preset
- * sets every parameter at once. Subscribe-and-snapshot, for
+ * plays its sound. Subscribe-and-snapshot, for
  * useSyncExternalStore. Storage that fails (a private window, a full
  * disk) leaves the presets working for this visit and says so in
  * `problem`.
  */
 export class Library {
-  readonly #host: ParamHost
+  readonly #host: SoundHost
   readonly #storage: PresetStorage | undefined
   readonly #factory: readonly Preset[]
   #snapshot: LibrarySnapshot
   readonly #listeners = new Set<() => void>()
   #timer: ReturnType<typeof setTimeout> | undefined
-  /** True while load() sets the values: no edit is being made */
+  /** True while load() sets the sound: no edit is being made */
   #loading = false
   readonly #unsubscribe: () => void
 
   constructor(
-    host: ParamHost,
+    host: SoundHost,
     factory: readonly Preset[],
     storage: PresetStorage | undefined
   ) {
@@ -98,7 +97,7 @@ export class Library {
       edited: true,
       problem: storage ? undefined : 'This browser keeps no storage',
     }
-    this.#unsubscribe = host.onParam(this.#changed)
+    this.#unsubscribe = host.subscribeSound(this.#changed)
   }
 
   get snapshot(): LibrarySnapshot {
@@ -122,7 +121,7 @@ export class Library {
     this.#set({ user: user ?? [] })
     const first = this.#factory[0]
     if (session) {
-      this.#apply(session.values)
+      this.#apply(session.sound)
       const current =
         session.current && this.#find(session.current)
           ? session.current
@@ -133,11 +132,11 @@ export class Library {
     }
   }
 
-  /** Plays preset ref: every parameter set to it at once */
+  /** Plays preset ref's sound */
   load(ref: PresetRef): void {
     const preset = this.#find(ref)
     if (!preset) return
-    this.#apply(preset.values)
+    this.#apply(preset.sound)
     this.#set({
       current: { source: ref.source, name: preset.name },
       edited: false,
@@ -157,7 +156,7 @@ export class Library {
       name,
       user.map((preset) => preset.name)
     )
-    const preset = { name: unique, category, values: this.#sound() }
+    const preset = { name: unique, category, sound: this.#host.getSound() }
     const ref: PresetRef = { source: 'user', name: unique }
     this.#set({ user: [...user, preset], current: ref, edited: false })
     this.#writeUser()
@@ -169,10 +168,10 @@ export class Library {
   save(): boolean {
     const current = this.#snapshot.current
     if (current?.source !== 'user') return false
-    const values = this.#sound()
+    const sound = this.#host.getSound()
     this.#set({
       user: this.#snapshot.user.map((preset) =>
-        preset.name === current.name ? { ...preset, values } : preset
+        preset.name === current.name ? { ...preset, sound } : preset
       ),
       edited: false,
     })
@@ -278,25 +277,18 @@ export class Library {
     this.#timer = setTimeout(() => this.#writeSession(), SESSION_DELAY_MS)
   }
 
-  #apply(values: PresetValues): void {
+  #apply(sound: Sound): void {
     this.#loading = true
     try {
-      this.#host.setValues(fullValues(values))
+      this.#host.setSound(sound)
     } finally {
       this.#loading = false
     }
   }
 
-  /** The sound, as a preset's values */
-  #sound(): PresetValues {
-    return sparseValues(this.#host.values())
-  }
-
   #differs(ref: PresetRef | undefined): boolean {
     const preset = ref && this.#find(ref)
-    return (
-      !preset || !sameValues(this.#host.values(), fullValues(preset.values))
-    )
+    return !preset || !sameSound(this.#host.getSound(), preset.sound)
   }
 
   #find(ref: PresetRef): Preset | undefined {
@@ -337,9 +329,10 @@ export class Library {
     clearTimeout(this.#timer)
     this.#timer = undefined
     const current = this.#snapshot.current
+    const sound = this.#host.getSound()
     const session: Session = current
-      ? { version: 1, values: this.#sound(), current }
-      : { version: 1, values: this.#sound() }
+      ? { version: 2, sound, current }
+      : { version: 2, sound }
     this.#write(SESSION_KEY, session)
   }
 
@@ -350,16 +343,21 @@ export class Library {
 }
 
 /**
- * A session from parsed JSON: its values read as a preset's are (unknown
- * ids dropped, values clamped) and its current preset if well formed
+ * A session from parsed JSON: its sound read as a preset's is (as
+ * untrusted, or converted from version 1's values) and its current preset
+ * if well formed
  */
 function readSession(data: unknown): Session | undefined {
   if (typeof data !== 'object' || data === null) return undefined
-  const { values, current } = data as { values?: unknown; current?: unknown }
+  const { sound, values, current } = data as {
+    sound?: unknown
+    values?: unknown
+    current?: unknown
+  }
   const [preset] = readPresetFile({
     format: PRESET_FILE_FORMAT,
     version: PRESET_FILE_VERSION,
-    presets: [{ name: 'Session', category: 'Basic', values }],
+    presets: [{ name: 'Session', category: 'Basic', sound, values }],
   }).presets
   if (!preset) return undefined
   const ref = current as Partial<PresetRef> | undefined
@@ -369,12 +367,12 @@ function readSession(data: unknown): Session | undefined {
     typeof ref.name === 'string'
   return known
     ? {
-        version: 1,
-        values: preset.values,
+        version: 2,
+        sound: preset.sound,
         current: {
           source: ref.source as PresetSource,
           name: ref.name as string,
         },
       }
-    : { version: 1, values: preset.values }
+    : { version: 2, sound: preset.sound }
 }

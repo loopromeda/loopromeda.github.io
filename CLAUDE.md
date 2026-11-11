@@ -31,9 +31,11 @@ Before calling a change done: `pnpm typecheck && pnpm lint && pnpm format:check 
   `src/` folders. It renders `Float32Array` blocks and is tested in Node.
 - **No allocation inside `process()`.** Preallocate voices and buffers; smooth
   parameter changes; never hardcode the sample rate (read `sampleRate`).
-- **One parameter schema** (`src/state/params.ts`, from M2): id, range, default,
-  curve and unit, used by the UI and presets alike, and by the worklet through
-  the sound they convert to (`src/state/sound/v1.ts`).
+- **One knob schema** (`ValueSpec` in `src/state/params.ts`): range, default,
+  curve and unit. Every part kind's knobs are built from it
+  (`src/state/sound/kinds.ts`), for the editor, presets and the worklet alike.
+  The old parameter list there (`PARAMS`) now only reads version 1 presets and
+  sessions (`src/state/sound/v1.ts`).
 - **Real-time UI bypasses React state.** Knob drags and key presses go straight
   to the engine through refs and pointer events; React renders structure.
 - **Secure context everywhere.** AudioWorklet needs HTTPS: Pages in production,
@@ -52,26 +54,31 @@ src/worklet/  the AudioWorkletProcessor around src/dsp; own globals and
               tsconfig (tsconfig.worklet.json), loaded via ?worker&url;
               sound.ts loads a sound document onto the ChainSynth and
               sets its knobs one by one (Node-testable)
-src/engine/   AudioContext lifecycle, unlock, node wiring; the parameters
-              sent as a sound, or as the knobs that moved; protocol.ts is
-              the message types both threads share (plain data only)
-src/state/    params.ts: the parameter schema; presets.ts: the preset and
-              file format; factory.ts: the shipped presets; library.ts:
-              user presets and the last sound, kept in localStorage;
+src/engine/   AudioContext lifecycle, unlock, node wiring; the sound,
+              held here and edited, sent whole or as the knobs that
+              moved; protocol.ts is the message types both threads share
+              (plain data only)
+src/state/    params.ts: the knob schema and the old parameters;
+              presets.ts: the preset and file format (version 2 holds
+              sounds); factory.ts: the shipped presets; library.ts: user
+              presets and the last sound, kept in localStorage;
               surface.ts: keys or pads, the pads' key (root and scale);
               settings.ts: the device's settings (voices, latency,
               velocity, what the screen shows); sound/: a sound as a
               document of inputs, chains, modulators and routes, its
               edits, reading it from JSON and from the old parameters,
-              and the knobs that moved between two (diff.ts); the audio
-              plays the old parameters converted, until the editor
+              a knob by part and key (knob.ts), and the knobs that moved
+              between two (diff.ts)
 src/viz/      pure display math (scope trigger and decimation, envelope
               and LFO outlines, filter response, keyboard and pad grid
               geometry, the sound editor's input column and chain rows
               in graph.ts, hit-testing, velocity and Slide from a touch's
               position)
 src/ui/       React components; Scope.tsx draws the output waveform,
-              Knob.tsx turns one parameter, PlaySurface.tsx plays notes
+              SoundEditor.tsx the sound as tiles (editor.ts: their
+              names, lines, pictograms and colours), PartPanel.tsx the
+              picked tile's knobs, adds and moves, Knob.tsx turns one
+              knob of one part, PlaySurface.tsx plays notes
               on Keys.tsx or Pads.tsx (hands.ts: who holds which note),
               PresetBrowser.tsx loads, saves and moves presets,
               SettingsSheet.tsx holds the settings and Measure CPU

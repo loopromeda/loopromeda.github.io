@@ -151,15 +151,18 @@ as a graph of flat tiles, flowing left to right.
    unchanged.
 2. The DSP: a voice that renders inputs, chains and modulators from
    preallocated places, block by block; render time measured against the
-   old voice and on the Fold. Done 2026-11-10 but for the Fold:
+   old voice and on the Fold. Done 2026-11-10:
    `src/dsp/chainSynth.ts`, `chainVoice.ts` and `slots.ts` beside the
    old voice, `src/worklet/sound.ts` giving it a sound. Every factory
    preset, converted, plays as the old synth did to within one float32
    step (`src/worklet/sound.test.ts`). One 128-frame block of 16 voices
    here (M3 Max): a saw 0.040 ms (old 0.045), the old stress patch 0.256
    ms (old 0.237), every slot taken 1.15 ms, over the 0.89 ms budget:
-   such a sound wants fewer voices. The Fold is measured once Measure
-   CPU times `chainStress.ts` (step 3).
+   such a sound wants fewer voices. On the Fold (Chrome 157), 2026-11-11,
+   Measure CPU times it at 0.51, 1.03, 1.57 and 2.13 ms for 8, 16, 24
+   and 32 voices, 19% to 80% of a 2.67 ms block, as desktop Chrome on
+   the M3 Max does (0.52 to 2.03 ms): at the default 16 voices the worst
+   sound fits the block but not its third.
 3. The engine and worklet: a sound's structure as one message, a knob as
    (part id, key, value). The old voice, synth and parameter mapping go,
    with the equivalence test that held the new one to them. Done
@@ -171,6 +174,25 @@ as a graph of flat tiles, flowing left to right.
    `chainStress.ts`.
 4. The editor: inputs, chains and modulators on screen, with add, remove
    and reorder; routes from any knob. Drawn first (The editor, above);
-   the input column's layout is `src/viz/graph.ts`, 2026-11-11.
-5. Presets v2, the factory presets rebuilt as sounds.
+   the input column's layout is `src/viz/graph.ts`, 2026-11-11. In two
+   parts:
+   - 4a, done 2026-11-11: the graph and its panel replace the tabs of
+     knobs. `src/ui/SoundEditor.tsx` draws the rack and the graph
+     (`graphGeometry`), `PartPanel.tsx` the picked tile's knobs and
+     choices, with add, remove and move (by buttons); an input's panel
+     turns each chain on or off for it, which is how an input moves to
+     another chain (a chain's knobs set how much). A knob is a part's
+     id and key (`src/state/sound/knob.ts`), a chain's send being
+     `send.<input id>`. The engine holds the sound and takes edits to it;
+     the library keeps sounds, so presets went to file version 2 here
+     rather than in step 5 (a version 1 file or session converts as it
+     is read). The editor redraws only when the sound's shape changes
+     (`shapeKey` in `src/ui/editor.ts`); a knob turned redraws itself, a
+     tile's line and a peg.
+   - 4b: routes, by holding a knob while a modulator is picked (the MOD
+     tab's matrix went with 4a: until then a sound keeps the routes it
+     came with, but none can be made); dragging to reorder; the panel's
+     outlines of an envelope, an LFO and a filter's response, which
+     `src/viz` still draws for it.
+5. The factory presets rebuilt as sounds.
 6. The drum kit on top: sixteen sounds, one per pad.
