@@ -2,12 +2,20 @@ import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 import { deviceReport } from './scripts/vite-device-report.ts'
+import { licences } from './scripts/vite-licences.ts'
 
 export default defineConfig({
   // GitHub Pages serves the site at the root of loopromeda.github.io
   // (deploy.yml); BASE_PATH builds it for a path under a host instead
   base: process.env.BASE_PATH ?? '/',
-  plugins: [react(), tailwindcss(), deviceReport()],
+  plugins: [
+    react(),
+    tailwindcss(),
+    deviceReport(),
+    // licences.txt: ours, and those of what the site ships. Tailwind's
+    // preflight lands in the stylesheet.
+    licences({ title: 'Loopromeda', also: ['tailwindcss'] }),
+  ],
   server: {
     // Phones reach this server over the tailnet: `tailscale serve`
     // (scripts/tailnet.sh) terminates HTTPS on <machine>.<tailnet>.ts.net:5173

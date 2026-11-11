@@ -96,7 +96,9 @@ src/ui/       React components; SoundEditor.tsx the sound as tiles
               sheet an address (#/presets), so a reload keeps it and Back
               closes it; controls.ts the shared sizes and the card every
               panel stands on
-scripts/      dev tooling: tailnet.sh, the device-report Vite plugin
+scripts/      dev tooling: tailnet.sh, the device-report Vite plugin,
+              and vite-licences.ts, which gathers LICENSE and the
+              licences of what the site ships into licences.txt
 ```
 
 Dev-only device reports: every page load, every audio state change and,
@@ -110,7 +112,9 @@ device test instead of asking for numbers to be retyped.
 
 github.com/loopromeda/loopromeda.github.io (public), remote `origin`. Every
 push to `main` deploys https://loopromeda.github.io/ (deploy.yml). Commit
-only when asked, and push only when ashon asks.
+only when asked, and push only when ashon asks. MIT (`LICENSE`, chosen by
+ashon 2026-11-11). A new runtime dependency, or a build tool whose code
+lands in the output, needs its licence file: the build fails without one.
 
 ## Conventions
 

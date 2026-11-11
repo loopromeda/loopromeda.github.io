@@ -32,3 +32,10 @@ while Tailscale obtains the certificate; later ones are instant.
 ```sh
 pnpm typecheck && pnpm lint && pnpm format:check && pnpm test
 ```
+
+## License
+
+MIT: see [LICENSE](LICENSE). The site ships with the licences of what it
+is built with (React, the Recursive font, Tailwind's preflight), gathered
+into `licences.txt` as it builds (`scripts/vite-licences.ts`) and linked
+from Settings, About.

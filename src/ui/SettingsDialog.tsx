@@ -43,6 +43,9 @@ const BENCH_VOICES = [8, 16, 24, 32] as const
 /** Frames the audio thread renders per call: the Web Audio render quantum */
 const RENDER_QUANTUM = 128
 
+/** Where the code is */
+const SOURCE = 'https://github.com/loopromeda/loopromeda.github.io'
+
 /**
  * The player's settings for this device, apart from the sound: what the
  * phone is asked to do, how a touch plays, and what the screen shows about
@@ -54,7 +57,8 @@ const RENDER_QUANTUM = 128
  * Debug holds Measure CPU: the audio thread times the heaviest sound at 8
  * to 32 voices, to choose Voices by. onBench gets its results too (the dev
  * server keeps them in device-reports.jsonl). Browser lists what this
- * browser offers the synth.
+ * browser offers the synth. About says whose it is, and opens the
+ * licences (licences.txt, scripts/vite-licences.ts) and the source.
  */
 export function SettingsDialog({
   engine,
@@ -185,6 +189,10 @@ export function SettingsDialog({
         <Group title="Browser">
           <PlatformChecks platform={platform} />
         </Group>
+
+        <Group title="About">
+          <About />
+        </Group>
       </div>
     </dialog>
   )
@@ -286,6 +294,41 @@ function Choice<T extends string | number | boolean>({
             {option.label}
           </button>
         ))}
+      </div>
+    </Row>
+  )
+}
+
+/**
+ * Whose it is and under what licence, and links (in a new tab, the synth
+ * left playing) to the licences of what it is built with and to the code
+ */
+function About() {
+  const id = useId()
+  return (
+    <Row
+      label="Loopromeda"
+      labelId={`${id}-label`}
+      hint="© 2026 ashon, under the MIT License. Licences lists the software it is built with, each under its own."
+      hintId={`${id}-hint`}
+    >
+      <div
+        role="group"
+        aria-labelledby={`${id}-label`}
+        aria-describedby={`${id}-hint`}
+        className="flex flex-wrap gap-1.5"
+      >
+        <a
+          href={`${import.meta.env.BASE_URL}licences.txt`}
+          target="_blank"
+          rel="noreferrer"
+          className={BUTTON}
+        >
+          Licences
+        </a>
+        <a href={SOURCE} target="_blank" rel="noreferrer" className={BUTTON}>
+          Source
+        </a>
       </div>
     </Row>
   )
