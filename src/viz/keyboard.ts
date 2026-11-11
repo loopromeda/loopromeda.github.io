@@ -91,26 +91,65 @@ export function keysFit(width: number): KeysFit {
   return { octaves, length: Math.round(white * KEY_LENGTH) }
 }
 
+/** Middle C: the keys stand with it in their middle */
+export const MIDDLE_C = 60
+/** The lowest and the highest note the keys reach: C1 and C8 */
+const BOTTOM = cNote(1)
+const TOP = cNote(8)
+
+/** Where keys stand, and how far they shift */
+export interface KeysPlace {
+  /** Their lowest note, a white key's */
+  readonly lowest: number
+  /** How many octaves they shift down from there, and up, in C1 to C8 */
+  readonly down: number
+  readonly up: number
+}
+
 /**
- * Every key from C in octave start, octaves octaves up, to the C above:
- * white keys first, then black (the order to draw them in)
+ * Keys octaves octaves wide with middle C in their middle: from a C for
+ * an even number of octaves (C3 to C5), from an F for an odd one (F3 to
+ * F4, F2 to F5: C4 the white key just right of the middle). Where that
+ * would reach past C1 or C8 they stand an octave in, or at C1 (seven
+ * octaves only fit from there).
  */
-export function keyboardLayout(start: number, octaves: number): Key[] {
+export function keysPlace(octaves: number): KeysPlace {
+  const span = 12 * octaves
+  const below = Math.floor(whiteCount(octaves) / 2)
+  let lowest = whiteAt(Math.max(whiteIndex(MIDDLE_C) - below, 0))
+  while (lowest < BOTTOM) lowest += 12
+  if (lowest + span > TOP) lowest = BOTTOM
+  return {
+    lowest,
+    down: Math.floor((lowest - BOTTOM) / 12),
+    up: Math.max(Math.floor((TOP - span - lowest) / 12), 0),
+  }
+}
+
+/**
+ * The C nearest the middle of keys from lowest, octaves octaves wide:
+ * where the computer keys start (C4 where the keys stand around it)
+ */
+export function middleC(lowest: number, octaves: number): number {
+  return 12 * Math.round((lowest + 6 * octaves) / 12)
+}
+
+/**
+ * Every key from the white key lowest, octaves octaves up, to the same
+ * white key above: white keys first, then black (the order to draw them in)
+ */
+export function keyboardLayout(lowest: number, octaves: number): Key[] {
   const whites = whiteCount(octaves)
+  const base = whiteIndex(lowest)
   const width = 1 / whites
   const keys: Key[] = []
   for (let i = 0; i < whites; i++) {
-    keys.push({
-      note: whiteNote(start, i),
-      black: false,
-      left: i * width,
-      width,
-    })
+    keys.push({ note: whiteAt(base + i), black: false, left: i * width, width })
   }
   for (let i = 0; i < whites - 1; i++) {
-    if (!hasBlackAbove(i)) continue
+    if (!hasBlackAbove(base + i)) continue
     keys.push({
-      note: whiteNote(start, i) + 1,
+      note: whiteAt(base + i) + 1,
       black: true,
       left: (i + 1 - BLACK_WIDTH / 2) * width,
       width: BLACK_WIDTH * width,
@@ -126,10 +165,11 @@ export function keyboardLayout(start: number, octaves: number): Key[] {
 export function keyAt(
   x: number,
   y: number,
-  start: number,
+  lowest: number,
   octaves: number
 ): number {
   const whites = whiteCount(octaves)
+  const base = whiteIndex(lowest)
   const across = Math.min(Math.max(x, 0), 1) * whites
   const white = Math.min(Math.floor(across), whites - 1)
   if (y < BLACK_LENGTH) {
@@ -138,15 +178,19 @@ export function keyAt(
     if (
       within > 1 - BLACK_WIDTH / 2 &&
       white < whites - 1 &&
-      hasBlackAbove(white)
+      hasBlackAbove(base + white)
     ) {
-      return whiteNote(start, white) + 1
+      return whiteAt(base + white) + 1
     }
-    if (within < BLACK_WIDTH / 2 && white > 0 && hasBlackAbove(white - 1)) {
-      return whiteNote(start, white - 1) + 1
+    if (
+      within < BLACK_WIDTH / 2 &&
+      white > 0 &&
+      hasBlackAbove(base + white - 1)
+    ) {
+      return whiteAt(base + white - 1) + 1
     }
   }
-  return whiteNote(start, white)
+  return whiteAt(base + white)
 }
 
 /** The velocity of a touch at a key's back edge; its front edge plays 1 */
@@ -185,13 +229,27 @@ export function slideFrom(startY: number, y: number): number {
   return slide > -1 ? (slide < 1 ? slide : 1) : -1
 }
 
-/** The note of white key i, counting from C in octave start */
-function whiteNote(start: number, i: number): number {
-  return cNote(start + Math.floor(i / 7)) + (WHITE_SEMITONES[i % 7] as number)
+/**
+ * A white key's place, counting the white keys up from MIDI note 0 (a C):
+ * C4 is 35. A black key's is the white key's below it.
+ */
+function whiteIndex(note: number): number {
+  const octave = Math.floor(note / 12)
+  const semitone = note - 12 * octave
+  const step = WHITE_SEMITONES.filter((white) => white <= semitone).length
+  return 7 * octave + step - 1
 }
 
-/** True unless white key i is an E or a B, which have no black key above */
-function hasBlackAbove(i: number): boolean {
-  const step = i % 7
+/** The note of the white key at index, as whiteIndex counts them */
+function whiteAt(index: number): number {
+  return 12 * Math.floor(index / 7) + (WHITE_SEMITONES[index % 7] as number)
+}
+
+/**
+ * True unless the white key at index (whiteIndex's) is an E or a B, which
+ * have no black key above
+ */
+function hasBlackAbove(index: number): boolean {
+  const step = index % 7
   return step !== 2 && step !== 6
 }

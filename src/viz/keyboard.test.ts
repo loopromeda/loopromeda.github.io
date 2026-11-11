@@ -11,6 +11,8 @@ import {
   keyAt,
   keyboardLayout,
   keysFit,
+  keysPlace,
+  middleC,
   noteName,
   pitchName,
   slideFrom,
@@ -43,7 +45,7 @@ describe('noteName', () => {
 
 describe('keyboardLayout', () => {
   it('lays out an octave and the C above: 8 white keys, 5 black', () => {
-    const keys = keyboardLayout(4, 1)
+    const keys = keyboardLayout(60, 1)
     expect(keys.filter((key) => !key.black).map((key) => key.note)).toEqual([
       60, 62, 64, 65, 67, 69, 71, 72,
     ])
@@ -53,21 +55,21 @@ describe('keyboardLayout', () => {
   })
 
   it('draws the white keys first', () => {
-    const keys = keyboardLayout(3, 2)
+    const keys = keyboardLayout(48, 2)
     const firstBlack = keys.findIndex((key) => key.black)
     expect(firstBlack).toBe(whiteCount(2))
     expect(keys.slice(firstBlack).every((key) => key.black)).toBe(true)
   })
 
   it('tiles the white keys across the whole width', () => {
-    const whites = keyboardLayout(4, 2).filter((key) => !key.black)
+    const whites = keyboardLayout(60, 2).filter((key) => !key.black)
     expect(whites[0]?.left).toBe(0)
     const last = whites[whites.length - 1]
     expect((last?.left ?? 0) + (last?.width ?? 0)).toBeCloseTo(1, 12)
   })
 
   it('centres each black key on the gap between two white keys', () => {
-    const keys = keyboardLayout(4, 1)
+    const keys = keyboardLayout(60, 1)
     const width = 1 / whiteCount(1)
     const cSharp = keys.find((key) => key.note === 61)
     expect((cSharp?.left ?? 0) + (cSharp?.width ?? 0) / 2).toBeCloseTo(
@@ -75,6 +77,59 @@ describe('keyboardLayout', () => {
       12
     )
     expect(cSharp?.width).toBeCloseTo(BLACK_WIDTH * width, 12)
+  })
+
+  it('starts on any white key, an F say, to the same key above', () => {
+    const keys = keyboardLayout(41, 3)
+    const whites = keys.filter((key) => !key.black).map((key) => key.note)
+    expect(whites).toHaveLength(whiteCount(3))
+    expect(whites.slice(0, 5)).toEqual([41, 43, 45, 47, 48])
+    expect(whites[whites.length - 1]).toBe(77)
+    // F#, G#, A#, then none above B
+    expect(
+      keys
+        .filter((key) => key.black)
+        .map((key) => key.note)
+        .slice(0, 4)
+    ).toEqual([42, 44, 46, 49])
+    for (const key of keys) {
+      const y = key.black ? BLACK_LENGTH / 2 : (BLACK_LENGTH + 1) / 2
+      expect(keyAt(key.left + key.width / 2, y, 41, 3)).toBe(key.note)
+    }
+  })
+})
+
+describe('keysPlace', () => {
+  it('stands the keys with middle C in their middle', () => {
+    expect(keysPlace(1)).toEqual({ lowest: 53, down: 2, up: 3 }) // F3–F4
+    expect(keysPlace(2)).toEqual({ lowest: 48, down: 2, up: 3 }) // C3–C5
+    expect(keysPlace(3)).toEqual({ lowest: 41, down: 1, up: 2 }) // F2–F5
+    expect(keysPlace(4)).toEqual({ lowest: 36, down: 1, up: 2 }) // C2–C6
+    expect(keysPlace(5)).toEqual({ lowest: 29, down: 0, up: 1 }) // F1–F6
+    expect(keysPlace(6)).toEqual({ lowest: 24, down: 0, up: 1 }) // C1–C7
+  })
+
+  it('puts middle C on the white key at or just right of the middle', () => {
+    for (let octaves = 1; octaves <= 6; octaves++) {
+      const whites = keyboardLayout(keysPlace(octaves).lowest, octaves)
+        .filter((key) => !key.black)
+        .map((key) => key.note)
+      expect(whites.indexOf(60)).toBe(Math.floor(whites.length / 2))
+    }
+  })
+
+  it('fits seven octaves from C1 to C8, with nowhere to shift', () => {
+    expect(keysPlace(7)).toEqual({ lowest: 24, down: 0, up: 0 })
+  })
+})
+
+describe('middleC', () => {
+  it('finds the C nearest the middle of the keys', () => {
+    expect(middleC(41, 3)).toBe(60)
+    expect(middleC(48, 2)).toBe(60)
+    expect(middleC(53, 1)).toBe(60)
+    expect(middleC(53, 3)).toBe(72)
+    expect(middleC(24, 7)).toBe(72)
   })
 })
 
@@ -111,42 +166,42 @@ describe('keyAt', () => {
   const high = BLACK_LENGTH / 2 // among them
 
   it('finds white keys below the black ones', () => {
-    expect(keyAt(width * 0.5, low, 4, 1)).toBe(60)
-    expect(keyAt(width * 0.95, low, 4, 1)).toBe(60) // under C#'s overhang
-    expect(keyAt(width * 7.5, low, 4, 1)).toBe(72)
+    expect(keyAt(width * 0.5, low, 60, 1)).toBe(60)
+    expect(keyAt(width * 0.95, low, 60, 1)).toBe(60) // under C#'s overhang
+    expect(keyAt(width * 7.5, low, 60, 1)).toBe(72)
   })
 
   it('finds black keys on either side of a white key', () => {
-    expect(keyAt(width * 0.95, high, 4, 1)).toBe(61) // C's right edge
-    expect(keyAt(width * 1.05, high, 4, 1)).toBe(61) // D's left edge
-    expect(keyAt(width * 1.5, high, 4, 1)).toBe(62) // D between them
-    expect(keyAt(width * 1.95, high, 4, 1)).toBe(63)
+    expect(keyAt(width * 0.95, high, 60, 1)).toBe(61) // C's right edge
+    expect(keyAt(width * 1.05, high, 60, 1)).toBe(61) // D's left edge
+    expect(keyAt(width * 1.5, high, 60, 1)).toBe(62) // D between them
+    expect(keyAt(width * 1.95, high, 60, 1)).toBe(63)
   })
 
   it('has no black key between E and F or B and C', () => {
-    expect(keyAt(width * 2.98, high, 4, 1)).toBe(64)
-    expect(keyAt(width * 3.02, high, 4, 1)).toBe(65)
-    expect(keyAt(width * 6.98, high, 4, 1)).toBe(71)
-    expect(keyAt(width * 7.02, high, 4, 1)).toBe(72)
+    expect(keyAt(width * 2.98, high, 60, 1)).toBe(64)
+    expect(keyAt(width * 3.02, high, 60, 1)).toBe(65)
+    expect(keyAt(width * 6.98, high, 60, 1)).toBe(71)
+    expect(keyAt(width * 7.02, high, 60, 1)).toBe(72)
   })
 
   it('has no black key past either end', () => {
-    expect(keyAt(0.001, high, 4, 1)).toBe(60)
-    expect(keyAt(0.999, high, 4, 1)).toBe(72)
+    expect(keyAt(0.001, high, 60, 1)).toBe(60)
+    expect(keyAt(0.999, high, 60, 1)).toBe(72)
   })
 
   it('clamps points off the keyboard onto its edge keys', () => {
-    expect(keyAt(-0.5, low, 4, 1)).toBe(60)
-    expect(keyAt(1.5, low, 4, 1)).toBe(72)
-    expect(keyAt(1, low, 4, 1)).toBe(72)
-    expect(keyAt(width * 1.05, -1, 4, 1)).toBe(61)
-    expect(keyAt(width * 1.05, 2, 4, 1)).toBe(62)
+    expect(keyAt(-0.5, low, 60, 1)).toBe(60)
+    expect(keyAt(1.5, low, 60, 1)).toBe(72)
+    expect(keyAt(1, low, 60, 1)).toBe(72)
+    expect(keyAt(width * 1.05, -1, 60, 1)).toBe(61)
+    expect(keyAt(width * 1.05, 2, 60, 1)).toBe(62)
   })
 
   it('agrees with the layout at every key centre', () => {
-    for (const key of keyboardLayout(2, 3)) {
+    for (const key of keyboardLayout(36, 3)) {
       const y = key.black ? high : low
-      expect(keyAt(key.left + key.width / 2, y, 2, 3)).toBe(key.note)
+      expect(keyAt(key.left + key.width / 2, y, 36, 3)).toBe(key.note)
     }
   })
 })

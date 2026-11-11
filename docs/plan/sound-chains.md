@@ -114,11 +114,15 @@ as a graph of flat tiles, flowing left to right.
   head (letter and level), then its items side by side, then the amp,
   which stands at the end of every row (since 2026-11-12 at most two
   slots tall, or three fifths of its width: past that it stands in the
-  rows' middle and a bus down the seam takes every row to it). Modulators sit in a rack above,
-  the voice at its end (since 2026-11-12 at its start, over the inputs
-  whose pitch it sets). A tile is flat, outlined by a ring; picked, its
-  ring is heavier and it takes a tint. A dashed "+" fills a row's free
-  place; a longer chain pans the graph right.
+  rows' middle and a bus down the seam takes every row to it; a chain's
+  items and its "+" likewise stand at most two slots tall, in the row's
+  middle, the head keeping the row's height for the pegs). Modulators sit
+  in a rack above, the voice at its end (since 2026-11-12 at its start,
+  over the inputs whose pitch it sets; from md up the rack is a column at
+  the graph's left, which has width to spare and little height). A tile
+  is flat, outlined by a ring; picked, its ring is heavier and it takes a
+  tint. A dashed "+" fills a row's free place; a longer chain pans the
+  graph right.
 - **Pegs.** The joints between tiles carry pegs: an input's send into a
   chain (tap to set it), the chain's level before the amp. A peg's
   length is its level.

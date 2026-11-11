@@ -15,26 +15,34 @@ import {
   type SurfaceKind,
   type SurfaceSettings,
 } from '../state/surface'
-import { cNote, keysFit, noteName, pitchName } from '../viz/keyboard'
+import {
+  cNote,
+  keysFit,
+  keysPlace,
+  middleC,
+  noteName,
+  pitchName,
+} from '../viz/keyboard'
 import { padGrid, padNote, type PadGrid } from '../viz/pads'
 import { COMPUTER_ID, Hands } from './hands'
 import { IconButton } from './IconButton'
 import { Keys } from './Keys'
 import { Pads } from './Pads'
 
-/** The lowest note is in octave 1 or higher, the highest C8 or lower */
+/** The pads' lowest note is in octave 1 or higher, their highest C8 or lower */
 const LOWEST = 1
 const TOP = 8
 /**
- * Where each surface starts: the keys on C4, the pads (two octaves and
- * more of them) an octave lower. Each keeps its own octave.
+ * Where each surface starts: the keys with middle C in their middle
+ * (keysPlace), shifted no octaves, the pads (two octaves and more of
+ * them) on the root in octave 3. Each keeps its own octave.
  */
-const STARTS: Readonly<Record<SurfaceKind, number>> = { keys: 4, pads: 3 }
+const STARTS: Readonly<Record<SurfaceKind, number>> = { keys: 0, pads: 3 }
 
 /**
  * Computer keys (KeyboardEvent.code) for the keys: each plays as many
- * semitones above the lowest C as its place here. The home row is white
- * keys, the row above black.
+ * semitones above the keys' middle C (middleC) as its place here. The
+ * home row is white keys, the row above black.
  */
 const KEY_CODES = [
   'KeyA',
@@ -110,8 +118,9 @@ const sameFit = (a: Fit, b: Fit) =>
  * screen, the keys' own length, which the section holds as --key-length
  * (the pads stand as tall). Keys: as many octaves as fit at a finger's
  * width (one on a phone held upright, more on a wide window: keysFit).
- * Pads: as many as fit at a fingertip's
- * size, playing the notes of settings' key. Both shift an octave at a time.
+ * The keys start with middle C in their middle. Pads: as many as fit at a
+ * fingertip's size, playing the notes of settings' key. Both shift an
+ * octave at a time.
  * Touches go straight to the engine; React renders only the keys or pads,
  * again when the octave, the key or the size changes. The header row holds
  * `menus` (the patch, the surface) at its left and the octave controls at
@@ -146,12 +155,16 @@ export function PlaySurface({
   const count = grid.columns * grid.rows
   // The top pad's height above the bottom one
   const span = padNote(count - 1, 0, scaleSteps(scale))
+  // The keys: octaves from where they stand around middle C; the pads:
+  // the octave of their lowest root
+  const place = keysPlace(fit.octaves)
+  const lowest = pads ? LOWEST : -place.down
   const highest = pads
     ? Math.max(Math.floor((cNote(TOP) - root - span) / 12) - 1, LOWEST)
-    : TOP - fit.octaves
-  const first = Math.min(Math.max(starts[kind], LOWEST), highest)
-  const lowestNote = cNote(first) + (pads ? root : 0)
-  const highestNote = pads ? lowestNote + span : cNote(first + fit.octaves)
+    : place.up
+  const first = Math.min(Math.max(starts[kind], lowest), highest)
+  const lowestNote = pads ? cNote(first) + root : place.lowest + 12 * first
+  const highestNote = lowestNote + (pads ? span : 12 * fit.octaves)
   const range = `${noteName(lowestNote)} – ${noteName(highestNote)}`
   const notes = useMemo(
     () =>
@@ -179,10 +192,10 @@ export function PlaySurface({
 
   const shift = useCallback(
     (by: number) => {
-      const next = Math.min(Math.max(first + by, LOWEST), highest)
+      const next = Math.min(Math.max(first + by, lowest), highest)
       setStarts((was) => ({ ...was, [kind]: next }))
     },
-    [kind, first, highest]
+    [kind, first, lowest, highest]
   )
 
   // Computer keys, for a desktop: they play, Z and X shift the octave
@@ -190,7 +203,9 @@ export function PlaySurface({
     const noteOf = (code: string): number | undefined => {
       if (pads) return notes[PAD_CODES.indexOf(code)]
       const semitones = KEY_CODES.indexOf(code)
-      return semitones < 0 ? undefined : cNote(first) + semitones
+      return semitones < 0
+        ? undefined
+        : middleC(lowestNote, fit.octaves) + semitones
     }
     const down = (event: KeyboardEvent) => {
       if (event.repeat || event.metaKey || event.ctrlKey || event.altKey) return
@@ -216,7 +231,7 @@ export function PlaySurface({
       window.removeEventListener('keyup', up)
       window.removeEventListener('blur', blur)
     }
-  }, [hands, pads, notes, first, shift])
+  }, [hands, pads, notes, lowestNote, fit.octaves, shift])
 
   // Its header and the surface's least height are its minimum: on a short
   // screen the controls above give way (their graph pans), not the keys
@@ -236,7 +251,7 @@ export function PlaySurface({
         <div className="ml-auto flex shrink-0 items-center gap-2">
           <IconButton
             label="Octave down"
-            disabled={first <= LOWEST}
+            disabled={first <= lowest}
             onClick={() => shift(-1)}
             path="M11 4l-5 5 5 5"
           />
@@ -264,7 +279,7 @@ export function PlaySurface({
         ) : (
           <Keys
             hands={hands}
-            first={first}
+            lowest={lowestNote}
             octaves={fit.octaves}
             fullVelocity={fullVelocity}
             label={`Keys ${range}. Computer keys A to K play them; Z and X shift the octave`}

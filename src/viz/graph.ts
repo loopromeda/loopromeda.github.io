@@ -205,10 +205,11 @@ export interface ChainBoxes {
   readonly chain: string
   /** The whole row, head to the amp */
   readonly row: Box
-  /** Its head: its letter and level */
+  /** Its head, as tall as the row: its letter and level */
   readonly head: Box
+  /** At most two slots tall, in the row's middle */
   readonly items: readonly { readonly item: string; readonly box: Box }[]
-  /** The dashed "+" after its items, unless it holds all it may */
+  /** The dashed "+" after its items, unless it holds all it may: as tall */
   readonly add: Box | undefined
   /** The seams between its tiles, head to amp: each one's centre */
   readonly joints: readonly number[]
@@ -261,7 +262,9 @@ export interface GraphGeometry {
  *
  * The amp stands as tall as the rows, up to two slots or ampTall times
  * its width, whichever is more: past that it stands in their middle, and
- * a bus down the seam takes every row to it.
+ * a bus down the seam takes every row to it. A chain's items and its "+"
+ * stand as tall as its row up to two slots, and in its middle past that;
+ * its head keeps the row's height, every input's peg on it.
  */
 export const GRAPH = {
   top: 6,
@@ -406,9 +409,11 @@ export function graphGeometry(
     const items = sound.chains[c]?.items ?? []
     const y = slotY(row.first)
     const h = tall(row.slots)
+    const itemH = Math.min(h, tall(2))
+    const itemY = y + Math.floor((h - itemH) / 2)
     const boxes = items.map((item, k) => ({
       item: item.id,
-      box: { x: itemsX + k * itemPitch, y, w: w.item, h },
+      box: { x: itemsX + k * itemPitch, y: itemY, w: w.item, h: itemH },
     }))
     const addX = itemsX + items.length * itemPitch
     const joints = [
@@ -422,7 +427,7 @@ export function graphGeometry(
       items: boxes,
       add:
         items.length < limits.items
-          ? { x: addX, y, w: ampX - g.seam - addX, h }
+          ? { x: addX, y: itemY, w: ampX - g.seam - addX, h: itemH }
           : undefined,
       joints,
     }
@@ -470,10 +475,7 @@ export function graphGeometry(
         ? Math.max(w.amp, fill - ampX - g.end)
         : w.amp
   const span = rowsEnd - g.top
-  const ampH = Math.min(
-    span,
-    Math.max(2 * slot + g.slotGap, Math.round(ampW * g.ampTall))
-  )
+  const ampH = Math.min(span, Math.max(tall(2), Math.round(ampW * g.ampTall)))
   const middle = (row: ChainBoxes) => row.row.y + row.row.h / 2
   const firstRow = chains[0]
   const endRow = chains[chains.length - 1]

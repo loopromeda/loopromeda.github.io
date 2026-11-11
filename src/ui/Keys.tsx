@@ -10,20 +10,22 @@ import {
 import type { Hands } from './hands'
 
 /**
- * Piano keys, octaves octaves from the C of octave first to the C above. A
+ * Piano keys, octaves octaves from the white key lowest to the same one
+ * above (keysPlace stands them around middle C). A
  * key plays louder pressed nearer its front edge (every key at full
  * velocity, given fullVelocity); a finger that slides moves its note from
  * key to key, and up or down the keys sends Slide.
  */
 export function Keys({
   hands,
-  first,
+  lowest,
   octaves,
   label,
   fullVelocity = false,
 }: {
   hands: Hands
-  first: number
+  /** The lowest note, a white key's */
+  lowest: number
   octaves: number
   label: string
   fullVelocity?: boolean
@@ -39,7 +41,7 @@ export function Keys({
     const box = boxRef.current ?? event.currentTarget.getBoundingClientRect()
     const x = (event.clientX - box.left) / box.width
     const y = (event.clientY - box.top) / box.height
-    return { y, note: keyAt(x, y, first, octaves) }
+    return { y, note: keyAt(x, y, lowest, octaves) }
   }
 
   const down = (event: PointerEvent<HTMLDivElement>) => {
@@ -74,7 +76,7 @@ export function Keys({
       onLostPointerCapture={up}
       className="absolute inset-0 touch-none"
     >
-      {keyboardLayout(first, octaves).map((key) => (
+      {keyboardLayout(lowest, octaves).map((key) => (
         <div
           key={key.note}
           ref={(element) => {

@@ -105,9 +105,10 @@ interface Picking {
 
 /**
  * The sound as flat tiles flowing left to right (docs/plan/sound-chains.md,
- * The editor): the modulators' rack and the voice above, the inputs in a
- * column, a row per chain (its head, its items, the amp at the end of
- * every row), and under it all the panel of the tile picked. Tapping a
+ * The editor): the modulators' rack and the voice above (beside, at the
+ * left, on a wider screen), the inputs in a column, a row per chain (its
+ * head, its items, the amp at the end of every row), and under it all the
+ * panel of the tile picked. Tapping a
  * tile picks it; a peg between an input and a chain picks the chain, its
  * knob for that input lit.
  *
@@ -187,12 +188,14 @@ export function SoundEditor({
   // tiles at the top of theirs, and the graph pans only past it. On a wide
   // one (index.css) the panel stands under the graph again, the whole
   // width, its knobs 72 px in a row over the keys (knobRow), and the graph
-  // takes the rest of the height.
+  // takes the rest of the height. Held upright, the rack stands over the
+  // graph; on a wider screen, whose graph has width to spare and little
+  // height, it stands at its left, a column.
   return (
     <div className="flex min-h-0 flex-col gap-3 md:grid md:grid-cols-[minmax(0,1fr)_clamp(22rem,36%,40rem)] md:grid-rows-[minmax(0,1fr)] max-md:flex-1 roomy:flex-1 wide:flex">
       <section
         aria-label="The sound, flowing left to right"
-        className={`flex min-h-[8.75rem] min-w-0 flex-col overflow-hidden max-md:flex-1 wide:flex-1 ${CARD}`}
+        className={`flex min-h-[8.75rem] min-w-0 flex-col overflow-hidden max-md:flex-1 md:flex-row wide:flex-1 ${CARD}`}
       >
         <Rack {...picking} source={from} />
         <Graph
@@ -238,9 +241,10 @@ export function SoundEditor({
  * note comes in, its mode under its name. Then the modulators in a row,
  * each a block drawing its shape, and a "+" while there is room. The row
  * scrolls sideways under the voice, which clips at its padding: there is
- * room in it for a tile's rings (a reach ring stands 3.5 px out). The
- * source being routed from is outlined in sky. A modulator dragged moves
- * along it.
+ * room in it for a tile's rings (a reach ring stands 3.5 px out). From md
+ * up it is a column at the graph's left, the voice on top, scrolling down
+ * (it asks no height of the card: the graph sets that). The source being
+ * routed from is outlined in sky. A modulator dragged moves along it.
  */
 function Rack({
   engine,
@@ -254,40 +258,47 @@ function Rack({
   const scrollerRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
   const markerRef = useRef<HTMLSpanElement>(null)
+  /** Whether the rack stands as a column, read as a drag starts */
+  const downRef = useRef(false)
   const drag = useTileDrag<Place>({
     scroller: scrollerRef,
     content: contentRef,
     marker: markerRef,
-    axis: () => 'x',
-    // Measured: the tiles stand in a row of their own sizes
-    locate: (id, x) => {
+    axis: () => {
+      const content = contentRef.current
+      downRef.current =
+        content !== null && getComputedStyle(content).flexDirection === 'column'
+      return downRef.current ? 'y' : 'x'
+    },
+    // Measured: the tiles stand in a row (or a column) of their own sizes
+    locate: (id, x, y) => {
+      const down = downRef.current
       const tiles = Array.from(
         contentRef.current?.querySelectorAll<HTMLElement>('[data-drag]') ?? []
       )
       const from = tiles.findIndex((tile) => tile.dataset.drag === id)
       const tile = tiles[from]
-      const spans = tiles.map((each) => ({
-        start: each.offsetLeft,
-        end: each.offsetLeft + each.offsetWidth,
-      }))
-      const at = tile && spanDrop(spans, from, x, RACK_GAP, 0)
+      const spans = tiles.map((each) =>
+        down
+          ? { start: each.offsetTop, end: each.offsetTop + each.offsetHeight }
+          : { start: each.offsetLeft, end: each.offsetLeft + each.offsetWidth }
+      )
+      const at = tile && spanDrop(spans, from, down ? y : x, RACK_GAP, 0)
       if (!tile || !at) return undefined
+      const seam = at.middle - MARK / 2
       return {
         to: at.to,
         color: MOD_LOOK.ink,
-        marker: {
-          x: at.middle - MARK / 2,
-          y: tile.offsetTop,
-          w: MARK,
-          h: tile.offsetHeight,
-        },
+        marker: down
+          ? { x: tile.offsetLeft, y: seam, w: tile.offsetWidth, h: MARK }
+          : { x: seam, y: tile.offsetTop, w: MARK, h: tile.offsetHeight },
       }
     },
     drop: (id, at) => engine.edit((current) => movePart(current, id, at.to)),
     lift: (id) => pick(id),
   })
   return (
-    <div className="mx-2 mt-2 mb-1 flex h-[4.25rem] shrink-0 items-center gap-1.5 rounded-lg bg-white/[0.03] pr-0.5 pl-1.5">
+    <div className="mx-2 mt-2 mb-1 flex h-[4.25rem] shrink-0 items-center gap-1.5 rounded-lg bg-white/[0.03] pr-0.5 pl-1.5 md:mr-1 md:mb-2 md:h-auto md:w-[4.25rem] md:flex-col md:px-0 md:pt-1.5 md:pb-0.5">
       <Tile
         engine={engine}
         label="Voice"
@@ -301,13 +312,19 @@ function Rack({
         className="size-14 shrink-0"
         small
       />
-      <span aria-hidden className="h-10 w-px shrink-0 bg-white/10" />
+      <span
+        aria-hidden
+        className="h-10 w-px shrink-0 bg-white/10 md:h-px md:w-10"
+      />
       <div
         ref={scrollerRef}
         aria-label="Modulators"
-        className="flex min-w-0 flex-1 overflow-x-auto overscroll-x-contain px-1 py-1.5"
+        className="flex min-w-0 flex-1 overflow-x-auto overscroll-x-contain px-1 py-1.5 md:min-h-0 md:basis-0 md:flex-col md:self-stretch md:overflow-x-hidden md:overflow-y-auto md:overscroll-y-contain md:px-1.5 md:py-1"
       >
-        <div ref={contentRef} className="relative flex shrink-0 gap-1">
+        <div
+          ref={contentRef}
+          className="relative flex shrink-0 gap-1 md:flex-col"
+        >
           {sound.modulators.map((modulator) => (
             <Tile
               key={modulator.id}
@@ -337,7 +354,7 @@ function Rack({
               dashed="add"
               aria="Add a modulator"
               onClick={() => pick(addId('modulator'))}
-              className="h-14 w-7 shrink-0"
+              className="h-14 w-7 shrink-0 md:h-7 md:w-14"
               small
             />
           )}
@@ -433,10 +450,11 @@ function Graph({
     <div
       ref={frameRef}
       // Its height at rest is what it asks of the card, the slots grown or
-      // not (held upright, at most 45% of the screen): a card given more
-      // (the editor filling the page) grows it, and the slots fill it
+      // not (held upright, at most 45% of the screen; beside the rack, from
+      // md up, at most 22rem): a card given more (the editor filling the
+      // page) grows it, and the slots fill it
       style={{ '--rest': `${geometry.rest}px` } as CSSProperties}
-      className="relative min-h-0 grow basis-(--rest) overflow-auto overscroll-contain max-md:basis-[min(var(--rest),22rem,45dvh)] md:max-h-[22rem] roomy:max-h-none"
+      className="relative min-h-0 grow basis-[min(var(--rest),22rem,45dvh)] overflow-auto overscroll-contain md:h-[min(var(--rest),22rem)] md:max-h-full md:min-w-0 md:basis-0 roomy:h-auto roomy:max-h-none"
     >
       <div
         ref={contentRef}

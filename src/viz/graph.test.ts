@@ -326,6 +326,24 @@ describe('graphGeometry', () => {
     expect(graphGeometry(two, LIMITS).bus).toBeUndefined()
   })
 
+  it('stands items two slots tall at most, in the middle of their row', () => {
+    // A chain fed by four inputs: its row four slots, 194 tall
+    const fed = built(['i1', 'i2', 'i3', 'i4'], [['i1', 'i2', 'i3', 'i4']], [1])
+    const a = graphGeometry(fed, LIMITS).chains[0]
+    expect(a?.head).toMatchObject({ y: 6, h: 194 })
+    expect(a?.items[0]?.box).toMatchObject({ y: 56, h: 94 })
+    expect(a?.add).toMatchObject({ y: 56, h: 94 })
+    // Their middle is the row's, where the joints stand
+    const box = a?.items[0]?.box
+    expect((box?.y ?? 0) + (box?.h ?? 0) / 2).toBe(6 + 194 / 2)
+    // A row of two slots or one: as tall as it
+    const two = built(['i1', 'i2'], [['i1', 'i2']], [1])
+    expect(graphGeometry(two, LIMITS).chains[0]?.items[0]?.box).toMatchObject({
+      y: 6,
+      h: 94,
+    })
+  })
+
   it('draws an amp one slot tall when there are no chains', () => {
     const geometry = graphGeometry(built([], [], []), LIMITS)
     expect(geometry.chains).toEqual([])

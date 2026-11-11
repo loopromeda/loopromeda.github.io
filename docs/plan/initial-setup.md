@@ -345,6 +345,11 @@ right, benchmark within budget.
         stays within three octaves, so there is always an octave to shift
         to, and 16 is the drum kit's size for when Parts come. Keys start
         on C4, pads on the root in octave 3, each keeping its own octave.
+        2026-11-12, asked for by ashon: the keys stand with C4 in their
+        middle, from a C for an even number of octaves (C3–C5) and from an
+        F for an odd one (F3–F4 on a phone, F2–F5 on the Fold open), and
+        the computer keys start on the C nearest their middle (`keysPlace`
+        and `middleC` in `src/viz/keyboard.ts`).
         Computer keys play the pads too (A–; then Q–P). Measured in frames:
         360×720 4×3 pads of 79×65 px, 390×844 4×4 of 87×73, 930×566 8×2
         of 109×66, 768×1024 4×4 of 181×130, 1280×800 8×2 of 153×160,
