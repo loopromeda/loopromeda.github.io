@@ -139,7 +139,7 @@ well-specified: delegate to opencode (project rule), then verify with tests.
       directly: the opencode wrapper needs a first commit to diff against)
 - [x] vitest config + one trivial test
 - [x] GitHub Actions: `ci.yml` (typecheck, lint, test, build) — written and
-      actionlint-clean, not run yet (no remote)
+      actionlint-clean; green since the first push (2026-11-11)
 - [x] GitHub Pages deploy workflow — same; since 2026-11-11 it publishes the
       organisation site at the root of https://loopromeda.github.io/
 - [x] HTTPS dev over the tailnet: `pnpm dev:tailnet` (`scripts/tailnet.sh` +
@@ -150,7 +150,8 @@ well-specified: delegate to opencode (project rule), then verify with tests.
 
 **Exit:** a phone on the tailnet opens `https://<machine>.<tailnet>.ts.net:5173` as a
 secure context — **met 2026-11-09** (Galaxy Z Fold line, Android 17, Chrome 156;
-see `docs/platform-notes.md`). The Pages URL and green CI wait for a remote.
+see `docs/platform-notes.md`). The Pages URL and green CI — **met 2026-11-11**:
+https://loopromeda.github.io/ starts its audio, and ci and deploy pass.
 
 ### M1 — Audio spike on real devices (M) — _highest risk_
 
