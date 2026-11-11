@@ -4,7 +4,8 @@ import { defineConfig } from 'vite'
 import { deviceReport } from './scripts/vite-device-report.ts'
 
 export default defineConfig({
-  // GitHub Pages serves the project page under /loopromeda/ (deploy.yml)
+  // GitHub Pages serves the site at the root of loopromeda.github.io
+  // (deploy.yml); BASE_PATH builds it for a path under a host instead
   base: process.env.BASE_PATH ?? '/',
   plugins: [react(), tailwindcss(), deviceReport()],
   server: {

@@ -106,8 +106,9 @@ device test instead of asking for numbers to be retyped.
 
 ## Repository
 
-Local only for now: there is no remote. Do not create a GitHub repository,
-add a remote or push until ashon asks; commit only when asked.
+github.com/loopromeda/loopromeda.github.io (public), remote `origin`. Every
+push to `main` deploys https://loopromeda.github.io/ (deploy.yml). Commit
+only when asked, and push only when ashon asks.
 
 ## Conventions
 

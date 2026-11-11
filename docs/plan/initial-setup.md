@@ -140,7 +140,8 @@ well-specified: delegate to opencode (project rule), then verify with tests.
 - [x] vitest config + one trivial test
 - [x] GitHub Actions: `ci.yml` (typecheck, lint, test, build) — written and
       actionlint-clean, not run yet (no remote)
-- [x] GitHub Pages deploy workflow (`base` path set for the project page) — same
+- [x] GitHub Pages deploy workflow — same; since 2026-11-11 it publishes the
+      organisation site at the root of https://loopromeda.github.io/
 - [x] HTTPS dev over the tailnet: `pnpm dev:tailnet` (`scripts/tailnet.sh` +
       `tailscale serve`); phones only need the Tailscale app
 - [x] Dev-only device report: each page load records what the browser offers in
@@ -513,9 +514,11 @@ Confirmed 2026-11-09 (the recommended defaults):
    types: wavetable next, then 2-operator FM if wanted. Sampling stays out unless
    the loop recorder needs it.
 2. **"Loop"** — step sequencer (pattern loop) first; a live loop recorder may follow.
-3. **Hosting** — GitHub Pages (project page under `/loopromeda/`), later:
-   development stays local for now (no remote, nothing pushed), per ashon
-   2026-11-09. The workflows are ready for when a repository exists.
+3. **Hosting** — GitHub Pages. Development stayed local at first (no remote,
+   nothing pushed), per ashon 2026-11-09. On 2026-11-11 ashon made the
+   `loopromeda` organisation, so the app is its site at the root of
+   https://loopromeda.github.io/, from the public repository
+   `loopromeda/loopromeda.github.io` (not a project page under a path).
 4. **iOS delivery** — pure web/PWA first; Capacitor only if M1 forces it.
 5. **Minimum targets** — iOS 17+ Safari, the last 2 major Android Chrome versions.
 6. **Dev environment** — over the tailnet with `tailscale serve`.
