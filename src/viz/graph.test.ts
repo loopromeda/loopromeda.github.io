@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  GRAPH,
   graphGeometry,
   graphLayout,
   type GeometrySound,
@@ -313,17 +314,30 @@ describe('graphGeometry', () => {
     expect(geometry.addChain).toEqual({ x: 80, y: 6, w: 83, h: 30 })
   })
 
-  it('stretches the amp to fill a frame, keeping room for its waveform', () => {
+  it('shares a wider frame among the tiles, the amp holding the rest', () => {
     const one = built(['i1'], [['i1']], [1])
-    // One item and its "+": the amp at 119 + 63 + 47
-    const wide = graphGeometry(one, LIMITS, 520)
-    expect(wide.amp).toMatchObject({ x: 229, w: 520 - 229 - 8 })
-    expect(wide.width).toBe(520)
-    // A frame too narrow pans: the amp keeps its waveform's room
+    // At rest, one item and its "+": the amp at 119 + 63 + 47, 96 wide
+    const rest = graphGeometry(one, LIMITS, 333)
+    expect(rest.inputs[0]?.box.w).toBe(68)
+    expect(rest.amp).toMatchObject({ x: 229, w: 96 })
+    // A frame too narrow pans: everything stays at rest
     const narrow = graphGeometry(one, LIMITS, 300)
-    expect(narrow.amp.w).toBe(96)
-    expect(narrow.width).toBe(229 + 96 + 8)
-    // The rest stands where it did
-    expect(wide.chains).toEqual(graphGeometry(one, LIMITS).chains)
+    expect(narrow.width).toBe(333)
+    expect(narrow.chains).toEqual(rest.chains)
+    // 187 more: the input, the item, the "+" and the amp widen about 1.7
+    // times (the head stays 36), and the amp takes what rounding leaves
+    const wide = graphGeometry(one, LIMITS, 520)
+    expect(wide.inputs[0]?.box.w).toBe(115)
+    expect(wide.chains[0]?.head).toMatchObject({ x: 127, w: 36 })
+    expect(wide.chains[0]?.items[0]?.box).toMatchObject({ x: 166, w: 101 })
+    expect(wide.chains[0]?.add).toMatchObject({ x: 270, w: 74 })
+    expect(wide.amp).toMatchObject({ x: 347, w: 165 })
+    expect(wide.width).toBe(520)
+    expect(wide.pegs[0]?.x).toBe((8 + 115 + 127) / 2)
+    // At most twice as wide; past that the amp takes the rest
+    const huge = graphGeometry(one, LIMITS, 1000)
+    expect(huge.inputs[0]?.box.w).toBe(GRAPH.inputW * GRAPH.stretch)
+    expect(huge.chains[0]?.items[0]?.box.w).toBe(GRAPH.itemW * GRAPH.stretch)
+    expect(huge.amp).toMatchObject({ x: 401, w: 1000 - 401 - 8 })
   })
 })

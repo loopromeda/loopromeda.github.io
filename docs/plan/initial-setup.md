@@ -33,6 +33,7 @@ development runs over the tailnet (`tailscale serve`) instead of LAN + mkcert.
 | Package manager        | pnpm                                                          | House standard                                                                                                                            |
 | Build                  | Vite + TypeScript (strict)                                    | Worklet bundled separately via `?worker&url` (verify dev **and** build in M1)                                                             |
 | UI                     | React 19 + Tailwind v4                                        | House standard. Real-time paths (knob drag, keys) bypass React state: refs + pointer events, push straight to the engine, repaint via rAF |
+| Type                   | Recursive, self-hosted (`@fontsource-variable/recursive`)     | One variable face for names (sans) and readouts (MONO axis at 1); bundled, so every phone shows the same letters, offline too             |
 | State                  | Small external store + `useSyncExternalStore`                 | No extra dependency needed yet                                                                                                            |
 | Audio                  | Single `AudioWorkletNode`, custom DSP in TS                   | No Tone.js (main-thread scheduling, heavy, less control). Native-node graph rejected: per-voice node churn, limited per-sample modulation |
 | Main→worklet transport | `port.postMessage` with a typed message union                 | SharedArrayBuffer ring buffer deferred: needs COOP/COEP headers (not possible on GitHub Pages), not needed for UI-rate events             |
@@ -153,7 +154,14 @@ see `docs/platform-notes.md`). The Pages URL and green CI wait for a remote.
 ### M1 — Audio spike on real devices (M) — _highest risk_
 
 - [x] "Tap to start" screen: create/resume `AudioContext` inside the **click**
-      (on touch screens pointerdown is not a user activation; click is)
+      (on touch screens pointerdown is not a user activation; click is).
+      Since 2026-11-11 (ashon: a reload always went back to the first
+      page) a cover over the instrument, which a reload brings back as it
+      was: each sheet has an address (`#/presets`, `#/surface`,
+      `#/settings`, `src/ui/pages.ts`; Back closes it), the picked tile is
+      kept for the tab (sessionStorage). The tap stays: no browser lets a
+      page start audio without one. The browser checks moved to Settings,
+      under Browser; only a failed start has a page of its own.
 - [x] iOS: feature-detect and set `navigator.audioSession.type = 'playback'` so the
       silent switch doesn't mute us — written, untested until an iPhone tries it
 - [ ] Fallback if that is not enough: silent looping `<audio>` unmute trick

@@ -1,6 +1,19 @@
 @import 'tailwindcss';
 
 /*
+ * One face, Recursive (OFL), bundled so the app looks the same on every
+ * phone and offline: its Linear sans for names and labels, its Mono (the
+ * MONO axis at 1) for every readout (font-mono). main.tsx loads the cut
+ * that holds the weight and MONO axes only.
+ */
+@theme {
+  --font-sans: 'Recursive Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-sans--font-variation-settings: 'MONO' 0;
+  --font-mono: 'Recursive Variable', ui-monospace, monospace;
+  --font-mono--font-variation-settings: 'MONO' 1;
+}
+
+/*
  * An instrument, not a document: no page bounce, text selection, long-press
  * callout, double-tap zoom or tap highlight on touch screens (main.tsx
  * also turns away long presses). Play surfaces and knobs add

@@ -7,7 +7,7 @@ import {
   type RefObject,
 } from 'react'
 import type { Box } from '../viz/graph'
-import { HOLD } from './controls'
+import { CARD_FACE, HOLD } from './controls'
 import { keepHeld } from './held'
 
 /** A mouse moved this far (CSS px) with its button down drags the tile */
@@ -151,7 +151,7 @@ export function useTileDrag<T extends Spot>(
       width: `${box.w}px`,
       height: `${box.h}px`,
       background: color,
-      boxShadow: `0 0 0 2px #111116, 0 0 10px ${color}`,
+      boxShadow: `0 0 0 2px ${CARD_FACE}, 0 0 10px ${color}`,
     })
   }
 

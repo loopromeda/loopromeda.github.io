@@ -87,7 +87,8 @@ export function itemDrop(
     start: box.x,
     end: box.x + box.w,
   }))
-  const empty = GRAPH.itemsX - GRAPH.seam / 2
+  // An empty chain's first place: on the seam after its head
+  const empty = row.head.x + row.head.w + GRAPH.seam / 2
   const drop = spanDrop(spans, from, x, GRAPH.seam, empty)
   if (!drop) return undefined
   return {

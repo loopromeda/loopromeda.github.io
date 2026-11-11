@@ -5,7 +5,7 @@ import {
   type SurfaceSettings,
 } from '../state/surface'
 import { pitchName } from '../viz/keyboard'
-import { OPTION } from './controls'
+import { CARD, OPTION } from './controls'
 import { IconButton } from './IconButton'
 import { SurfaceIcon } from './SurfaceButton'
 
@@ -47,7 +47,7 @@ export function SurfacePicker({
     <section
       id="surface"
       aria-labelledby="surface-heading"
-      className="absolute inset-0 z-10 flex flex-col gap-2 rounded-xl bg-[#16161c] px-3 pt-1.5 pb-3 shadow-[0_0_0_1px_rgb(255_255_255/0.08)]"
+      className={`absolute inset-0 z-10 flex flex-col gap-2 px-3 pt-1.5 pb-3 ${CARD}`}
     >
       <div className="@container flex h-11 shrink-0 items-center justify-end gap-1.5">
         <h2

@@ -41,6 +41,7 @@ import {
   tileLine,
   type Look,
 } from './editor'
+import { CARD, CARD_FACE } from './controls'
 import { PartPanel } from './PartPanel'
 import { RoutesFrom, RoutesInto, type RouteTarget } from './RoutePanels'
 import { Scope, type ScopeStats } from './Scope'
@@ -53,8 +54,8 @@ export interface AmpScope {
   readonly onStats?: (stats: ScopeStats) => void
 }
 
-/** The graph's background: tiles are cut from it by a ring of it */
-const GROUND = '#111116'
+/** The graph's background, a card's: tiles are cut from it by a ring of it */
+const GROUND = CARD_FACE
 /** A tile's face */
 const FACE = '#1c1c23'
 /** A tile's text: zinc-100 */
@@ -69,6 +70,25 @@ const RACK_GAP = 4
 
 /** Where a tile dragged goes: its index, and the chain an item goes into */
 type Place = Spot & { readonly to: number; readonly chain?: string }
+
+/** The tile picked, kept for the tab: a reload picks it again */
+const PICKED_KEY = 'loopromeda.picked'
+
+function readPicked(): string {
+  try {
+    return sessionStorage.getItem(PICKED_KEY) ?? ''
+  } catch {
+    return ''
+  }
+}
+
+function keepPicked(id: string): void {
+  try {
+    sessionStorage.setItem(PICKED_KEY, id)
+  } catch {
+    // A private window may refuse it: the tile is picked all the same
+  }
+}
 
 /** What the editor's parts share: the engine, what is picked, picking */
 interface Picking {
@@ -111,7 +131,7 @@ export function SoundEditor({
 }) {
   useSyncExternalStore(engine.subscribeSound, () => shapeKey(engine.getSound()))
   const sound = engine.getSound()
-  const [chosen, setChosen] = useState('')
+  const [chosen, setChosen] = useState(readPicked)
   const [focus, setFocus] = useState<string | undefined>(undefined)
   const [menu, setMenu] = useState(false)
   const [routing, setRouting] = useState<RouteTarget | null>(null)
@@ -125,6 +145,7 @@ export function SoundEditor({
 
   const pick = (id: string, input?: string) => {
     setChosen(id)
+    keepPicked(id)
     setFocus(input)
     setMenu(false)
     setRouting(null)
@@ -156,8 +177,7 @@ export function SoundEditor({
     <div className="flex min-h-0 flex-col gap-3 md:grid md:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] md:grid-rows-[minmax(0,1fr)]">
       <section
         aria-label="The sound, flowing left to right"
-        style={{ background: GROUND }}
-        className="flex min-h-28 min-w-0 flex-col overflow-hidden rounded-xl shadow-[inset_0_0_0_1px_rgba(255,255,255,0.06)]"
+        className={`flex min-h-28 min-w-0 flex-col overflow-hidden ${CARD}`}
       >
         <Rack {...picking} source={from} />
         <Graph
@@ -308,9 +328,10 @@ function Rack({
 }
 
 /**
- * The inputs, the chains and the amp, laid out by graphGeometry: the amp
- * fills the frame's width, holding the output waveform. The frame takes
- * the room the page leaves it, up to a cap, and pans what it cannot show.
+ * The inputs, the chains and the amp, laid out by graphGeometry: the
+ * tiles share the frame's width, the amp holding the output waveform. The
+ * frame takes the room the page leaves it, up to a cap, and pans what it
+ * cannot show.
  */
 function Graph({
   engine,

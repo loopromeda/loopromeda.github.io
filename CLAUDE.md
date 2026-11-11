@@ -86,7 +86,12 @@ src/ui/       React components; SoundEditor.tsx the sound as tiles
               notes on Keys.tsx or Pads.tsx (hands.ts: who holds which
               note),
               PresetBrowser.tsx loads, saves and moves presets,
-              SettingsSheet.tsx holds the settings and Measure CPU
+              SettingsDialog.tsx, a modal dialog, holds the settings,
+              Measure CPU and the browser's checks; pages.ts gives each
+              sheet an address (#/presets), so a reload keeps it and
+              Back closes it;
+              controls.ts the shared sizes and the card every panel
+              stands on
 scripts/      dev tooling: tailnet.sh, the device-report Vite plugin
 ```
 

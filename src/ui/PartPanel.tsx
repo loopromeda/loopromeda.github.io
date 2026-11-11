@@ -40,8 +40,10 @@ import {
 import {
   BUTTON,
   BUTTON_DANGER,
-  KNOB_ROW,
+  CARD,
+  knobRow,
   KNOB_SIZE,
+  PANEL_BODY,
   SMALL_BUTTON,
   TALL_HIT,
 } from './controls'
@@ -195,7 +197,7 @@ export function PartPanel({
   return (
     <section
       aria-label={view.title}
-      className="flex min-h-[8.5rem] min-w-0 flex-col gap-2 rounded-xl bg-white/5 px-2.5 py-2"
+      className={`flex min-h-[8.5rem] min-w-0 flex-col gap-2 px-2.5 py-2 ${CARD}`}
     >
       <div className="flex h-7 shrink-0 items-center gap-2">
         <span
@@ -253,129 +255,139 @@ export function PartPanel({
         </span>
       </div>
 
-      {open ? (
-        <>
-          <div className="flex gap-2">
-            {view.actions?.map((action) => (
-              <button
-                key={action.label}
-                type="button"
-                disabled={!action.run}
-                onClick={action.run}
-                className={`${action.danger ? BUTTON_DANGER : BUTTON} flex-1 px-2`}
-              >
-                {action.label}
-              </button>
-            ))}
-          </div>
-          {view.actionNote && (
-            <p className="text-[11px] leading-snug text-zinc-500">
-              {view.actionNote}
-            </p>
-          )}
-        </>
-      ) : view.choices ? (
-        <>
-          <div className="flex gap-2">
-            {view.choices.map((choice) => (
-              <button
-                key={choice.label}
-                type="button"
-                disabled={!choice.add}
-                onClick={choice.add}
-                className="flex h-[54px] max-w-[108px] flex-1 flex-col items-start justify-center gap-[3px] rounded-[7px] bg-[#1c1c23] px-2.5 text-left text-zinc-100 disabled:opacity-40"
-                style={{ boxShadow: `inset 0 0 0 1.5px ${choice.look.ring}` }}
-              >
-                <span className="flex items-center gap-1.5">
-                  <svg viewBox="0 0 18 12" width={18} height={12} aria-hidden>
-                    <path
-                      d={choice.glyph}
-                      fill="none"
-                      stroke={choice.look.ink}
-                      strokeWidth={1.7}
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                  <span className="text-xs font-semibold">{choice.label}</span>
-                </span>
-                <span className="text-[10px] whitespace-nowrap text-zinc-400">
-                  {choice.hint}
-                </span>
-              </button>
-            ))}
-          </div>
-          {view.choiceNote && (
-            <p className="text-[11px] leading-snug text-zinc-500">
-              {view.choiceNote}
-            </p>
-          )}
-        </>
-      ) : (
-        <>
-          {view.feeds && view.feeds.length > 0 && (
-            <Feeds title={view.title} feeds={view.feeds} />
-          )}
-          {view.knobs.length > 0 || view.knobless?.length ? (
-            <div className={KNOB_ROW}>
-              {view.knobs.map(({ part, key, hot }) => (
-                <Knob
-                  key={`${part} ${key}`}
-                  engine={engine}
-                  part={part}
-                  knob={key}
-                  color={view.color}
-                  hot={hot}
-                  onHold={(dest) => onRoute(part, dest)}
-                />
-              ))}
-              {view.knobless?.map(({ part, dest, count }) => (
+      <div className={PANEL_BODY}>
+        {open ? (
+          <>
+            <div className="flex gap-2">
+              {view.actions?.map((action) => (
                 <button
-                  key={`${part} ${dest.key}`}
+                  key={action.label}
                   type="button"
-                  aria-label={`Route to ${view.title} ${dest.label}`}
-                  onClick={() => onRoute(part, dest.key)}
-                  className="flex min-w-0 flex-col items-center gap-0.5"
+                  disabled={!action.run}
+                  onClick={action.run}
+                  className={`${action.danger ? BUTTON_DANGER : BUTTON} flex-1 px-2`}
                 >
-                  <span
-                    aria-hidden
-                    style={{ border: `1.5px dashed ${MOD_LOOK.ring}` }}
-                    className={`${KNOB_SIZE} relative flex aspect-square items-center justify-center rounded-full`}
-                  >
-                    <svg viewBox="0 0 18 12" width={18} height={12}>
+                  {action.label}
+                </button>
+              ))}
+            </div>
+            {view.actionNote && (
+              <p className="text-[11px] leading-snug text-zinc-500">
+                {view.actionNote}
+              </p>
+            )}
+          </>
+        ) : view.choices ? (
+          <>
+            <div className="flex gap-2">
+              {view.choices.map((choice) => (
+                <button
+                  key={choice.label}
+                  type="button"
+                  disabled={!choice.add}
+                  onClick={choice.add}
+                  className="flex h-[54px] max-w-[108px] flex-1 flex-col items-start justify-center gap-[3px] rounded-[7px] bg-[#1c1c23] px-2.5 text-left text-zinc-100 disabled:opacity-40"
+                  style={{ boxShadow: `inset 0 0 0 1.5px ${choice.look.ring}` }}
+                >
+                  <span className="flex items-center gap-1.5">
+                    <svg viewBox="0 0 18 12" width={18} height={12} aria-hidden>
                       <path
-                        d={GLYPHS.route}
+                        d={choice.glyph}
                         fill="none"
-                        stroke={MOD_COLOR}
-                        strokeWidth={1.6}
+                        stroke={choice.look.ink}
+                        strokeWidth={1.7}
                         strokeLinecap="round"
                         strokeLinejoin="round"
                       />
                     </svg>
+                    <span className="text-xs font-semibold">
+                      {choice.label}
+                    </span>
                   </span>
-                  <span className="text-[11px] leading-tight whitespace-nowrap text-zinc-400">
-                    {dest.label}
-                  </span>
-                  <span className="font-mono text-[11px] leading-tight whitespace-nowrap text-zinc-200">
-                    {count === 0
-                      ? 'Route'
-                      : count === 1
-                        ? '1 route'
-                        : `${count} routes`}
+                  <span className="text-[10px] whitespace-nowrap text-zinc-400">
+                    {choice.hint}
                   </span>
                 </button>
               ))}
             </div>
-          ) : (
-            view.note && (
-              <p className="text-xs leading-snug text-zinc-400">{view.note}</p>
-            )
-          )}
-          {view.targets && (
-            <Targets {...view.targets} onRoute={onRoute} onMap={onMap} />
-          )}
-        </>
-      )}
+            {view.choiceNote && (
+              <p className="text-[11px] leading-snug text-zinc-500">
+                {view.choiceNote}
+              </p>
+            )}
+          </>
+        ) : (
+          <>
+            {view.feeds && view.feeds.length > 0 && (
+              <Feeds title={view.title} feeds={view.feeds} />
+            )}
+            {view.knobs.length > 0 || view.knobless?.length ? (
+              <div
+                className={knobRow(
+                  view.knobs.length + (view.knobless?.length ?? 0)
+                )}
+              >
+                {view.knobs.map(({ part, key, hot }) => (
+                  <Knob
+                    key={`${part} ${key}`}
+                    engine={engine}
+                    part={part}
+                    knob={key}
+                    color={view.color}
+                    hot={hot}
+                    onHold={(dest) => onRoute(part, dest)}
+                  />
+                ))}
+                {view.knobless?.map(({ part, dest, count }) => (
+                  <button
+                    key={`${part} ${dest.key}`}
+                    type="button"
+                    aria-label={`Route to ${view.title} ${dest.label}`}
+                    onClick={() => onRoute(part, dest.key)}
+                    className="flex min-w-0 flex-col items-center gap-0.5"
+                  >
+                    <span
+                      aria-hidden
+                      style={{ border: `1.5px dashed ${MOD_LOOK.ring}` }}
+                      className={`${KNOB_SIZE} relative flex aspect-square items-center justify-center rounded-full`}
+                    >
+                      <svg viewBox="0 0 18 12" width={18} height={12}>
+                        <path
+                          d={GLYPHS.route}
+                          fill="none"
+                          stroke={MOD_COLOR}
+                          strokeWidth={1.6}
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    </span>
+                    <span className="text-[11px] leading-tight whitespace-nowrap text-zinc-400">
+                      {dest.label}
+                    </span>
+                    <span className="font-mono text-[11px] leading-tight whitespace-nowrap text-zinc-200">
+                      {count === 0
+                        ? 'Route'
+                        : count === 1
+                          ? '1 route'
+                          : `${count} routes`}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              view.note && (
+                <p className="text-xs leading-snug text-zinc-400">
+                  {view.note}
+                </p>
+              )
+            )}
+            {view.targets && (
+              <Targets {...view.targets} onRoute={onRoute} onMap={onMap} />
+            )}
+          </>
+        )}
+      </div>
     </section>
   )
 }

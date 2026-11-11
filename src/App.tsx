@@ -1,4 +1,4 @@
-import { useCallback, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
 import type { Engine } from './engine/engine'
 import type { BenchReport } from './engine/protocol'
 import type { PlatformReport } from './platform'
@@ -11,35 +11,38 @@ import {
   type SurfaceStorage,
 } from './state/surface'
 import { IconButton } from './ui/IconButton'
+import { hashOf, sheetOf, type Sheet } from './ui/pages'
 import { PatchButton } from './ui/PatchButton'
 import { PlatformChecks } from './ui/PlatformChecks'
 import { PlaySurface } from './ui/PlaySurface'
 import { PresetBrowser } from './ui/PresetBrowser'
 import type { ScopeStats } from './ui/Scope'
 import { SettingsButton } from './ui/SettingsButton'
-import { SettingsSheet } from './ui/SettingsSheet'
+import { SettingsDialog } from './ui/SettingsDialog'
 import { SoundEditor } from './ui/SoundEditor'
 import { StatusBar } from './ui/StatusBar'
 import { SurfaceButton } from './ui/SurfaceButton'
 import { SurfacePicker } from './ui/SurfacePicker'
 
-/** What can open over the controls */
-type Sheet = 'presets' | 'surface' | 'settings'
-
 const page =
   'flex h-full flex-col px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]'
 
 /**
- * A start screen (what the browser offers, and the tap that may start
- * audio), then the sound's editor (its parts as tiles, the output
- * waveform in the amp's, the picked one's knobs under them), the keys or
- * pads filling the rest, and a status line under it. The buttons at the
- * left of the keyboard's header open the presets, and the choice of keys
- * or pads, over the controls: what is played on stays there to try them
- * on. The third puts the controls away,
- * for a screen too short to play on under them. The settings (this
- * device's: voices, latency, what the screen shows) open from the status
- * line's right end, in the same place.
+ * The sound's editor (its parts as tiles, the output waveform in the
+ * amp's, the picked one's knobs under them), the keys or pads filling the
+ * rest, and a status line under it. The buttons at the left of the
+ * keyboard's header open the presets, and the choice of keys or pads, over
+ * the controls: what is played on stays there to try them on. The third
+ * puts the controls away, for a screen too short to play on under them.
+ * The settings (this device's: voices, latency, what the screen shows, and
+ * what the browser offers) open from the status line's right end, in the
+ * same place.
+ *
+ * A reload comes back to the same view: each sheet has an address
+ * (pages.ts), the sound and the device's choices are kept, and the editor
+ * keeps its tile picked. Audio still waits for a tap, which browsers ask
+ * for: until then a cover over it all takes the tap. Only a failure to
+ * start has a page of its own.
  */
 export function App({
   platform,
@@ -60,10 +63,39 @@ export function App({
 }) {
   const snapshot = useSyncExternalStore(engine.subscribe, engine.getSnapshot)
   const { state } = snapshot
-  const [sheet, setSheet] = useState<Sheet | null>(null)
-  const closeSheet = useCallback(() => setSheet(null), [])
-  const toggle = (which: Sheet) =>
-    setSheet((open) => (open === which ? null : which))
+  const [sheet, setSheet] = useState<Sheet | null>(() => sheetOf(location.hash))
+  // Back, Forward, or an address typed: the sheet it names
+  useEffect(() => {
+    const follow = () => setSheet(sheetOf(location.hash))
+    window.addEventListener('popstate', follow)
+    window.addEventListener('hashchange', follow)
+    return () => {
+      window.removeEventListener('popstate', follow)
+      window.removeEventListener('hashchange', follow)
+    }
+  }, [])
+  /**
+   * Opens a sheet at its address, a step of history that Back closes;
+   * another sheet takes its step. Closing goes back off the step, or, for
+   * a sheet the page was opened at, leaves its address.
+   */
+  const showSheet = useCallback((next: Sheet | null) => {
+    const stepped = sheetOf(String(history.state?.sheet ?? '')) !== null
+    const base = location.pathname + location.search
+    if (next === null) {
+      if (stepped) history.back()
+      else {
+        history.replaceState(null, '', base)
+        setSheet(null)
+      }
+      return
+    }
+    if (stepped) history.replaceState({ sheet: next }, '', hashOf(next))
+    else history.pushState({ sheet: next }, '', hashOf(next))
+    setSheet(next)
+  }, [])
+  const closeSheet = useCallback(() => showSheet(null), [showSheet])
+  const toggle = (which: Sheet) => showSheet(sheet === which ? null : which)
   const [surface, setSurface] = useState(() => readSurface(storage))
   const changeSurface = (next: SurfaceSettings) => {
     setSurface(next)
@@ -78,46 +110,34 @@ export function App({
     if (next.voices !== settings.voices) engine.setVoices(next.voices)
     if (next.latency !== settings.latency) engine.setLatency(next.latency)
   }
+  // The presets and the surface open over the controls; the settings open
+  // as a dialog over everything instead
+  const covered = sheet === 'presets' || sheet === 'surface'
   // Put away, the controls still come back under a sheet: it needs room
-  const controls = !surface.hideControls || sheet !== null
-  // Once the audio has run, starting it again (a new latency) keeps the
-  // instrument on screen, under a note, instead of the start screen
+  const controls = !surface.hideControls || covered
+  // Until the audio has run, the cover asks for the tap that starts it;
+  // starting it again (a new latency) shows a note instead
   const [ran, setRan] = useState(false)
   if (state === 'running' && !ran) setRan(true)
 
-  if (
-    state === 'idle' ||
-    state === 'failed' ||
-    (state === 'starting' && !ran)
-  ) {
-    const failed = state === 'failed'
+  // The audio could not start: what the browser offers, and why
+  if (state === 'failed') {
     return (
       <main className={`${page} items-center justify-center gap-6`}>
         <h1 className="text-3xl font-semibold tracking-tight">Loopromeda</h1>
-        <PlatformChecks platform={platform} />
-        {failed && (
-          <p className="max-w-xs text-center text-sm break-words text-red-400 select-text">
-            {snapshot.error}
-          </p>
-        )}
+        <div className="w-full max-w-xs">
+          <PlatformChecks platform={platform} />
+        </div>
+        <p className="max-w-xs text-center text-sm break-words text-red-400 select-text">
+          {snapshot.error}
+        </p>
         <button
           type="button"
-          disabled={state === 'starting'}
-          // A click, not pointerdown: on touch screens only the click
-          // counts as the user activation iOS needs to start audio
-          onClick={() => (failed ? location.reload() : void engine.start())}
-          className="w-full max-w-xs rounded-xl bg-emerald-500 px-6 py-4 text-lg font-semibold text-black disabled:opacity-50"
+          onClick={() => location.reload()}
+          className="w-full max-w-xs rounded-xl bg-emerald-500 px-6 py-4 text-lg font-semibold text-black"
         >
-          {failed
-            ? 'Reload'
-            : state === 'starting'
-              ? 'Starting…'
-              : 'Tap to start audio'}
+          Reload
         </button>
-        <p className="max-w-xs text-center text-xs break-words text-zinc-500 select-text">
-          {platform.standalone ? 'Home screen · ' : ''}
-          {platform.userAgent}
-        </p>
       </main>
     )
   }
@@ -127,9 +147,9 @@ export function App({
       {/* Shrinks when the page is short (the graph pans), so the keys and
           the status line stay on screen; a sheet open over it has room */}
       <div
-        className={`relative flex flex-col ${sheet !== null ? 'min-h-[min(22rem,50dvh)]' : 'min-h-0'}`}
+        className={`relative flex flex-col ${covered ? 'min-h-[min(22rem,50dvh)]' : 'min-h-0'}`}
       >
-        <div inert={sheet !== null} className="flex min-h-0 flex-col">
+        <div inert={covered} className="flex min-h-0 flex-col">
           {/* Hidden, not unmounted: the editor keeps the tile picked */}
           <div
             id="controls"
@@ -154,15 +174,6 @@ export function App({
             settings={surface}
             onChange={changeSurface}
             onClose={closeSheet}
-          />
-        )}
-        {sheet === 'settings' && (
-          <SettingsSheet
-            engine={engine}
-            settings={settings}
-            onChange={changeSettings}
-            onClose={closeSheet}
-            onBench={onBench}
           />
         )}
       </div>
@@ -206,13 +217,43 @@ export function App({
         snapshot={snapshot}
         details={settings.audioDetails}
       >
-        <SettingsButton
-          open={sheet === 'settings'}
-          onToggle={() => toggle('settings')}
-        />
+        <SettingsButton onOpen={() => showSheet('settings')} />
       </StatusBar>
-      {state === 'starting' ? (
-        <p className="fixed inset-0 flex items-center justify-center bg-black/80 px-8 text-lg">
+      {/* Not over the cover: the page opened at #/settings shows them once
+          the tap has started the audio */}
+      {sheet === 'settings' && ran && (
+        <SettingsDialog
+          engine={engine}
+          platform={platform}
+          settings={settings}
+          onChange={changeSettings}
+          onClose={closeSheet}
+          onBench={onBench}
+        />
+      )}
+      {!ran ? (
+        <button
+          type="button"
+          // Enter or Space starts it from a keyboard
+          autoFocus
+          disabled={state === 'starting'}
+          // A click, not pointerdown: on touch screens only the click
+          // counts as the user activation iOS needs to start audio
+          onClick={() => void engine.start()}
+          // Focused, its pill wears the ring, not the screen's edge
+          className="group fixed inset-0 z-20 flex flex-col items-center justify-center gap-5 bg-black/80 px-8 outline-none"
+        >
+          <span className="text-3xl font-semibold tracking-tight">
+            Loopromeda
+          </span>
+          <span
+            className={`w-full max-w-xs rounded-xl bg-emerald-500 px-6 py-4 text-lg font-semibold text-black group-focus-visible:ring-2 group-focus-visible:ring-emerald-200 group-focus-visible:ring-offset-2 group-focus-visible:ring-offset-black ${state === 'starting' ? 'opacity-50' : ''}`}
+          >
+            {state === 'starting' ? 'Starting…' : 'Tap to start audio'}
+          </span>
+        </button>
+      ) : state === 'starting' ? (
+        <p className="fixed inset-0 z-20 flex items-center justify-center bg-black/80 px-8 text-lg">
           Starting the audio again…
         </p>
       ) : (
@@ -222,7 +263,7 @@ export function App({
             onClick={() =>
               state === 'closed' ? location.reload() : void engine.resume()
             }
-            className="fixed inset-0 bg-black/80 px-8 text-lg"
+            className="fixed inset-0 z-20 bg-black/80 px-8 text-lg"
           >
             Audio is {state}.
             <br />

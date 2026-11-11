@@ -27,6 +27,7 @@ import {
   BUTTON,
   BUTTON_CONFIRM,
   BUTTON_DANGER,
+  CARD,
   FIELD,
   OPTION,
 } from './controls'
@@ -155,7 +156,7 @@ export function PresetBrowser({
     <section
       id="presets"
       aria-labelledby="presets-heading"
-      className="absolute inset-0 z-10 flex flex-col gap-2 rounded-xl bg-[#16161c] px-3 pt-1.5 pb-2 shadow-[0_0_0_1px_rgb(255_255_255/0.08)]"
+      className={`absolute inset-0 z-10 flex flex-col gap-2 px-3 pt-1.5 pb-2 ${CARD}`}
     >
       {/* A narrow header keeps its buttons and drops the heading from view */}
       <div className="@container flex h-11 shrink-0 items-center justify-end gap-1.5">

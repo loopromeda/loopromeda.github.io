@@ -1,14 +1,24 @@
-import { Fragment, useEffect, useId, useState, type ReactNode } from 'react'
+import {
+  Fragment,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type MouseEvent,
+  type ReactNode,
+} from 'react'
 import type { Engine } from '../engine/engine'
 import type { BenchReport } from '../engine/protocol'
+import type { PlatformReport } from '../platform'
 import {
   VOICE_LIMITS,
   type AppSettings,
   type Latency,
   type VelocityMode,
 } from '../state/settings'
-import { BUTTON, OPTION } from './controls'
+import { BUTTON, CARD, OPTION } from './controls'
 import { IconButton } from './IconButton'
+import { PlatformChecks } from './PlatformChecks'
 
 /** Each latencyHint as the player picks it, lowest first */
 const LATENCY_LABELS: readonly { value: Latency; label: string }[] = [
@@ -36,21 +46,26 @@ const RENDER_QUANTUM = 128
 /**
  * The player's settings for this device, apart from the sound: what the
  * phone is asked to do, how a touch plays, and what the screen shows about
- * the audio. It opens from the status line over the controls, as the
- * presets do, and Escape closes it.
+ * the audio. It opens from the status line as a dialog over the whole
+ * screen, modal: nothing under it plays until it closes. Escape, Back
+ * (Chrome on Android closes a modal dialog first), the cross or a tap
+ * outside it closes it, and the settings button has the focus again.
  *
  * Debug holds Measure CPU: the audio thread times the heaviest sound at 8
  * to 32 voices, to choose Voices by. onBench gets its results too (the dev
- * server keeps them in device-reports.jsonl).
+ * server keeps them in device-reports.jsonl). Browser lists what this
+ * browser offers the synth.
  */
-export function SettingsSheet({
+export function SettingsDialog({
   engine,
+  platform,
   settings,
   onChange,
   onClose,
   onBench,
 }: {
   engine: Engine
+  platform: PlatformReport
   settings: AppSettings
   onChange: (settings: AppSettings) => void
   onClose: () => void
@@ -59,24 +74,52 @@ export function SettingsSheet({
   const set = (change: Partial<AppSettings>) =>
     onChange({ ...settings, ...change })
 
-  useEffect(() => {
-    const key = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose()
+  const dialogRef = useRef<HTMLDialogElement>(null)
+  const closeRef = useRef(onClose)
+  useLayoutEffect(() => {
+    closeRef.current = onClose
+  })
+  // Open from its first paint. When the browser closes it (Escape, Back),
+  // the sheet closes with it; put away by the page, it closes quietly and
+  // gives the focus back. A close event comes a task late: one that finds
+  // the dialog open again (shown again since) is not this one's.
+  useLayoutEffect(() => {
+    const dialog = dialogRef.current
+    if (!dialog) return
+    if (!dialog.open) dialog.showModal()
+    const closed = () => {
+      if (!dialog.open) closeRef.current()
     }
-    window.addEventListener('keydown', key)
-    return () => window.removeEventListener('keydown', key)
-  }, [onClose])
+    dialog.addEventListener('close', closed)
+    return () => {
+      dialog.removeEventListener('close', closed)
+      if (dialog.open) dialog.close()
+    }
+  }, [])
+  // A tap on the backdrop: the dialog's own, outside its box
+  const outside = (event: MouseEvent<HTMLDialogElement>) => {
+    if (event.target !== event.currentTarget) return
+    const box = event.currentTarget.getBoundingClientRect()
+    const within =
+      event.clientX >= box.left &&
+      event.clientX <= box.right &&
+      event.clientY >= box.top &&
+      event.clientY <= box.bottom
+    if (!within) onClose()
+  }
 
   return (
-    <section
+    <dialog
+      ref={dialogRef}
       id="settings"
       aria-labelledby="settings-heading"
-      className="absolute inset-0 z-10 flex flex-col gap-2 rounded-xl bg-[#16161c] px-3 pt-1.5 pb-3 shadow-[0_0_0_1px_rgb(255_255_255/0.08)]"
+      onClick={outside}
+      className={`m-auto max-h-[calc(100dvh_-_2rem_-_env(safe-area-inset-top)_-_env(safe-area-inset-bottom))] w-[calc(100%_-_1.5rem)] max-w-md flex-col gap-2 px-3 pt-1.5 pb-3 text-inherit open:flex backdrop:bg-black/70 ${CARD}`}
     >
       <div className="flex h-11 shrink-0 items-center justify-end gap-1.5">
         <h2
           id="settings-heading"
-          className="mr-auto min-w-0 truncate px-1 text-[11px] font-medium tracking-widest text-zinc-500 uppercase"
+          className="mr-auto min-w-0 truncate px-1 text-[13px] font-semibold text-zinc-200"
         >
           Settings
         </h2>
@@ -138,8 +181,12 @@ export function SettingsSheet({
           />
           <MeasureCpu engine={engine} onBench={onBench} />
         </Group>
+
+        <Group title="Browser">
+          <PlatformChecks platform={platform} />
+        </Group>
       </div>
-    </section>
+    </dialog>
   )
 }
 

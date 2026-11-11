@@ -10,10 +10,27 @@
  *   at 11 px. A header's buttons still answer a 44 px tall touch: their
  *   hit area reaches into the panel's padding.
  *
- * Panels and the waveform round at 12 px. Labels are semibold and spaced;
+ * Cards (CARD) and the waveform round at 12 px. Labels are semibold and spaced;
  * what is named or typed (a preset, a note range) is 13 px. Disabled is
  * 40% opaque everywhere, pressed or chosen is white at 10%.
+ *
+ * Rings belong to the graph's tiles and the parts' chips, in their part's
+ * colour, and to states (picked, keyboard focus). Cards and the controls
+ * on them are fills only.
+ *
+ * Every letter is Recursive (index.css): names in its sans, readouts in
+ * its mono (font-mono), the same face with its MONO axis turned up.
  */
+
+/**
+ * A card's face: the sound's graph, the panel under it and the sheets
+ * that open over them all stand on it, and the graph's tiles are cut
+ * from it
+ */
+export const CARD_FACE = '#16161c'
+
+/** A card: CARD_FACE, rounded at 12 px, no ring */
+export const CARD = 'rounded-xl bg-[#16161c]'
 
 const BUTTON_SHAPE =
   'flex h-11 shrink-0 items-center justify-center gap-2 rounded-[10px] px-3.5 text-xs font-semibold tracking-wider whitespace-nowrap disabled:opacity-40'
@@ -51,13 +68,33 @@ export const TALL_HIT =
 /** A 28 px button in a panel's header row */
 export const SMALL_BUTTON = `${TALL_HIT} flex h-7 shrink-0 items-center gap-1.5 rounded-md bg-white/5 px-3 text-[11px] font-semibold tracking-wider whitespace-nowrap text-zinc-200 disabled:opacity-40`
 
-/**
- * A panel's knobs, six to a row, wrapping. Every knob is the size it would
- * be six to a row, at most 48 px, whatever its row holds: knobs match from
- * part to part.
- */
-export const KNOB_ROW =
-  '@container grid grid-cols-6 justify-items-center gap-x-1 gap-y-2'
+/** Columns for one to six knobs, written out for Tailwind to find */
+const KNOB_COLUMNS = [
+  'grid-cols-1',
+  'grid-cols-2',
+  'grid-cols-3',
+  'grid-cols-4',
+  'grid-cols-5',
+  'grid-cols-6',
+] as const
 
-/** A knob's width in a KNOB_ROW: a sixth of the row, less five gaps */
+/**
+ * A panel's count knobs, spread across its width: a column each, six at
+ * most, wrapping past that, so a part with few knobs leaves no empty
+ * stretch at the right. Every knob is the size it would be six to a row,
+ * at most 48 px, whatever its row holds: knobs match from part to part.
+ */
+export function knobRow(count: number): string {
+  const columns = KNOB_COLUMNS[Math.min(Math.max(count, 1), 6) - 1]
+  return `@container grid ${columns} justify-items-center gap-x-1 gap-y-2`
+}
+
+/**
+ * What stands under a panel's header: in the middle of the height the
+ * panel has (beside the graph it takes the graph's), or from the top when
+ * there is more of it than fits
+ */
+export const PANEL_BODY = 'my-auto flex flex-col gap-2'
+
+/** A knob's width in a knobRow: a sixth of the row, less five gaps */
 export const KNOB_SIZE = 'w-[min(3rem,calc((100cqw_-_1.25rem)/6))]'

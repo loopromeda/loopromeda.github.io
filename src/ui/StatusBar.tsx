@@ -14,6 +14,12 @@ const DOT: Readonly<Record<EngineState, string>> = {
   failed: 'bg-red-400',
 }
 
+/**
+ * An outputLatency above this (s) is a bad reading, not a delay: Chrome on
+ * the Fold once counted down from 42 s (docs/platform-notes.md)
+ */
+const MAX_OUTPUT = 1
+
 const ms = (seconds: number | undefined): string =>
   seconds === undefined ? '—' : `${(seconds * 1000).toFixed(1)} ms`
 
@@ -23,7 +29,8 @@ const ms = (seconds: number | undefined): string =>
  * `children` (the settings button) at its right end. The latency's split
  * into base and output is in the title, and the dev server logs it with
  * every state change. outputLatency changes without an event, so the engine
- * is re-read twice a second while the details are shown.
+ * is re-read twice a second while the details are shown; a reading past
+ * MAX_OUTPUT shows as unknown.
  */
 export function StatusBar({
   engine,
@@ -43,9 +50,11 @@ export function StatusBar({
   }, [engine, details])
 
   const { state, sampleRate, baseLatency, outputLatency } = snapshot
+  const bad = outputLatency !== undefined && outputLatency > MAX_OUTPUT
+  const output = bad ? undefined : outputLatency
   const total =
-    baseLatency !== undefined && outputLatency !== undefined
-      ? baseLatency + outputLatency
+    baseLatency !== undefined && output !== undefined
+      ? baseLatency + output
       : undefined
   const block = sampleRate ? RENDER_QUANTUM / sampleRate : undefined
 
@@ -54,7 +63,7 @@ export function StatusBar({
       aria-label="Audio status"
       title={
         details
-          ? `Latency: base ${ms(baseLatency)} + output ${ms(outputLatency)}`
+          ? `Latency: base ${ms(baseLatency)} + output ${bad ? `unknown (reads ${ms(outputLatency)})` : ms(output)}`
           : undefined
       }
       className="flex h-4 shrink-0 items-center justify-between gap-3 font-mono text-[11px] text-zinc-400"

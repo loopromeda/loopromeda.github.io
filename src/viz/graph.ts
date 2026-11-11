@@ -236,10 +236,15 @@ export interface GraphGeometry {
  * The editor drawn on the design canvas, in pixels: a slot is a tile 44
  * tall (a touch's height; the canvas drew 39, before the waveform moved
  * into the amp and left the graph more room) with 6 between slots; inputs
- * stand in a column 68 wide, a chain's head is 36 and each item 60, 3
- * apart; the amp, 52 wide, stands after the longest chain and its "+",
- * which is 44 wide at least. Filling a frame, the amp takes the room left
- * in it, at least ampFill: room for the waveform it holds.
+ * stand in a column 68 wide, 4 before the chains; a chain's head is 36 and
+ * each item 60, 3 apart; the amp stands after the longest chain and its
+ * "+", which is 44 wide at least.
+ *
+ * Unframed, the amp is 52 wide. A frame wider than the graph needs is
+ * shared: the inputs, the items, the "+" and the amp widen together (a
+ * head keeps its 36), up to stretch times their width, and past that the
+ * amp takes the rest. A frame too narrow keeps the amp at ampFill, room
+ * for the waveform it holds, and pans.
  */
 export const GRAPH = {
   top: 6,
@@ -247,22 +252,76 @@ export const GRAPH = {
   slotGap: 6,
   inputX: 8,
   inputW: 68,
-  headX: 80,
+  inputGap: 4,
   headW: 36,
-  itemsX: 119,
   itemW: 60,
   seam: 3,
   addMin: 44,
   ampW: 52,
   ampFill: 96,
+  stretch: 2,
   addRow: 30,
   end: 8,
 } as const
 
+/** The tiles' widths, s times their own; the amp's from its waveform's */
+interface Widths {
+  readonly input: number
+  readonly item: number
+  readonly add: number
+  readonly amp: number
+}
+
+function widths(s: number, round: (n: number) => number): Widths {
+  const g = GRAPH
+  return {
+    input: round(g.inputW * s),
+    item: round(g.itemW * s),
+    add: round(g.addMin * s),
+    amp: round(g.ampFill * s),
+  }
+}
+
+/** Where a chain's head, its items and the amp stand, at those widths */
+function columns(sound: GeometrySound, limits: GraphLimits, w: Widths) {
+  const g = GRAPH
+  const headX = g.inputX + w.input + g.inputGap
+  const itemsX = headX + g.headW + g.seam
+  // The amp stands after the longest chain, counting its "+"
+  let reach = w.add + g.seam
+  for (const chain of sound.chains) {
+    const add = chain.items.length < limits.items ? w.add + g.seam : 0
+    reach = Math.max(reach, chain.items.length * (w.item + g.seam) + add)
+  }
+  return { headX, itemsX, ampX: itemsX + reach }
+}
+
 /**
- * Where everything in the sound's graph is drawn; given the width of its
- * frame, the amp stretches to fill it (at least GRAPH.ampFill wide), else
- * it is GRAPH.ampW
+ * How far the tiles widen in a frame fill wide: 1 when it is no wider
+ * than the graph needs, at most GRAPH.stretch. The graph's width grows
+ * in step with s (its longest chain stays the longest), so s is read off
+ * the widths at 1 and 2.
+ */
+function stretchFor(
+  sound: GeometrySound,
+  limits: GraphLimits,
+  fill: number
+): number {
+  const exact = (n: number) => n
+  const extent = (s: number) => {
+    const w = widths(s, exact)
+    return columns(sound, limits, w).ampX + w.amp + GRAPH.end
+  }
+  const at1 = extent(1)
+  if (fill <= at1) return 1
+  const s = 1 + (fill - at1) / (extent(2) - at1)
+  return Math.min(GRAPH.stretch, s)
+}
+
+/**
+ * Where everything in the sound's graph is drawn. Given the width of its
+ * frame, the tiles share it (see GRAPH): the amp fills what they leave, at
+ * least GRAPH.ampFill wide; unframed, the amp is GRAPH.ampW.
  */
 export function graphGeometry(
   sound: GeometrySound,
@@ -274,15 +333,12 @@ export function graphGeometry(
   const pitch = g.slot + g.slotGap
   const slotY = (slot: number) => g.top + slot * pitch
   const tall = (slots: number) => slots * pitch - g.slotGap
-  const itemPitch = g.itemW + g.seam
-
-  // The amp stands after the longest chain, counting its "+"
-  let reach = g.addMin + g.seam
-  for (const chain of sound.chains) {
-    const add = chain.items.length < limits.items ? g.addMin + g.seam : 0
-    reach = Math.max(reach, chain.items.length * itemPitch + add)
-  }
-  const ampX = g.itemsX + reach
+  const w = widths(
+    fill === undefined ? 1 : stretchFor(sound, limits, fill),
+    Math.floor
+  )
+  const itemPitch = w.item + g.seam
+  const { headX, itemsX, ampX } = columns(sound, limits, w)
 
   const chains: ChainBoxes[] = layout.rows.map((row, c) => {
     const items = sound.chains[c]?.items ?? []
@@ -290,17 +346,17 @@ export function graphGeometry(
     const h = tall(row.slots)
     const boxes = items.map((item, k) => ({
       item: item.id,
-      box: { x: g.itemsX + k * itemPitch, y, w: g.itemW, h },
+      box: { x: itemsX + k * itemPitch, y, w: w.item, h },
     }))
-    const addX = g.itemsX + items.length * itemPitch
+    const addX = itemsX + items.length * itemPitch
     const joints = [
       ...boxes.map(({ box }) => box.x - g.seam / 2),
       ampX - g.seam / 2,
     ]
     return {
       chain: row.chain,
-      row: { x: g.headX, y, w: ampX - g.headX, h },
-      head: { x: g.headX, y, w: g.headW, h },
+      row: { x: headX, y, w: ampX - headX, h },
+      head: { x: headX, y, w: g.headW, h },
       items: boxes,
       add:
         items.length < limits.items
@@ -319,24 +375,24 @@ export function graphGeometry(
     box: {
       x: g.inputX,
       y: slotY(tile.first),
-      w: g.inputW,
+      w: w.input,
       h: tall(tile.slots),
     },
   }))
   const pegs = layout.pegs.map((peg) => ({
     ...peg,
-    x: (g.inputX + g.inputW + g.headX) / 2,
+    x: (g.inputX + w.input + headX) / 2,
     y: slotY(peg.slot) + g.slot / 2,
   }))
 
   const addY = slotY(layout.slots)
   const addInput =
     sound.inputs.length < limits.inputs
-      ? { x: g.inputX, y: addY, w: g.inputW, h: g.addRow }
+      ? { x: g.inputX, y: addY, w: w.input, h: g.addRow }
       : undefined
   const addChain =
     sound.chains.length < limits.chains
-      ? { x: g.headX, y: addY, w: ampX - g.seam - g.headX, h: g.addRow }
+      ? { x: headX, y: addY, w: ampX - g.seam - headX, h: g.addRow }
       : undefined
   const bottom =
     addInput || addChain
@@ -344,7 +400,7 @@ export function graphGeometry(
       : Math.max(rowsEnd, slotY(layout.slots) - g.slotGap)
 
   const ampW =
-    fill === undefined ? g.ampW : Math.max(g.ampFill, fill - ampX - g.end)
+    fill === undefined ? g.ampW : Math.max(w.amp, fill - ampX - g.end)
   return {
     width: ampX + ampW + g.end,
     height: bottom + g.end,
