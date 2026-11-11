@@ -42,7 +42,9 @@ import {
   type Look,
 } from './editor'
 import { CARD, CARD_FACE } from './controls'
+import { outlineKind } from './outline'
 import { PartPanel } from './PartPanel'
+import { Picture } from './Picture'
 import { RoutesFrom, RoutesInto, type RouteTarget } from './RoutePanels'
 import { Scope, type ScopeStats } from './Scope'
 import { useTileDrag, type DragProps, type Spot } from './tileDrag'
@@ -170,9 +172,13 @@ export function SoundEditor({
     if (target !== undefined) pick(target)
   }
 
-  // Short of room, the graph gives way first, down to a row of tiles; the
-  // panel scrolls only past that (its room: all but the graph's least and
-  // the gap). Beside the graph, each takes the row's height and scrolls.
+  // Under the graph, the panel stands at one height whatever is picked,
+  // so the keys below it stay put: 10.5rem holds the tallest panel most
+  // parts make (a header, a row of chains or routes, a row of knobs), and
+  // more scrolls in it. Short of room, the graph gives way first, down to
+  // a row of tiles; the panel shrinks only past that (its room: all but
+  // the graph's least and the gap). Beside the graph, the panel takes the
+  // graph's height and never makes the row taller: it scrolls instead.
   return (
     <div className="flex min-h-0 flex-col gap-3 md:grid md:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] md:grid-rows-[minmax(0,1fr)]">
       <section
@@ -186,7 +192,7 @@ export function SoundEditor({
           scope={scope}
         />
       </section>
-      <div className="grid max-h-[calc(100%-7.75rem)] min-h-0 shrink-0 overflow-y-auto overscroll-contain rounded-xl md:max-h-none">
+      <div className="grid h-[10.5rem] max-h-[calc(100%-7.75rem)] min-h-0 shrink-0 overflow-y-auto overscroll-contain rounded-xl md:h-0 md:max-h-none md:min-h-full">
         {into ? (
           <RoutesInto
             engine={engine}
@@ -329,9 +335,10 @@ function Rack({
 
 /**
  * The inputs, the chains and the amp, laid out by graphGeometry: the
- * tiles share the frame's width, the amp holding the output waveform. The
- * frame takes the room the page leaves it, up to a cap, and pans what it
- * cannot show.
+ * tiles share the frame's width, the amp holding the output waveform over
+ * its envelope (the envelope alone when it has no waveform). The frame
+ * takes the room the page leaves it, up to a cap, and pans what it cannot
+ * show.
  */
 function Graph({
   engine,
@@ -493,6 +500,7 @@ function Graph({
                   label={tileLabel(sound, item)}
                   line={item}
                   glyph={box.h >= 60 ? glyphOf(sound, item) : undefined}
+                  picture={outlineKind(sound, item) ? item : undefined}
                   look={look}
                   picked={picked === item}
                   member={member}
@@ -546,6 +554,7 @@ function Graph({
           label="Amp"
           line={AMP}
           glyph={geometry.amp.h >= 60 ? glyphOf(sound, AMP) : undefined}
+          picture={showScope ? undefined : AMP}
           look={NEUTRAL_LOOK}
           picked={picked === AMP}
           reach={reach.has(AMP)}
@@ -559,7 +568,9 @@ function Graph({
                 engine={engine}
                 timing={scope.timing}
                 onStats={scope.onStats}
-                className="h-full min-w-0 flex-1 rounded-[5px]"
+                className="h-full min-w-0 flex-1 rounded-[4px]"
+                picture={AMP}
+                pictureColor={NEUTRAL_LOOK.ink}
               />
             )
           }
@@ -790,7 +801,12 @@ function SendPeg({
  * of the picked chain is outlined in its ink; reached by the modulation
  * picked, a sky ring stands outside it. Dashed: a "+" that adds, or a
  * copy of an input standing in another chain's row. Given drag, it is
- * held to be dragged (tileDrag.ts).
+ * held to be dragged (tileDrag.ts). Given a picture, it draws that part's
+ * (outline.ts) in its ink, live, in place of its pictogram: under the
+ * label in a tall tile (two slots and up), its line and the area under
+ * it; behind the label in a short one, the area alone, so that no line
+ * runs through the letters. Either way it stands 3 px inside the tile's
+ * edges, its corners rounded as the tile's.
  */
 function Tile({
   engine,
@@ -813,6 +829,7 @@ function Tile({
   className = '',
   small = false,
   aside,
+  picture,
 }: {
   engine: Engine
   drag?: DragProps
@@ -836,13 +853,22 @@ function Tile({
   style?: CSSProperties
   className?: string
   small?: boolean
-  /** Beside the label, filling the rest of the tile: the amp's waveform */
+  /**
+   * Beside the label, filling the rest of the tile 3 px inside its edges,
+   * as a picture does (round it at 4 px): the amp's waveform
+   */
   aside?: ReactNode
+  /** The part whose picture fills the tile: a filter's response, a drive's */
+  picture?: string
 }) {
   const height = typeof style?.height === 'number' ? style.height : 26
   const tall = !dashed && !small && height >= 60
+  const under = picture !== undefined && tall
+  // A picture stands in for the pictogram
+  const pictogram = picture === undefined ? glyph : undefined
   // A short tile stacks a line under its label only without a pictogram
-  const column = tall || mark !== undefined || (line !== undefined && !glyph)
+  const column =
+    tall || mark !== undefined || (line !== undefined && !pictogram)
 
   let shadow = `inset 0 0 0 1.5px ${look.ring}`
   if (picked) shadow = `inset 0 0 0 2px ${look.ink}, 0 0 0 3px ${look.tint}`
@@ -903,7 +929,7 @@ function Tile({
   } else {
     content = (
       <>
-        {glyph && (
+        {pictogram && (
           <svg
             viewBox="0 0 18 12"
             width={tall ? 22 : small ? 15 : 18}
@@ -913,7 +939,7 @@ function Tile({
             style={{ opacity: dashed === 'copy' && !picked ? 0.6 : 1 }}
           >
             <path
-              d={glyph}
+              d={pictogram}
               fill="none"
               stroke={look.ink}
               strokeWidth={tall ? 1.7 : 1.8}
@@ -959,13 +985,29 @@ function Tile({
       aria-label={aria}
       aria-pressed={picked}
       onClick={onClick}
-      style={{ ...style, ...face }}
+      style={{
+        ...style,
+        ...face,
+      }}
       className={`relative flex items-center overflow-hidden rounded-[7px] ${
         aside
-          ? 'justify-start gap-2 py-1.5 pr-3 pl-2'
-          : `justify-center ${column ? 'flex-col gap-1 px-1' : 'gap-[7px] px-1.5'}`
+          ? 'justify-start gap-2 py-[3px] pr-[3px] pl-2'
+          : under
+            ? 'flex-col justify-start gap-1 px-[3px] pt-2.5 pb-[3px]'
+            : `justify-center ${column ? 'flex-col gap-1 px-1' : 'gap-[7px] px-1.5'}`
       } ${picked ? 'z-[2]' : 'z-[1]'} ${className}`}
     >
+      {picture !== undefined && !under && (
+        // Behind the label: on the face, inside the ring, under the content
+        <Picture
+          engine={engine}
+          part={picture}
+          color={look.ink}
+          lineOpacity={0}
+          fillOpacity={0.16}
+          className="absolute top-[3px] left-[3px] -z-10 size-[calc(100%-6px)] rounded-[4px]"
+        />
+      )}
       {aside ? (
         <>
           <span className="flex shrink-0 flex-col items-center gap-1">
@@ -975,6 +1017,14 @@ function Tile({
         </>
       ) : (
         content
+      )}
+      {picture !== undefined && under && (
+        <Picture
+          engine={engine}
+          part={picture}
+          color={look.ink}
+          className="min-h-0 w-full flex-1 rounded-[4px]"
+        />
       )}
       {routed && (
         <span

@@ -90,9 +90,10 @@ export function knobRow(count: number): string {
 }
 
 /**
- * What stands under a panel's header: in the middle of the height the
- * panel has (beside the graph it takes the graph's), or from the top when
- * there is more of it than fits
+ * What stands under a panel's header (and under an input's chains, which
+ * keep their place): in the middle of the height the panel has (beside
+ * the graph it takes the graph's), or from the top when there is more of
+ * it than fits
  */
 export const PANEL_BODY = 'my-auto flex flex-col gap-2'
 

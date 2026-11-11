@@ -9,8 +9,15 @@ export const HIGHEST_HZ = 20000
 export const TOP_DB = 24
 export const BOTTOM_DB = -36
 
-/** Below this the gain is drawn at the bottom, and log10 never sees 0 */
+/** Below this the gain is drawn as if it were this, and log10 never sees 0 */
 const FLOOR = 1e-6
+
+/**
+ * How far under the gain axis's bottom (as a share of the axis) a deep cut
+ * is drawn: far enough to run out of the picture, rather than along its
+ * floor
+ */
+export const UNDER = 0.25
 
 /**
  * The filter's gain at frequency (linear, 1 is 0 dB): its analog prototype,
@@ -32,9 +39,9 @@ export function filterGain(
 
 /**
  * The response curve for display: RESPONSE_POINTS x,y pairs written into
- * out, x across (frequency, LOWEST_HZ to HIGHEST_HZ on a log scale) and y up
- * (gain, BOTTOM_DB to TOP_DB), both 0..1 and clamped there. Allocates
- * nothing.
+ * out, x across (frequency, LOWEST_HZ to HIGHEST_HZ on a log scale, 0..1)
+ * and y up (gain, BOTTOM_DB to TOP_DB as 0..1), y clamped to -UNDER..1: a
+ * slope carries on out of the bottom of the axis. Allocates nothing.
  */
 export function filterResponse(
   out: Float32Array,
@@ -53,6 +60,6 @@ export function filterResponse(
     const gain = Math.max(filterGain(type, cutoff, q, hz), FLOOR)
     const y = (20 * Math.log10(gain) - BOTTOM_DB) / (TOP_DB - BOTTOM_DB)
     out[2 * i] = x
-    out[2 * i + 1] = Math.min(Math.max(y, 0), 1)
+    out[2 * i + 1] = Math.min(Math.max(y, -UNDER), 1)
   }
 }

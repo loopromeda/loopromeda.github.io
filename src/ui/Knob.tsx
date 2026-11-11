@@ -2,10 +2,12 @@ import {
   useEffect,
   useLayoutEffect,
   useRef,
+  type CSSProperties,
   type KeyboardEvent,
   type MouseEvent,
   type PointerEvent,
 } from 'react'
+import { createPortal } from 'react-dom'
 import type { Engine } from '../engine/engine'
 import {
   formatAmount,
@@ -26,12 +28,14 @@ import {
   setKnob,
   type PartDest,
 } from '../state/sound/knob'
+import { FINE_ZONES, fineZone, type FineZone } from '../viz/fine'
 import { HOLD, KNOB_SIZE } from './controls'
 import { MOD_COLOR } from './editor'
 import { keepHeld } from './held'
 
 /** CSS pixels of vertical drag that sweep a knob from end to end */
 const TRAVEL = 160
+const FULL_SPEED = FINE_ZONES[0] as FineZone
 /** A second tap within this many ms puts the knob back to its default */
 const DOUBLE_TAP = 300
 /** A touch that moves less than this (CSS px) is a tap, not a drag */
@@ -84,6 +88,17 @@ const clamp01 = (n: number) => (n < 0 ? 0 : n > 1 ? 1 : n)
 /** A knob's arc where nothing colours it: zinc-300 */
 export const NEUTRAL_ARC = '#d4d4d8'
 
+/**
+ * Counts the fine drags under way, on any knob, on the document: while
+ * there are any, every knob but theirs dims (the wrapper's in-data-fine)
+ */
+function countFine(change: 1 | -1) {
+  const root = document.documentElement
+  const count = Number(root.dataset.fine ?? 0) + change
+  if (count > 0) root.dataset.fine = `${count}`
+  else delete root.dataset.fine
+}
+
 /** Where a stepped knob's stops fall on the dial, or none (see MAX_DETENTS) */
 function detents(spec: ValueSpec): { x: number; y: number }[] {
   if (!(spec.step > 0)) return []
@@ -102,6 +117,14 @@ function detents(spec: ValueSpec): { x: number; y: number }[] {
  * by setting SVG attributes and text: no React state, so nothing
  * re-renders while it turns. It also follows its value changed from
  * elsewhere (a preset loaded).
+ *
+ * A finger that strays sideways while it drags turns the knob finer, a
+ * quarter or a tenth as fast (src/viz/fine.ts), from where it stands: a
+ * long way up or down for a small change, the knob in sight. The knob
+ * lights up in its colour while a finger turns it; while it turns finely
+ * it shows how finely (÷4, ÷10, under its arc), every other knob dims, a
+ * line runs from it to the finger, and each change of speed ticks the
+ * phone (where it can vibrate).
  *
  * A two-sided range (Octave, Semi, Fine) lights the arc from its zero, a
  * one-sided range from its minimum, in `color`: a chain's, or neutral. A
@@ -232,6 +255,10 @@ function Dial({
   const textRef = useRef<HTMLSpanElement>(null)
   const reachRef = useRef<SVGPathElement>(null)
   const badgeRef = useRef<HTMLSpanElement>(null)
+  const wrapRef = useRef<HTMLDivElement>(null)
+  const tagRef = useRef<HTMLSpanElement>(null)
+  const tetherRef = useRef<SVGSVGElement>(null)
+  const tieRef = useRef<SVGLineElement>(null)
   /** The routes drawn last, as a key, so an unrelated change draws nothing */
   const routesShownRef = useRef('')
   /** The latest knob it turns, for a hold that fires after a redraw */
@@ -239,9 +266,21 @@ function Dial({
   /** The drag in progress, and when the last tap ended */
   const gesture = useRef({
     pointerId: -1,
-    startY: 0,
-    startN: 0,
+    /** Where the finger came down across, and where it was last up */
+    startX: 0,
+    lastY: 0,
+    /**
+     * Where the drag has the knob, 0 to 1, not snapped: a stepped knob
+     * follows the finger between its steps
+     */
+    n: 0,
     moved: false,
+    /** How fast it turns, by how far the finger has strayed sideways */
+    zone: FULL_SPEED,
+    /** The knob's centre and radius on the screen, for the line */
+    cx: 0,
+    cy: 0,
+    r: 0,
     lastTap: -Infinity,
     /** The pending hold's timer, 0 for none */
     hold: 0,
@@ -325,6 +364,58 @@ function Dial({
     if (dest !== undefined) at.onHold(dest)
   }
 
+  /** Runs the line from the knob's edge to the finger at x, y */
+  const tie = (x: number, y: number) => {
+    const line = tieRef.current
+    if (!line) return
+    const { cx, cy, r } = gesture.current
+    const dx = x - cx
+    const dy = y - cy
+    const away = Math.hypot(dx, dy)
+    // Over the knob, there is nothing to tie
+    line.style.display = away > r ? '' : 'none'
+    if (away <= r) return
+    line.setAttribute('x1', `${cx + (dx / away) * r}`)
+    line.setAttribute('y1', `${cy + (dy / away) * r}`)
+    line.setAttribute('x2', `${x}`)
+    line.setAttribute('y2', `${y}`)
+  }
+
+  /**
+   * Turns at `zone`'s speed from here on, and shows it: its tag, and while
+   * it is slow the other knobs dimmed and the line to the finger
+   */
+  const pace = (zone: FineZone) => {
+    const g = gesture.current
+    if (zone === g.zone) return
+    const was = g.zone.speed < 1
+    const is = zone.speed < 1
+    g.zone = zone
+    const tag = tagRef.current
+    if (tag) {
+      tag.textContent = zone.tag
+      tag.style.display = is ? '' : 'none'
+    }
+    if (is === was) return
+    countFine(is ? 1 : -1)
+    wrapRef.current?.toggleAttribute('data-fine', is)
+    const tether = tetherRef.current
+    if (tether) tether.style.display = is ? '' : 'none'
+    const root = rootRef.current
+    if (is && root) {
+      const box = root.getBoundingClientRect()
+      g.cx = box.left + box.width / 2
+      g.cy = box.top + box.height / 2
+      g.r = box.width / 2
+    }
+  }
+
+  /** The finger is off the knob: it stops lighting up and turns at full */
+  const release = () => {
+    rootRef.current?.removeAttribute('data-turning')
+    pace(FULL_SPEED)
+  }
+
   // Before the first paint: the knob never flashes a wrong position
   useLayoutEffect(() => {
     turnsRef.current = turns
@@ -347,8 +438,15 @@ function Dial({
     [engine, address]
   )
 
-  // A hold still pending when the knob goes away fires nothing
-  useEffect(() => () => window.clearTimeout(gesture.current.hold), [])
+  // A hold still pending when the knob goes away fires nothing, and a fine
+  // drag on it leaves the other knobs lit
+  useEffect(() => {
+    const g = gesture.current
+    return () => {
+      window.clearTimeout(g.hold)
+      if (g.zone.speed < 1) countFine(-1)
+    }
+  }, [])
 
   const down = (event: PointerEvent<HTMLDivElement>) => {
     const g = gesture.current
@@ -363,8 +461,9 @@ function Dial({
     const { pointerId } = event
     target.setPointerCapture(pointerId)
     g.pointerId = pointerId
-    g.startY = event.clientY
-    g.startN = toNormalized(spec, read())
+    g.startX = event.clientX
+    g.lastY = event.clientY
+    g.n = toNormalized(spec, read())
     g.moved = false
     if (routedRef.current?.onHold) {
       g.hold = window.setTimeout(() => {
@@ -386,17 +485,24 @@ function Dial({
   const move = (event: PointerEvent<HTMLDivElement>) => {
     const g = gesture.current
     if (event.pointerId !== g.pointerId) return
+    const { clientX: x, clientY: y } = event
     if (!g.moved) {
-      if (Math.abs(g.startY - event.clientY) < TAP_SLOP) return
+      const slop = Math.max(Math.abs(g.lastY - y), Math.abs(g.startX - x))
+      if (slop < TAP_SLOP) return
       // A drag from here on; measured from here, so the knob does not jump
       g.moved = true
-      g.startY = event.clientY
+      g.lastY = y
       window.clearTimeout(g.hold)
+      rootRef.current?.setAttribute('data-turning', '')
     }
-    // Up turns it up; the start position, not the snapped value, keeps a
-    // stepped knob following the finger between steps
-    const travel = (g.startY - event.clientY) / TRAVEL
-    const value = toValue(spec, clamp01(g.startN + travel))
+    const before = g.zone
+    pace(fineZone(x - g.startX, g.zone))
+    if (g.zone !== before) navigator.vibrate?.(5)
+    if (g.zone.speed < 1) tie(x, y)
+    // Up turns it up, by each step at the speed it moved at
+    g.n = clamp01(g.n + ((g.lastY - y) / TRAVEL) * g.zone.speed)
+    g.lastY = y
+    const value = toValue(spec, g.n)
     if (value !== read()) set(value)
   }
 
@@ -407,6 +513,7 @@ function Dial({
     window.clearTimeout(g.hold)
     g.pointerId = -1
     g.lastTap = g.moved ? -Infinity : event.timeStamp
+    release()
   }
 
   // A right click holds the knob too; a touch's long press is the timer's
@@ -458,7 +565,10 @@ function Dial({
   }
 
   return (
-    <div className="flex min-w-0 flex-col items-center gap-0.5">
+    <div
+      ref={wrapRef}
+      className="flex min-w-0 flex-col items-center gap-0.5 transition-opacity duration-150 in-data-fine:opacity-30 data-fine:opacity-100"
+    >
       <div
         ref={rootRef}
         role="slider"
@@ -473,7 +583,8 @@ function Dial({
         onLostPointerCapture={up}
         onContextMenu={menu}
         onKeyDown={key}
-        className={`${KNOB_SIZE} relative aspect-square touch-none rounded-full outline-none focus-visible:ring-2 focus-visible:ring-emerald-400`}
+        style={{ '--tone': color } as CSSProperties}
+        className={`${KNOB_SIZE} relative aspect-square touch-none rounded-full outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 data-turning:bg-[color-mix(in_oklab,var(--tone)_18%,transparent)] data-turning:shadow-[0_0_0_1.5px_var(--tone)]`}
       >
         <svg viewBox="0 0 48 48" className="block size-full" aria-hidden>
           <path
@@ -525,7 +636,33 @@ function Dial({
           style={{ display: 'none', background: MOD_COLOR }}
           className="absolute -top-0.5 -right-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full px-0.5 text-[9px] leading-none font-bold text-zinc-950"
         />
+        {/* How finely it turns, in the gap at the foot of the arc */}
+        <span
+          ref={tagRef}
+          aria-hidden
+          style={{ display: 'none', background: color }}
+          className="absolute bottom-0 left-1/2 -translate-x-1/2 rounded-full px-1 py-px text-[9px] leading-none font-bold text-zinc-950"
+        />
       </div>
+      {/* The line from the knob to a finger turning it finely, over all */}
+      {createPortal(
+        <svg
+          ref={tetherRef}
+          aria-hidden
+          style={{ display: 'none' }}
+          className="pointer-events-none fixed inset-0 z-50 size-full"
+        >
+          <line
+            ref={tieRef}
+            stroke={color}
+            strokeOpacity={0.7}
+            strokeWidth={1.5}
+            strokeDasharray="3 4"
+            strokeLinecap="round"
+          />
+        </svg>,
+        document.body
+      )}
       <span
         style={hot ? { color: hot } : undefined}
         className="text-[11px] leading-tight whitespace-nowrap text-zinc-400"

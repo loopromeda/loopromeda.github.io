@@ -6,6 +6,12 @@ import {
   isSilent,
   minMaxColumns,
 } from '../viz/waveform'
+import {
+  OUTLINE_HEIGHT,
+  OUTLINE_WIDTH,
+  outlineFill,
+  outlinePath,
+} from './outline'
 
 /** Samples on screen: 21 ms at 48 kHz, about nine cycles of A4 */
 const WINDOW = 1024
@@ -27,6 +33,11 @@ const BACKGROUND = '#0b0b10'
 const GRID = 'rgba(255, 255, 255, 0.06)'
 const AXIS = 'rgba(255, 255, 255, 0.14)'
 const TRACE = '#34d399'
+/** A picture under the trace: its area and its line, this opaque */
+const PICTURE_FILL = 0.08
+const PICTURE_LINE = 0.3
+/** The share of the height a picture takes, from the bottom up to the axis */
+const PICTURE_SHARE = 0.5
 
 /** What drawing cost, over the last second */
 export interface ScopeStats {
@@ -59,12 +70,19 @@ export interface ScopeStats {
  *   the browser has it), capped at MAX_SCALE
  * - no text on the canvas: the cost readout is a DOM element updated once a
  *   second
+ *
+ * Given a picture (a part's, outline.ts: the amp's envelope), it lies
+ * faintly under the grid and the trace, in the lower half: from the bottom
+ * up to the axis. It is painted into the background, so it costs a frame
+ * nothing, and painted again only when it changes.
  */
 export function Scope({
   engine,
   timing = true,
   onStats,
   className = '',
+  picture,
+  pictureColor = '#e4e4e7',
 }: {
   engine: Engine
   /** The cost readout is shown */
@@ -72,6 +90,9 @@ export function Scope({
   onStats?: (stats: ScopeStats) => void
   /** Its size and shape where it stands (the amp's tile) */
   className?: string
+  /** The part whose picture lies under the trace */
+  picture?: string
+  pictureColor?: string
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const readoutRef = useRef<HTMLSpanElement>(null)
@@ -104,6 +125,10 @@ export function Scope({
     let statsSince = 0
     let drawn = 0
     let drawTime = 0
+    /** The picture's path data as last painted, '' for none */
+    const pictureLine = () =>
+      picture === undefined ? '' : outlinePath(engine.getSound(), picture)
+    let shownPicture = pictureLine()
 
     /** Half the height a full-scale sample may use, keeping the line inside */
     const reach = (height: number) => height / 2 - 2 * scale
@@ -116,6 +141,26 @@ export function Scope({
       if (!bg) return
       bg.fillStyle = BACKGROUND
       bg.fillRect(0, 0, width, height)
+      if (shownPicture !== '') {
+        // Scaled into place as a path, so the line keeps its width
+        const room = height * PICTURE_SHARE
+        const place = new DOMMatrix()
+          .translate(0, height - room)
+          .scale(width / OUTLINE_WIDTH, room / OUTLINE_HEIGHT)
+        const area = new Path2D()
+        area.addPath(new Path2D(outlineFill(shownPicture)), place)
+        const line = new Path2D()
+        line.addPath(new Path2D(shownPicture), place)
+        bg.fillStyle = pictureColor
+        bg.strokeStyle = pictureColor
+        bg.lineWidth = 1.5 * scale
+        bg.lineJoin = 'round'
+        bg.globalAlpha = PICTURE_FILL
+        bg.fill(area)
+        bg.globalAlpha = PICTURE_LINE
+        bg.stroke(line)
+        bg.globalAlpha = 1
+      }
       // One device pixel wide, on pixel centres: crisp at any scale
       bg.lineWidth = 1
       bg.strokeStyle = GRID
@@ -276,13 +321,25 @@ export function Scope({
     }
     const unsubscribe = engine.subscribe(sync)
     sync()
+    // The picture follows the knobs: a new background, and a frame now if
+    // no loop will draw one
+    const unsubscribeSound = engine.subscribeSound(() => {
+      const line = pictureLine()
+      if (line === shownPicture) return
+      shownPicture = line
+      if (!sized) return
+      paintBackground()
+      wasSilent = false
+      if (!raf) render()
+    })
 
     return () => {
       stopLoop()
       unsubscribe()
+      unsubscribeSound()
       observer.disconnect()
     }
-  }, [engine])
+  }, [engine, picture, pictureColor])
 
   return (
     <div className={`relative overflow-hidden contain-strict ${className}`}>

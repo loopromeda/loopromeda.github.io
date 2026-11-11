@@ -6,6 +6,7 @@ import {
   LOWEST_HZ,
   RESPONSE_POINTS,
   TOP_DB,
+  UNDER,
   filterGain,
   filterResponse,
 } from './filter'
@@ -55,10 +56,16 @@ describe('filterResponse', () => {
     expect(out[2 * middle + 1]).toBeCloseTo(yOf(0), 3)
   })
 
-  it('clamps a deep cut to the bottom and a tall peak to the top', () => {
+  it('runs a deep cut out under the bottom, and clamps a peak to the top', () => {
     const out = new Float32Array(RESPONSE_POINTS * 2)
     filterResponse(out, HIGHPASS, 20000, 0)
-    expect(out[1]).toBe(0) // 20 Hz through a 20 kHz highpass: -120 dB
+    expect(out[1]).toBe(-UNDER) // 20 Hz through a 20 kHz highpass: -120 dB
+    // A lowpass slope crosses the bottom on its way down, not along it
+    filterResponse(out, LOWPASS, 1000, 0)
+    const ys = Array.from({ length: RESPONSE_POINTS }, (_, i) => out[2 * i + 1])
+    const crossed = ys.findIndex((y) => (y as number) < 0)
+    expect(crossed).toBeGreaterThan(0)
+    expect(ys[crossed - 1]).toBeGreaterThan(0)
     filterResponse(out, LOWPASS, 1000, 1)
     let top = 0
     for (let i = 0; i < RESPONSE_POINTS; i++) {

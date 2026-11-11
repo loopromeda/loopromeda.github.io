@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, type ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import type { Engine } from '../engine/engine'
 import {
   addChain,
@@ -63,13 +63,7 @@ import {
 } from './editor'
 import { Knob, NEUTRAL_ARC } from './Knob'
 import { knoblessDests, routesTo } from '../state/sound/knob'
-import {
-  OUTLINE_HEIGHT,
-  OUTLINE_WIDTH,
-  outlineFill,
-  outlineKind,
-  outlinePath,
-} from './outline'
+import { Picture } from './Picture'
 
 /** One kind a "+" offers: its pictogram, name and what it does */
 interface Choice {
@@ -122,7 +116,10 @@ interface View {
   readonly knobs: readonly { part: string; key: string; hot?: string }[]
   /** The knobs' arc: a chain's colour on its own parts, else neutral */
   readonly color: string
-  /** A picture of the part beside its name, in this colour */
+  /**
+   * A picture of the part beside its name, in this colour: for a part whose
+   * tile has no room for its own (a modulator's, in the rack)
+   */
   readonly outline?: string
   readonly refs?: ReactNode
   /** An input's chains, each a toggle: which ones it feeds */
@@ -238,7 +235,12 @@ export function PartPanel({
         </span>
         <span className="ml-auto flex shrink-0 items-center gap-1.5">
           {view.outline && (
-            <Outline engine={engine} part={picked} color={view.outline} />
+            <Picture
+              engine={engine}
+              part={picked}
+              color={view.outline}
+              className="h-6 w-24 shrink"
+            />
           )}
           {view.refs}
           {view.actions && (
@@ -255,6 +257,9 @@ export function PartPanel({
         </span>
       </div>
 
+      {!open && !view.choices && view.feeds && view.feeds.length > 0 && (
+        <Feeds title={view.title} feeds={view.feeds} />
+      )}
       <div className={PANEL_BODY}>
         {open ? (
           <>
@@ -318,9 +323,6 @@ export function PartPanel({
           </>
         ) : (
           <>
-            {view.feeds && view.feeds.length > 0 && (
-              <Feeds title={view.title} feeds={view.feeds} />
-            )}
             {view.knobs.length > 0 || view.knobless?.length ? (
               <div
                 className={knobRow(
@@ -395,7 +397,9 @@ export function PartPanel({
 /**
  * The chains an input feeds, one toggle per chain in its colour: on, the
  * chain takes the input at full level; off, not at all. Moving an input
- * to another chain is turning that one on and its own off.
+ * to another chain is turning that one on and its own off. They stand
+ * right under the header, outside the centred body: from input to input
+ * they keep their place, whether knobs or a note follow.
  */
 function Feeds({ title, feeds }: { title: string; feeds: readonly Feed[] }) {
   const none = !feeds.some((feed) => feed.on)
@@ -436,54 +440,6 @@ function Feeds({ title, feeds }: { title: string; feeds: readonly Feed[] }) {
         </span>
       )}
     </div>
-  )
-}
-
-/**
- * The part's picture (outline.ts): an envelope, an LFO's cycles, a
- * filter's response. It follows the knobs by setting the path itself, so
- * a knob turning re-renders nothing.
- */
-function Outline({
-  engine,
-  part,
-  color,
-}: {
-  engine: Engine
-  part: string
-  color: string
-}) {
-  const lineRef = useRef<SVGPathElement>(null)
-  const fillRef = useRef<SVGPathElement>(null)
-  useLayoutEffect(() => {
-    let shown = ''
-    const draw = () => {
-      const line = outlinePath(engine.getSound(), part)
-      if (line === shown) return
-      shown = line
-      lineRef.current?.setAttribute('d', line)
-      fillRef.current?.setAttribute('d', outlineFill(line))
-    }
-    draw()
-    return engine.subscribeSound(draw)
-  }, [engine, part])
-  return (
-    <svg
-      viewBox={`0 0 ${OUTLINE_WIDTH} ${OUTLINE_HEIGHT}`}
-      preserveAspectRatio="none"
-      aria-hidden
-      className="h-6 w-24 shrink"
-    >
-      <path ref={fillRef} fill={color} fillOpacity={0.12} />
-      <path
-        ref={lineRef}
-        fill="none"
-        stroke={color}
-        strokeWidth={1.5}
-        strokeLinejoin="round"
-        vectorEffect="non-scaling-stroke"
-      />
-    </svg>
   )
 }
 
@@ -603,7 +559,6 @@ function viewOf(
       knobs: knobsOf(AMP, AMP_SPEC.knobs),
       knobless: knoblessOf(AMP),
       color: NEUTRAL_ARC,
-      outline: NEUTRAL_LOOK.ink,
     }
   }
   if (picked === VOICE) {
@@ -652,7 +607,6 @@ function viewOf(
         chip: { look, glyph: glyphOf(sound, picked) },
         knobs: knobsOf(picked, ITEM_KINDS[part.kind].knobs),
         color: look.ink,
-        outline: outlineKind(sound, picked) ? look.ink : undefined,
         actions: [
           { label: '◂ Move left', run: move(-1) },
           { label: 'Move right ▸', run: move(1) },

@@ -1,11 +1,13 @@
 /**
- * A part's picture beside its name in the panel: an envelope's shape (the
- * amp's, an Env's), an LFO's cycles, a filter's response. Pure: it reads
- * the sound and returns SVG path data, drawn by the panel as knobs turn.
+ * A part's picture: an envelope's shape (the amp's, an Env's), an LFO's
+ * cycles, a filter's response, a drive's curve. The panel draws it beside
+ * the part's name, and a chain's items on their tiles too, as knobs turn
+ * (Picture.tsx). Pure: it reads the sound and returns SVG path data.
  */
 import { toNormalized } from '../state/params'
 import { knobSpec, knobValue } from '../state/sound/knob'
 import { AMP, findPart, type Sound } from '../state/sound/sound'
+import { DRIVE_POINTS, driveCurve } from '../viz/drive'
 import { OUTLINE_POINTS, envelopeOutline } from '../viz/envelope'
 import { RESPONSE_POINTS, filterResponse } from '../viz/filter'
 import { LFO_POINTS, lfoOutline } from '../viz/lfo'
@@ -20,8 +22,9 @@ const PAD = 2
 const ENVELOPE = new Float32Array(OUTLINE_POINTS * 2)
 const LFO = new Float32Array(LFO_POINTS * 2)
 const RESPONSE = new Float32Array(RESPONSE_POINTS * 2)
+const DRIVE = new Float32Array(DRIVE_POINTS * 2)
 
-type OutlineKind = 'envelope' | 'lfo' | 'filter'
+type OutlineKind = 'envelope' | 'lfo' | 'filter' | 'drive'
 
 /** What picture part has, if any */
 export function outlineKind(
@@ -33,7 +36,7 @@ export function outlineKind(
   if (found?.type === 'modulator') {
     return found.part.kind === 'env' ? 'envelope' : 'lfo'
   }
-  if (found?.type === 'item' && found.part.kind === 'filter') return 'filter'
+  if (found?.type === 'item') return found.part.kind
   return undefined
 }
 
@@ -69,16 +72,24 @@ export function outlinePath(sound: Sound, part: string): string {
         value('resonance')
       )
       return path(RESPONSE, RESPONSE_POINTS)
+    case 'drive':
+      driveCurve(DRIVE, value('drive'))
+      return path(DRIVE, DRIVE_POINTS)
     default:
       return ''
   }
 }
 
-/** The area under an outline's path, closed along the bottom */
+/**
+ * The area under an outline's path: from each end of the line straight
+ * down to the bottom, and along it. An envelope ends where its release
+ * does, short of the right edge, and its area with it.
+ */
 export function outlineFill(line: string): string {
-  return line === ''
-    ? ''
-    : `${line}L${OUTLINE_WIDTH} ${OUTLINE_HEIGHT}L0 ${OUTLINE_HEIGHT}Z`
+  if (line === '') return ''
+  const first = /^M([\d.]+)/.exec(line)?.[1] ?? '0'
+  const last = /([\d.]+) [\d.]+$/.exec(line)?.[1] ?? `${OUTLINE_WIDTH}`
+  return `${line}L${last} ${OUTLINE_HEIGHT}L${first} ${OUTLINE_HEIGHT}Z`
 }
 
 /** count x, y pairs (0..1, y up) as path data in the outline's box */
