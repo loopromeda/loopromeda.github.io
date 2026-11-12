@@ -473,9 +473,13 @@ right, benchmark within budget.
         shown → hidden: 490×671 pads 6×2 of 73×78 px → 4×4 of 112×107,
         360×720 4×3 → 4×4, 930×566 pads 66 → 174 px tall, 844×390 8×1 and
         89 px of scroll → 8×2 and none.
-  - [ ] A phone on its side (844×390) still runs over and scrolls, by 89
-        px after the size pass (74 before it), unless the controls are put
-        away: it needs the playing layout this item is about
+  - [x] A phone on its side (844×390) ran over and scrolled, by 89 px
+        after the size pass (74 before it), unless the controls were put
+        away. It no longer does, 2026-11-12, measured in a frame: the
+        side layout (`side`, above) took the most of it, and the last
+        8 px was the status line's Settings button, its touch reaching 16
+        px into a margin of 8 on a short screen, now kept to that margin.
+        718×392, 390×844 and 945×555 do not scroll either.
 - [ ] Kill browser gestures on play surfaces: `touch-action: none`, no double-tap zoom,
       no text selection / iOS long-press callout, keep away from edge-swipe zones
   - [x] Long presses, 2026-11-10, after ashon saw text selected by a long
@@ -494,6 +498,22 @@ right, benchmark within budget.
         `overscroll-behavior: none` on `html` as well as `body` (only
         `body` had it, and Chrome reads the viewport's from the root where
         the document scrolls). To be confirmed on the Fold.
+  - [x] No zoom, 2026-11-12, asked for by ashon ("모바일에서 줌 안되게"),
+        with a margin at the right on the Fold ("오른쪽에 미세하게 여백이
+        있는데"): the status line's Settings button reached 12 px past its
+        edge into the page's margin, 8 px since that day, so it ran the
+        page 4 px wider than the screen and 8 px taller, and Chrome showed
+        the page that much smaller. Its hit area, and Update's, now go no
+        further than the margins and the gap above them (8 px each, which
+        also keeps it off the keys). The viewport has
+        `maximum-scale=1, user-scalable=no`, the page
+        `touch-action: pan-x pan-y` (panels still pan, no pinch or double
+        tap zooms), and Safari's gesture
+        events are turned away (`src/main.tsx`), as iOS lets a pinch
+        through the viewport's limits. Measured in a frame: the page as
+        wide and tall as the screen at 360×720, 390×844, 454×622,
+        490×671, 718×392, 844×390, 945×555 and 1000×600. The pinch to be
+        confirmed on the Fold and an iPhone.
 - [ ] Playwright smoke: page loads, start overlay unlocks, keys respond (mobile emulation)
 - [x] Output waveform display (`src/ui/Scope.tsx`), asked for by ashon
       2026-11-10: AnalyserNode tap in the output path, rising-edge trigger

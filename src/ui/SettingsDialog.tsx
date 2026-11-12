@@ -132,7 +132,7 @@ export function SettingsDialog({
       id="settings"
       aria-labelledby="settings-heading"
       onClick={outside}
-      className={`m-auto max-h-[calc(100dvh_-_2rem_-_env(safe-area-inset-top)_-_env(safe-area-inset-bottom))] w-[calc(100%_-_1.5rem)] max-w-md flex-col gap-2 px-3 pt-1.5 pb-3 text-inherit open:flex backdrop:bg-black/70 ${CARD}`}
+      className={`m-auto max-h-[calc(100dvh_-_2rem_-_env(safe-area-inset-top)_-_env(safe-area-inset-bottom))] w-[calc(100%_-_1.5rem)] max-w-md flex-col gap-2 p-3 text-inherit open:flex backdrop:bg-black/70 ${CARD}`}
     >
       <div className="flex h-11 shrink-0 items-center justify-end gap-1.5">
         <h2

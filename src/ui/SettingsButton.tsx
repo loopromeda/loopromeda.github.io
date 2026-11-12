@@ -8,8 +8,11 @@ const SLIDERS =
 /**
  * At the right end of the status line: opens the settings dialog, which
  * gives the focus back here when it closes. As small as the line, it
- * answers a 44 px touch: its hit area reaches into the gap above the line
- * and the page's margin below it.
+ * answers a larger touch: its hit area reaches into the gap above the
+ * line and the page's margins below it and at its right, no further than
+ * they go (8 px each), so that it never takes a touch from the keys nor
+ * runs the page over. Past the page's edge it ran the page 4 px wider
+ * than the screen, which Chrome showed as a margin at the right.
  */
 export function SettingsButton({ onOpen }: { onOpen: () => void }) {
   return (
@@ -18,7 +21,7 @@ export function SettingsButton({ onOpen }: { onOpen: () => void }) {
       aria-label="Settings"
       aria-haspopup="dialog"
       onClick={onOpen}
-      className="relative -mr-1.5 flex h-4 w-8 shrink-0 items-center justify-center rounded text-zinc-400 before:absolute before:-inset-x-1.5 before:-top-3 before:-bottom-4"
+      className="relative -mr-1.5 flex h-4 w-8 shrink-0 items-center justify-center rounded text-zinc-400 before:absolute before:-top-2 before:-right-0.5 before:-bottom-2 before:-left-1.5"
     >
       <svg
         width="15"

@@ -73,6 +73,13 @@ const guard = (event: Event) => {
 }
 document.addEventListener('contextmenu', guard)
 document.addEventListener('selectstart', guard)
+// Nor is it zoomed: Chrome keeps to the viewport's user-scalable=no and
+// touch-action (index.css), Safari on iOS to neither, but a pinch's
+// gesture events turned away stop it there (Safari's own, never fired
+// elsewhere)
+const still = (event: Event) => event.preventDefault()
+for (const type of ['gesturestart', 'gesturechange', 'gestureend'])
+  document.addEventListener(type, still)
 
 const storage = localStore()
 // The device's settings that reach the audio go in before it starts: a

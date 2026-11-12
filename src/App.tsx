@@ -28,9 +28,11 @@ import { SurfacePicker } from './ui/SurfacePicker'
 import { UpdateButton } from './ui/UpdateButton'
 import type { ScreenAwake } from './wakeLock'
 
-// A short screen (index.css: a phone on its side) keeps narrower margins
+// The page's margins and the gaps between its cards are 8 px, as far as a
+// card keeps what stands on it from its edges (the graph's tiles:
+// graph.ts), on every screen
 const page =
-  'flex h-full flex-col px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] short:pt-[max(0.5rem,env(safe-area-inset-top))] short:pb-[max(0.5rem,env(safe-area-inset-bottom))]'
+  'flex h-full flex-col px-2 pt-[max(0.5rem,env(safe-area-inset-top))] pb-[max(0.5rem,env(safe-area-inset-bottom))]'
 
 /**
  * How the height is shared, the controls out. The keys stand at most 10rem
@@ -204,7 +206,7 @@ export function App({
   }
 
   return (
-    <main className={`${page} gap-3 short:gap-2`}>
+    <main className={`${page} gap-2`}>
       {/* Shrinks when the page is short (the graph pans), so the keys and
           the status line stay on screen; a sheet open over it has room */}
       <div

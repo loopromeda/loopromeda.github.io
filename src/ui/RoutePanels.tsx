@@ -201,7 +201,7 @@ export function RoutesInto({
             <div
               key={route.id}
               data-route={route.id}
-              className="flex shrink-0 items-center gap-2 rounded-lg bg-white/[0.04] py-1.5 pr-1.5 pl-1"
+              className="flex shrink-0 items-center gap-2 rounded-lg bg-white/[0.04] p-1.5"
             >
               <Knob
                 engine={engine}
@@ -321,7 +321,7 @@ function Frame({
         background: ROUTING_TINT,
         boxShadow: `inset 0 0 0 1px ${MOD_LOOK.ring}`,
       }}
-      className="flex min-h-[8.5rem] min-w-0 flex-col gap-2 rounded-xl px-2.5 py-2"
+      className="flex min-h-[8.5rem] min-w-0 flex-col gap-2 rounded-xl p-2.5"
     >
       <div className="flex h-7 shrink-0 items-center gap-2">
         {chip}
