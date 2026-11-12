@@ -1,10 +1,8 @@
 import { memo, useRef, type KeyboardEvent, type PointerEvent } from 'react'
 import {
   MIDDLE_C,
-  REACH_LOWEST,
-  REACH_OCTAVES,
   REACH_WHITES,
-  keyboardLayout,
+  reachLayout,
   whitesAbove,
 } from '../viz/keyboard'
 
@@ -22,7 +20,7 @@ const KEY_STEPS: Readonly<Record<string, number>> = {
 const at = (whites: number) => `${(whites / REACH_WHITES) * 100}%`
 
 /**
- * C1 to C8 drawn small, middle C dotted: drawn once, the frame moving
+ * C−1 to G9 drawn small, middle C dotted: drawn once, the frame moving
  * over it
  */
 const ReachKeys = memo(function ReachKeys() {
@@ -31,7 +29,7 @@ const ReachKeys = memo(function ReachKeys() {
       aria-hidden="true"
       className="absolute inset-0 overflow-hidden rounded-md bg-black/40"
     >
-      {keyboardLayout(REACH_LOWEST, REACH_OCTAVES).map((key) => (
+      {reachLayout().map((key) => (
         <div
           key={key.note}
           style={{
@@ -54,7 +52,7 @@ const ReachKeys = memo(function ReachKeys() {
 })
 
 /**
- * The keys' whole reach, C1 to C8, drawn small, the white keys on screen
+ * The keys' whole reach, C−1 to G9, drawn small, the white keys on screen
  * framed, as a camera over the keyboard: a finger on the frame drags it,
  * a white key at a time; one beside it brings the frame's middle to it
  * and drags from there. The reach outside the frame is dimmed. To a
@@ -68,13 +66,13 @@ export function KeysNavigator({
   onMove,
   className = '',
 }: {
-  /** The keys' lowest white key, counted up from C1 (whitesAbove) */
+  /** The keys' lowest white key, counted up from C−1 (whitesAbove) */
   position: number
   /** How many white keys are on screen */
   whites: number
   /** What is on screen, to be read out: F2 – F5 */
   range: string
-  /** Gets the lowest white key wanted, counted up from C1 */
+  /** Gets the lowest white key wanted, counted up from C−1 */
   onMove: (position: number) => void
   /** Its size and place */
   className?: string
@@ -90,7 +88,7 @@ export function KeysNavigator({
     if (next !== position) onMove(next)
   }
 
-  /** Where a pointer is along the reach, in white keys from C1 */
+  /** Where a pointer is along the reach, in white keys from C−1 */
   const whitesAt = (event: PointerEvent<HTMLDivElement>) => {
     const box = boxRef.current ?? event.currentTarget.getBoundingClientRect()
     return ((event.clientX - box.left) / box.width) * REACH_WHITES

@@ -5,8 +5,8 @@ import {
   MAX_WHITE,
   MIN_VELOCITY,
   MIN_WHITE,
-  REACH_LOWEST,
-  REACH_OCTAVES,
+  HIGHEST_NOTE,
+  LOWEST_NOTE,
   REACH_WHITES,
   cNote,
   isBlack,
@@ -17,6 +17,7 @@ import {
   middleC,
   noteName,
   pitchName,
+  reachLayout,
   slideFrom,
   velocityAt,
   whiteCount,
@@ -31,6 +32,10 @@ describe('noteName', () => {
     expect(noteName(69)).toBe('A4')
     expect(noteName(59)).toBe('B3')
     expect(noteName(12)).toBe('C0')
+    // Under octave 0 with a minus sign, as the values are
+    expect(noteName(0)).toBe('C\u22121')
+    expect(noteName(11)).toBe('B\u22121')
+    expect(noteName(127)).toBe('G9')
   })
 
   it('names a pitch without its octave', () => {
@@ -106,16 +111,17 @@ describe('keyboardLayout', () => {
 describe('keysPlace', () => {
   it('stands one octave from middle C, more with it in their middle', () => {
     // Moves in white keys: seven of them an octave
-    expect(keysPlace(1)).toEqual({ lowest: 60, down: 21, up: 21 }) // C4–C5
-    expect(keysPlace(2)).toEqual({ lowest: 48, down: 14, up: 21 }) // C3–C5
-    expect(keysPlace(3)).toEqual({ lowest: 41, down: 10, up: 18 }) // F2–F5
-    expect(keysPlace(4)).toEqual({ lowest: 36, down: 7, up: 14 }) // C2–C6
-    expect(keysPlace(5)).toEqual({ lowest: 29, down: 3, up: 11 }) // F1–F6
-    expect(keysPlace(6)).toEqual({ lowest: 24, down: 0, up: 7 }) // C1–C7
+    expect(keysPlace(1)).toEqual({ lowest: 60, down: 35, up: 32 }) // C4–C5
+    expect(keysPlace(2)).toEqual({ lowest: 48, down: 28, up: 32 }) // C3–C5
+    expect(keysPlace(3)).toEqual({ lowest: 41, down: 24, up: 29 }) // F2–F5
+    expect(keysPlace(4)).toEqual({ lowest: 36, down: 21, up: 25 }) // C2–C6
+    expect(keysPlace(5)).toEqual({ lowest: 29, down: 17, up: 22 }) // F1–F6
+    expect(keysPlace(6)).toEqual({ lowest: 24, down: 14, up: 18 }) // C1–C7
+    expect(keysPlace(9)).toEqual({ lowest: 5, down: 3, up: 8 }) // F−1–F8
   })
 
   it('puts middle C on the white key at or just right of the middle', () => {
-    for (let octaves = 2; octaves <= 6; octaves++) {
+    for (let octaves = 2; octaves <= 9; octaves++) {
       const whites = keyboardLayout(keysPlace(octaves).lowest, octaves)
         .filter((key) => !key.black)
         .map((key) => key.note)
@@ -123,35 +129,40 @@ describe('keysPlace', () => {
     }
   })
 
-  it('fits seven octaves from C1 to C8, with nowhere to move', () => {
-    expect(keysPlace(7)).toEqual({ lowest: 24, down: 0, up: 0 })
+  it('fits ten octaves from C−1 to C9, with four white keys to G9', () => {
+    expect(keysPlace(10)).toEqual({ lowest: 0, down: 0, up: 4 })
   })
 
-  it('moves only within C1 to C8', () => {
-    for (let octaves = 1; octaves <= 7; octaves++) {
+  it('moves only within C−1 to G9', () => {
+    for (let octaves = 1; octaves <= 10; octaves++) {
       const { lowest, down, up } = keysPlace(octaves)
-      expect(whiteStep(lowest, -down)).toBe(cNote(1))
+      expect(whiteStep(lowest, -down)).toBe(LOWEST_NOTE)
       const top = whiteStep(whiteStep(lowest, up), 7 * octaves)
-      expect(top).toBe(cNote(8))
+      expect(top).toBe(HIGHEST_NOTE)
     }
   })
 })
 
 describe('the reach', () => {
-  it('spans C1 to C8 in REACH_WHITES white keys', () => {
-    const whites = keyboardLayout(REACH_LOWEST, REACH_OCTAVES).filter(
-      (key) => !key.black
-    )
+  it('spans every MIDI note, C−1 to G9, in REACH_WHITES white keys', () => {
+    const keys = reachLayout()
+    const whites = keys.filter((key) => !key.black)
     expect(whites).toHaveLength(REACH_WHITES)
-    expect(whites[0]?.note).toBe(cNote(1))
-    expect(whites[whites.length - 1]?.note).toBe(cNote(8))
+    expect(whites[0]?.note).toBe(0)
+    expect(whites[whites.length - 1]?.note).toBe(127)
+    const notes = keys.map((key) => key.note).sort((a, b) => a - b)
+    expect(notes).toEqual(Array.from({ length: 128 }, (_, note) => note))
+    // The last black key, F#9, stands over the seam before G9
+    const last = keys.find((key) => key.note === 126)
+    expect(last?.left).toBeCloseTo((74 - BLACK_WIDTH / 2) / REACH_WHITES, 9)
   })
 
-  it('counts white keys above C1', () => {
-    expect(whitesAbove(cNote(1))).toBe(0)
-    expect(whitesAbove(60)).toBe(21)
-    expect(whitesAbove(61)).toBe(21) // C#4: the white key below it
-    expect(whitesAbove(cNote(8))).toBe(REACH_WHITES - 1)
+  it('counts white keys above C−1', () => {
+    expect(whitesAbove(LOWEST_NOTE)).toBe(0)
+    expect(whitesAbove(cNote(1))).toBe(14)
+    expect(whitesAbove(60)).toBe(35)
+    expect(whitesAbove(61)).toBe(35) // C#4: the white key below it
+    expect(whitesAbove(HIGHEST_NOTE)).toBe(REACH_WHITES - 1)
   })
 
   it('steps from white key to white key, across octaves', () => {
@@ -189,8 +200,8 @@ describe('keysFit', () => {
     expect(keysFit(1722)).toEqual({ octaves: 4 })
     expect(1722 / 29).toBeLessThanOrEqual(MAX_WHITE)
     expect(keysFit(1888).octaves).toBe(5)
-    // No more than C1 to C8
-    expect(keysFit(10000).octaves).toBe(7)
+    // No more than the reach's whole octaves, C−1 to C9
+    expect(keysFit(10000).octaves).toBe(10)
   })
 
   it('holds one octave in a box not yet measured', () => {

@@ -102,7 +102,7 @@ src/ui/       React components; SoundEditor.tsx the sound as tiles
               finer with the finger off to the side; PlaySurface.tsx plays
               notes on Keys.tsx, Pads.tsx or XyPad.tsx (hands.ts: who
               holds which note, and bends it), KeysNavigator.tsx moves the keys a white key at a
-              time over C1 to C8, ModWheel.tsx the mod wheel at their
+              time over C−1 to G9 (all of MIDI's notes), ModWheel.tsx the mod wheel at their
               left (the Wheel source) and its Route, PresetBrowser.tsx
               loads, saves and moves presets,
               SettingsDialog.tsx, a modal dialog, holds the settings,

@@ -395,6 +395,23 @@ right, benchmark within budget.
         desktop Chrome at 390×844 (C4–C5, the strip), 844×390 and
         1000×608 (in the header): a drag moved C3–C5 to F4–F6, a tap at
         the left end to C1, End to C6–C8.
+        Since 2026-11-12, asked for by ashon ("가청주파수 전역으로...
+        0~12000Hz 까지"): the keys, the pads and the XY pad reach all of
+        MIDI's notes, C−1 (8.2 Hz) to G9 (12.5 kHz), where they reached
+        C1 to C8 (`LOWEST_NOTE`, `HIGHEST_NOTE` in `src/viz/keyboard.ts`).
+        The navigator draws 75 white keys where it drew 50; a desktop
+        window shows up to ten octaves where it showed seven; the pads and
+        the XY pad move by octaves within it (the XY pad from C−1–C2 to
+        C6–C9 at three octaves). A note under octave 0 is named with a
+        minus sign, C−1. Checked in desktop Chrome at 1000×600 and
+        390×844: Home on the navigator went to C−1 – C2 and C−1 – C0, End
+        to G6 – G9 and G8 – G9. Nothing in the sound limits the notes
+        (a phase step is held under half the sample rate, a cutoff under
+        0.45 of it), but up there a saw or a square has little under the
+        Nyquist frequency, and what polyBLEP leaves folds back: at 48 kHz
+        the saw's aliases stand 24 dB under it at C8, 17.5 at C9 and 12.6
+        at G9 (the square 29, 17 and 31; a sine none): a sine sounds
+        clean there, a saw grows rough.
         Computer keys play the pads too (A–; then Q–P). Measured in frames:
         360×720 4×3 pads of 79×65 px, 390×844 4×4 of 87×73, 930×566 8×2
         of 109×66, 768×1024 4×4 of 181×130, 1280×800 8×2 of 153×160,

@@ -16,6 +16,7 @@ import {
   type SurfaceSettings,
 } from '../state/surface'
 import {
+  HIGHEST_NOTE,
   REACH_WHITES,
   cNote,
   keysFit,
@@ -37,11 +38,11 @@ import { Pads } from './Pads'
 import { XyPad } from './XyPad'
 
 /**
- * The pads' and the XY pad's lowest note is in octave 1 or higher, their
- * highest C8 or lower
+ * The pads' and the XY pad's lowest note is in octave −1 or higher (C−1 is
+ * MIDI's lowest note), their highest G9 (HIGHEST_NOTE, MIDI's highest) or
+ * lower, as the keys' reach
  */
-const LOWEST = 1
-const TOP = 8
+const LOWEST = -1
 /**
  * Where each surface starts: the keys where keysPlace stands them, moved
  * no white keys, the pads (two octaves and more of them) on the root in
@@ -154,7 +155,7 @@ const sameFit = (a: Fit, b: Fit) =>
  * Keys: as many octaves as fit at a finger's width (one on a phone held
  * upright, more on a wide window: keysFit), standing where keysPlace puts
  * them (one octave from middle C up, more around it); the arrows move
- * them an octave, the navigator (KeysNavigator, C1 to C8 drawn small) a
+ * them an octave, the navigator (KeysNavigator, C−1 to G9 drawn small) a
  * white key at a time. Pads: as many as fit at a fingertip's size,
  * playing the notes of settings' key; the arrows shift them an octave.
  * The XY pad: from a C, as many octaves as fit at a semitone a finger
@@ -214,9 +215,9 @@ export function PlaySurface({
   const place = keysPlace(fit.octaves)
   const lowest = pads || xy ? LOWEST : -place.down
   const highest = pads
-    ? Math.max(Math.floor((cNote(TOP) - root - span) / 12) - 1, LOWEST)
+    ? Math.max(Math.floor((HIGHEST_NOTE - root - span) / 12) - 1, LOWEST)
     : xy
-      ? TOP - fit.xy
+      ? Math.floor((HIGHEST_NOTE - 12 * fit.xy) / 12) - 1
       : place.up
   const first = Math.min(Math.max(starts[kind], lowest), highest)
   const lowestNote = pads
@@ -227,7 +228,7 @@ export function PlaySurface({
   const highestNote =
     lowestNote + (pads ? span : 12 * (xy ? fit.xy : fit.octaves))
   const range = `${noteName(lowestNote)} – ${noteName(highestNote)}`
-  // The navigator, for keys that do not reach C1 to C8 at once
+  // The navigator, for keys that do not reach C−1 to G9 at once
   const whites = whiteCount(fit.octaves)
   const navigator = kind === 'keys' && whites < REACH_WHITES
   const inHeader = navigator && fit.wide
@@ -274,7 +275,7 @@ export function PlaySurface({
     (octaves: number) => moveTo(first + octaves * OCTAVE[kind]),
     [moveTo, first, kind]
   )
-  // The navigator counts the keys' place in white keys up from C1
+  // The navigator counts the keys' place in white keys up from C−1
   const position = whitesAbove(lowestNote)
   const navigate = useCallback(
     (to: number) => moveTo(to - place.down),
