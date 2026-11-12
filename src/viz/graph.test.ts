@@ -19,16 +19,36 @@ function sound(inputs: string[], chains: string[][]): GraphSound {
   }
 }
 
-/** Each tile as "input first+slots chains", copies marked with a star */
+/**
+ * Each tile as "input first+slots chains", copies marked with a star; in a
+ * sources' column, a "<" for each column left of the inputs', and the
+ * inputs it stands beside in place of chains
+ */
 function tiles(layout: GraphLayout): string[] {
   return layout.tiles.map(
     (t) =>
-      `${t.copy ? '*' : ''}${t.input} ${t.first}+${t.slots} ${t.chains.join(',')}`
+      `${'<'.repeat(t.column)}${t.copy ? '*' : ''}${t.input} ${t.first}+${t.slots} ${(t.column === 0 ? t.chains : t.readers).join(',')}`
   )
 }
 
 function rows(layout: GraphLayout): string[] {
   return layout.rows.map((r) => `${r.chain} ${r.first}+${r.slots}`)
+}
+
+/** sound() with some inputs reading others: reader id to its references */
+function reading(
+  base: GraphSound,
+  refs: Record<string, Record<string, string | null>>,
+  rings: string[] = []
+): GraphSound {
+  return {
+    ...base,
+    inputs: base.inputs.map((input) => ({
+      ...input,
+      kind: rings.includes(input.id) ? 'ring' : 'osc',
+      refs: refs[input.id] ?? {},
+    })),
+  }
 }
 
 describe('graphLayout', () => {
@@ -37,6 +57,8 @@ describe('graphLayout', () => {
       rows: [],
       tiles: [],
       pegs: [],
+      reads: [],
+      columns: 0,
       slots: 0,
     })
   })
@@ -133,6 +155,244 @@ describe('graphLayout', () => {
     const layout = graphLayout(sound(['i1', 'i2', 'i3'], [['i1'], ['i3']]))
     expect(tiles(layout)).toEqual(['i1 0+1 c1', 'i3 1+1 c2', 'i2 2+1 '])
     expect(layout.slots).toBe(3)
+  })
+
+  it('stands the input FM reads left of its reader, a peg between', () => {
+    // Glass Pad: IN 2 in no chain, IN 1's FM source
+    const layout = graphLayout(
+      reading(sound(['i1', 'i2'], [['i1']]), { i1: { fmSource: 'i2' } })
+    )
+    expect(rows(layout)).toEqual(['c1 0+1'])
+    expect(tiles(layout)).toEqual(['i1 0+1 c1', '<i2 0+1 i1'])
+    expect(layout.reads).toEqual([
+      { from: 'i2', to: 'i1', as: 'FM', column: 1, first: 0, slots: 1 },
+    ])
+    expect(layout.columns).toBe(1)
+    expect(layout.slots).toBe(1)
+  })
+
+  it('stands one source over the readers next to one another', () => {
+    // IN 2, IN 3 and IN 4 each take IN 5 as FM: one tile, three pegs
+    const layout = graphLayout(
+      reading(
+        sound(['i1', 'i2', 'i3', 'i4', 'i5'], [['i1', 'i2', 'i3', 'i4']]),
+        {
+          i2: { fmSource: 'i5' },
+          i3: { fmSource: 'i5' },
+          i4: { fmSource: 'i5' },
+        }
+      )
+    )
+    expect(tiles(layout)).toEqual([
+      'i1 0+1 c1',
+      'i2 1+1 c1',
+      'i3 2+1 c1',
+      'i4 3+1 c1',
+      '<i5 1+3 i2,i3,i4',
+    ])
+    expect(layout.reads.map((peg) => `${peg.to} ${peg.first}`)).toEqual([
+      'i2 1',
+      'i3 2',
+      'i4 3',
+    ])
+    expect(layout.slots).toBe(4)
+  })
+
+  it('puts a copy of a source beside readers apart from the others', () => {
+    // IN 2 between IN 1 and IN 4, which both read IN 3
+    const layout = graphLayout(
+      reading(sound(['i1', 'i2', 'i3', 'i4'], [['i1', 'i2', 'i4']]), {
+        i1: { fmSource: 'i3' },
+        i4: { fmSource: 'i3' },
+      })
+    )
+    expect(tiles(layout)).toEqual([
+      'i1 0+1 c1',
+      'i2 1+1 c1',
+      'i4 2+1 c1',
+      '<i3 0+1 i1',
+      '<*i3 2+1 i4',
+    ])
+  })
+
+  it('gives a ring two slots, one for each of its sides', () => {
+    // Closed Hat: two squares in no chain, a ring of them in chain A
+    const layout = graphLayout(
+      reading(
+        sound(['i1', 'i2', 'i3', 'i4'], [['i3', 'i4']]),
+        { i4: { a: 'i1', b: 'i2' } },
+        ['i4']
+      )
+    )
+    expect(rows(layout)).toEqual(['c1 0+3'])
+    expect(tiles(layout)).toEqual([
+      'i3 0+1 c1',
+      'i4 1+2 c1',
+      '<i1 1+1 i4',
+      '<i2 2+1 i4',
+    ])
+    expect(layout.reads).toEqual([
+      { from: 'i1', to: 'i4', as: 'ring', column: 1, first: 1, slots: 1 },
+      { from: 'i2', to: 'i4', as: 'ring', column: 1, first: 2, slots: 1 },
+    ])
+    // Pegs on the seam beside it, a slot each
+    expect(layout.pegs).toEqual([
+      { input: 'i3', chain: 'c1', slot: 0 },
+      { input: 'i4', chain: 'c1', slot: 1 },
+    ])
+  })
+
+  it('puts a copy beside its reader of a source that feeds a chain', () => {
+    const layout = graphLayout(
+      reading(sound(['i1', 'i2'], [['i1'], ['i2']]), {
+        i1: { fmSource: 'i2' },
+      })
+    )
+    expect(rows(layout)).toEqual(['c1 0+1', 'c2 1+1'])
+    expect(tiles(layout)).toEqual(['i1 0+1 c1', 'i2 1+1 c2', '<*i2 0+1 i1'])
+  })
+
+  it('stands a source as tall as a reader across chains', () => {
+    const layout = graphLayout(
+      reading(sound(['i1', 'i2'], [['i1'], ['i1']]), {
+        i1: { fmSource: 'i2' },
+      })
+    )
+    expect(tiles(layout)).toEqual(['i1 0+2 c1,c2', '<i2 0+2 i1'])
+    expect(layout.reads[0]).toMatchObject({ first: 0, slots: 2 })
+  })
+
+  it('stands what a source reads a column further left', () => {
+    const layout = graphLayout(
+      reading(sound(['i1', 'i2', 'i3'], [['i1']]), {
+        i1: { fmSource: 'i2' },
+        i2: { fmSource: 'i3' },
+      })
+    )
+    expect(tiles(layout)).toEqual(['i1 0+1 c1', '<i2 0+1 i1', '<<i3 0+1 i2'])
+    expect(layout.columns).toBe(2)
+  })
+
+  it('shares a slot between the sides of a ring a column left', () => {
+    // A ring as IN 1's FM, its two sides in no chain
+    const layout = graphLayout(
+      reading(
+        sound(['i1', 'i2', 'i3', 'i4'], [['i1']]),
+        { i1: { fmSource: 'i2' }, i2: { a: 'i3', b: 'i4' } },
+        ['i2']
+      )
+    )
+    expect(tiles(layout)).toEqual([
+      'i1 0+1 c1',
+      '<i2 0+1 i1',
+      '<<i3 0+0.5 i2',
+      '<<i4 0.5+0.5 i2',
+    ])
+  })
+
+  it('stands a reader that feeds nothing after the chains', () => {
+    const layout = graphLayout(
+      reading(sound(['i1', 'i2'], []), { i2: { fmSource: 'i1' } })
+    )
+    expect(tiles(layout)).toEqual(['i2 0+1 ', '<i1 0+1 i2'])
+    expect(layout.slots).toBe(1)
+  })
+
+  it('stands nothing left for feedback FM or a reference to nothing', () => {
+    const layout = graphLayout(
+      reading(sound(['i1', 'i2'], [['i1', 'i2']]), {
+        i1: { fmSource: 'i1' },
+        i2: { fmSource: null },
+      })
+    )
+    expect(tiles(layout)).toEqual(['i1 0+1 c1', 'i2 1+1 c1'])
+    expect(layout.reads).toEqual([])
+    expect(layout.columns).toBe(0)
+  })
+
+  it('still stands inputs that read one another round in a loop', () => {
+    const layout = graphLayout(
+      reading(sound(['i1', 'i2'], []), {
+        i1: { fmSource: 'i2' },
+        i2: { fmSource: 'i1' },
+      })
+    )
+    expect(tiles(layout)).toEqual(['i1 0+1 ', 'i2 1+1 '])
+  })
+
+  it('stands every source beside its readers, without overlaps', () => {
+    let seed = 11
+    const random = () => {
+      seed = (seed * 1103515245 + 12345) % 2147483648
+      return seed / 2147483648
+    }
+    for (let n = 0; n < 2000; n++) {
+      const inputs = Array.from(
+        { length: 1 + Math.floor(random() * 6) },
+        (_, k) => `i${k + 1}`
+      )
+      const chains = Array.from({ length: Math.floor(random() * 5) }, () =>
+        inputs.filter(() => random() < 0.4)
+      )
+      // Each input reads one before it, or none: no loops
+      const rings: string[] = []
+      const refs: Record<string, Record<string, string | null>> = {}
+      inputs.forEach((id, k) => {
+        const pick = () =>
+          k > 0 && random() < 0.5
+            ? (inputs[Math.floor(random() * k)] ?? null)
+            : null
+        if (random() < 0.3) {
+          rings.push(id)
+          refs[id] = { a: pick(), b: pick() }
+        } else refs[id] = { fmSource: pick() }
+      })
+      const layout = graphLayout(reading(sound(inputs, chains), refs, rings))
+
+      // One tile per input that is not a copy; none overlap in a column
+      for (const id of inputs) {
+        const own = layout.tiles.filter((t) => t.input === id && !t.copy)
+        expect(own).toHaveLength(1)
+      }
+      for (let k = 0; k <= layout.columns; k++) {
+        const column = layout.tiles
+          .filter((t) => t.column === k)
+          .sort((a, b) => a.first - b.first)
+        column.forEach((tile, j) => {
+          expect(tile.first + tile.slots).toBeLessThanOrEqual(layout.slots)
+          const after = column[j + 1]
+          if (after) {
+            expect(tile.first + tile.slots).toBeLessThanOrEqual(after.first)
+          }
+        })
+      }
+
+      // Each read: its source's tile in its column, its reader's own tile
+      // in the column right of it, both over the peg's share
+      const over = (t: { first: number; slots: number }, first: number) =>
+        t.first <= first && first < t.first + t.slots
+      for (const peg of layout.reads) {
+        const source = layout.tiles.find(
+          (t) => t.column === peg.column && over(t, peg.first)
+        )
+        expect(source?.input).toBe(peg.from)
+        expect(source?.readers).toContain(peg.to)
+        const reader = layout.tiles.find(
+          (t) => t.column === peg.column - 1 && over(t, peg.first)
+        )
+        expect(reader?.input).toBe(peg.to)
+        expect(reader?.copy).toBe(false)
+      }
+      // Every reference to another input has its peg
+      const wanted = inputs.flatMap((id) =>
+        [...new Set(Object.values(refs[id] ?? {}))].flatMap((to) =>
+          to !== null && to !== id ? [`${to}>${id}`] : []
+        )
+      )
+      expect(layout.reads.map((peg) => `${peg.from}>${peg.to}`).sort()).toEqual(
+        wanted.sort()
+      )
+    }
   })
 
   it('reads a send of 0 or naming no input as not fed', () => {
@@ -289,6 +549,29 @@ describe('graphGeometry', () => {
     expect(geometry.addInput).toEqual({ x: 8, y: 206, w: 68, h: 30 })
     expect(geometry.addChain).toEqual({ x: 80, y: 206, w: 209, h: 30 })
     expect([geometry.width, geometry.height]).toEqual([352, 244])
+  })
+
+  it('moves the inputs right past the columns of their sources', () => {
+    const base = built(['i1', 'i2'], [['i1']], [1])
+    const geometry = graphGeometry(
+      { ...base, inputs: reading(base, { i1: { fmSource: 'i2' } }).inputs },
+      LIMITS
+    )
+    const inputsX = GRAPH.inputX + GRAPH.sourceW + GRAPH.inputGap
+    expect(geometry.inputs.map((tile) => [tile.input, tile.box])).toEqual([
+      ['i1', { x: inputsX, y: 6, w: GRAPH.inputW, h: 44 }],
+      ['i2', { x: GRAPH.inputX, y: 6, w: GRAPH.sourceW, h: 44 }],
+    ])
+    // The read's peg on the seam between, in the middle of the slot
+    expect(
+      geometry.reads.map(({ from, to, x, y }) => [from, to, x, y])
+    ).toEqual([['i2', 'i1', inputsX - GRAPH.inputGap / 2, 28]])
+    // A send's peg past the inputs, and the chains after it
+    expect(geometry.pegs[0]?.x).toBe(inputsX + GRAPH.inputW + 2)
+    expect(geometry.chains[0]?.head.x).toBe(
+      inputsX + GRAPH.inputW + GRAPH.inputGap
+    )
+    expect(geometry.addInput?.x).toBe(inputsX)
   })
 
   it('leaves out the "+" tiles at the limits', () => {

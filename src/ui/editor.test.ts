@@ -13,13 +13,16 @@ import {
 import { AMP, VOICE, initSound, type Sound } from '../state/sound/sound'
 import {
   CHAIN_COLORS,
+  FM_START,
   GLYPHS,
   MOD_LOOK,
   NEUTRAL_LOOK,
   addId,
   chainLook,
   destName,
+  fmTargets,
   glyphOf,
+  heardThrough,
   lookOf,
   modulated,
   reachOf,
@@ -27,6 +30,7 @@ import {
   stillPicked,
   tileLabel,
   tileLine,
+  toggleFm,
 } from './editor'
 
 /** The init sound, plus noise (i2), a second filter (x2) and an LFO */
@@ -93,6 +97,66 @@ describe('tiles', () => {
     expect(tileLine(sound, AMP)).toBe('Out')
     expect(tileLine(sound, VOICE)).toBe('Poly')
     expect(tileLine(setValue(sound, VOICE, 'mode', 2), VOICE)).toBe('Legato')
+  })
+
+  it('shows where an input no chain takes is heard instead', () => {
+    // IN 2 out of chain A, and IN 1's FM reading it
+    let sound = setSend(busy(), 'c1', 'i2', 0)
+    expect(tileLine(sound, 'i2')).toBe('Noise')
+    expect(heardThrough(sound, 'i2')).toBeUndefined()
+    sound = setRef(sound, 'i1', 'fmSource', 'i2')
+    expect(tileLine(sound, 'i2')).toBe('→ IN 1 FM')
+    expect(heardThrough(sound, 'i2')).toBe("IN 1's FM")
+    // A ring reading it too
+    const ring = addInput(sound, 'ring')
+    sound = setSend(ring.sound, 'c1', ring.id as string, 0)
+    sound = setRef(sound, ring.id as string, 'a', 'i2')
+    expect(tileLine(sound, 'i2')).toBe('→ 2 inputs')
+    expect(heardThrough(sound, 'i2')).toBe("IN 1's FM and IN 3's ring")
+    // Back in a chain, it shows its own line again
+    expect(tileLine(setSend(sound, 'c1', 'i2', 1), 'i2')).toBe('Noise')
+    // Its own feedback FM does not count
+    expect(heardThrough(setRef(busy(), 'i1', 'fmSource', 'i1'), 'i1')).toBe(
+      undefined
+    )
+  })
+
+  it('offers an input as the FM of every other oscillator', () => {
+    // IN 1 and IN 3 oscillators, IN 2 noise
+    let sound = addInput(busy(), 'osc').sound
+    expect(fmTargets(sound, 'i2')).toEqual([
+      { id: 'i1', on: false, loops: false },
+      { id: 'i3', on: false, loops: false },
+    ])
+    expect(fmTargets(sound, 'i1').map((target) => target.id)).toEqual(['i3'])
+    // IN 1 reads IN 3: IN 3 reading IN 1 would loop
+    sound = toggleFm(sound, 'i1', 'i3')
+    expect(fmTargets(sound, 'i3')).toEqual([
+      { id: 'i1', on: true, loops: false },
+    ])
+    expect(fmTargets(sound, 'i1')).toEqual([
+      { id: 'i3', on: false, loops: true },
+    ])
+  })
+
+  it("turns an oscillator's FM from another input on and off", () => {
+    let sound = busy()
+    // On: it reads IN 2, from none to FM_START
+    sound = toggleFm(sound, 'i1', 'i2')
+    const osc = () => sound.inputs.find((input) => input.id === 'i1')
+    expect(osc()?.refs.fmSource).toBe('i2')
+    expect(osc()?.values.fm).toBe(FM_START)
+    // Off, its amount kept for the next
+    sound = toggleFm(sound, 'i1', 'i2')
+    expect(osc()?.refs.fmSource).toBeNull()
+    expect(osc()?.values.fm).toBe(FM_START)
+    // On in place of what it read, at the amount it had
+    sound = setValue(setRef(sound, 'i1', 'fmSource', 'i1'), 'i1', 'fm', 0.6)
+    sound = toggleFm(sound, 'i1', 'i2')
+    expect(osc()?.refs.fmSource).toBe('i2')
+    expect(osc()?.values.fm).toBe(0.6)
+    // Noise has no FM
+    expect(toggleFm(sound, 'i2', 'i1')).toBe(sound)
   })
 
   it("draws a tile's pictogram from its kind and shape", () => {

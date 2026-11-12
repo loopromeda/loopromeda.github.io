@@ -9,11 +9,27 @@
  * the chain is not next to the others it feeds, another input already
  * stretches across that seam, or stretching would cover a chain that
  * takes another input too (the column is one tile wide).
+ *
+ * An input that another reads (as its FM, a side of its ring) stands in a
+ * column left of the inputs, beside the inputs that read it, as an input
+ * stands beside the chains it feeds: one tile over readers next to one
+ * another, a peg on the seam to each, a dashed copy beside readers apart
+ * from those. An input that feeds a chain stands in the inputs' column,
+ * a copy of it beside its readers; one that feeds none stands only there.
+ * What a source reads stands in a column left of it, and so on. A reader
+ * of two (a ring) shares its slots between them, and in the inputs'
+ * column takes two slots for it.
  */
 
 /** What the layout reads of a sound: its inputs and chains, in order */
 export interface GraphSound {
-  readonly inputs: readonly { readonly id: string }[]
+  readonly inputs: readonly {
+    readonly id: string
+    /** A ring's; an oscillator's references are its FM */
+    readonly kind?: string
+    /** The inputs it reads, by reference name (fmSource, a, b) */
+    readonly refs?: Readonly<Record<string, string | null>>
+  }[]
   readonly chains: readonly {
     readonly id: string
     /** The level each input is mixed at, by input id; none or 0: not fed */
@@ -29,17 +45,24 @@ export interface ChainRow {
 }
 
 /**
- * An input's tile in the column, from slot first, slots tall, beside the
- * chains it covers. Every input has one tile that is not a copy; a copy
- * stands beside one chain. An input that feeds nothing has its tile after
- * the chains, beside none.
+ * An input's tile, from slot first, slots tall: in the inputs' column
+ * (column 0) beside the chains it covers, or in a sources' column (1 and
+ * on, leftwards) beside the inputs that read it. Every input has one tile
+ * that is not a copy; a copy in the inputs' column stands beside one
+ * chain. An input that feeds nothing and that none reads has its tile
+ * after the chains, beside none. In a sources' column a share of a slot
+ * may be all a source has (first and slots not whole): two read by one
+ * reader one slot tall.
  */
 export interface InputTile {
   readonly input: string
   readonly copy: boolean
+  readonly column: number
   readonly first: number
   readonly slots: number
   readonly chains: readonly string[]
+  /** In a sources' column: the inputs it stands beside, which read it */
+  readonly readers: readonly string[]
 }
 
 /** A send's peg: input feeds chain beside this slot */
@@ -49,18 +72,45 @@ export interface SendPeg {
   readonly slot: number
 }
 
+/**
+ * An input read by another, as its FM or a side of its ring: the peg on
+ * the seam right of the source's column, in the middle of the share of
+ * the reader's slots it stands beside (from first, slots tall)
+ */
+export interface ReadPeg {
+  readonly from: string
+  readonly to: string
+  readonly as: 'FM' | 'ring'
+  /** The source's column */
+  readonly column: number
+  readonly first: number
+  readonly slots: number
+}
+
 export interface GraphLayout {
   readonly rows: readonly ChainRow[]
-  /** Ordered by first slot */
+  /** Ordered by column, then first slot */
   readonly tiles: readonly InputTile[]
   /** Ordered by chain, then slot */
   readonly pegs: readonly SendPeg[]
+  /** Ordered by column, then slot */
+  readonly reads: readonly ReadPeg[]
+  /** The sources' columns, left of the inputs' */
+  readonly columns: number
   /** Every slot: the chains', then those of inputs that feed nothing */
   readonly slots: number
 }
 
 /** A run of chains by index, first to last, both included */
 type Run = readonly [number, number]
+
+/** A source wanted beside a share of a reader's tile */
+interface Want {
+  readonly input: string
+  readonly reader: string
+  readonly first: number
+  readonly slots: number
+}
 
 export function graphLayout(sound: GraphSound): GraphLayout {
   const inputs = sound.inputs.map((input) => input.id)
@@ -106,24 +156,51 @@ export function graphLayout(sound: GraphSound): GraphLayout {
     for (let k = best[0]; k < best[1]; k++) seams[k] = input
   }
 
+  // What each input reads, but itself (feedback FM): a ring's two sides
+  // once if they are one input
+  const sourcesOf = new Map<string, readonly string[]>()
+  const asOf = new Map<string, 'FM' | 'ring'>()
+  for (const input of sound.inputs) {
+    const read = [...new Set(Object.values(input.refs ?? {}))].filter(
+      (id): id is string =>
+        id !== null && id !== input.id && inputs.includes(id)
+    )
+    if (read.length === 0) continue
+    sourcesOf.set(input.id, read)
+    asOf.set(input.id, input.kind === 'ring' ? 'ring' : 'FM')
+  }
+  const read = new Set([...sourcesOf.values()].flat())
+  const reading = (id: string) => sourcesOf.get(id)?.length ?? 0
+
   // A chain's slots: the input coming down across the seam above it, then
   // those that stand beside it alone (homes and copies, in input order),
-  // then the input going on across the seam below it
+  // then the input going on across the seam below it. One that reads two
+  // takes two slots where its tile stands in this row alone.
   const rows: ChainRow[] = []
   const slotOf = new Map<string, number>()
   const at = (input: string, c: number) => `${input} ${c}`
+  const only = (input: string, c: number) => {
+    const run = home.get(input)
+    return run !== undefined && run[0] === c && run[1] === c
+  }
   let next = 0
   chains.forEach((chain, c) => {
     const above = c > 0 ? (seams[c - 1] ?? null) : null
     const below = seams[c] ?? null
-    const order: string[] = []
-    if (above) order.push(above)
-    for (const id of feeders[c] ?? []) {
-      if (id !== above && id !== below) order.push(id)
+    const alone = (feeders[c] ?? []).filter(
+      (id) => id !== above && id !== below
+    )
+    const order: string[] = [
+      ...(above ? [above] : []),
+      ...alone,
+      ...(below && below !== above ? [below] : []),
+    ]
+    let slot = next
+    for (const id of order) {
+      slotOf.set(at(id, c), slot)
+      slot += only(id, c) ? Math.max(1, reading(id)) : 1
     }
-    if (below && below !== above) order.push(below)
-    order.forEach((id, k) => slotOf.set(at(id, c), next + k))
-    const slots = Math.max(1, order.length)
+    const slots = Math.max(1, slot - next)
     rows.push({ chain: chain.id, first: next, slots })
     next += slots
   })
@@ -134,12 +211,15 @@ export function graphLayout(sound: GraphSound): GraphLayout {
     if (!run) continue
     const first = slotOf.get(at(input, run[0])) ?? 0
     const last = slotOf.get(at(input, run[1])) ?? first
+    const tall = only(input, run[0]) ? Math.max(1, reading(input)) : 1
     tiles.push({
       input,
       copy: false,
+      column: 0,
       first,
-      slots: last - first + 1,
+      slots: last - first + tall,
       chains: chains.slice(run[0], run[1] + 1).map((chain) => chain.id),
+      readers: [],
     })
     chains.forEach((chain, c) => {
       if (c >= run[0] && c <= run[1]) return
@@ -148,18 +228,112 @@ export function graphLayout(sound: GraphSound): GraphLayout {
       tiles.push({
         input,
         copy: true,
+        column: 0,
         first: slot,
         slots: 1,
         chains: [chain.id],
+        readers: [],
       })
     })
   }
+  // Inputs that feed nothing and that none reads go after the chains, one
+  // that reads two taking two slots
   for (const input of inputs) {
-    if (home.has(input)) continue
-    tiles.push({ input, copy: false, first: next, slots: 1, chains: [] })
+    if (home.has(input) || read.has(input)) continue
+    const slots = Math.max(1, reading(input))
+    tiles.push({
+      input,
+      copy: false,
+      column: 0,
+      first: next,
+      slots,
+      chains: [],
+      readers: [],
+    })
+    next += slots
+  }
+
+  // Column by column leftwards: what the tiles standing as themselves in
+  // the last read, each source beside its share of its reader's slots
+  const placed = new Set(tiles.map((tile) => tile.input))
+  const reads: ReadPeg[] = []
+  let standing = tiles.filter((tile) => !tile.copy)
+  let column = 0
+  while (standing.some((tile) => reading(tile.input) > 0)) {
+    column += 1
+    const wants: Want[] = []
+    for (const tile of standing) {
+      const sources = sourcesOf.get(tile.input) ?? []
+      const share = tile.slots / Math.max(1, sources.length)
+      sources.forEach((input, k) => {
+        const first = tile.first + k * share
+        wants.push({ input, reader: tile.input, first, slots: share })
+        reads.push({
+          from: input,
+          to: tile.input,
+          as: asOf.get(tile.input) ?? 'FM',
+          column,
+          first,
+          slots: share,
+        })
+      })
+    }
+    // Each source's shares, those that meet merged into one tile: the
+    // longest (the earliest of those as long) stands as the source itself
+    // where it stands nowhere yet, the rest are copies
+    const here: InputTile[] = []
+    for (const input of inputs) {
+      const mine = wants
+        .filter((want) => want.input === input)
+        .sort((a, b) => a.first - b.first)
+      if (mine.length === 0) continue
+      const runs: { first: number; slots: number; readers: string[] }[] = []
+      for (const want of mine) {
+        const last = runs[runs.length - 1]
+        if (last && last.first + last.slots === want.first) {
+          last.slots += want.slots
+          last.readers.push(want.reader)
+        } else {
+          runs.push({ ...want, readers: [want.reader] })
+        }
+      }
+      let best = placed.has(input) ? undefined : runs[0]
+      for (const run of runs) {
+        if (best && run.slots > best.slots) best = run
+      }
+      if (best) placed.add(input)
+      for (const run of runs) {
+        here.push({
+          input,
+          copy: run !== best,
+          column,
+          first: run.first,
+          slots: run.slots,
+          chains: [],
+          readers: run.readers,
+        })
+      }
+    }
+    tiles.push(...here)
+    standing = here.filter((tile) => !tile.copy)
+  }
+  // Inputs that read one another round in a loop, none heard (a sound
+  // read from a file keeps none, edits make none): after the chains too
+  for (const input of inputs) {
+    if (placed.has(input)) continue
+    tiles.push({
+      input,
+      copy: false,
+      column: 0,
+      first: next,
+      slots: 1,
+      chains: [],
+      readers: [],
+    })
     next += 1
   }
-  tiles.sort((a, b) => a.first - b.first)
+  tiles.sort((a, b) => a.column - b.column || a.first - b.first)
+  reads.sort((a, b) => a.column - b.column || a.first - b.first)
 
   const pegs: SendPeg[] = []
   chains.forEach((chain, c) => {
@@ -172,7 +346,7 @@ export function graphLayout(sound: GraphSound): GraphLayout {
     pegs.push(...here)
   })
 
-  return { rows, tiles, pegs, slots: next }
+  return { rows, tiles, pegs, reads, columns: column, slots: next }
 }
 
 /** What the geometry reads besides: each chain's items, in order */
@@ -237,6 +411,11 @@ export interface GraphGeometry {
     readonly x: number
     readonly y: number
   })[]
+  /** Each read's peg, on the seam right of its source's column */
+  readonly reads: readonly (ReadPeg & {
+    readonly x: number
+    readonly y: number
+  })[]
   /** The dashed "+ Input" and "+ Chain", under the rows, unless full */
   readonly addInput: Box | undefined
   readonly addChain: Box | undefined
@@ -264,13 +443,16 @@ export interface GraphGeometry {
  * its width, whichever is more: past that it stands in their middle, and
  * a bus down the seam takes every row to it. A chain's items and its "+"
  * stand as tall as its row up to two slots, and in its middle past that;
- * its head keeps the row's height, every input's peg on it.
+ * its head keeps the row's height, every input's peg on it. Each column
+ * of sources is 52 wide, 4 before the next, and the inputs' column moves
+ * right past them.
  */
 export const GRAPH = {
   top: 6,
   slot: 44,
   slotGap: 6,
   inputX: 8,
+  sourceW: 52,
   inputW: 68,
   inputGap: 4,
   headW: 36,
@@ -287,6 +469,7 @@ export const GRAPH = {
 
 /** The tiles' widths, s times their own; the amp's from its waveform's */
 interface Widths {
+  readonly source: number
   readonly input: number
   readonly item: number
   readonly add: number
@@ -296,6 +479,7 @@ interface Widths {
 function widths(s: number, round: (n: number) => number): Widths {
   const g = GRAPH
   return {
+    source: round(g.sourceW * s),
     input: round(g.inputW * s),
     item: round(g.itemW * s),
     add: round(g.addMin * s),
@@ -303,10 +487,19 @@ function widths(s: number, round: (n: number) => number): Widths {
   }
 }
 
-/** Where a chain's head, its items and the amp stand, at those widths */
-function columns(sound: GeometrySound, limits: GraphLimits, w: Widths) {
+/**
+ * Where the inputs' column, a chain's head, its items and the amp stand,
+ * at those widths, with sources columns of sources before the inputs
+ */
+function columns(
+  sound: GeometrySound,
+  limits: GraphLimits,
+  w: Widths,
+  sources: number
+) {
   const g = GRAPH
-  const headX = g.inputX + w.input + g.inputGap
+  const inputsX = g.inputX + sources * (w.source + g.inputGap)
+  const headX = inputsX + w.input + g.inputGap
   const itemsX = headX + g.headW + g.seam
   // The amp stands after the longest chain, counting its "+"
   let reach = w.add + g.seam
@@ -314,7 +507,7 @@ function columns(sound: GeometrySound, limits: GraphLimits, w: Widths) {
     const add = chain.items.length < limits.items ? w.add + g.seam : 0
     reach = Math.max(reach, chain.items.length * (w.item + g.seam) + add)
   }
-  return { headX, itemsX, ampX: itemsX + reach }
+  return { inputsX, headX, itemsX, ampX: itemsX + reach }
 }
 
 /**
@@ -326,12 +519,13 @@ function columns(sound: GeometrySound, limits: GraphLimits, w: Widths) {
 function stretchFor(
   sound: GeometrySound,
   limits: GraphLimits,
+  sources: number,
   fill: number
 ): number {
   const exact = (n: number) => n
   const extent = (s: number) => {
     const w = widths(s, exact)
-    return columns(sound, limits, w).ampX + w.amp + GRAPH.end
+    return columns(sound, limits, w, sources).ampX + w.amp + GRAPH.end
   }
   const at1 = extent(1)
   if (fill <= at1) return 1
@@ -400,10 +594,15 @@ export function graphGeometry(
   const pitch = slot + g.slotGap
   const slotY = (n: number) => g.top + n * pitch
   const tall = (slots: number) => slots * pitch - g.slotGap
-  const stretch = fill === undefined ? 1 : stretchFor(sound, limits, fill)
+  const sources = layout.columns
+  const stretch =
+    fill === undefined ? 1 : stretchFor(sound, limits, sources, fill)
   const w = widths(stretch, Math.floor)
   const itemPitch = w.item + g.seam
-  const { headX, itemsX, ampX } = columns(sound, limits, w)
+  const { inputsX, headX, itemsX, ampX } = columns(sound, limits, w, sources)
+  // Column k's left edge: 0 the inputs', the sources' leftwards from it
+  const columnX = (k: number) =>
+    k === 0 ? inputsX : inputsX - k * (w.source + g.inputGap)
 
   const chains: ChainBoxes[] = layout.rows.map((row, c) => {
     const items = sound.chains[c]?.items ?? []
@@ -440,22 +639,27 @@ export function graphGeometry(
   const inputs = layout.tiles.map((tile) => ({
     ...tile,
     box: {
-      x: g.inputX,
+      x: columnX(tile.column),
       y: slotY(tile.first),
-      w: w.input,
+      w: tile.column === 0 ? w.input : w.source,
       h: tall(tile.slots),
     },
   }))
   const pegs = layout.pegs.map((peg) => ({
     ...peg,
-    x: (g.inputX + w.input + headX) / 2,
+    x: (inputsX + w.input + headX) / 2,
     y: slotY(peg.slot) + slot / 2,
+  }))
+  const reads = layout.reads.map((peg) => ({
+    ...peg,
+    x: columnX(peg.column) + w.source + g.inputGap / 2,
+    y: slotY(peg.first) + tall(peg.slots) / 2,
   }))
 
   const addY = slotY(layout.slots)
   const addInput =
     sound.inputs.length < limits.inputs
-      ? { x: g.inputX, y: addY, w: w.input, h: g.addRow }
+      ? { x: inputsX, y: addY, w: w.input, h: g.addRow }
       : undefined
   const addChain =
     sound.chains.length < limits.chains
@@ -498,6 +702,7 @@ export function graphGeometry(
         ? { x: ampX - g.seam / 2, y: busTop, h: busEnd - busTop }
         : undefined,
     pegs,
+    reads,
     addInput,
     addChain,
   }

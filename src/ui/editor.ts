@@ -10,6 +10,7 @@ import {
   VOICE_SPEC,
   WAVE_NAMES,
 } from '../state/sound/kinds'
+import { setRef, setValue } from '../state/sound/edit'
 import {
   AMP,
   VOICE,
@@ -17,6 +18,7 @@ import {
   findPart,
   isSource,
   partName,
+  refLoops,
   sendInput,
   type Sound,
 } from '../state/sound/sound'
@@ -177,10 +179,103 @@ const percent = (level: number) => `${Math.round(level * 100)}%`
 const VOICE_MODES =
   VOICE_SPEC.knobs.find((knob) => knob.key === 'mode')?.choices ?? []
 
+/** How another input reads one: as its FM, or as a side of its ring */
+export interface Reader {
+  readonly id: string
+  readonly as: 'FM' | 'ring'
+}
+
+/**
+ * The inputs that read input id's signal, other than itself (feedback
+ * FM): an input no chain takes is heard through them, or not at all
+ */
+export function readersOf(sound: Sound, id: string): Reader[] {
+  return sound.inputs.flatMap((input): Reader[] =>
+    input.id !== id && Object.values(input.refs).includes(id)
+      ? [{ id: input.id, as: input.kind === 'ring' ? 'ring' : 'FM' }]
+      : []
+  )
+}
+
+/** An oscillator an input may be the FM of, from that input's panel */
+export interface FmTarget {
+  readonly id: string
+  /** Its FM reads the input now */
+  readonly on: boolean
+  /** Reading it would loop back through the input (refLoops) */
+  readonly loops: boolean
+}
+
+/**
+ * The oscillators input id may be the FM of, other than itself (its own
+ * feedback FM is its own panel's), in input order
+ */
+export function fmTargets(sound: Sound, id: string): FmTarget[] {
+  return sound.inputs.flatMap((input): FmTarget[] =>
+    input.kind === 'osc' && input.id !== id
+      ? [
+          {
+            id: input.id,
+            on: input.refs.fmSource === id,
+            loops: refLoops(sound.inputs, input.id, 'fmSource', id),
+          },
+        ]
+      : []
+  )
+}
+
+/** Where an FM turned on from its source starts, if it was at none */
+export const FM_START = 0.25
+
+/**
+ * Turns oscillator target's FM from input id on, in place of what it read
+ * (at FM_START, if its FM was at none), or off; the sound unchanged where
+ * it would loop
+ */
+export function toggleFm(sound: Sound, target: string, id: string): Sound {
+  const found = findPart(sound, target)
+  if (found?.type !== 'input' || found.part.kind !== 'osc') return sound
+  if (found.part.refs.fmSource === id) {
+    return setRef(sound, target, 'fmSource', null)
+  }
+  const next = setRef(sound, target, 'fmSource', id)
+  if (next === sound || (found.part.values.fm ?? 0) > 0) return next
+  return setValue(next, target, 'fm', FM_START)
+}
+
+/** Whether any chain takes input id */
+export function sent(sound: Sound, id: string): boolean {
+  return sound.chains.some((chain) => (chain.sends[id] ?? 0) > 0)
+}
+
+/**
+ * Where an input no chain takes is heard, for its panel and a screen
+ * reader: through IN 1's FM, or IN 1's FM and IN 3's ring; undefined
+ * where no input reads it either
+ */
+export function heardThrough(sound: Sound, id: string): string | undefined {
+  const readers = readersOf(sound, id)
+  if (readers.length === 0) return undefined
+  return readers
+    .map((reader) => `${partName(sound, reader.id)}'s ${reader.as}`)
+    .join(' and ')
+}
+
+/** An input's own line: its wave, or its kind */
+export function inputLine(sound: Sound, id: string): string {
+  const found = findPart(sound, id)
+  if (found?.type !== 'input') return ''
+  const { kind, values } = found.part
+  return kind === 'osc'
+    ? (WAVE_NAMES[values.wave ?? 0] ?? '')
+    : INPUT_KINDS[kind].label
+}
+
 /**
  * A tile's second line, from its knobs: an oscillator's wave, a filter's
  * type and cutoff, a drive's amount, a chain's level, the amp's Out,
- * the voice's mode
+ * the voice's mode. An input no chain takes, but another reads, shows
+ * where it goes instead (its pictogram still shows its wave): → IN 1 FM.
  */
 export function tileLine(sound: Sound, id: string): string {
   if (id === AMP) return 'Out'
@@ -188,10 +283,11 @@ export function tileLine(sound: Sound, id: string): string {
   const found = findPart(sound, id)
   switch (found?.type) {
     case 'input': {
-      const { kind, values } = found.part
-      return kind === 'osc'
-        ? (WAVE_NAMES[values.wave ?? 0] ?? '')
-        : INPUT_KINDS[kind].label
+      const readers = sent(sound, id) ? [] : readersOf(sound, id)
+      const [reader] = readers
+      if (readers.length > 1) return `→ ${readers.length} inputs`
+      if (reader) return `→ ${partName(sound, reader.id)} ${reader.as}`
+      return inputLine(sound, id)
     }
     case 'chain':
       return percent(found.part.values.level ?? 0)

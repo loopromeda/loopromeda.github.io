@@ -130,6 +130,30 @@ as a graph of flat tiles, flowing left to right.
   chains it feeds; where it cannot, a dashed copy of it stands in that
   chain's row (`src/viz/graph.ts` lays this out). Tapping a copy picks
   the input; picking the input lights its copies.
+- **Links.** An input that another reads (its FM, a side of a ring)
+  stands in a column left of the inputs, beside the inputs that read it,
+  as an input stands beside the chains it feeds: one tile over readers
+  next to one another, a peg on the seam to each, a dashed copy beside
+  readers apart from those (`src/viz/graph.ts`). An FM's peg is as long
+  as the reader's FM, a ring's full. One that feeds a chain stands in the
+  inputs' column, a copy of it beside its readers; one that feeds none
+  stands only there. What a source reads stands a column further left. A
+  ring takes two slots in the inputs' column, one beside each side.
+  Tapped, an FM's peg picks the input read, its knob for the reader
+  marked; a ring's picks the ring. Either side edits the link: the reader
+  picks its FM source and sets its FM, as before, and the input read
+  turns itself on as any other oscillator's FM ("FM →", next to its
+  chains; on, it replaces what that one read, a quarter of FM if there
+  was none) and sets how much, on a knob for each (→ IN 1, that
+  oscillator's FM knob). An input no chain takes and no FM toggle shows
+  heard says where it is heard instead ("Heard through IN 4's ring") or
+  "Silent". Since 2026-11-12: ashon heard Glass Pad's modulator, in no
+  chain, took it for a fault, and found FM alone hard to see. A line down
+  the inputs' left came first; ashon wanted it shown more as the chains
+  show mixing, and the source stood under its reader with a peg between,
+  editable from both sides. Under its readers, one source used by three
+  stood three times down the column, and ashon asked for it left of them
+  instead, pegged to each.
 - **Colour by chain.** A chain's head, items, pegs, copies and knobs
   take its colour, A to D in a fixed order: orange-400, violet-400,
   lime-300, pink-500. Inputs carry a dot in the colour of each chain

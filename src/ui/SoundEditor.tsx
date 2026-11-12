@@ -24,7 +24,12 @@ import {
   type Sound,
 } from '../state/sound/sound'
 import { MARK, chainDrop, itemDrop, spanDrop } from '../viz/drop'
-import { GRAPH, graphGeometry, type Box } from '../viz/graph'
+import {
+  GRAPH,
+  graphGeometry,
+  type Box,
+  type GraphGeometry,
+} from '../viz/graph'
 import {
   MOD_LOOK,
   NEUTRAL_LOOK,
@@ -33,6 +38,8 @@ import {
   chainLetter,
   chainLook,
   glyphOf,
+  heardThrough,
+  inputLine,
   modulated,
   reachOf,
   shapeKey,
@@ -133,9 +140,11 @@ interface Picking {
  * head, its items, the amp at the end of every row), and under it all the
  * panel of the tile picked (beside the graph on a wider screen). Tapping a
  * tile picks it; a peg between an input and a chain picks the chain, its
- * knob for that input lit. The panel hides (its header's last button),
- * the graph taking its room to show more of the chains, a bar under it
- * bringing it back; picking a tile brings it back too.
+ * knob for that input lit, and one between an input and the oscillator
+ * whose FM reads it picks the input, its knob for that FM lit. The panel
+ * hides (its header's last button), the graph taking its room to show
+ * more of the chains, a bar under it bringing it back; picking a tile
+ * brings it back too.
  *
  * It redraws when the sound's shape changes (shapeKey: a part added, an
  * input feeding a chain, a wave changed); a knob turning redraws only the
@@ -543,6 +552,31 @@ function Graph({
       >
         {geometry.inputs.map((tile) => {
           const into = tile.chains.map((chain) => chainOf.get(chain) ?? 0)
+          if (tile.copy && tile.column > 0) {
+            // Beside readers, as the inputs' column is: neutral
+            const readers = tile.readers
+              .map((reader) => {
+                const ring = sound.inputs.some(
+                  (input) => input.id === reader && input.kind === 'ring'
+                )
+                return `${partName(sound, reader)}'s ${ring ? 'ring' : 'FM'}`
+              })
+              .join(' and ')
+            return (
+              <Tile
+                key={`${tile.input}<${tile.column} ${tile.first}`}
+                engine={engine}
+                label={tileLabel(sound, tile.input)}
+                glyph={glyphOf(sound, tile.input)}
+                look={NEUTRAL_LOOK}
+                picked={picked === tile.input}
+                dashed="copy"
+                aria={`${partName(sound, tile.input)} again: the same input, into ${readers}`}
+                onClick={() => pick(tile.input)}
+                style={place(tile.box)}
+              />
+            )
+          }
           if (tile.copy) {
             const c = into[0] ?? 0
             return (
@@ -563,22 +597,29 @@ function Graph({
           const feeds = sound.chains.flatMap((chain, c) =>
             (chain.sends[tile.input] ?? 0) > 0 ? [c] : []
           )
+          const through = heardThrough(sound, tile.input)
           return (
             <Tile
               key={tile.input}
               engine={engine}
               label={tileLabel(sound, tile.input)}
-              line={tile.box.h >= 60 ? tile.input : undefined}
+              // A source's column has no room for a line: its pegs say
+              // where it goes
+              line={
+                tile.box.h >= 60 && tile.column === 0 ? tile.input : undefined
+              }
               glyph={glyphOf(sound, tile.input)}
               look={NEUTRAL_LOOK}
               picked={picked === tile.input}
               reach={reach.has(tile.input)}
               routed={routed.has(tile.input)}
               dots={feeds.map((c) => chainLook(c).ink)}
-              aria={`${partName(sound, tile.input)}, ${tileLine(sound, tile.input)}${
+              aria={`${partName(sound, tile.input)}, ${inputLine(sound, tile.input)}${
                 feeds.length > 0
                   ? `, into ${feeds.map(chainLetter).join(' and ')}`
-                  : ', into nothing'
+                  : through
+                    ? `, into no chain, heard through ${through}`
+                    : ', into nothing'
               }`}
               onClick={() => pick(tile.input)}
               style={place(tile.box)}
@@ -738,6 +779,20 @@ function Graph({
           />
         )}
 
+        {geometry.reads.map((peg) => (
+          <ReadPeg
+            key={`${peg.from}>${peg.to}`}
+            engine={engine}
+            peg={peg}
+            lit={picked === peg.from || picked === peg.to}
+            focused={picked === peg.from && focus === peg.to}
+            // FM: the input read, its knob for the reader marked; a ring's
+            // side has no amount of its own, so the ring
+            onClick={() =>
+              peg.as === 'FM' ? pick(peg.from, peg.to) : pick(peg.to)
+            }
+          />
+        ))}
         {geometry.pegs.map((peg) => {
           const c = chainOf.get(peg.chain) ?? 0
           return (
@@ -812,6 +867,56 @@ function pillStyle(look: Look, lit: boolean, ring = false): CSSProperties {
     background: look.ink,
     boxShadow: `0 0 0 2px ${GROUND}${ring ? `, 0 0 0 4px ${look.ink}` : lit ? `, 0 0 10px ${look.ink}` : ''}`,
   }
+}
+
+/**
+ * A read's peg, on the seam between an input read and its reader: as long
+ * as the reader's FM (a ring's side, full), as a send's peg is as long as
+ * its send. Tapped, it picks as onClick says.
+ */
+function ReadPeg({
+  engine,
+  peg,
+  lit,
+  focused,
+  onClick,
+}: {
+  engine: Engine
+  peg: GraphGeometry['reads'][number]
+  lit: boolean
+  focused: boolean
+  onClick: () => void
+}) {
+  const level = useLive(engine, (sound) =>
+    peg.as === 'FM'
+      ? (sound.inputs.find((input) => input.id === peg.to)?.values.fm ?? 0)
+      : 1
+  )
+  const sound = engine.getSound()
+  const from = partName(sound, peg.from)
+  const to = partName(sound, peg.to)
+  const label =
+    peg.as === 'FM'
+      ? `${from} into ${to}'s FM, ${Math.round(level * 100)}%. Tap to set it.`
+      : `${from} into ${to}, a side of its ring`
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      onClick={onClick}
+      className="absolute z-[3] flex h-11 w-5 items-center justify-center"
+      style={{ left: peg.x - 10, top: peg.y - 22 }}
+    >
+      <span
+        className="block w-2 rounded"
+        style={{
+          height: pegLength(level),
+          opacity: lit || focused ? 1 : pegOpacity(level),
+          ...pillStyle(NEUTRAL_LOOK, lit, focused),
+        }}
+      />
+    </button>
+  )
 }
 
 /** The joint between two tiles of a chain */
@@ -1003,13 +1108,19 @@ function Tile({
   stacked?: boolean
 }) {
   const height = typeof style?.height === 'number' ? style.height : 26
+  const width = typeof style?.width === 'number' ? style.width : Infinity
   const tall = !dashed && !small && height >= 60
   const under = picture !== undefined && (tall || stacked)
   // A picture stands in for the pictogram
   const pictogram = picture === undefined ? glyph : undefined
-  // A short tile stacks a line under its label only without a pictogram
+  // A short tile stacks a line under its label only without a pictogram;
+  // a narrow one (a source's) its pictogram over it
   const column =
-    under || tall || mark !== undefined || (line !== undefined && !pictogram)
+    under ||
+    tall ||
+    width < 64 ||
+    mark !== undefined ||
+    (line !== undefined && !pictogram)
 
   let shadow = `inset 0 0 0 1.5px ${look.ring}`
   if (picked) shadow = `inset 0 0 0 2px ${look.ink}, 0 0 0 3px ${look.tint}`

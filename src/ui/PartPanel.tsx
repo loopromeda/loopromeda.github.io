@@ -48,8 +48,11 @@ import {
   chainLetter,
   chainLook,
   destName,
+  fmTargets,
   glyphOf,
+  heardThrough,
   lookOf,
+  toggleFm,
   type Look,
 } from './editor'
 import { ConfirmDialog } from './ConfirmDialog'
@@ -93,6 +96,15 @@ const ICONS = {
 /** A header's small square button, and the one that removes */
 const ACTION_BUTTON = `${TALL_HIT} flex size-7 shrink-0 items-center justify-center rounded-md bg-white/5 text-zinc-200 disabled:opacity-30`
 const REMOVE_BUTTON = `${TALL_HIT} flex size-7 shrink-0 items-center justify-center rounded-md bg-red-500/15 text-red-200`
+/**
+ * A row of 28 px buttons that pans sideways when long. It stands 8 px taller
+ * above and below, for their hit areas (TALL_HIT), and as much drawn back
+ * into the gaps around it, so it neither scrolls up and down (a scroller
+ * holding what reaches past it does) nor cuts them; a finger or a wheel
+ * pans it, without a scrollbar
+ */
+const PAN_ROW =
+  '-my-2 flex shrink-0 items-center gap-1.5 overflow-x-auto overflow-y-hidden overscroll-x-contain py-2 [scrollbar-width:none]'
 
 /** A stroked 14 px picture in an action's button */
 function ActionIcon({ path, className }: { path: string; className?: string }) {
@@ -123,6 +135,15 @@ interface Feed {
   readonly toggle: () => void
 }
 
+/** An oscillator an input may be the FM of, as a toggle: on while it is */
+interface FmInto {
+  readonly target: string
+  readonly name: string
+  readonly on: boolean
+  /** None where reading the input would loop back */
+  readonly toggle: (() => void) | undefined
+}
+
 /** A destination that no knob holds, beside the knobs: tap to route */
 interface Knobless {
   readonly part: string
@@ -145,12 +166,22 @@ interface View {
   readonly title: string
   readonly kind: string
   readonly chip: { look: Look; glyph?: string; mark?: string; add?: boolean }
-  readonly knobs: readonly { part: string; key: string; hot?: string }[]
+  /** A knob of a part, under its own label or another (→ IN 1) */
+  readonly knobs: readonly {
+    part: string
+    key: string
+    hot?: string
+    label?: string
+  }[]
   /** The knobs' arc: a chain's colour on its own parts, else neutral */
   readonly color: string
   readonly refs?: ReactNode
   /** An input's chains, each a toggle: which ones it feeds */
   readonly feeds?: readonly Feed[]
+  /** Where an input no chain takes is heard instead (heardThrough) */
+  readonly through?: string
+  /** The oscillators an input may be the FM of, each a toggle */
+  readonly fm?: readonly FmInto[]
   /** Destinations no knob holds (the voice's pitch), routed by a tap */
   readonly knobless?: readonly Knobless[]
   /** A modulator's routes, by where each goes; it routes from source */
@@ -189,7 +220,9 @@ const KIND_GLYPHS = {
  * colour; for a "+", the kinds it adds. Its header moves the part a place
  * either way and removes it (asked first: ConfirmDialog), and hides the
  * panel (onHide), the graph taking its room. An input picks the chains it
- * feeds here, an oscillator its FM source, a ring its two inputs.
+ * feeds here, an oscillator its FM source, a ring its two inputs. From
+ * the other side, an input is turned on as another oscillator's FM, and
+ * how much is set, here too: a knob for each oscillator its FM reads it.
  */
 export function PartPanel({
   engine,
@@ -309,7 +342,12 @@ export function PartPanel({
       )}
 
       {!view.choices && view.feeds && view.feeds.length > 0 && (
-        <Feeds title={view.title} feeds={view.feeds} />
+        <Feeds
+          title={view.title}
+          feeds={view.feeds}
+          through={view.through}
+          fm={view.fm}
+        />
       )}
       <div className={PANEL_BODY}>
         {view.choices ? (
@@ -359,12 +397,13 @@ export function PartPanel({
                   view.knobs.length + (view.knobless?.length ?? 0)
                 )}
               >
-                {view.knobs.map(({ part, key, hot }) => (
+                {view.knobs.map(({ part, key, hot, label }) => (
                   <Knob
                     key={`${part} ${key}`}
                     engine={engine}
                     part={part}
                     knob={key}
+                    label={label}
                     color={view.color}
                     hot={hot}
                     onHold={(dest) => onRoute(part, dest)}
@@ -429,17 +468,28 @@ export function PartPanel({
  * chain takes the input at full level; off, not at all. Moving an input
  * to another chain is turning that one on and its own off. They stand
  * right under the header, outside the centred body: from input to input
- * they keep their place, whether knobs or a note follow.
+ * they keep their place, whether knobs or a note follow. Feeding none, it
+ * is silent, unless another input reads it (through: IN 1's FM). After
+ * them, the oscillators it may be the FM of, a toggle each (fm): on, that
+ * one's FM reads it in place of what it read, and says where it is heard
+ * without the line; the row pans when long.
  */
-function Feeds({ title, feeds }: { title: string; feeds: readonly Feed[] }) {
-  const none = !feeds.some((feed) => feed.on)
+function Feeds({
+  title,
+  feeds,
+  through,
+  fm,
+}: {
+  title: string
+  feeds: readonly Feed[]
+  through?: string
+  fm?: readonly FmInto[]
+}) {
+  // The FM toggles lit say where it is heard already
+  const none = !feeds.some((feed) => feed.on) && !fm?.some((into) => into.on)
   return (
-    <div
-      role="group"
-      aria-label={`Chains ${title} feeds`}
-      className="flex shrink-0 items-center gap-1.5"
-    >
-      <span className="mr-0.5 text-[11px] text-zinc-500">Into</span>
+    <div role="group" aria-label={`Chains ${title} feeds`} className={PAN_ROW}>
+      <span className="mr-0.5 shrink-0 text-[11px] text-zinc-500">Into</span>
       {feeds.map((feed) => (
         <button
           key={feed.chain}
@@ -447,7 +497,7 @@ function Feeds({ title, feeds }: { title: string; feeds: readonly Feed[] }) {
           aria-pressed={feed.on}
           aria-label={`Chain ${feed.letter}`}
           onClick={feed.toggle}
-          className={`${TALL_HIT} flex h-7 w-9 items-center justify-center rounded-md text-xs font-extrabold`}
+          className={`${TALL_HIT} flex h-7 w-9 shrink-0 items-center justify-center rounded-md text-xs font-extrabold`}
           style={
             feed.on
               ? {
@@ -464,9 +514,41 @@ function Feeds({ title, feeds }: { title: string; feeds: readonly Feed[] }) {
           {feed.letter}
         </button>
       ))}
+      {fm && fm.length > 0 && (
+        <>
+          <span className="mr-0.5 ml-1.5 shrink-0 text-[11px] whitespace-nowrap text-zinc-500">
+            FM →
+          </span>
+          {fm.map((into) => (
+            <button
+              key={into.target}
+              type="button"
+              aria-pressed={into.on}
+              aria-label={`${into.name}'s FM`}
+              disabled={!into.toggle}
+              onClick={into.toggle}
+              className={`${TALL_HIT} flex h-7 shrink-0 items-center justify-center rounded-md px-2 text-[11px] font-bold whitespace-nowrap disabled:opacity-30`}
+              style={
+                into.on
+                  ? {
+                      background: NEUTRAL_LOOK.tint,
+                      boxShadow: `inset 0 0 0 1.5px ${NEUTRAL_LOOK.ink}`,
+                      color: NEUTRAL_LOOK.ink,
+                    }
+                  : {
+                      border: `1.5px dashed ${NEUTRAL_LOOK.ring}`,
+                      color: '#a1a1aa',
+                    }
+              }
+            >
+              {into.name}
+            </button>
+          ))}
+        </>
+      )}
       {none && (
-        <span className="ml-1 text-[11px] text-zinc-500">
-          Silent: tap a chain
+        <span className="ml-1 shrink-0 text-[11px] whitespace-nowrap text-zinc-500">
+          {through ? `Heard through ${through}` : 'Silent: tap a chain'}
         </span>
       )}
     </div>
@@ -491,11 +573,7 @@ function Targets({
   onMap: (source: string, target?: string) => void
 }) {
   return (
-    <div
-      role="group"
-      aria-label="Routes"
-      className="flex shrink-0 items-center gap-1.5 overflow-x-auto overscroll-x-contain"
-    >
+    <div role="group" aria-label="Routes" className={PAN_ROW}>
       <button
         type="button"
         onClick={() => onMap(source)}
@@ -748,18 +826,42 @@ function viewOf(
             )
           ),
       }))
+      const targets = fmTargets(sound, picked)
+      // How much of it each oscillator whose FM reads it takes, on that
+      // one's FM knob; a foot's peg tapped marks it (focus: that one's id)
+      const into = targets
+        .filter((target) => target.on)
+        .map((target) => ({
+          part: target.id,
+          key: 'fm',
+          label: `→ ${partName(sound, target.id)}`,
+          hot: focus === target.id ? NEUTRAL_LOOK.ink : undefined,
+        }))
       const base = {
         title,
         kind: INPUT_KINDS[part.kind].label,
         chip: { look: NEUTRAL_LOOK, glyph: glyphOf(sound, picked) },
         color: NEUTRAL_ARC,
         feeds: feeding,
+        through: heardThrough(sound, picked),
+        fm: targets.map((target) => ({
+          target: target.id,
+          name: partName(sound, target.id),
+          on: target.on,
+          toggle:
+            target.loops && !target.on
+              ? undefined
+              : () =>
+                  engine.edit((current) =>
+                    toggleFm(current, target.id, picked)
+                  ),
+        })),
         actions,
       }
       if (part.kind === 'osc') {
         return {
           ...base,
-          knobs: knobsOf(picked, INPUT_KINDS.osc.knobs),
+          knobs: [...knobsOf(picked, INPUT_KINDS.osc.knobs), ...into],
           refs: (
             <RefPicker
               engine={engine}
@@ -774,7 +876,7 @@ function viewOf(
       if (part.kind === 'ring') {
         return {
           ...base,
-          knobs: [],
+          knobs: into,
           refs: (
             <>
               <RefPicker
@@ -798,7 +900,7 @@ function viewOf(
       }
       return {
         ...base,
-        knobs: [],
+        knobs: into,
         note: 'Noise has no knobs of its own. How much of it a chain takes is on the chain’s knobs.',
       }
     }

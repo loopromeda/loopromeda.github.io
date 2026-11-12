@@ -80,7 +80,8 @@ src/state/    params.ts: the knob schema and the old parameters;
               and the knobs that moved between two (diff.ts)
 src/viz/      pure display math (scope trigger and decimation, envelope
               and LFO outlines, filter response, drive curve, keyboard
-              and pad grid geometry, the sound editor's input column and
+              and pad grid geometry, the sound editor's input column
+              (and left of it what each input reads, pegged to it) and
               chain rows in graph.ts and where a tile dragged goes in
               drop.ts, hit-testing, velocity and Slide from a touch's
               position, a knob turning finer as the finger strays
