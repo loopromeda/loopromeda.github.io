@@ -9,7 +9,7 @@ import {
 } from 'react'
 import type { Engine } from '../engine/engine'
 import type { BenchReport } from '../engine/protocol'
-import type { OfflineState } from '../offline'
+import type { CheckResult, OfflineState } from '../offline'
 import type { PlatformReport } from '../platform'
 import {
   VOICE_LIMITS,
@@ -59,7 +59,9 @@ const SOURCE = 'https://github.com/loopromeda/loopromeda.github.io'
  * to 32 voices, to choose Voices by. onBench gets its results too (the dev
  * server keeps them in device-reports.jsonl). Browser lists what this
  * browser offers the synth, and whether the site is saved to play offline
- * (src/offline.ts), with the update when a newer version waits. About
+ * (src/offline.ts), with the update when a newer version waits, or a
+ * check for one that takes it at once (an installed app has no reload of
+ * its own). About
  * says whose it is, and opens the licences (licences.txt,
  * scripts/vite-licences.ts) and the source.
  */
@@ -69,6 +71,7 @@ export function SettingsDialog({
   settings,
   offline,
   onUpdate,
+  onCheck,
   onChange,
   onClose,
   onBench,
@@ -80,6 +83,8 @@ export function SettingsDialog({
   offline: OfflineState
   /** Reloads the page onto the version waiting */
   onUpdate: () => void
+  /** Looks for a new version now, and takes one if it is found */
+  onCheck: () => Promise<CheckResult>
   onChange: (settings: AppSettings) => void
   onClose: () => void
   onBench?: (report: BenchReport) => void
@@ -208,7 +213,7 @@ export function SettingsDialog({
 
         <Group title="Browser">
           <PlatformChecks platform={platform} />
-          <OfflineRow state={offline} onUpdate={onUpdate} />
+          <OfflineRow state={offline} onUpdate={onUpdate} onCheck={onCheck} />
         </Group>
 
         <Group title="About">
@@ -332,32 +337,66 @@ const OFFLINE_HINTS: Readonly<Record<OfflineState, string>> = {
   off: 'A build served over HTTPS saves itself in the browser; this page is not saved, so it needs the network to start.',
   saving: 'Saving the site in the browser, to start and play with no network.',
   ready:
-    'Saved in the browser: it starts and plays with no network. A new version is saved as it comes, and waits for Update.',
+    'Saved in the browser: it starts and plays with no network. A new version is saved as it comes, and waits for Update; Check for update looks now, and takes it.',
   update:
     'A new version is saved. Update reloads the page onto it; the sound and this view come back.',
 }
 
+/** What Check for update found, said in the row's hint */
+const CHECK_HINTS: Readonly<Record<CheckResult | 'checking', string>> = {
+  checking: 'Looking for a new version, and saving it if there is one…',
+  found: 'A new version is saved: the page reloads onto it.',
+  latest: 'This is the newest version.',
+  unreachable:
+    'The site could not be reached, or the new version could not be saved: this one goes on playing. Try again with the network.',
+}
+
 /**
- * Whether the site is saved to play offline, and once a newer version
- * waits, the update
+ * Whether the site is saved to play offline; once it is, a check for a
+ * new version that takes it as soon as it is saved, and once a newer
+ * version waits, the update
  */
 function OfflineRow({
   state,
   onUpdate,
+  onCheck,
 }: {
   state: OfflineState
   onUpdate: () => void
+  onCheck: () => Promise<CheckResult>
 }) {
   const id = useId()
+  const [check, setCheck] = useState<CheckResult | 'checking'>()
+  const look = () => {
+    setCheck('checking')
+    onCheck().then(setCheck, () => setCheck('unreachable'))
+  }
+  const hint =
+    state === 'ready' && check ? CHECK_HINTS[check] : OFFLINE_HINTS[state]
   return (
     <Row
       label="Offline"
       labelId={`${id}-label`}
-      hint={OFFLINE_HINTS[state]}
+      hint={hint}
       hintId={`${id}-hint`}
       live
     >
-      {state === 'update' ? (
+      {state === 'ready' ? (
+        <span className="flex items-center gap-3">
+          <span className="text-[13px] text-emerald-400">
+            {OFFLINE_LABELS[state]}
+          </span>
+          <button
+            type="button"
+            aria-describedby={`${id}-hint`}
+            disabled={check === 'checking' || check === 'found'}
+            onClick={look}
+            className={`${BUTTON} disabled:text-zinc-500`}
+          >
+            {check === 'checking' ? 'Checking…' : 'Check for update'}
+          </button>
+        </span>
+      ) : state === 'update' ? (
         <button
           type="button"
           aria-describedby={`${id}-hint`}
@@ -367,9 +406,7 @@ function OfflineRow({
           Update
         </button>
       ) : (
-        <span
-          className={`text-[13px] ${state === 'ready' ? 'text-emerald-400' : 'text-zinc-500'}`}
-        >
+        <span className="text-[13px] text-zinc-500">
           {OFFLINE_LABELS[state]}
         </span>
       )}

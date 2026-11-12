@@ -71,7 +71,8 @@ const KEYS_SIZE = [
  *
  * While the audio runs, the screen stays on (awake, unless the settings
  * turn it off). A newer version of the site, once saved for offline,
- * waits for the status line's Update.
+ * waits for the status line's Update; the settings' Check for update
+ * looks for one at once and takes it.
  */
 export function App({
   platform,
@@ -277,6 +278,7 @@ export function App({
           settings={settings}
           offline={offlineState}
           onUpdate={offline.update}
+          onCheck={offline.check}
           onChange={changeSettings}
           onClose={closeSheet}
           onBench={onBench}

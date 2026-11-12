@@ -4,6 +4,8 @@
  * under it), and tells what the worker holds. The status line offers a
  * newer version once it is saved (Update), and the page reloads onto it;
  * the sound, the sheet open and the tile picked come back with a reload.
+ * Settings can also look for one at once (Check for update) and take it
+ * as soon as it is saved: an installed app has no reload of its own.
  */
 
 /**
@@ -34,6 +36,64 @@ export function offlineState(workers: Workers | undefined): OfflineState {
 
 /** The worker's message (sw.ts): take over now */
 const SKIP_WAITING = 'skip-waiting'
+
+/**
+ * What a check for a new version found:
+ * - found: one is saved, and waits to take over
+ * - latest: the site's version is the one running
+ * - unreachable: the site could not be reached (no network), or the new
+ *   version could not be saved
+ */
+export type CheckResult = 'found' | 'latest' | 'unreachable'
+
+/** A service worker, as the check watches one install */
+export interface WorkerLike {
+  readonly state: string
+  addEventListener(type: 'statechange', listener: () => void): void
+  removeEventListener(type: 'statechange', listener: () => void): void
+}
+
+/** A registration, as the check asks it for an update */
+export interface RegistrationLike {
+  readonly installing: WorkerLike | null
+  readonly waiting: WorkerLike | null
+  update(): Promise<unknown>
+}
+
+/**
+ * Whether a worker installing is saved (true) or failed (false), once it
+ * is one or the other
+ */
+export function installed(worker: WorkerLike): Promise<boolean> {
+  return new Promise((resolve) => {
+    const look = () => {
+      if (worker.state === 'parsed' || worker.state === 'installing') return
+      worker.removeEventListener('statechange', look)
+      resolve(worker.state !== 'redundant')
+    }
+    worker.addEventListener('statechange', look)
+    look()
+  })
+}
+
+/**
+ * Asks the site for its version now (the browser compares sw.js, which
+ * holds the hash of everything else) and waits while a new one is saved
+ */
+export async function findUpdate(
+  registration: RegistrationLike
+): Promise<CheckResult> {
+  if (registration.waiting) return 'found'
+  try {
+    await registration.update()
+  } catch {
+    return 'unreachable'
+  }
+  // A new version is installing once update() has found it
+  const installing = registration.installing
+  if (installing && !(await installed(installing))) return 'unreachable'
+  return registration.waiting ? 'found' : 'latest'
+}
 
 /**
  * The offline copy's state for React (subscribe, getSnapshot), and the
@@ -86,6 +146,18 @@ export class Offline {
       })
     })
     follow()
+  }
+
+  /**
+   * Looks for a new version now and, once it is saved, takes it (the page
+   * reloads onto it); otherwise tells what was found
+   */
+  readonly check = async (): Promise<CheckResult> => {
+    const registration = this.#registration
+    if (!registration) return 'unreachable'
+    const found = await findUpdate(registration)
+    if (found === 'found') this.update()
+    return found
   }
 
   /**

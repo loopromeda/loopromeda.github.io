@@ -512,6 +512,13 @@ dragging knobs during notes.
       with the server stopped a reload started, played (the worklet from
       the cache) and opened licences.txt; a new build showed Update, which
       reloaded onto it (#/settings kept) and dropped the old cache.
+      2026-11-12, asked for by ashon (an installed app has no reload of
+      its own): Settings, Browser, Offline has Check for update, which
+      asks for sw.js now and, once a new version is saved, reloads onto
+      it; otherwise it says this is the newest version, or that the site
+      could not be reached. Checked on `pnpm preview` by changing the
+      served sw.js: latest, found and reloaded (#/settings kept), and
+      unreachable with the server stopped.
 - [x] Screen Wake Lock while the audio runs, 2026-11-12 (`src/wakeLock.ts`):
       asked for again when the page comes back to the front, where the
       browser let it go. Settings, Playing: Keep screen on (on by
