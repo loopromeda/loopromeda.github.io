@@ -1,7 +1,8 @@
 /**
  * The playing surface's settings: whether the keyboard area plays piano keys
- * or a grid of pads, the key the pads play in (a root and a scale), and
- * whether the sound's controls above it are put away to give it room.
+ * or a grid of pads, the key the pads play in (a root and a scale), whether
+ * the mod wheel stands beside them, and whether the sound's controls above
+ * it are put away to give it room.
  * These belong to the player rather than to a preset, so they are kept
  * apart from the sound.
  */
@@ -105,14 +106,20 @@ export interface SurfaceSettings {
    * takes their height (a phone folded shut has little to spare)
    */
   readonly hideControls: boolean
+  /** The mod wheel stands at the surface's left (ModWheel.tsx) */
+  readonly wheel: boolean
 }
 
-/** Piano keys, in C, under the controls, until the player changes it */
+/**
+ * Piano keys, in C, the wheel beside them, under the controls, until the
+ * player changes it
+ */
 export const DEFAULT_SURFACE: SurfaceSettings = {
   kind: 'keys',
   root: 0,
   scale: 'minor',
   hideControls: false,
+  wheel: true,
 }
 
 /** Where the settings are kept */
@@ -145,11 +152,12 @@ export function readSurface(storage?: SurfaceStorage): SurfaceSettings {
     return { ...DEFAULT_SURFACE }
   }
 
-  const { kind, root, scale, hideControls } = saved as {
+  const { kind, root, scale, hideControls, wheel } = saved as {
     kind: unknown
     root: unknown
     scale: unknown
     hideControls: unknown
+    wheel: unknown
   }
   return {
     kind: isKind(kind) ? kind : DEFAULT_SURFACE.kind,
@@ -159,6 +167,7 @@ export function readSurface(storage?: SurfaceStorage): SurfaceSettings {
       typeof hideControls === 'boolean'
         ? hideControls
         : DEFAULT_SURFACE.hideControls,
+    wheel: typeof wheel === 'boolean' ? wheel : DEFAULT_SURFACE.wheel,
   }
 }
 
@@ -180,6 +189,7 @@ export function writeSurface(
         root: settings.root,
         scale: settings.scale,
         hideControls: settings.hideControls,
+        wheel: settings.wheel,
       })
     )
   } catch {

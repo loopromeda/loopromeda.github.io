@@ -76,6 +76,8 @@ export class Engine {
   #latency: AudioContextLatencyCategory = 'interactive'
   /** The most voices at once, if the player limited them */
   #voices: number | undefined
+  /** The mod wheel, 0..1, where the player left it */
+  #wheel = 0
 
   get snapshot(): EngineSnapshot {
     return this.#snapshot
@@ -138,6 +140,7 @@ export class Engine {
       if (this.#voices !== undefined) {
         this.#post({ t: 'voices', count: this.#voices })
       }
+      if (this.#wheel !== 0) this.#post({ t: 'wheel', value: this.#wheel })
       await resumed
     } catch (error) {
       this.#fail(error)
@@ -172,6 +175,19 @@ export class Engine {
   /** Touch id's finger slid up its key (or down, below 0), -1..1 */
   slide(id: number, value: number): void {
     this.#post({ t: 'slide', id, value })
+  }
+
+  /** The mod wheel beside the keys, 0..1: the Wheel source of every note */
+  get wheel(): number {
+    return this.#wheel
+  }
+
+  /** Turns the mod wheel to value, held within 0..1 */
+  setWheel(value: number): void {
+    const next = value > 0 ? (value < 1 ? value : 1) : 0
+    if (next === this.#wheel) return
+    this.#wheel = next
+    this.#post({ t: 'wheel', value: next })
   }
 
   panic(): void {

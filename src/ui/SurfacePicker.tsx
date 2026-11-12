@@ -18,8 +18,9 @@ const KINDS: readonly { kind: SurfaceKind; label: string }[] = [
 const ROOTS = Array.from({ length: 12 }, (_, semitone) => semitone)
 
 /**
- * What notes are played on, keys or pads, and the key the pads play in:
- * a root and a scale. Like the presets it covers the waveform and the
+ * What notes are played on, keys or pads, whether the mod wheel stands
+ * beside them, and the key the pads play in: a root and a scale. Like the
+ * presets it covers the waveform and the
  * controls, its buttons where theirs are, and leaves what is played on
  * below it, so a key can be tried on the pads while it is chosen.
  */
@@ -70,6 +71,28 @@ export function SurfacePicker({
             </button>
           ))}
         </div>
+        <button
+          type="button"
+          aria-pressed={settings.wheel}
+          onClick={() => set({ wheel: !settings.wheel })}
+          className={OPTION}
+        >
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 18 18"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            aria-hidden
+            className="shrink-0"
+          >
+            <rect x="6" y="2" width="6" height="14" rx="2" />
+            <path d="M6 10.5h6" strokeWidth="2" />
+          </svg>
+          {/* A phone's header keeps its picture, and drops the word */}
+          <span className="@max-[21rem]:sr-only">Wheel</span>
+        </button>
         <IconButton
           label="Close play surface"
           onClick={onClose}
@@ -80,7 +103,7 @@ export function SurfacePicker({
       {settings.kind === 'keys' && (
         <p className="px-1 text-[13px] leading-snug text-zinc-500">
           Keys play every note. Pads play the notes of one key: choose Pads,
-          then its root and scale.
+          then its root and scale. Wheel stands the mod wheel at their left.
         </p>
       )}
       {settings.kind === 'pads' && (

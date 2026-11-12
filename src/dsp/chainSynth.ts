@@ -17,6 +17,7 @@ import {
   SOURCE_COUNT,
   SOURCE_OFF,
   SOURCE_VELOCITY,
+  SOURCE_WHEEL,
   DEST_COUNT,
   chainLevelDest,
   inputDest,
@@ -42,6 +43,11 @@ export const LEGATO = 2
 const VOICE_LEVEL = 0.25
 /** Level and cutoff changes glide over about 5 × this many seconds */
 const SMOOTHING = 0.005
+/**
+ * The wheel glides longer: a finger moves it in steps, one a frame, a
+ * step too big to pass for smooth at SMOOTHING
+ */
+const WHEEL_SMOOTHING = 0.012
 /** Work buffer length; longer blocks render in chunks of it */
 const CHUNK = 128
 /**
@@ -75,6 +81,8 @@ export class ChainSynth {
   readonly #itemValue: Smoother[] = []
   /** Each route's amount, in its destination's units */
   readonly #amounts: Smoother[] = []
+  /** The mod wheel, 0..1: the Wheel source, the same for every voice */
+  readonly #wheel: Smoother
   readonly #smoothers: Smoother[] = []
   /** True after a change to the structure, until the next block */
   #restructured = true
@@ -112,6 +120,8 @@ export class ChainSynth {
     smoothers(MAX_CHAINS * MAX_INPUTS, 0, this.#send)
     smoothers(MAX_CHAINS * MAX_ITEMS, Math.log2(20000), this.#itemValue)
     smoothers(MAX_ROUTES, 0, this.#amounts)
+    this.#wheel = new Smoother(sampleRate, WHEEL_SMOOTHING, 0)
+    this.#smoothers.push(this.#wheel)
   }
 
   /**
@@ -395,6 +405,18 @@ export class ChainSynth {
     if (at === this.#held - 1) (this.#voices[0] as ChainVoice).slide = amount
   }
 
+  /**
+   * The mod wheel beside the keys, 0..1 (clamped; NaN reads as 0): the
+   * Wheel source of every note, playing or to come
+   */
+  set wheel(value: number) {
+    this.#wheel.target = value > 0 ? (value < 1 ? value : 1) : 0
+  }
+
+  get wheel(): number {
+    return this.#wheel.target
+  }
+
   /** Every note lets go */
   releaseAll(): void {
     this.#allocator.releaseAll()
@@ -555,6 +577,13 @@ export class ChainSynth {
       settings.destUsed[settings.routeDest[r] as number] = 1
     }
     const routed = settings.destUsed
+    // The wheel is every voice's: filled once here, and no voice writes it
+    if (settings.sourceUsed[SOURCE_WHEEL] === 1) {
+      const wheel = settings.sources[SOURCE_WHEEL] as Float32Array
+      this.#wheel.fill(wheel, 0, length)
+    } else {
+      this.#wheel.snap()
+    }
 
     // The chains heard, and their sends
     settings.inputOn.fill(0)

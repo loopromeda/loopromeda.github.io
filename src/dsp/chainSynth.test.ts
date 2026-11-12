@@ -12,6 +12,7 @@ import {
   NO_INPUT,
   SOURCE_OFF,
   SOURCE_VELOCITY,
+  SOURCE_WHEEL,
   itemDest,
   modulatorSource,
   rateDest,
@@ -53,6 +54,29 @@ function wobbled(rate: number, octaves?: number): ChainSynth {
     synth.setRoute(1, SOURCE_VELOCITY, rateDest(0), octaves, SOURCE_OFF)
   }
   return synth
+}
+
+/**
+ * twoSaws through a filter at cutoff (Hz), with a route from the wheel
+ * moving it octaves, the wheel at wheel
+ */
+function wheeled(cutoff: number, octaves: number, wheel: number): ChainSynth {
+  const synth = twoSaws()
+  synth.setFilter(0, 0, LOWPASS, cutoff, 0.3, 0)
+  synth.routeCount = 1
+  const dest = itemDest(0, 0, ITEM_CUTOFF)
+  synth.setRoute(0, SOURCE_WHEEL, dest, octaves, SOURCE_OFF)
+  synth.wheel = wheel
+  return synth
+}
+
+/** The largest difference between two renders, sample by sample */
+function furthest(a: Float32Array, b: Float32Array): number {
+  let most = 0
+  for (let i = 0; i < a.length; i++) {
+    most = Math.max(most, Math.abs((a[i] as number) - (b[i] as number)))
+  }
+  return most
 }
 
 /** A quarter second of synth with a note held */
@@ -106,6 +130,54 @@ describe('ChainSynth', () => {
     expect(play(wobbled(LFO_MIN_RATE, -4))).toEqual(play(wobbled(LFO_MIN_RATE)))
     // Within the range, a route still moves it
     expect(play(wobbled(5, 2))).not.toEqual(play(wobbled(5)))
+  })
+
+  it('moves nothing by the wheel at 0, and at 1 its routes in full', () => {
+    // A routed cutoff runs per sample, so each plays against another routed
+    expect(play(wheeled(1000, 2, 0))).toEqual(play(wheeled(1000, 3, 0)))
+    // Turned while silent, it plays where it stands from the first sample
+    const turned = play(wheeled(1000, 2, 1))
+    expect(furthest(turned, play(wheeled(4000, 2, 0)))).toBeLessThan(1e-4)
+    expect(furthest(turned, play(wheeled(1000, 2, 0)))).toBeGreaterThan(0.01)
+  })
+
+  it('holds the wheel within 0..1, NaN at 0', () => {
+    expect(play(wheeled(1000, 2, 3))).toEqual(play(wheeled(1000, 2, 1)))
+    expect(play(wheeled(1000, 2, -1))).toEqual(play(wheeled(1000, 2, 0)))
+    expect(play(wheeled(1000, 2, Number.NaN))).toEqual(
+      play(wheeled(1000, 2, 0))
+    )
+    const synth = twoSaws()
+    synth.wheel = 0.25
+    expect(synth.wheel).toBe(0.25)
+  })
+
+  it('glides the wheel turned mid-note, for every note playing', () => {
+    const synth = wheeled(500, 3, 0)
+    synth.noteOn(1, 48, 0.8)
+    synth.noteOn(2, 55, 0.8)
+    const block = new Float32Array(128)
+    for (let b = 0; b < 20; b++) synth.process(block)
+    synth.wheel = 1
+    const after = new Float32Array(128 * 40)
+    for (let at = 0; at < after.length; at += block.length) {
+      synth.process(block)
+      after.set(block, at)
+    }
+    const still = wheeled(500, 3, 0)
+    still.noteOn(1, 48, 0.8)
+    still.noteOn(2, 55, 0.8)
+    for (let b = 0; b < 20; b++) still.process(block)
+    const before = new Float32Array(128 * 40)
+    for (let at = 0; at < before.length; at += block.length) {
+      still.process(block)
+      before.set(block, at)
+    }
+    // Its first sample barely moves; by the end the cutoff has opened
+    expect(Math.abs((after[0] as number) - (before[0] as number))).toBeLessThan(
+      0.01
+    )
+    expect(furthest(after, before)).toBeGreaterThan(0.05)
   })
 
   it('plays nothing while no note is held', () => {

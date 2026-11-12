@@ -46,10 +46,13 @@ const STARTS: Readonly<Record<SurfaceKind, number>> = { keys: 0, pads: 3 }
 /** What the arrows and Z and X move: the keys 7 white keys, the pads 1 */
 const OCTAVE: Readonly<Record<SurfaceKind, number>> = { keys: 7, pads: 1 }
 /**
- * From this width (CSS px) the keys' navigator stands in the header, between
- * the patch and the arrows; under it, in a strip of its own below
+ * From this width of the header (CSS px) the keys' navigator stands in it,
+ * between the patch and the arrows: room for it at its least (10rem), the
+ * arrows, the buttons at the end and the patch's name, cut short. Under
+ * it, in a strip of its own below, which a phone on its side has no
+ * height for.
  */
-const NAVIGATOR_IN_HEADER = 704
+const NAVIGATOR_IN_HEADER = 600
 
 /**
  * Computer keys (KeyboardEvent.code) for the keys: each plays as many
@@ -110,7 +113,7 @@ const typing = (target: EventTarget | null): boolean =>
   target instanceof HTMLElement &&
   (target.isContentEditable || target.matches('input, select, textarea'))
 
-/** What the surface's box has room for */
+/** What the surface's box and the header have room for */
 interface Fit {
   octaves: number
   grid: PadGrid
@@ -139,16 +142,19 @@ const sameFit = (a: Fit, b: Fit) =>
  * again when they move, the key or the size changes. The header row holds
  * `start` (the patch) at its left, and at its right the octave controls
  * and after them `end` (the surface, putting the controls away); the
- * navigator stands between on a wide screen and in a strip under them on
- * a narrow one, where `start` takes the room the rest leaves. Given
- * fullVelocity, every note plays at full velocity, wherever a finger
- * lands.
+ * navigator stands between in a header wide enough (a phone on its side
+ * too) and in a strip under it in a narrower one, where `start` takes the
+ * room the rest leaves. `beside`
+ * (the mod wheel) stands at the surface's left, outside what the keys and
+ * pads are fitted to. Given fullVelocity, every note plays at full
+ * velocity, wherever a finger lands.
  */
 export function PlaySurface({
   engine,
   settings,
   start,
   end,
+  beside,
   fullVelocity = false,
   className = 'flex-1',
 }: {
@@ -158,6 +164,8 @@ export function PlaySurface({
   start?: ReactNode
   /** At the header's right, after the octave controls */
   end?: ReactNode
+  /** At the surface's left, as tall */
+  beside?: ReactNode
   fullVelocity?: boolean
   /** Its height in the page's column */
   className?: string
@@ -170,6 +178,7 @@ export function PlaySurface({
     wide: false,
   })
   const surfaceRef = useRef<HTMLDivElement>(null)
+  const headerRef = useRef<HTMLDivElement>(null)
   const { kind, root, scale } = settings
   const pads = kind === 'pads'
   const { grid } = fit
@@ -205,18 +214,19 @@ export function PlaySurface({
   // As many octaves, or pads, as the box allows
   useLayoutEffect(() => {
     const surface = surfaceRef.current
-    if (!surface) return
-    const observer = new ResizeObserver(([entry]) => {
-      const width = entry?.contentRect.width ?? 0
-      const height = entry?.contentRect.height ?? 0
+    const header = headerRef.current
+    if (!surface || !header) return
+    const observer = new ResizeObserver(() => {
+      const { width, height } = surface.getBoundingClientRect()
       const next = {
         ...keysFit(width),
         grid: padGrid(width, height),
-        wide: width >= NAVIGATOR_IN_HEADER,
+        wide: header.getBoundingClientRect().width >= NAVIGATOR_IN_HEADER,
       }
       setFit((was) => (sameFit(was, next) ? was : next))
     })
     observer.observe(surface)
+    observer.observe(header)
     return () => observer.disconnect()
   }, [])
 
@@ -299,7 +309,10 @@ export function PlaySurface({
     >
       {/* A narrow header (a phone's, under 26rem) keeps the patch's name
           and every button, and drops the range */}
-      <div className="@container flex h-11 shrink-0 items-center gap-3">
+      <div
+        ref={headerRef}
+        className="@container flex h-11 shrink-0 items-center gap-3"
+      >
         {/* Held upright, the patch takes the room the buttons leave */}
         <div
           className={`flex min-w-0 items-center gap-2 ${inHeader ? '' : 'flex-1 *:flex-1'}`}
@@ -329,25 +342,28 @@ export function PlaySurface({
         {end && <div className="flex shrink-0 items-center gap-2">{end}</div>}
       </div>
       {inStrip && keysNavigator('h-6 shrink-0')}
-      <div ref={surfaceRef} className="relative min-h-28 flex-1">
-        {pads ? (
-          <Pads
-            hands={hands}
-            grid={grid}
-            notes={notes}
-            root={root}
-            fullVelocity={fullVelocity}
-            label={`Pads ${range} in ${pitchName(root)} ${scaleName(scale)}. Computer keys A to ; and Q to P play them; Z and X shift the octave`}
-          />
-        ) : (
-          <Keys
-            hands={hands}
-            lowest={lowestNote}
-            octaves={fit.octaves}
-            fullVelocity={fullVelocity}
-            label={`Keys ${range}. Computer keys A to K play them; Z and X shift them an octave`}
-          />
-        )}
+      <div className="flex min-h-28 flex-1 gap-2">
+        {beside}
+        <div ref={surfaceRef} className="relative min-w-0 flex-1">
+          {pads ? (
+            <Pads
+              hands={hands}
+              grid={grid}
+              notes={notes}
+              root={root}
+              fullVelocity={fullVelocity}
+              label={`Pads ${range} in ${pitchName(root)} ${scaleName(scale)}. Computer keys A to ; and Q to P play them; Z and X shift the octave`}
+            />
+          ) : (
+            <Keys
+              hands={hands}
+              lowest={lowestNote}
+              octaves={fit.octaves}
+              fullVelocity={fullVelocity}
+              label={`Keys ${range}. Computer keys A to K play them; Z and X shift them an octave`}
+            />
+          )}
+        </div>
       </div>
     </section>
   )

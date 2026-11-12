@@ -27,8 +27,10 @@ import { MARK, chainDrop, itemDrop, spanDrop } from '../viz/drop'
 import {
   GRAPH,
   graphGeometry,
+  roomBeside,
   type Box,
   type GraphGeometry,
+  type Room,
 } from '../viz/graph'
 import {
   MOD_LOOK,
@@ -76,6 +78,20 @@ const ADD_LINE = 'rgba(255,255,255,0.16)'
 const LIMITS = { inputs: MAX_INPUTS, chains: MAX_CHAINS, items: MAX_ITEMS }
 /** The space between the rack's tiles (gap-1) */
 const RACK_GAP = 4
+/** Kept clear between the tiles and the panel over them (gap-3) */
+const DOCK_GAP = 12
+/**
+ * The bar the hidden panel leaves in the dock: beside the graph its width
+ * (w-11), under it its height (h-9)
+ */
+const BAR_BESIDE = 44
+const BAR_UNDER = 36
+/**
+ * The panel, or its bar, standing over the graph's card: frosted glass
+ * (index.css), the canvas under it blurred
+ */
+const DOCKED =
+  'glass rounded-xl shadow-[0_0_24px_rgba(0,0,0,0.6)] ring-1 ring-white/10'
 
 /** Where a tile dragged goes: its index, and the chain an item goes into */
 type Place = Spot & { readonly to: number; readonly chain?: string }
@@ -117,6 +133,14 @@ function keepPicked(id: string): void {
   }
 }
 
+/**
+ * A source's routes asked for from outside the editor (the mod wheel's
+ * Route): each new ask opens them once
+ */
+export interface RoutesAsked {
+  readonly source: string
+}
+
 /** What the editor's parts share: the engine, what is picked, picking */
 interface Picking {
   readonly engine: Engine
@@ -142,9 +166,9 @@ interface Picking {
  * tile picks it; a peg between an input and a chain picks the chain, its
  * knob for that input lit, and one between an input and the oscillator
  * whose FM reads it picks the input, its knob for that FM lit. The panel
- * hides (its header's last button), the graph taking its room to show
- * more of the chains, a bar under it bringing it back; picking a tile
- * brings it back too.
+ * stands over the graph's card and hides (its header's last button),
+ * showing the canvas under it, the tiles as they were; a bar where it
+ * stood brings it back, and so does picking a tile.
  *
  * It redraws when the sound's shape changes (shapeKey: a part added, an
  * input feeding a chain, a wave changed); a knob turning redraws only the
@@ -152,7 +176,8 @@ interface Picking {
  *
  * The panel turns to routing in two ways (RoutePanels.tsx). Holding a
  * knob shows the routes into it. A modulator's Route shows the picked
- * tile's knobs as depths from it, while tiles are picked as before.
+ * tile's knobs as depths from it, while tiles are picked as before; so
+ * does asking (asked), for a source with no tile, the mod wheel.
  *
  * Held, a tile lifts to be dragged (tileDrag.ts): an item along its chain
  * or into another, a chain's head (its row with it) up or down, a
@@ -162,9 +187,11 @@ interface Picking {
 export function SoundEditor({
   engine,
   scope,
+  asked,
 }: {
   engine: Engine
   scope?: AmpScope
+  asked?: RoutesAsked
 }) {
   useSyncExternalStore(engine.subscribeSound, () => shapeKey(engine.getSound()))
   const sound = engine.getSound()
@@ -174,6 +201,19 @@ export function SoundEditor({
   const [routing, setRouting] = useState<RouteTarget | null>(null)
   /** The source routed from while tiles are picked, if any */
   const [mapping, setMapping] = useState<string | null>(null)
+  /** The panel's dock, for the graph to keep its tiles out from under */
+  const [dock, setDock] = useState<HTMLDivElement | null>(null)
+  // A new ask routes its source, the panel shown: once, as it comes
+  const [answered, setAnswered] = useState(asked)
+  if (asked !== answered) {
+    setAnswered(asked)
+    if (asked) {
+      setRouting(null)
+      setMapping(asked.source)
+      setPanel(true)
+      keepPanel(true)
+    }
+  }
   const picked = stillPicked(sound, chosen)
   // Either goes with what it names: a part removed, another preset
   const into =
@@ -226,73 +266,85 @@ export function SoundEditor({
   // (its room: all but the graph's least and the gap). Beside the graph,
   // the panel takes the graph's height and never makes the row taller: it
   // scrolls instead, its knobs at 48 px. It is 22rem wide, and on a wider
-  // screen a little over a third of the row, up to 40rem. On a roomy
-  // screen both fill the height the page gives the editor (App.tsx), the
-  // tiles at the top of theirs, and the graph pans only past it. On a wide
+  // screen a little over a third of the row, up to 40rem. Both fill the
+  // height the page gives the editor beside (App.tsx: what the keys
+  // leave), the tiles at the top of theirs, and the graph pans only past
+  // it. On a wide
   // one (index.css) the panel stands under the graph again, the whole
   // width, its knobs 72 px in a row over the keys (knobRow), and the graph
   // takes the rest of the height. Held upright, the rack stands over the
-  // graph; on a wider screen, whose graph has width to spare and little
-  // height, it stands at its left, a column.
-  // Hidden, the panel leaves a bar under the graph, or beside it from md
-  // (the panel's own side: a short screen has no height for a bar)
+  // graph; beside (index.css: a wider screen, or a phone on its side,
+  // whose graph has width to spare and little height), it stands at its
+  // left, a column, and the panel at the graph's right.
+  //
+  // The panel stands over the graph's card, a dock (dock), not beside
+  // it: the card fills the editor and the tiles keep to the room the dock
+  // leaves them (roomBeside), so hiding the panel moves nothing else. The
+  // editor asks the page for the same height either way (--dock, what the
+  // graph's frame asks besides its own), so the keys under it stay put
+  // too. Hidden, the dock keeps its place and holds only a bar at its
+  // bottom, or at its right beside (the panel's own side: a short screen
+  // has no height for a bar). Under the graph the tiles keep clear of the
+  // whole dock, the canvas they leave showing where the panel stood when
+  // it hides; beside it, only of the bar, the panel standing over the
+  // last of them, shown. Either way the frame pans them out from under
+  // the panel or the bar, and showing it resizes nothing.
   return (
-    <div
-      className={
-        panel
-          ? 'flex min-h-0 flex-col gap-3 md:grid md:grid-cols-[minmax(0,1fr)_clamp(22rem,36%,40rem)] md:grid-rows-[minmax(0,1fr)] max-md:flex-1 roomy:flex-1 wide:flex'
-          : 'flex min-h-0 flex-col gap-2 md:grid md:grid-cols-[minmax(0,1fr)_2.75rem] md:grid-rows-[minmax(0,1fr)] max-md:flex-1 roomy:flex-1 wide:flex'
-      }
-    >
+    <div className="relative isolate flex min-h-0 flex-1 flex-col [--dock:calc(7.5rem_+_var(--knob)_+_0.75rem)] [--knob:clamp(3rem,calc((100vw_-_4.5rem)/8.5),4.5rem)] side:[--dock:0px] side:[--knob:3rem] wide:[--knob:4.5rem]">
       <section
         aria-label="The sound, flowing left to right"
-        className={`flex min-h-[8.75rem] min-w-0 flex-col overflow-hidden max-md:flex-1 md:flex-row wide:flex-1 ${CARD}`}
+        className={`flex min-h-[8rem] min-w-0 flex-1 flex-col overflow-hidden side:flex-row ${CARD}`}
       >
         <Rack {...picking} source={from} />
         <Graph
           {...picking}
           focus={picked === chosen ? focus : undefined}
           scope={scope}
+          dock={dock}
+          docked={panel}
         />
       </section>
-      {!panel && (
-        <button
-          type="button"
-          aria-label={`Show the knobs: ${partName(sound, picked)}`}
-          onClick={() => show(true)}
-          className={`flex h-9 shrink-0 items-center gap-2 px-3 text-left md:h-auto md:justify-center md:px-0 wide:h-9 wide:justify-start wide:px-3 ${CARD}`}
-        >
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 18 18"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-            className="shrink-0 text-zinc-300 md:-rotate-90 wide:rotate-0"
+      <div
+        ref={setDock}
+        className={`absolute inset-x-0 bottom-0 z-20 h-[calc(7.5rem_+_var(--knob))] max-h-[calc(100%-8.75rem)] min-h-0 side:inset-y-0 side:right-0 side:left-auto side:h-auto side:max-h-none side:w-[clamp(22rem,36%,40rem)] wide:top-auto wide:left-0 wide:h-[calc(7.5rem_+_var(--knob))] wide:max-h-[calc(100%-8.75rem)] wide:w-auto ${panel ? `grid overflow-y-auto overscroll-contain ${DOCKED}` : 'pointer-events-none'}`}
+      >
+        {!panel && (
+          <button
+            type="button"
+            aria-label={`Show the knobs: ${partName(sound, picked)}`}
+            onClick={() => show(true)}
+            className={`pointer-events-auto absolute inset-x-0 bottom-0 flex h-9 items-center gap-2 px-3 text-left side:inset-x-auto side:inset-y-0 side:right-0 side:h-auto side:w-11 side:justify-center side:px-0 wide:inset-x-0 wide:top-auto wide:h-9 wide:w-auto wide:justify-start wide:px-3 ${DOCKED}`}
           >
-            <path d="M4 11l5-5 5 5" />
-          </svg>
-          <span
-            aria-hidden
-            className="text-xs font-semibold text-zinc-200 md:hidden wide:inline"
-          >
-            Show the knobs
-          </span>
-          <span
-            aria-hidden
-            className="min-w-0 truncate text-[11px] text-zinc-400 md:hidden wide:inline"
-          >
-            {partName(sound, picked)}
-          </span>
-        </button>
-      )}
-      {panel && (
-        <div className="grid h-[calc(7.5rem_+_var(--knob))] max-h-[calc(100%-9.5rem)] min-h-0 shrink-0 overflow-y-auto overscroll-contain rounded-xl [--knob:clamp(3rem,calc((100vw_-_4.5rem)/8.5),4.5rem)] md:h-0 md:max-h-none md:min-h-full md:[--knob:3rem] wide:h-[calc(7.5rem_+_var(--knob))] wide:min-h-0 wide:[--knob:4.5rem]">
-          {into ? (
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 18 18"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+              className="shrink-0 text-zinc-300 side:-rotate-90 wide:rotate-0"
+            >
+              <path d="M4 11l5-5 5 5" />
+            </svg>
+            <span
+              aria-hidden
+              className="text-xs font-semibold text-zinc-200 side:hidden wide:inline"
+            >
+              Show the knobs
+            </span>
+            <span
+              aria-hidden
+              className="min-w-0 truncate text-[11px] text-zinc-400 side:hidden wide:inline"
+            >
+              {partName(sound, picked)}
+            </span>
+          </button>
+        )}
+        {panel &&
+          (into ? (
             <RoutesInto
               engine={engine}
               sound={sound}
@@ -316,9 +368,8 @@ export function SoundEditor({
               onMap={map}
               onHide={() => show(false)}
             />
-          )}
-        </div>
-      )}
+          ))}
+      </div>
     </div>
   )
 }
@@ -326,10 +377,14 @@ export function SoundEditor({
 /**
  * The voice first, a block over the inputs, whose pitch it sets: where a
  * note comes in, its mode under its name. Then the modulators in a row,
- * each a block drawing its shape, and a "+" while there is room. The row
- * scrolls sideways under the voice, which clips at its padding: there is
- * room in it for a tile's rings (a reach ring stands 3.5 px out). From md
- * up it is a column at the graph's left, the voice on top, scrolling down
+ * each a block drawing its shape, and a "+" while there is room. Held
+ * upright its tiles stand as tall as the graph's (44 px), wider than
+ * tall; beside the graph, 56 px squares, and on a short screen (a phone
+ * on its side) 56 by 44, for more of them to show. The row scrolls under
+ * the voice, which clips at its padding: there is room in it for a tile's
+ * rings (a reach ring stands 3.5 px out). Beside the graph (a wider
+ * screen, a phone on its side) it is a column at the graph's left, the
+ * voice on top, scrolling down
  * (it asks no height of the card: the graph sets that). The source being
  * routed from is outlined in sky. A modulator dragged moves along it.
  */
@@ -386,7 +441,7 @@ function Rack({
     lift: (id) => hold(id),
   })
   return (
-    <div className="mx-2 mt-2 mb-1 flex h-[4.25rem] shrink-0 items-center gap-1.5 rounded-lg bg-white/[0.03] pr-0.5 pl-1.5 md:mr-1 md:mb-2 md:h-auto md:w-[4.25rem] md:flex-col md:px-0 md:pt-1.5 md:pb-0.5">
+    <div className="mx-2 mt-2 mb-1 flex h-14 shrink-0 items-center gap-1.5 rounded-lg bg-white/[0.03] pr-0.5 pl-1.5 side:mr-1 side:mb-2 side:h-auto side:w-[4.25rem] side:flex-col side:px-0 side:pt-1.5 side:pb-0.5">
       <Tile
         engine={engine}
         label="Voice"
@@ -397,21 +452,21 @@ function Rack({
         reach={reach.has(VOICE)}
         aria="Voice"
         onClick={() => pick(VOICE)}
-        className="size-14 shrink-0"
+        className="h-11 w-14 shrink-0 side:size-14 short:h-11"
         small
       />
       <span
         aria-hidden
-        className="h-10 w-px shrink-0 bg-white/10 md:h-px md:w-10"
+        className="h-8 w-px shrink-0 bg-white/10 side:h-px side:w-10"
       />
       <div
         ref={scrollerRef}
         aria-label="Modulators"
-        className="flex min-w-0 flex-1 overflow-x-auto overscroll-x-contain px-1 py-1.5 md:min-h-0 md:basis-0 md:flex-col md:self-stretch md:overflow-x-hidden md:overflow-y-auto md:overscroll-y-contain md:px-1.5 md:py-1"
+        className="flex min-w-0 flex-1 overflow-x-auto overscroll-x-contain px-1 py-1.5 side:min-h-0 side:basis-0 side:flex-col side:self-stretch side:overflow-x-hidden side:overflow-y-auto side:overscroll-y-contain side:px-1.5 side:py-1"
       >
         <div
           ref={contentRef}
-          className="relative flex shrink-0 gap-1 md:flex-col"
+          className="relative flex shrink-0 gap-1 side:flex-col"
         >
           {sound.modulators.map((modulator) => (
             <Tile
@@ -429,7 +484,7 @@ function Rack({
               // A block, its shape under its name, as its knobs turn
               picture={modulator.id}
               stacked
-              className="size-14 shrink-0"
+              className="h-11 w-16 shrink-0 side:size-14 short:h-11"
               small
             />
           ))}
@@ -442,7 +497,7 @@ function Rack({
               dashed="add"
               aria="Add a modulator"
               onClick={() => pick(addId('modulator'))}
-              className="h-14 w-7 shrink-0 md:h-7 md:w-14"
+              className="h-11 w-7 shrink-0 side:h-7 side:w-14"
               small
             />
           )}
@@ -457,7 +512,9 @@ function Rack({
  * The inputs, the chains and the amp, laid out by graphGeometry: the
  * tiles share the frame's width, the amp holding the output waveform over
  * its envelope (the envelope alone when it has no waveform). The frame
- * takes the room the page leaves it, up to a cap, and pans what it cannot
+ * takes the room the page leaves it, up to a cap, the tiles what the
+ * panel's dock over it leaves of that (beside, what its bar leaves, the
+ * panel standing over the last of them), and it pans what it cannot
  * show.
  */
 function Graph({
@@ -469,27 +526,60 @@ function Graph({
   reach,
   focus,
   scope,
-}: Picking & { focus: string | undefined; scope: AmpScope | undefined }) {
+  dock,
+  docked,
+}: Picking & {
+  focus: string | undefined
+  scope: AmpScope | undefined
+  /** The panel's dock, over the frame: the tiles keep to what it leaves */
+  dock: HTMLElement | null
+  /**
+   * Whether the panel is in it: the frame pans the tiles from under it,
+   * or with the panel hidden from under its bar
+   */
+  docked: boolean
+}) {
   const frameRef = useRef<HTMLDivElement>(null)
-  /** The frame's size, measured: 0 until it is */
-  const [frame, setFrame] = useState({ w: 0, h: 0 })
+  /** The room the frame leaves the tiles, measured: 0 until it is */
+  const [room, setRoom] = useState<Room>({ w: 0, h: 0, right: 0, bottom: 0 })
   useLayoutEffect(() => {
     const element = frameRef.current
     if (!element) return
-    const observer = new ResizeObserver((entries) => {
-      const box = entries[0]?.contentRect
-      const w = Math.floor(box?.width ?? 0)
-      const h = Math.floor(box?.height ?? 0)
-      setFrame((was) => (was.w === w && was.h === h ? was : { w, h }))
-    })
+    const measure = () => {
+      // The frame inside its scrollbars, and the dock where it stands
+      const at = element.getBoundingClientRect()
+      const frame = {
+        left: at.left,
+        top: at.top,
+        right: at.left + element.clientWidth,
+        bottom: at.top + element.clientHeight,
+      }
+      // Beside, the tiles keep clear of the panel's bar, shown or hidden
+      const next = roomBeside(
+        frame,
+        dock?.getBoundingClientRect(),
+        DOCK_GAP,
+        BAR_BESIDE
+      )
+      setRoom((was) =>
+        was.w === next.w &&
+        was.h === next.h &&
+        was.right === next.right &&
+        was.bottom === next.bottom
+          ? was
+          : next
+      )
+    }
+    const observer = new ResizeObserver(measure)
     observer.observe(element)
+    if (dock) observer.observe(dock)
     return () => observer.disconnect()
-  }, [])
+  }, [dock])
   const geometry = graphGeometry(
     sound,
     LIMITS,
-    frame.w || undefined,
-    frame.h || undefined
+    room.w || undefined,
+    room.h || undefined
   )
   const showScope = scope !== undefined && geometry.amp.w >= GRAPH.ampFill
   const routed = modulated(sound)
@@ -535,16 +625,33 @@ function Graph({
     lift: (id) => hold(id),
   })
 
+  /** How far past the tiles the frame pans, of reach the dock covers */
+  const clear = (reach: number, bar: number) =>
+    reach > 0 ? (docked ? reach : Math.min(reach, bar + DOCK_GAP)) : 0
+
   return (
     <div
       ref={frameRef}
-      // Its height at rest is what it asks of the card, the slots grown or
-      // not (held upright, at most 45% of the screen; beside the rack, from
-      // md up, at most 22rem): a card given more (the editor filling the
-      // page) grows it, and the slots fill it
+      // Held upright, its height at rest is what it asks of the card, the
+      // slots grown or not (at most 45% of the screen, and the panel's
+      // dock under the tiles besides): a card given more grows it. Beside
+      // the rack and the panel, it takes the card's height, the editor
+      // filling what the keys leave. The slots fill what the dock leaves.
       style={{ '--rest': `${geometry.rest}px` } as CSSProperties}
-      className="relative min-h-0 grow basis-[min(var(--rest),22rem,45dvh)] overflow-auto overscroll-contain md:h-[min(var(--rest),22rem)] md:max-h-full md:min-w-0 md:basis-0 roomy:h-auto roomy:max-h-none"
+      className="relative min-h-0 grow basis-[calc(min(var(--rest),22rem,45dvh)_+_var(--dock,0px))] overflow-auto overscroll-contain side:min-w-0 side:basis-0"
     >
+      {/* Room to pan the tiles out from under the panel over the frame,
+          or from under its bar with the panel hidden */}
+      {(room.right > 0 || room.bottom > 0) && (
+        <span
+          aria-hidden
+          className="pointer-events-none absolute size-px"
+          style={{
+            left: geometry.width + clear(room.right, BAR_BESIDE) - 1,
+            top: geometry.height + clear(room.bottom, BAR_UNDER) - 1,
+          }}
+        />
+      )}
       <div
         ref={contentRef}
         className="relative min-w-full"

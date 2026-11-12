@@ -55,6 +55,9 @@ class SynthProcessor extends AudioWorkletProcessor {
       case 'slide':
         this.#synth.slide(message.id, message.value)
         break
+      case 'wheel':
+        this.#synth.wheel = message.value
+        break
       case 'sound':
         this.#player.load(message.sound)
         break

@@ -37,7 +37,7 @@ import {
   sendKey,
   type Sound,
 } from '../state/sound/sound'
-import { CARD, knobRow, KNOB_SIZE, PANEL_BODY, TALL_HIT } from './controls'
+import { knobRow, KNOB_SIZE, PANEL_BODY, TALL_HIT } from './controls'
 import {
   GLYPHS,
   MOD_COLOR,
@@ -255,7 +255,7 @@ export function PartPanel({
   return (
     <section
       aria-label={view.title}
-      className={`flex min-h-[8.5rem] min-w-0 flex-col gap-2 px-2.5 py-2 ${CARD}`}
+      className="flex min-h-[8.5rem] min-w-0 flex-col gap-2 rounded-xl px-2.5 py-2"
     >
       <div className="flex h-7 shrink-0 items-center gap-2">
         <span
@@ -323,7 +323,7 @@ export function PartPanel({
           >
             <ActionIcon
               path={ICONS.hide}
-              className="md:-rotate-90 wide:rotate-0"
+              className="side:-rotate-90 wide:rotate-0"
             />
           </button>
         </span>

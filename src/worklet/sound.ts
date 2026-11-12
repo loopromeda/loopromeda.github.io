@@ -30,6 +30,7 @@ import {
   SOURCE_OFF,
   SOURCE_RANDOM,
   SOURCE_SLIDE,
+  SOURCE_WHEEL,
   SOURCE_VELOCITY,
   chainLevelDest,
   inputDest,
@@ -58,6 +59,7 @@ const NOTE_SOURCE: Record<NoteSource, number> = {
   key: SOURCE_KEY,
   slide: SOURCE_SLIDE,
   random: SOURCE_RANDOM,
+  wheel: SOURCE_WHEEL,
 }
 
 type Values = Record<string, number>

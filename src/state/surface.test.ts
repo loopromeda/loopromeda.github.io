@@ -117,11 +117,14 @@ describe('readSurface', () => {
       root: 4,
       scale: 'dorian',
       hideControls: true,
+      wheel: false,
     }
     const saved = storageWith(JSON.stringify({ ...good, kind: 'drums' }))
     expect(readSurface(saved)).toEqual({ ...good, kind: 'keys' })
     const shown = storageWith(JSON.stringify({ ...good, hideControls: 'yes' }))
     expect(readSurface(shown)).toEqual({ ...good, hideControls: false })
+    const wheel = storageWith(JSON.stringify({ ...good, wheel: 0 }))
+    expect(readSurface(wheel)).toEqual({ ...good, wheel: true })
   })
 
   it('defaults a root that is out of range or not a whole number', () => {
@@ -144,6 +147,7 @@ describe('readSurface', () => {
       root: 9,
       scale: 'blues',
       hideControls: false,
+      wheel: true,
     })
   })
 })
@@ -156,6 +160,7 @@ describe('writeSurface', () => {
       root: 9,
       scale: 'blues',
       hideControls: true,
+      wheel: false,
     }
     writeSurface(storage, settings)
     expect(readSurface(storage)).toEqual(settings)
@@ -168,6 +173,7 @@ describe('writeSurface', () => {
       root: 9,
       scale: 'blues',
       hideControls: true,
+      wheel: false,
     })
     expect(JSON.parse(storage.items.get(SURFACE_KEY) ?? 'null')).toEqual({
       version: 1,
@@ -175,6 +181,7 @@ describe('writeSurface', () => {
       root: 9,
       scale: 'blues',
       hideControls: true,
+      wheel: false,
     })
   })
 

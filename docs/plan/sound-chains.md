@@ -21,7 +21,7 @@ chains      A: [Filter LP] → [Drive]                  B: [Filter BP]
 output                   amp envelope → voice
 
 modulators  [Env] [Env] [LFO] [LFO] …     sources: these, velocity, key,
-routes      source → any knob × amount            slide, random
+routes      source → any knob × amount            slide, random, wheel
             (× via, another source)
 ```
 
@@ -35,10 +35,18 @@ routes      source → any knob × amount            slide, random
 - **The output** is the amp envelope (and velocity) and the voice (mode,
   glide): one of each, always there.
 - **Modulators** are envelopes and LFOs. **Routes** connect a source (a
-  modulator, velocity, key, slide, random) to any knob that can be
-  modulated, by an amount of that knob's modulation scale, optionally
-  scaled by a via source. Pitch of the whole voice and the amp's gain are
-  destinations too.
+  modulator, velocity, key, slide, random, the wheel) to any knob that
+  can be modulated, by an amount of that knob's modulation scale,
+  optionally scaled by a via source. Pitch of the whole voice and the
+  amp's gain are destinations too.
+- **The wheel** (since 2026-11-12, ashon: a mod wheel beside the keys
+  for dynamics) is a strip at the keys' or pads' left, 0..1, the same
+  for every note; it moves nothing until a route reads it, and is grey
+  until then, sky after. A finger turns it by how far it moves, so a
+  touch takes it up where it was left; a double tap sets it back to 0.
+  Its Route button opens its routes in the panel, as a modulator's
+  does; the surface's choices hide it. It is the player's, not the
+  sound's: a preset keeps the routes from it, never where it stands.
 
 A reference to another input (FM, ring) may name any input that does
 not read it back: inputs render in an order where each comes after the
@@ -118,8 +126,13 @@ as a graph of flat tiles, flowing left to right.
   items and its "+" likewise stand at most two slots tall, in the row's
   middle, the head keeping the row's height for the pegs). Modulators sit
   in a rack above, the voice at its end (since 2026-11-12 at its start,
-  over the inputs whose pitch it sets; from md up the rack is a column at
-  the graph's left, which has width to spare and little height). A tile
+  over the inputs whose pitch it sets; from md up, and on a phone on its
+  side, the rack is a column at the graph's left, which has width to
+  spare and little height). Held upright, its tiles stand as tall as the
+  graph's, 44 px (56 until 2026-11-12, ashon: the rack hard to take in
+  on a phone); in the column, 56 px squares, 56 by 44 on a screen under
+  30rem tall (ashon, 2026-11-12: on a phone on its side the column
+  showed the voice and half a modulator). A tile
   is flat, outlined by a ring; picked, its ring is heavier and it takes a
   tint. A dashed "+" fills a row's free place; a longer chain pans the
   graph right.
@@ -185,7 +198,25 @@ as a graph of flat tiles, flowing left to right.
   confirmed). Its last button hides it, the graph taking its room to
   show more chains (ashon, 2026-11-12): a bar under the graph, or a
   narrow column beside it from md, brings it back, as picking a tile
-  does; a tile held to be dragged leaves it hidden.
+  does; a tile held to be dragged leaves it hidden. Since 2026-11-12 it
+  stands over the graph's card, not beside it: the tiles keep to the
+  room it leaves them (`roomBeside` in `src/viz/graph.ts`) and the
+  editor asks the page for the same height whether it shows or not, so
+  hiding it shows the canvas under it and moves neither the tiles nor
+  the keys. Hidden, it had given the keys and the tiles its room, both
+  growing, and ashon asked for them to keep their size, the panel over
+  the canvas. Hidden, it leaves a bar, and the graph pans its last
+  tiles out from under it as from under the panel (ashon, 2026-11-12:
+  on a phone on its side the bar hid the amp). Beside the graph the
+  tiles keep clear of the bar only, the panel shown or hidden, and the
+  panel stands over the last of them, the graph panning them out
+  (ashon, 2026-11-12: the canvas left for the panel on a phone on its
+  side was room wasted, and the tiles should not resize as it shows);
+  under the graph they keep clear of the whole dock. Its card face lets a
+  little through, the canvas under it
+  blurred (since 2026-11-12: ashon asked for a blur, a hue and a grain,
+  then found the knobs lost on that busier glass and kept the blur
+  alone).
 - **Dragging.** A tile held (a touch kept still 450 ms, as a knob is
   held; a mouse moved with its button down) lifts and follows the
   finger, picked; a bar on a seam shows where it would go, and near an

@@ -388,13 +388,15 @@ export const AMOUNT_SPEC: KnobSpec = {
 /**
  * Sources every note has, besides the modulators: velocity (0..1), the
  * note (-1..1 from 48 semitones below C4 to 48 above), how far the finger
- * slid (-1..1), and a random number drawn as it starts (-1..1)
+ * slid (-1..1), a random number drawn as it starts (-1..1), and the mod
+ * wheel beside the keys (0..1), the same for every note
  */
 export const NOTE_SOURCES = {
   velocity: 'Velo',
   key: 'Key',
   slide: 'Slide',
   random: 'Random',
+  wheel: 'Wheel',
 } as const
 
 export type InputKind = keyof typeof INPUT_KINDS

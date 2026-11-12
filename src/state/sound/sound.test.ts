@@ -100,6 +100,7 @@ describe('destinations and sources', () => {
       'key',
       'slide',
       'random',
+      'wheel',
     ])
   })
 

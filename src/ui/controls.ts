@@ -23,9 +23,9 @@
  */
 
 /**
- * A card's face: the sound's graph, the panel under it and the sheets
- * that open over them all stand on it, and the graph's tiles are cut
- * from it
+ * A card's face: the sound's graph and the sheets that open over it stand
+ * on it, and the graph's tiles are cut from it. The editor's panel, over
+ * the graph, stands on glass instead (index.css), this face let through.
  */
 export const CARD_FACE = '#16161c'
 

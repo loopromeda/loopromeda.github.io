@@ -85,7 +85,8 @@ src/viz/      pure display math (scope trigger and decimation, envelope
               chain rows in graph.ts and where a tile dragged goes in
               drop.ts, hit-testing, velocity and Slide from a touch's
               position, a knob turning finer as the finger strays
-              sideways in fine.ts)
+              sideways in fine.ts, the mod wheel's turn, double tap and
+              ridges in wheel.ts)
 src/ui/       React components; SoundEditor.tsx the sound as tiles
               (editor.ts: their names, lines, pictograms and colours), its
               amp holding Scope.tsx, the output waveform over the amp's
@@ -100,7 +101,9 @@ src/ui/       React components; SoundEditor.tsx the sound as tiles
               finer with the finger off to the side; PlaySurface.tsx plays
               notes on Keys.tsx or Pads.tsx (hands.ts: who holds which
               note), KeysNavigator.tsx moves the keys a white key at a
-              time over C1 to C8, PresetBrowser.tsx loads, saves and moves presets,
+              time over C1 to C8, ModWheel.tsx the mod wheel at their
+              left (the Wheel source) and its Route, PresetBrowser.tsx
+              loads, saves and moves presets,
               SettingsDialog.tsx, a modal dialog, holds the settings,
               Measure CPU and the browser's checks; pages.ts gives each
               sheet an address (#/presets), so a reload keeps it and Back

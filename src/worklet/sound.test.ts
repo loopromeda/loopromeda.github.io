@@ -86,6 +86,23 @@ describe('the chain engine', () => {
     expect(slots.MAX_ROUTES).toBe(kinds.MAX_ROUTES)
   })
 
+  it("routes the wheel, which plays where the synth's wheel stands", () => {
+    const sound = setRoute(
+      addRoute(initSound(), { source: 'wheel', target: 'x1', key: 'cutoff' })
+        .sound,
+      'r1',
+      { amount: -0.5 }
+    )
+    const at = (wheel: number) => {
+      const synth = new ChainSynth(SAMPLE_RATE)
+      applySound(synth, sound)
+      synth.wheel = wheel
+      return phrase(synth)
+    }
+    expect(maxDifference(at(0), render(sound))).toBe(0)
+    expect(maxDifference(at(1), at(0))).toBeGreaterThan(0.01)
+  })
+
   it('plays nothing without a chain, or with no sends', () => {
     const silent = (sound: Sound) => peak(render(sound))
     expect(silent({ ...initSound(), chains: [] })).toBe(0)

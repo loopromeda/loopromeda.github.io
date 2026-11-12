@@ -20,35 +20,41 @@ import { PresetBrowser } from './ui/PresetBrowser'
 import type { ScopeStats } from './ui/Scope'
 import { SettingsButton } from './ui/SettingsButton'
 import { SettingsDialog } from './ui/SettingsDialog'
-import { SoundEditor } from './ui/SoundEditor'
+import { ModWheel } from './ui/ModWheel'
+import { SoundEditor, type RoutesAsked } from './ui/SoundEditor'
 import { StatusBar } from './ui/StatusBar'
 import { SurfaceButton } from './ui/SurfaceButton'
 import { SurfacePicker } from './ui/SurfacePicker'
 import { UpdateButton } from './ui/UpdateButton'
 import type { ScreenAwake } from './wakeLock'
 
+// A short screen (index.css: a phone on its side) keeps narrower margins
 const page =
-  'flex h-full flex-col px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]'
+  'flex h-full flex-col px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] short:pt-[max(0.5rem,env(safe-area-inset-top))] short:pb-[max(0.5rem,env(safe-area-inset-bottom))]'
 
 /**
  * How the height is shared, the controls out. The keys stand at most 10rem
- * long, whatever the width, and at most 45% of a short screen, under what
- * stands above them (PlaySurface's --play-head: the header and its gap,
- * 3.25rem, and on a narrow screen the keys' navigator in a strip of its
- * own): one length to lay the rest out around. On a roomy screen
- * (index.css) they stand at that and the editor takes the rest: the keys
- * stay put as inputs and chains come and go, and the graph pans when they
- * do not fit. Held upright (under md), the editor keeps what it needs
- * first and the keys take the rest up to that length; past it, the editor
- * grows, its tiles with it (graph.ts), and what they cannot fill is left
- * an empty canvas.
+ * long, whatever the width, under what stands above them (PlaySurface's
+ * --play-head: the header and its gap, 3.25rem, and on a narrow screen
+ * the keys' navigator in a strip of its own): one length to lay the rest
+ * out around. Beside (index.css: md wide, or a phone on its side) they
+ * stand at that and the editor takes the rest: the keys stay put as
+ * inputs and chains come and go, and the graph pans when they do not fit.
+ * On a screen under 30rem tall they give way, down to their least (7rem)
+ * at 27rem, so a phone on its side keeps the editor's panel whole. Held
+ * upright, the editor keeps what it needs first and the keys take the
+ * rest up to that length, and at most 45% of the screen; past it, the
+ * editor grows, its tiles with it (graph.ts), and what they cannot fill
+ * is left an empty canvas. It needs the same with its panel shown or
+ * hidden (the panel stands over its graph: SoundEditor.tsx), so neither
+ * moves the keys.
  */
-const EDITOR_SIZE = 'max-md:grow roomy:flex-1'
+const EDITOR_SIZE = 'upright:grow side:flex-1'
 // Written out whole, for Tailwind to find
 const KEYS_SIZE = [
-  'flex-1 max-md:grow-[999]',
-  'max-md:max-h-[calc(var(--play-head,3.25rem)_+_min(10rem,45dvh))]',
-  'roomy:flex-[0_0_calc(var(--play-head,3.25rem)_+_min(10rem,45dvh))]',
+  'flex-1 upright:grow-[999]',
+  'upright:max-h-[calc(var(--play-head,3.25rem)_+_min(10rem,45dvh))]',
+  'side:flex-[0_0_calc(var(--play-head,3.25rem)_+_clamp(7rem,100dvh_-_20rem,10rem))]',
 ].join(' ')
 
 /**
@@ -59,9 +65,12 @@ const KEYS_SIZE = [
  * the keyboard's header opens the presets, and the first button at its
  * right end the choice of keys or pads, over the controls: what is played
  * on stays there to try them on. The last puts the controls away, for a
- * screen too short to play on under them. The settings (this device's:
- * voices, latency, what the screen shows, and what the browser offers)
- * open from the status line's right end, in the same place.
+ * screen too short to play on under them. The mod wheel stands at the
+ * keys' left (the surface's choices hide it); its Route opens its routes
+ * in the editor's panel, bringing the controls back for them. The
+ * settings (this device's: voices, latency, what the screen shows, and
+ * what the browser offers) open from the status line's right end, in the
+ * same place.
  *
  * A reload comes back to the same view: each sheet has an address
  * (pages.ts), the sound and the device's choices are kept, and the editor
@@ -142,6 +151,14 @@ export function App({
     setSurface(next)
     writeSurface(storage, next)
   }
+  // The wheel's Route: its routes in the editor's panel, the controls
+  // brought back and any sheet over them closed, to show them
+  const [asked, setAsked] = useState<RoutesAsked | undefined>(undefined)
+  const routeWheel = () => {
+    if (sheet === 'presets' || sheet === 'surface') closeSheet()
+    if (surface.hideControls) changeSurface({ ...surface, hideControls: false })
+    setAsked({ source: 'wheel' })
+  }
   const [settings, setSettings] = useState(() => readSettings(storage))
   useEffect(() => {
     awake.want(settings.keepAwake && state === 'running')
@@ -187,24 +204,22 @@ export function App({
   }
 
   return (
-    <main className={`${page} gap-3`}>
+    <main className={`${page} gap-3 short:gap-2`}>
       {/* Shrinks when the page is short (the graph pans), so the keys and
           the status line stay on screen; a sheet open over it has room */}
       <div
         className={`relative flex flex-col ${covered ? 'min-h-[min(22rem,50dvh)]' : 'min-h-0'} ${controls ? EDITOR_SIZE : ''}`}
       >
-        <div
-          inert={covered}
-          className="flex min-h-0 flex-col max-md:flex-1 roomy:flex-1"
-        >
+        <div inert={covered} className="flex min-h-0 flex-1 flex-col">
           {/* Hidden, not unmounted: the editor keeps the tile picked */}
           <div
             id="controls"
             hidden={!controls}
-            className="flex min-h-0 flex-col max-md:flex-1 roomy:flex-1"
+            className="flex min-h-0 flex-1 flex-col"
           >
             <SoundEditor
               engine={engine}
+              asked={asked}
               scope={
                 settings.waveform
                   ? { timing: settings.waveformTiming, onStats: onScopeStats }
@@ -229,6 +244,9 @@ export function App({
         className={controls ? KEYS_SIZE : 'flex-1'}
         settings={surface}
         fullVelocity={settings.velocity === 'full'}
+        beside={
+          surface.wheel && <ModWheel engine={engine} onRoute={routeWheel} />
+        }
         start={
           <PatchButton
             library={library}

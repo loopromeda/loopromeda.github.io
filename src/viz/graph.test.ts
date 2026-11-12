@@ -3,6 +3,7 @@ import {
   GRAPH,
   graphGeometry,
   graphLayout,
+  roomBeside,
   type GeometrySound,
   type GraphLayout,
   type GraphSound,
@@ -690,5 +691,66 @@ describe('graphGeometry', () => {
     const huge = graphGeometry(one, LIMITS, 333, 1000)
     expect(huge.inputs[0]?.box.h).toBe(GRAPH.slot * GRAPH.stretch)
     expect(huge.height).toBe(rest.height + GRAPH.slot)
+  })
+})
+
+describe('roomBeside', () => {
+  const frame = { left: 10, top: 20, right: 410, bottom: 320 }
+
+  it('leaves the whole frame without a dock, or one off it', () => {
+    const whole = { w: 400, h: 300, right: 0, bottom: 0 }
+    expect(roomBeside(frame, undefined, 12)).toEqual(whole)
+    const below = { left: 0, top: 330, right: 420, bottom: 500 }
+    expect(roomBeside(frame, below, 12)).toEqual(whole)
+  })
+
+  it('takes a dock across the frame off its bottom, and the gap', () => {
+    const dock = { left: 0, top: 200, right: 420, bottom: 340 }
+    expect(roomBeside(frame, dock, 12)).toEqual({
+      w: 400,
+      h: 168,
+      right: 0,
+      bottom: 132,
+    })
+  })
+
+  it('takes a dock down the frame off its right, and the gap', () => {
+    const dock = { left: 250, top: 0, right: 430, bottom: 330 }
+    expect(roomBeside(frame, dock, 12)).toEqual({
+      w: 228,
+      h: 300,
+      right: 172,
+      bottom: 0,
+    })
+  })
+
+  it('lays the tiles out clear of a bar down the frame, under the rest', () => {
+    const dock = { left: 250, top: 0, right: 430, bottom: 330 }
+    // The bar from 386: 24 px of the frame, and the gap
+    expect(roomBeside(frame, dock, 12, 44)).toEqual({
+      w: 364,
+      h: 300,
+      right: 172,
+      bottom: 0,
+    })
+    // A bar wider than its dock is the dock
+    expect(roomBeside(frame, dock, 12, 500)).toEqual(
+      roomBeside(frame, dock, 12)
+    )
+  })
+
+  it('keeps the tiles clear of the whole dock across the frame', () => {
+    const dock = { left: 0, top: 200, right: 420, bottom: 330 }
+    expect(roomBeside(frame, dock, 12, 44)).toEqual(roomBeside(frame, dock, 12))
+  })
+
+  it('never leaves less than nothing', () => {
+    const dock = { left: 0, top: 0, right: 420, bottom: 340 }
+    expect(roomBeside(frame, dock, 12)).toEqual({
+      w: 400,
+      h: 0,
+      right: 0,
+      bottom: 300,
+    })
   })
 })

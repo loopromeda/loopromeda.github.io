@@ -18,6 +18,8 @@ export type ToWorklet =
   | { t: 'noteOff'; id: number }
   /** That touch's finger slid up its key (or down, below 0), -1..1 */
   | { t: 'slide'; id: number; value: number }
+  /** The mod wheel beside the keys moved, to 0..1 */
+  | { t: 'wheel'; value: number }
   /**
    * The whole sound (src/state/sound): a new one, one whose structure
    * changed, or catching a new worklet up

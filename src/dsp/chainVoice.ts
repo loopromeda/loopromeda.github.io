@@ -177,7 +177,10 @@ export class ChainSettings {
   readonly sourceUsed = new Uint8Array(SOURCE_COUNT)
   /** Per chunk: 1 for each destination a running route writes */
   readonly destUsed = new Uint8Array(DEST_COUNT)
-  /** Work buffers, used by one voice at a time: sources, destinations */
+  /**
+   * Work buffers, used by one voice at a time: sources (but the wheel's,
+   * which the synth fills for them all each chunk), destinations
+   */
   readonly sources: Float32Array[] = []
   readonly dests: Float32Array[] = []
   /** More work buffers: the voice's sum, a chain's, an oscillator's */
@@ -225,9 +228,9 @@ export class ChainSettings {
  * mixes the inputs it takes at their send levels and passes the mix
  * through its items in order, and the chains' ends, each at its level,
  * sum into the amp envelope. Its own modulators (envelopes, LFOs,
- * velocity, key, slide and a random number) drive the destinations the
- * settings' routes name, per sample. Its pitch glides from the note it
- * starts from.
+ * velocity, key, slide and a random number), and the wheel all voices
+ * share, drive the destinations the settings' routes name, per sample.
+ * Its pitch glides from the note it starts from.
  *
  * A voice asked for a new note while it still sounds (stolen, or taken again
  * mid-release) chokes first: a linear fall to silence over CHOKE_TIME. The new

@@ -707,3 +707,69 @@ export function graphGeometry(
     addChain,
   }
 }
+
+/** A box on the screen by its edges, in CSS pixels (a DOMRect is one) */
+export interface Edges {
+  readonly left: number
+  readonly top: number
+  readonly right: number
+  readonly bottom: number
+}
+
+/** The room a frame leaves its tiles, and how much of it is covered */
+export interface Room {
+  /** What the tiles are laid out in */
+  readonly w: number
+  readonly h: number
+  /**
+   * Covered at its right and at its bottom, the gap before it included:
+   * how far past the tiles the frame pans to bring them out from under
+   */
+  readonly right: number
+  readonly bottom: number
+}
+
+/**
+ * The room frame leaves its tiles with a dock (the editor's panel) over
+ * it, in whole pixels: a dock across the frame's width covers its bottom
+ * from the dock's top, one down its height its right from the dock's
+ * left, and gap more is kept clear before either. One that covers
+ * nothing of it leaves it all, and so does no dock. Given bar, the width
+ * of the bar at a dock's right edge (the panel's, hidden), the tiles of a
+ * frame with a dock down it keep clear of that bar only, the panel shown
+ * or not, and stand under the rest: the frame pans them out from under it
+ * (right). Across, they keep clear of the whole dock.
+ */
+export function roomBeside(
+  frame: Edges,
+  dock: Edges | undefined,
+  gap: number,
+  bar?: number
+): Room {
+  const w = Math.floor(frame.right - frame.left)
+  const h = Math.floor(frame.bottom - frame.top)
+  const whole = { w, h, right: 0, bottom: 0 }
+  if (!dock) return whole
+  // A pixel either way, for the rounding of the boxes measured
+  const across = dock.left <= frame.left + 1 && dock.right >= frame.right - 1
+  const down = dock.top <= frame.top + 1 && dock.bottom >= frame.bottom - 1
+  if (across) {
+    const covered = Math.ceil(frame.bottom - Math.max(dock.top, frame.top))
+    if (covered <= 0) return whole
+    const bottom = Math.min(h, covered + gap)
+    return { w, h: h - bottom, right: 0, bottom }
+  }
+  if (down) {
+    /** How much of the frame's width is covered from left on, the gap too */
+    const from = (left: number) => {
+      const covered = Math.ceil(frame.right - Math.max(left, frame.left))
+      return covered > 0 ? Math.min(w, covered + gap) : 0
+    }
+    const right = from(dock.left)
+    if (right === 0) return whole
+    const kept =
+      bar === undefined ? right : from(Math.max(dock.right - bar, dock.left))
+    return { w: w - kept, h, right, bottom: 0 }
+  }
+  return whole
+}

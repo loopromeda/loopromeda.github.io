@@ -45,7 +45,9 @@ export const SOURCE_KEY = SOURCE_VELOCITY + 1
 export const SOURCE_SLIDE = SOURCE_VELOCITY + 2
 /** A random number for each note, -1..1, drawn as it starts */
 export const SOURCE_RANDOM = SOURCE_VELOCITY + 3
-export const SOURCE_COUNT = SOURCE_VELOCITY + 4
+/** The mod wheel beside the keys, 0..1: the same for every note */
+export const SOURCE_WHEEL = SOURCE_VELOCITY + 4
+export const SOURCE_COUNT = SOURCE_VELOCITY + 5
 
 /** The note a Key source of 0 plays, and where keytracking moves nothing */
 export const KEY_CENTER = 60

@@ -14,12 +14,33 @@
 }
 
 /*
- * Wide enough for the editor's panel beside its graph (md) and tall enough
- * for both over the keys: a tablet, a Fold open, not a phone on its side.
- * There the keys stop at a playing height and the editor takes the room
- * (App.tsx).
+ * The editor's panel beside its graph, the rack a column at its left
+ * (SoundEditor.tsx): wide enough for the three (md), or a phone on its
+ * side, whose height has no room for them stacked over the keys. There
+ * the keys stand at a playing height and the editor takes the rest
+ * (App.tsx). Upright is the rest: the rack over the graph, the panel
+ * under it.
  */
-@custom-variant roomy (@media (width >= 48rem) and (height >= 30rem));
+@custom-variant side {
+  @media (width >= 48rem),
+    (orientation: landscape) and (width >= 33rem) and (height < 30rem) {
+    @slot;
+  }
+}
+@custom-variant upright {
+  @media (width < 48rem) and (orientation: portrait),
+    (width < 48rem) and (height >= 30rem),
+    (width < 33rem) {
+    @slot;
+  }
+}
+
+/*
+ * Short of height (a phone on its side, a short window): the page's
+ * margins and gaps close up and the rack's tiles stand lower, for the
+ * editor to keep room for its panel over the keys
+ */
+@custom-variant short (@media (height < 30rem));
 
 /*
  * Wider still, and tall enough for three rows (a desktop's window): the
@@ -59,4 +80,23 @@ body {
   touch-action: manipulation;
   background: #0b0b10;
   color: #e7e7ee;
+}
+
+/*
+ * Frosted glass, for what stands over the sound's graph (the editor's
+ * panel, SoundEditor.tsx): the card face, letting a little through, and
+ * the canvas under it blurred. Nothing more (ashon, 2026-11-12: a hue, a
+ * grain and a rim took the eye off the knobs). Without a backdrop filter
+ * the face is opaque.
+ */
+@utility glass {
+  background-color: rgb(22 22 28 / 0.8);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+
+  @supports not (
+    (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))
+  ) {
+    background-color: rgb(22 22 28);
+  }
 }

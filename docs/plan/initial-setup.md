@@ -376,6 +376,17 @@ right, benchmark within budget.
         whatever it is: 12rem, and held upright (the navigator in its
         strip) all the room the buttons leave. A header under 26rem (a
         phone's) drops the range to fit them.
+        Later that day, after ashon found a phone on its side (718×392 in
+        Chrome) hard to edit on: the navigator stands in the header from
+        a 600 px wide header (was a 704 px wide surface), so a phone on
+        its side has it there; a phone on its side lays the editor out as
+        a wider screen does (index.css: `side`), its rack a column and
+        its panel at the graph's right; and beside, the keys stand at a
+        playing height and the editor takes the rest, the keys giving way
+        to 7rem on a screen under 30rem tall, the page's margins closing
+        up (`short`). Measured in frames: at 718×392 the editor went from
+        128 to 180 px (the panel, 136 px and more, had been cut short), at
+        667×375 to 163, at 844×390 178; 390×844 and 1024×768 unchanged.
 - [ ] Knob/Slider components: vertical drag, fine-adjust, double-tap reset; values go
       straight to the engine, React only for structure
 - [ ] Layout: landscape-first for playing, portrait for editing; `viewport-fit=cover` + safe-area insets

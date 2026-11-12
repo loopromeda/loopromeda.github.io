@@ -12,7 +12,7 @@ import { addRoute, removePart, setRoute } from '../state/sound/edit'
 import { MAX_ROUTES } from '../state/sound/kinds'
 import { partDests, routesTo } from '../state/sound/knob'
 import { destOf, partName, sources, type Sound } from '../state/sound/sound'
-import { CARD_FACE, PANEL_BODY, SMALL_BUTTON, knobRow } from './controls'
+import { PANEL_BODY, SMALL_BUTTON, knobRow } from './controls'
 import {
   GLYPHS,
   MOD_COLOR,
@@ -23,7 +23,7 @@ import {
 } from './editor'
 import { DepthKnob, Knob } from './Knob'
 
-/** A routing panel's tint over the card: sky at 5% */
+/** A routing panel's tint over the dock's glass: sky at 5% */
 const ROUTING_TINT = 'rgba(56,189,248,0.05)'
 
 /** A destination whose routes are edited: a part's, by key */
@@ -193,7 +193,7 @@ export function RoutesInto({
     >
       <div
         ref={scrollerRef}
-        className="@container flex min-w-0 items-stretch gap-1.5 overflow-x-auto overscroll-x-contain md:flex-wrap"
+        className="@container flex min-w-0 items-stretch gap-1.5 overflow-x-auto overscroll-x-contain side:flex-wrap"
       >
         {routes.map((route) => {
           const from = partName(sound, route.source)
@@ -316,9 +316,9 @@ function Frame({
   return (
     <section
       aria-label={label}
-      // A card, tinted and ringed in sky while it routes
+      // Tinted and ringed in sky while it routes, over the dock's glass
       style={{
-        background: `linear-gradient(${ROUTING_TINT}, ${ROUTING_TINT}), ${CARD_FACE}`,
+        background: ROUTING_TINT,
         boxShadow: `inset 0 0 0 1px ${MOD_LOOK.ring}`,
       }}
       className="flex min-h-[8.5rem] min-w-0 flex-col gap-2 rounded-xl px-2.5 py-2"
