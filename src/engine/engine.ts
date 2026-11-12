@@ -89,9 +89,11 @@ export class Engine {
   }
 
   /**
-   * Starts the audio. Call it from a click: browsers, iOS most strictly, let
-   * audio start only inside a user activation, so everything up to the first
-   * await below runs synchronously within the click.
+   * Starts the audio. Browsers, iOS most strictly, let audio start only
+   * inside a user activation, unless their autoplay rules allow it: called
+   * from a click, everything up to the first await below runs synchronously
+   * within it. Called without one, the context may stay suspended; start()
+   * or resume() from a click then starts it.
    */
   async start(): Promise<void> {
     if (this.#context) return this.resume()

@@ -65,9 +65,10 @@ const KEYS_SIZE = [
  *
  * A reload comes back to the same view: each sheet has an address
  * (pages.ts), the sound and the device's choices are kept, and the editor
- * keeps its tile picked. Audio still waits for a tap, which browsers ask
- * for: until then a cover over it all takes the tap. Only a failure to
- * start has a page of its own.
+ * keeps its tile picked. The audio starts with the page where the browser
+ * lets it (main.tsx); where it holds it back for a tap (iOS always), a
+ * cover over it all takes the tap. Only a failure to start has a page of
+ * its own.
  *
  * While the audio runs, the screen stays on (awake, unless the settings
  * turn it off). A newer version of the site, once saved for offline,
