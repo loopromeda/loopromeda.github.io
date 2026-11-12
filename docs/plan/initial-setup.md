@@ -349,6 +349,36 @@ right, benchmark within budget.
         stays within three octaves, so there is always an octave to shift
         to, and 16 is the drum kit's size for when Parts come. Keys start
         on C4, pads on the root in octave 3, each keeping its own octave.
+        2026-11-12, asked for by ashon (an XY pad beside the keys and the
+        pads; ashon chose a pitch with no steps across, and Slide up): a
+        third surface, XY (`src/ui/XyPad.tsx`, `src/viz/xy.ts`). Each
+        finger plays a note, its pitch rising across the pad from a C with
+        no steps, as many octaves as fit at 24 px a semitone (one on a
+        phone held upright, two on one on its side, at most four), its
+        Slide 0 at the bottom to 1 at the top. A finger moving bends its
+        note: a `bend` message moves a held note to a pitch between
+        semitones, which it follows over 30 ms (`ChainSynth.bend`), and
+        the note played next glides from there.
+        Lines mark the semitones, the Cs named; the finger's ring, its
+        line and its pitch in cents are drawn straight onto the page.
+        Every note plays at full velocity. Checked in frames at 718×392
+        (C3–C5) and 390×844 (C3–C4): a finger at 0.53 across read C#4
+        −28¢, and the arrows moved the pad to C4–C6.
+        2026-11-12, asked for by ashon (the glide shown on the XY pad): a
+        bend is an offset over the note's glide, not a new target, so a
+        glide under way carries on beneath a finger that moves (one
+        settling as it lands used to cut it short, to the bend's 30 ms);
+        a mono move starts its glide from the pitch sounding, bend and
+        all. While an XY pad is showing (`Engine.watchGlides`) the audio
+        thread reports the notes held still gliding, about 60 times a
+        second, each one's key and the glide's way left without its bend
+        (`ChainSynth.glides`); the pad draws a dot on the finger's row
+        where the note sounds and a line from it to the ring
+        (`xyGlide`), gone once it is within a pixel. Checked in a frame
+        at 718×392 with a 2 s glide: the dot ran from C3 towards G#4 as
+        the glide's curve says (186 px at 0.2 s, 397 at 0.8 s, the finger
+        at 542), kept on through a 2 px move, and moved with the finger
+        on a 64 px one.
         2026-11-12, asked for by ashon: the keys stand with C4 in their
         middle, from a C for an even number of octaves (C3–C5) and from an
         F for an odd one (F3–F4 on a phone, F2–F5 on the Fold open), and

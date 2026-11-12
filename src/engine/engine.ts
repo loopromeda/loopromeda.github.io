@@ -5,6 +5,7 @@ import {
   PROCESSOR_NAME,
   type BenchReport,
   type FromWorklet,
+  type GlideReport,
   type LoadReport,
   type ToWorklet,
 } from './protocol'
@@ -78,6 +79,8 @@ export class Engine {
   #voices: number | undefined
   /** The mod wheel, 0..1, where the player left it */
   #wheel = 0
+  /** Who watches the notes still gliding (an XY pad), told each report */
+  readonly #glideListeners = new Set<(report: GlideReport) => void>()
 
   get snapshot(): EngineSnapshot {
     return this.#snapshot
@@ -141,6 +144,9 @@ export class Engine {
         this.#post({ t: 'voices', count: this.#voices })
       }
       if (this.#wheel !== 0) this.#post({ t: 'wheel', value: this.#wheel })
+      if (this.#glideListeners.size > 0) {
+        this.#post({ t: 'watchGlides', on: true })
+      }
       await resumed
     } catch (error) {
       this.#fail(error)
@@ -177,6 +183,11 @@ export class Engine {
     this.#post({ t: 'slide', id, value })
   }
 
+  /** Touch id's finger bent its note to note (the XY pad: between keys) */
+  bend(id: number, note: number): void {
+    this.#post({ t: 'bend', id, note })
+  }
+
   /** The mod wheel beside the keys, 0..1: the Wheel source of every note */
   get wheel(): number {
     return this.#wheel
@@ -192,6 +203,26 @@ export class Engine {
 
   panic(): void {
     this.#post({ t: 'panic' })
+  }
+
+  /**
+   * Tells listener the notes held still gliding (GlideReport), about a
+   * display's frame rate while any are; the audio thread reports them only
+   * while someone watches. Returns the way to stop.
+   */
+  readonly watchGlides = (
+    listener: (report: GlideReport) => void
+  ): (() => void) => {
+    this.#glideListeners.add(listener)
+    if (this.#glideListeners.size === 1) {
+      this.#post({ t: 'watchGlides', on: true })
+    }
+    return () => {
+      if (!this.#glideListeners.delete(listener)) return
+      if (this.#glideListeners.size === 0) {
+        this.#post({ t: 'watchGlides', on: false })
+      }
+    }
   }
 
   /** The most voices playing at once (the synth's whole pool at most) */
@@ -328,6 +359,8 @@ export class Engine {
     } else if (message.t === 'load') {
       const { load, voices } = message
       this.#setLoad({ load, voices })
+    } else if (message.t === 'glides') {
+      for (const listener of this.#glideListeners) listener(message)
     }
   }
 

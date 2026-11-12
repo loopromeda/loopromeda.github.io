@@ -86,7 +86,8 @@ src/viz/      pure display math (scope trigger and decimation, envelope
               drop.ts, hit-testing, velocity and Slide from a touch's
               position, a knob turning finer as the finger strays
               sideways in fine.ts, the mod wheel's turn, double tap and
-              ridges in wheel.ts)
+              ridges in wheel.ts, the XY pad's pitch, Slide, lines and
+              a glide's dot in xy.ts)
 src/ui/       React components; SoundEditor.tsx the sound as tiles
               (editor.ts: their names, lines, pictograms and colours), its
               amp holding Scope.tsx, the output waveform over the amp's
@@ -99,8 +100,8 @@ src/ui/       React components; SoundEditor.tsx the sound as tiles
               tileDrag.ts holds a tile and drags it to a new place; Knob.tsx
               turns one knob of one part (or a source's depth into one),
               finer with the finger off to the side; PlaySurface.tsx plays
-              notes on Keys.tsx or Pads.tsx (hands.ts: who holds which
-              note), KeysNavigator.tsx moves the keys a white key at a
+              notes on Keys.tsx, Pads.tsx or XyPad.tsx (hands.ts: who
+              holds which note, and bends it), KeysNavigator.tsx moves the keys a white key at a
               time over C1 to C8, ModWheel.tsx the mod wheel at their
               left (the Wheel source) and its Route, PresetBrowser.tsx
               loads, saves and moves presets,

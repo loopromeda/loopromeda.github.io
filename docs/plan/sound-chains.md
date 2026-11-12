@@ -35,7 +35,8 @@ routes      source → any knob × amount            slide, random, wheel
 - **The output** is the amp envelope (and velocity) and the voice (mode,
   glide): one of each, always there.
 - **Modulators** are envelopes and LFOs. **Routes** connect a source (a
-  modulator, velocity, key, slide, random, the wheel) to any knob that
+  modulator, velocity, key, slide (a finger's on a pad, or up the XY
+  pad), random, the wheel) to any knob that
   can be modulated, by an amount of that knob's modulation scale,
   optionally scaled by a via source. Pitch of the whole voice and the
   amp's gain are destinations too.

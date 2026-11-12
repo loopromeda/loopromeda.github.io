@@ -1,7 +1,8 @@
-import { ChainSynth } from '../dsp/chainSynth'
+import { ChainSynth, VOICE_COUNT } from '../dsp/chainSynth'
 import { chainStressSynth, timeBlocks } from '../dsp/chainStress'
 import {
   BENCH_MAX_VOICES,
+  GLIDE_REPORTS,
   PROCESSOR_NAME,
   type BenchResult,
   type FromWorklet,
@@ -23,9 +24,10 @@ const now = clock ? () => clock.now() : () => Date.now()
 
 /**
  * The audio thread's shell around src/dsp's ChainSynth: messages in,
- * blocks out, and its load (LoadMeter) out twice a second. SoundPlayer
+ * blocks out, and its load (LoadMeter) out twice a second, and the notes
+ * still gliding while the page watches them (an XY pad). SoundPlayer
  * keeps the sound's knobs and hands each change to the synth in its own
- * terms. Nothing is allocated in process(): the load goes out in one
+ * terms. Nothing is allocated in process(): each report goes out in one
  * message object, reused (postMessage copies it).
  */
 class SynthProcessor extends AudioWorkletProcessor {
@@ -36,6 +38,21 @@ class SynthProcessor extends AudioWorkletProcessor {
     t: 'load',
     load: 0,
     voices: 0,
+  }
+  /** Whether the page watches the glides, and the frames since a report */
+  #watching = false
+  #sinceGlides = 0
+  readonly #glidesEvery = Math.max(1, Math.round(sampleRate / GLIDE_REPORTS))
+  readonly #glides: {
+    t: 'glides'
+    count: number
+    keys: Float64Array
+    amounts: Float64Array
+  } = {
+    t: 'glides',
+    count: 0,
+    keys: new Float64Array(VOICE_COUNT),
+    amounts: new Float64Array(VOICE_COUNT),
   }
 
   constructor() {
@@ -55,8 +72,15 @@ class SynthProcessor extends AudioWorkletProcessor {
       case 'slide':
         this.#synth.slide(message.id, message.value)
         break
+      case 'bend':
+        this.#synth.bend(message.id, message.note)
+        break
       case 'wheel':
         this.#synth.wheel = message.value
+        break
+      case 'watchGlides':
+        this.#watching = message.on
+        this.#glides.count = 0
         break
       case 'sound':
         this.#player.load(message.sound)
@@ -114,7 +138,21 @@ class SynthProcessor extends AudioWorkletProcessor {
       report.voices = this.#synth.activeVoices
       this.port.postMessage(report satisfies FromWorklet)
     }
+    if (this.#watching) this.#reportGlides(out.length)
     return true
+  }
+
+  /** The notes held still gliding, every so often, while there are some */
+  #reportGlides(frames: number): void {
+    this.#sinceGlides += frames
+    if (this.#sinceGlides < this.#glidesEvery) return
+    this.#sinceGlides = 0
+    const report = this.#glides
+    const count = this.#synth.glides(report.keys, report.amounts)
+    // Once with none as the last lands, then quiet
+    if (count === 0 && report.count === 0) return
+    report.count = count
+    this.port.postMessage(report satisfies FromWorklet)
   }
 }
 

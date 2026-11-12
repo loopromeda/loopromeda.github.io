@@ -16,6 +16,10 @@ class FakePlayer implements Player {
   slide(id: number, value: number): void {
     this.calls.push(`slide ${id} ${value}`)
   }
+
+  bend(id: number, note: number): void {
+    this.calls.push(`bend ${id} ${note}`)
+  }
 }
 
 /** A key's element as Hands sees it: its data attributes */
@@ -46,6 +50,18 @@ describe('Hands', () => {
     expect(player.calls).toEqual(['on 1 60 0.5', 'off 1'])
     expect(lit(key(60))).toBe(false)
     expect(hands.startOf(1)).toBeUndefined()
+  })
+
+  it('bends the note a touch holds by more than a step, and no other', () => {
+    const { player, hands } = setup()
+    hands.press(1, 60.25, 1, 0)
+    hands.bend(1, 60.25 + 1 / 256)
+    hands.bend(1, 61.5)
+    hands.bend(1, 61.5 + 1 / 256)
+    hands.bend(2, 70)
+    hands.stop(1)
+    hands.bend(1, 63)
+    expect(player.calls).toEqual(['on 1 60.25 1', 'bend 1 61.5', 'off 1'])
   })
 
   it('keeps a key lit while anyone holds it', () => {

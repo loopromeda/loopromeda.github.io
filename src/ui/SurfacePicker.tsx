@@ -12,17 +12,18 @@ import { SurfaceIcon } from './SurfaceButton'
 const KINDS: readonly { kind: SurfaceKind; label: string }[] = [
   { kind: 'keys', label: 'Keys' },
   { kind: 'pads', label: 'Pads' },
+  { kind: 'xy', label: 'XY' },
 ]
 
 /** C to B, as semitones above C */
 const ROOTS = Array.from({ length: 12 }, (_, semitone) => semitone)
 
 /**
- * What notes are played on, keys or pads, whether the mod wheel stands
- * beside them, and the key the pads play in: a root and a scale. Like the
- * presets it covers the waveform and the
- * controls, its buttons where theirs are, and leaves what is played on
- * below it, so a key can be tried on the pads while it is chosen.
+ * What notes are played on, keys, pads or the XY pad, whether the mod
+ * wheel stands beside them, and the key the pads play in: a root and a
+ * scale. Like the presets it covers the waveform and the controls, its
+ * buttons where theirs are, and leaves what is played on below it, so a
+ * key can be tried on the pads while it is chosen.
  */
 export function SurfacePicker({
   settings,
@@ -104,6 +105,13 @@ export function SurfacePicker({
         <p className="px-1 text-[13px] leading-snug text-zinc-500">
           Keys play every note. Pads play the notes of one key: choose Pads,
           then its root and scale. Wheel stands the mod wheel at their left.
+        </p>
+      )}
+      {settings.kind === 'xy' && (
+        <p className="px-1 text-[13px] leading-snug text-zinc-500">
+          XY plays a note under each finger: across, its pitch, gliding with no
+          steps between the lines; up, its Slide, for what a route from Slide
+          moves. Wheel stands the mod wheel at its left.
         </p>
       )}
       {settings.kind === 'pads' && (

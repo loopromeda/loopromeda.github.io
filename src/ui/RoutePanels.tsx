@@ -71,7 +71,7 @@ export function RoutesFrom({
             aria-label="Route from"
             value={source}
             onChange={(event) => onSource(event.target.value)}
-            className="h-7 max-w-24 min-w-0 shrink-0 rounded-md bg-white/[0.08] px-1.5 text-[13px] font-semibold text-sky-100"
+            className="select-chevron h-7 max-w-24 min-w-0 shrink-0 truncate rounded-md bg-white/[0.08] pr-6 pl-2.5 text-[13px] font-semibold text-sky-100"
           >
             {sources(sound).map((each) => (
               <option key={each.id} value={each.id}>
@@ -222,7 +222,7 @@ export function RoutesInto({
                       })
                     )
                   }
-                  className="h-7 w-full min-w-0 rounded-md bg-black/35 px-1.5 text-[11px] text-zinc-200"
+                  className="select-chevron h-7 w-full min-w-0 truncate rounded-md bg-black/35 pr-6 pl-2 text-[11px] text-zinc-200"
                 >
                   <option value="">No via</option>
                   {all

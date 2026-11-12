@@ -48,6 +48,12 @@ const SMOOTHING = 0.005
  * step too big to pass for smooth at SMOOTHING
  */
 const WHEEL_SMOOTHING = 0.012
+/**
+ * Seconds a bent note's pitch takes to follow its finger (95% of the way):
+ * long enough to smooth a touch's steps, a frame apart, short enough to
+ * feel at once
+ */
+const BEND_TIME = 0.03
 /** Work buffer length; longer blocks render in chunks of it */
 const CHUNK = 128
 /**
@@ -93,9 +99,10 @@ export class ChainSynth {
   #lastNote = Number.NaN
   /** Glide time in seconds, 0 for none */
   #glideTime = 0
-  /** Mono play's held keys, oldest first, with their notes */
+  /** Mono play's held keys, oldest first, with their notes, and bent */
   readonly #keys = new Float64Array(STACK)
   readonly #notes = new Float64Array(STACK)
+  readonly #bent = new Float64Array(STACK)
   readonly #velocities = new Float64Array(STACK)
   readonly #slides = new Float64Array(STACK)
   #held = 0
@@ -122,6 +129,7 @@ export class ChainSynth {
     smoothers(MAX_ROUTES, 0, this.#amounts)
     this.#wheel = new Smoother(sampleRate, WHEEL_SMOOTHING, 0)
     this.#smoothers.push(this.#wheel)
+    this.#settings.bendCoef = 1 - Math.exp(-3 / (BEND_TIME * sampleRate))
   }
 
   /**
@@ -406,6 +414,56 @@ export class ChainSynth {
   }
 
   /**
+   * key's finger moved its note to note (a MIDI number, between semitones
+   * too: the XY pad), which it bends to, a glide under way carrying on
+   * beneath; a key not held bends nothing. A note played next glides from
+   * there.
+   */
+  bend(key: number, note: number): void {
+    if (!Number.isFinite(note)) return
+    if (this.#mode === POLY) {
+      const index = this.#allocator.voiceOf(key)
+      if (index < 0) return
+      ;(this.#voices[index] as ChainVoice).bend(note)
+      this.#lastNote = note
+      return
+    }
+    const at = this.#find(key)
+    if (at < 0) return
+    this.#bent[at] = note
+    if (at !== this.#held - 1) return
+    ;(this.#voices[0] as ChainVoice).bend(note)
+    this.#lastNote = note
+  }
+
+  /**
+   * The notes held still gliding, into keys and amounts (as many as they
+   * have room for): each one's key, and how far its note has still to
+   * glide, in semitones, its bend left out. Returns how many.
+   */
+  glides(keys: Float64Array, amounts: Float64Array): number {
+    const room = Math.min(keys.length, amounts.length)
+    if (this.#mode !== POLY) {
+      if (this.#held === 0 || room === 0) return 0
+      const amount = (this.#voices[0] as ChainVoice).gliding
+      if (amount === 0) return 0
+      keys[0] = this.#keys[this.#held - 1] as number
+      amounts[0] = amount
+      return 1
+    }
+    let count = 0
+    for (let i = 0; i < this.#voices.length && count < room; i++) {
+      if (!this.#allocator.held(i)) continue
+      const amount = (this.#voices[i] as ChainVoice).gliding
+      if (amount === 0) continue
+      keys[count] = this.#allocator.keyOf(i)
+      amounts[count] = amount
+      count++
+    }
+    return count
+  }
+
+  /**
    * The mod wheel beside the keys, 0..1 (clamped; NaN reads as 0): the
    * Wheel source of every note, playing or to come
    */
@@ -646,6 +704,7 @@ export class ChainSynth {
     const top = this.#held++
     this.#keys[top] = key
     this.#notes[top] = note
+    this.#bent[top] = note
     this.#velocities[top] = velocity
     this.#slides[top] = 0
     const voice = this.#voices[0] as ChainVoice
@@ -672,9 +731,11 @@ export class ChainSynth {
     }
     const top = this.#held - 1
     const note = this.#notes[top] as number
+    const bent = this.#bent[top] as number
     voice.move(note, this.#velocities[top] as number, this.#mode === MONO)
+    if (bent !== note) voice.bend(bent)
     voice.slide = this.#slides[top] as number
-    this.#lastNote = note
+    this.#lastNote = bent
   }
 
   /** Where key sits in the mono stack, or -1 */
@@ -688,6 +749,7 @@ export class ChainSynth {
   #removeAt(at: number): void {
     this.#keys.copyWithin(at, at + 1, this.#held)
     this.#notes.copyWithin(at, at + 1, this.#held)
+    this.#bent.copyWithin(at, at + 1, this.#held)
     this.#velocities.copyWithin(at, at + 1, this.#held)
     this.#slides.copyWithin(at, at + 1, this.#held)
     this.#held--

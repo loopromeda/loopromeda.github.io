@@ -162,6 +162,11 @@ export class ChainSettings {
   ampVelocity = 0.5
   /** The pitch glide's one-pole coefficient per sample; 1 jumps */
   glideCoef = 1
+  /**
+   * A bend's (bend()), on top of the glide: a finger moving the pitch, which
+   * leaves a glide under way to carry on
+   */
+  bendCoef = 1
 
   // Routes
   routeCount = 0
@@ -260,8 +265,16 @@ export class ChainVoice {
    * module runner an import read is a getter call).
    */
   readonly #note0Step: number
-  /** The note played, a MIDI number, and the pitch gliding towards it */
+  /**
+   * The note played, a MIDI number (between semitones too), and the note's
+   * own pitch gliding towards it at the glide's pace. A bend moves the
+   * pitch from there, at its own pace: bend gliding to bendTarget,
+   * semitones. pitch is what sounds, the two added up.
+   */
   #note = 0
+  #base = 0
+  #bend = 0
+  #bendTarget = 0
   #pitch = 0
   #velocity = 0
   /** This note's Random source, -1..1 */
@@ -271,6 +284,8 @@ export class ChainVoice {
   #nextNote = 0
   #nextVelocity = 0
   #nextFrom = 0
+  /** The bend of the note waiting, from its note, semitones */
+  #nextBend = 0
 
   /**
    * seed tells this voice's noise and random numbers from the others' (same
@@ -305,6 +320,19 @@ export class ChainVoice {
     return this.#amp.active || this.#waiting
   }
 
+  /**
+   * How far the note has still to glide, in semitones: the note less its
+   * own pitch, the bend left out; 0 once it has landed, and for a voice
+   * silent
+   */
+  get gliding(): number {
+    if (this.#waiting) {
+      const left = this.#nextNote - this.#nextFrom
+      return Number.isFinite(left) ? left : 0
+    }
+    return this.#amp.active ? this.#note - this.#base : 0
+  }
+
   /** The finger's slide on its key, -1..1: the Slide source glides to it */
   set slide(value: number) {
     this.#slide.target = value
@@ -320,6 +348,7 @@ export class ChainVoice {
       this.#nextNote = note
       this.#nextVelocity = velocity
       this.#nextFrom = from
+      this.#nextBend = 0
       this.#amp.choke()
     } else {
       this.#begin(note, velocity, from)
@@ -327,8 +356,23 @@ export class ChainVoice {
   }
 
   /**
-   * Moves a sounding voice to another note (mono play): the pitch glides
-   * from where it is. retrigger restarts the envelopes and LFOs from their
+   * Bends the note to note (a MIDI number, between semitones too): the
+   * pitch follows it at the bend's pace, and nothing restarts. A glide
+   * under way carries on beneath it, to the note bent. A note waiting to
+   * start bends once it starts.
+   */
+  bend(note: number): void {
+    if (this.#waiting) {
+      this.#nextBend = note - this.#nextNote
+      return
+    }
+    this.#bendTarget = note - this.#note
+  }
+
+  /**
+   * Moves a sounding voice to another note (mono play), not bent: the
+   * pitch glides from where it is, a bend going at its own pace.
+   * retrigger restarts the envelopes and LFOs from their
    * current levels, with the new velocity; otherwise everything carries on
    * (legato). A silent voice starts the note instead.
    */
@@ -336,12 +380,17 @@ export class ChainVoice {
     if (this.#waiting) {
       this.#nextNote = note
       this.#nextVelocity = velocity
+      this.#nextBend = 0
       return
     }
     if (!this.#amp.active) {
       this.#begin(note, velocity, this.#pitch)
       return
     }
+    // The glide starts from the pitch sounding, bend and all
+    this.#base = this.#pitch
+    this.#bend = 0
+    this.#bendTarget = 0
     this.#note = note
     if (!retrigger) return
     this.#velocity = velocity
@@ -374,6 +423,7 @@ export class ChainVoice {
     if (this.#waiting && !this.#amp.active) {
       this.#waiting = false
       this.#begin(this.#nextNote, this.#nextVelocity, this.#nextFrom)
+      this.#bendTarget = this.#nextBend
     }
     if (!this.#amp.active) return
     const settings = this.#settings
@@ -431,7 +481,8 @@ export class ChainVoice {
       velocity.fill(this.#velocity, 0, length)
     }
     if (used[SOURCE_KEY] === 1) {
-      const key = (this.#note - KEY_CENTER) / KEY_SPAN
+      // The note bent, where the finger is
+      const key = (this.#note + this.#bendTarget - KEY_CENTER) / KEY_SPAN
       ;(sources[SOURCE_KEY] as Float32Array).fill(key, 0, length)
     }
     if (used[SOURCE_SLIDE] === 1) {
@@ -486,21 +537,34 @@ export class ChainVoice {
   }
 
   /**
-   * Moves the pitch towards the note over [0, length), into the settings'
-   * glide buffer; false (and nothing written) while it sits on the note
+   * Moves the pitch over [0, length), into the settings' glide buffer: the
+   * note's own towards the note at the glide's pace, the bend towards its
+   * target at the bend's; false (and nothing written) while both sit still
    */
   #glide(length: number): boolean {
-    const target = this.#note
-    let pitch = this.#pitch
-    if (pitch === target) return false
-    const coefficient = this.#settings.glideCoef
-    const glide = this.#settings.glide
+    const note = this.#note
+    const target = this.#bendTarget
+    let base = this.#base
+    let bend = this.#bend
+    if (base === note && bend === target) return false
+    const settings = this.#settings
+    const glideCoef = settings.glideCoef
+    const bendCoef = settings.bendCoef
+    const glide = settings.glide
     for (let i = 0; i < length; i++) {
-      pitch += (target - pitch) * coefficient
-      if (Math.abs(target - pitch) < GLIDE_LAND) pitch = target
-      glide[i] = pitch
+      if (base !== note) {
+        base += (note - base) * glideCoef
+        if (Math.abs(note - base) < GLIDE_LAND) base = note
+      }
+      if (bend !== target) {
+        bend += (target - bend) * bendCoef
+        if (Math.abs(target - bend) < GLIDE_LAND) bend = target
+      }
+      glide[i] = base + bend
     }
-    this.#pitch = pitch
+    this.#base = base
+    this.#bend = bend
+    this.#pitch = base + bend
     return true
   }
 
@@ -771,7 +835,10 @@ export class ChainVoice {
 
   #begin(note: number, velocity: number, from: number): void {
     this.#note = note
-    this.#pitch = Number.isFinite(from) ? from : note
+    this.#base = Number.isFinite(from) ? from : note
+    this.#bend = 0
+    this.#bendTarget = 0
+    this.#pitch = this.#base
     this.#velocity = velocity
     this.#gain.target = 1 - this.#settings.ampVelocity * (1 - velocity) || 0
     this.#gain.snap()

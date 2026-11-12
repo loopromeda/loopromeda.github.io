@@ -3,7 +3,7 @@
  * each computer key holds one. Lights the key or pad elements directly, so
  * a press never re-renders React. A touch also keeps the velocity it
  * pressed with and where it pressed, from which its surface works out the
- * finger's Slide as it moves.
+ * finger's Slide as it moves; on the XY pad, it bends its note as well.
  */
 
 /** The part of the engine that plays notes */
@@ -11,12 +11,15 @@ export interface Player {
   noteOn(id: number, note: number, velocity: number): void
   noteOff(id: number): void
   slide(id: number, value: number): void
+  bend(id: number, note: number): void
 }
 
 /** Computer keys' ids are this and below, below any pointerId */
 export const COMPUTER_ID = -1000
 /** A Slide change smaller than this is not worth a message */
 const SLIDE_STEP = 1 / 256
+/** Nor a bend smaller than this, in semitones (under a cent) */
+const BEND_STEP = 1 / 128
 
 export class Hands {
   readonly #player: Player
@@ -26,6 +29,8 @@ export class Hands {
   readonly #velocities = new Map<number, number>()
   readonly #starts = new Map<number, number>()
   readonly #slides = new Map<number, number>()
+  /** Where each touch bent its note to, since it pressed */
+  readonly #bends = new Map<number, number>()
   /** How many ids hold each note: two fingers can share a key */
   readonly #counts = new Map<number, number>()
   /** The key or pad elements on screen, by note */
@@ -77,6 +82,17 @@ export class Hands {
     }
   }
 
+  /**
+   * A touch's finger moved its note to note, between semitones too (the
+   * XY pad): the note it pressed bends there, and stays itself
+   */
+  bend(id: number, note: number): void {
+    const from = this.#bends.get(id) ?? this.#notes.get(id)
+    if (from === undefined || Math.abs(note - from) < BEND_STEP) return
+    this.#bends.set(id, note)
+    this.#player.bend(id, note)
+  }
+
   /** id lets go */
   stop(id: number): void {
     const was = this.#notes.get(id)
@@ -85,6 +101,7 @@ export class Hands {
     this.#velocities.delete(id)
     this.#starts.delete(id)
     this.#slides.delete(id)
+    this.#bends.delete(id)
     this.#light(was, -1)
     this.#player.noteOff(id)
   }

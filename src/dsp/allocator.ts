@@ -73,6 +73,11 @@ export class VoiceAllocator {
     return index
   }
 
+  /** The key holding voice index, while one holds it (held) */
+  keyOf(index: number): number {
+    return this.#key[index] as number
+  }
+
   /** The voice key holds, or -1 if it holds none */
   voiceOf(key: number): number {
     for (let i = 0; i < this.#voices.length; i++) {

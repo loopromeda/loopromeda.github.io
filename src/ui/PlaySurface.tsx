@@ -28,23 +28,39 @@ import {
   whitesAbove,
 } from '../viz/keyboard'
 import { padGrid, padNote, type PadGrid } from '../viz/pads'
+import { xyOctaves } from '../viz/xy'
 import { COMPUTER_ID, Hands } from './hands'
 import { IconButton } from './IconButton'
 import { Keys } from './Keys'
 import { KeysNavigator } from './KeysNavigator'
 import { Pads } from './Pads'
+import { XyPad } from './XyPad'
 
-/** The pads' lowest note is in octave 1 or higher, their highest C8 or lower */
+/**
+ * The pads' and the XY pad's lowest note is in octave 1 or higher, their
+ * highest C8 or lower
+ */
 const LOWEST = 1
 const TOP = 8
 /**
  * Where each surface starts: the keys where keysPlace stands them, moved
  * no white keys, the pads (two octaves and more of them) on the root in
- * octave 3. Each keeps its own place.
+ * octave 3, the XY pad on C3. Each keeps its own place.
  */
-const STARTS: Readonly<Record<SurfaceKind, number>> = { keys: 0, pads: 3 }
-/** What the arrows and Z and X move: the keys 7 white keys, the pads 1 */
-const OCTAVE: Readonly<Record<SurfaceKind, number>> = { keys: 7, pads: 1 }
+const STARTS: Readonly<Record<SurfaceKind, number>> = {
+  keys: 0,
+  pads: 3,
+  xy: 3,
+}
+/**
+ * What the arrows and Z and X move: the keys 7 white keys, the pads and the
+ * XY pad an octave
+ */
+const OCTAVE: Readonly<Record<SurfaceKind, number>> = {
+  keys: 7,
+  pads: 1,
+  xy: 1,
+}
 /**
  * From this width of the header (CSS px) the keys' navigator stands in it,
  * between the patch and the arrows: room for it at its least (10rem), the
@@ -117,27 +133,33 @@ const typing = (target: EventTarget | null): boolean =>
 interface Fit {
   octaves: number
   grid: PadGrid
+  /** The XY pad's octaves across */
+  xy: number
   /** Whether the header has room for the keys' navigator */
   wide: boolean
 }
 
 const sameFit = (a: Fit, b: Fit) =>
   a.octaves === b.octaves &&
+  a.xy === b.xy &&
   a.grid.columns === b.grid.columns &&
   a.grid.rows === b.grid.rows &&
   a.wide === b.wide
 
 /**
- * Where notes are played, on piano keys or on pads (settings.kind), sized
- * by className in the page's column: App gives it the rest, at most the
- * keys' length (the pads stand as tall), under what stands above them,
- * which the section holds as --play-head.
+ * Where notes are played, on piano keys, on pads or on the XY pad
+ * (settings.kind), sized by className in the page's column: App gives it
+ * the rest, at most the keys' length (the pads stand as tall), under what
+ * stands above them, which the section holds as --play-head.
  * Keys: as many octaves as fit at a finger's width (one on a phone held
  * upright, more on a wide window: keysFit), standing where keysPlace puts
  * them (one octave from middle C up, more around it); the arrows move
  * them an octave, the navigator (KeysNavigator, C1 to C8 drawn small) a
  * white key at a time. Pads: as many as fit at a fingertip's size,
  * playing the notes of settings' key; the arrows shift them an octave.
+ * The XY pad: from a C, as many octaves as fit at a semitone a finger
+ * finds (xyOctaves), a pitch with no steps across and Slide up; the
+ * arrows shift it an octave.
  * Touches go straight to the engine; React renders only the keys or pads,
  * again when they move, the key or the size changes. The header row holds
  * `start` (the patch) at its left, and at its right the octave controls
@@ -145,8 +167,8 @@ const sameFit = (a: Fit, b: Fit) =>
  * navigator stands between in a header wide enough (a phone on its side
  * too) and in a strip under it in a narrower one, where `start` takes the
  * room the rest leaves. `beside`
- * (the mod wheel) stands at the surface's left, outside what the keys and
- * pads are fitted to. Given fullVelocity, every note plays at full
+ * (the mod wheel) stands at the surface's left, outside what the keys,
+ * pads and XY pad are fitted to. Given fullVelocity, every note plays at full
  * velocity, wherever a finger lands.
  */
 export function PlaySurface({
@@ -175,30 +197,39 @@ export function PlaySurface({
   const [fit, setFit] = useState<Fit>({
     octaves: 1,
     grid: { columns: 4, rows: 4 },
+    xy: 1,
     wide: false,
   })
   const surfaceRef = useRef<HTMLDivElement>(null)
   const headerRef = useRef<HTMLDivElement>(null)
   const { kind, root, scale } = settings
   const pads = kind === 'pads'
+  const xy = kind === 'xy'
   const { grid } = fit
   const count = grid.columns * grid.rows
   // The top pad's height above the bottom one
   const span = padNote(count - 1, 0, scaleSteps(scale))
   // The keys: white keys moved from where keysPlace stands them; the pads:
-  // the octave of their lowest root
+  // the octave of their lowest root; the XY pad: of its lowest C
   const place = keysPlace(fit.octaves)
-  const lowest = pads ? LOWEST : -place.down
+  const lowest = pads || xy ? LOWEST : -place.down
   const highest = pads
     ? Math.max(Math.floor((cNote(TOP) - root - span) / 12) - 1, LOWEST)
-    : place.up
+    : xy
+      ? TOP - fit.xy
+      : place.up
   const first = Math.min(Math.max(starts[kind], lowest), highest)
-  const lowestNote = pads ? cNote(first) + root : whiteStep(place.lowest, first)
-  const highestNote = lowestNote + (pads ? span : 12 * fit.octaves)
+  const lowestNote = pads
+    ? cNote(first) + root
+    : xy
+      ? cNote(first)
+      : whiteStep(place.lowest, first)
+  const highestNote =
+    lowestNote + (pads ? span : 12 * (xy ? fit.xy : fit.octaves))
   const range = `${noteName(lowestNote)} – ${noteName(highestNote)}`
   // The navigator, for keys that do not reach C1 to C8 at once
   const whites = whiteCount(fit.octaves)
-  const navigator = !pads && whites < REACH_WHITES
+  const navigator = kind === 'keys' && whites < REACH_WHITES
   const inHeader = navigator && fit.wide
   const inStrip = navigator && !fit.wide
   const notes = useMemo(
@@ -221,6 +252,7 @@ export function PlaySurface({
       const next = {
         ...keysFit(width),
         grid: padGrid(width, height),
+        xy: xyOctaves(width),
         wide: header.getBoundingClientRect().width >= NAVIGATOR_IN_HEADER,
       }
       setFit((was) => (sameFit(was, next) ? was : next))
@@ -256,7 +288,7 @@ export function PlaySurface({
       const semitones = KEY_CODES.indexOf(code)
       return semitones < 0
         ? undefined
-        : middleC(lowestNote, fit.octaves) + semitones
+        : middleC(lowestNote, xy ? fit.xy : fit.octaves) + semitones
     }
     const down = (event: KeyboardEvent) => {
       if (event.repeat || event.metaKey || event.ctrlKey || event.altKey) return
@@ -282,7 +314,7 @@ export function PlaySurface({
       window.removeEventListener('keyup', up)
       window.removeEventListener('blur', blur)
     }
-  }, [hands, pads, notes, lowestNote, fit.octaves, shift])
+  }, [hands, pads, xy, notes, lowestNote, fit.octaves, fit.xy, shift])
 
   const keysNavigator = (className: string) => (
     <KeysNavigator
@@ -353,6 +385,14 @@ export function PlaySurface({
               root={root}
               fullVelocity={fullVelocity}
               label={`Pads ${range} in ${pitchName(root)} ${scaleName(scale)}. Computer keys A to ; and Q to P play them; Z and X shift the octave`}
+            />
+          ) : xy ? (
+            <XyPad
+              hands={hands}
+              watchGlides={engine.watchGlides}
+              lowest={lowestNote}
+              octaves={fit.xy}
+              label={`XY pad ${range}: across, a note's pitch with no steps; up, its Slide. Computer keys A to K play notes; Z and X shift it an octave`}
             />
           ) : (
             <Keys

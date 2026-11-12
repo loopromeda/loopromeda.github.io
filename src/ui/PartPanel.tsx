@@ -1038,7 +1038,7 @@ function RefPicker({
         const to = event.target.value || null
         engine.edit((sound) => setRef(sound, input, refName, to))
       }}
-      className="h-7 max-w-28 min-w-0 rounded-md bg-white/[0.08] px-2 text-[11px] font-semibold text-zinc-200"
+      className="select-chevron h-7 max-w-28 min-w-0 truncate rounded-md bg-white/[0.08] pr-6 pl-2.5 text-[11px] font-semibold text-zinc-200"
     >
       <option value="">{label}: none</option>
       {sound.inputs.map((other) => (

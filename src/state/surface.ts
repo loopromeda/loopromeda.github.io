@@ -1,14 +1,17 @@
 /**
- * The playing surface's settings: whether the keyboard area plays piano keys
- * or a grid of pads, the key the pads play in (a root and a scale), whether
- * the mod wheel stands beside them, and whether the sound's controls above
- * it are put away to give it room.
+ * The playing surface's settings: whether the keyboard area plays piano
+ * keys, a grid of pads or an XY pad, the key the pads play in (a root and
+ * a scale), whether the mod wheel stands beside them, and whether the
+ * sound's controls above it are put away to give it room.
  * These belong to the player rather than to a preset, so they are kept
  * apart from the sound.
  */
 
-/** What the keyboard area plays on: piano keys, or a grid of pads */
-export const SURFACE_KINDS = ['keys', 'pads'] as const
+/**
+ * What the keyboard area plays on: piano keys, a grid of pads, or an XY
+ * pad (a pitch across with no steps, Slide up)
+ */
+export const SURFACE_KINDS = ['keys', 'pads', 'xy'] as const
 export type SurfaceKind = (typeof SURFACE_KINDS)[number]
 
 /** One scale: a name to show and its steps above the root */

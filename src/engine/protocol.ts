@@ -1,7 +1,8 @@
 /**
  * What the two threads say to each other over the worklet's port: intents
- * to the audio thread, and back its load twice a second and the answer to
- * a measurement asked for by hand. Shared by src/engine (DOM) and
+ * to the audio thread, and back its load twice a second, the notes still
+ * gliding while the page watches them, and the answer to a measurement
+ * asked for by hand. Shared by src/engine (DOM) and
  * src/worklet (AudioWorkletGlobalScope), so it stays free of either: plain
  * data only.
  */
@@ -18,8 +19,12 @@ export type ToWorklet =
   | { t: 'noteOff'; id: number }
   /** That touch's finger slid up its key (or down, below 0), -1..1 */
   | { t: 'slide'; id: number; value: number }
+  /** That touch's finger bent its note to note, between semitones too */
+  | { t: 'bend'; id: number; note: number }
   /** The mod wheel beside the keys moved, to 0..1 */
   | { t: 'wheel'; value: number }
+  /** Report the notes held still gliding (GlideReport), or stop */
+  | { t: 'watchGlides'; on: boolean }
   /**
    * The whole sound (src/state/sound): a new one, one whose structure
    * changed, or catching a new worklet up
@@ -72,5 +77,22 @@ export interface LoadReport {
   readonly voices: number
 }
 
+/**
+ * The notes held still gliding (ChainSynth.glides), GLIDE_REPORTS times a
+ * second while the page watches them, and once more as the last lands:
+ * the first count of keys (touch ids), and how far each one's note has
+ * still to glide, in semitones, its bend left out
+ */
+export interface GlideReport {
+  readonly count: number
+  readonly keys: Float64Array
+  readonly amounts: Float64Array
+}
+
+/** How often the glides are reported: about a display's frame rate */
+export const GLIDE_REPORTS = 60
+
 export type FromWorklet =
-  ({ t: 'bench' } & BenchReport) | ({ t: 'load' } & LoadReport)
+  | ({ t: 'bench' } & BenchReport)
+  | ({ t: 'load' } & LoadReport)
+  | ({ t: 'glides' } & GlideReport)

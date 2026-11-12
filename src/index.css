@@ -83,6 +83,21 @@ body {
 }
 
 /*
+ * A small select in a panel: no native arrow, whose room differs from one
+ * browser to the next, but a chevron of its own, 0.5rem in from its right
+ * (the class keeps room for it: pr-6), and as wide as the option chosen
+ * where the browser can size it so, not as the widest
+ */
+@utility select-chevron {
+  appearance: none;
+  field-sizing: content;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23a1a1aa' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.5rem center;
+  background-size: 0.625rem 0.375rem;
+}
+
+/*
  * Frosted glass, for what stands over the sound's graph (the editor's
  * panel, SoundEditor.tsx): the card face, letting a little through, and
  * the canvas under it blurred. Nothing more (ashon, 2026-11-12: a hue, a

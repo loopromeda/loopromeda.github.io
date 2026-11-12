@@ -125,6 +125,8 @@ describe('readSurface', () => {
     expect(readSurface(shown)).toEqual({ ...good, hideControls: false })
     const wheel = storageWith(JSON.stringify({ ...good, wheel: 0 }))
     expect(readSurface(wheel)).toEqual({ ...good, wheel: true })
+    const xy = storageWith(JSON.stringify({ ...good, kind: 'xy' }))
+    expect(readSurface(xy)).toEqual({ ...good, kind: 'xy' })
   })
 
   it('defaults a root that is out of range or not a whole number', () => {
