@@ -13,6 +13,7 @@
     "noEmit": true
   },
   "include": ["src"],
-  // The audio thread has its own globals (tsconfig.worklet.json)
-  "exclude": ["src/worklet"]
+  // The audio thread and the service worker have their own globals
+  // (tsconfig.worklet.json, tsconfig.sw.json)
+  "exclude": ["src/worklet", "src/sw"]
 }

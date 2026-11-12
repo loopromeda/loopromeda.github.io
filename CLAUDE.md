@@ -12,12 +12,13 @@ modulators, under way: `docs/plan/sound-chains.md`. What real devices did:
 pnpm dev            # Vite on 127.0.0.1:5173 (this machine only)
 pnpm dev:tailnet    # same, plus https://<machine>.<tailnet>.ts.net:5173 for phones
 pnpm tailnet:off    # stop serving 5173 to the tailnet
-pnpm typecheck      # tsc: app, audio thread (tsconfig.worklet.json), configs
+pnpm typecheck      # tsc: app, audio thread, service worker, configs
 pnpm lint           # eslint
 pnpm format:check   # prettier (pnpm format to fix)
 pnpm test           # vitest, once
 pnpm bench          # render-time budget: every voice, one 128-frame block
 pnpm build          # typecheck + vite build into dist/
+pnpm preview        # dist/ on 127.0.0.1:4173: the offline copy, which dev lacks
 ```
 
 Before calling a change done: `pnpm typecheck && pnpm lint && pnpm format:check && pnpm test`.
@@ -56,6 +57,11 @@ src/worklet/  the AudioWorkletProcessor around src/dsp; own globals and
               sound.ts loads a sound document onto the ChainSynth and
               sets its knobs one by one (Node-testable); load.ts the
               share of its time the synth takes, for the status line
+src/sw/       the service worker (own globals, tsconfig.sw.json): keeps
+              what the build ships for offline, a new version waiting
+              for Update; offline.ts registers it (builds only) and
+              tells its state; wakeLock.ts keeps the screen on while the
+              audio runs
 src/engine/   AudioContext lifecycle, unlock, node wiring; the sound,
               held here and edited, sent whole or as the knobs that
               moved; protocol.ts is the message types both threads share
@@ -97,8 +103,11 @@ src/ui/       React components; SoundEditor.tsx the sound as tiles
               closes it; controls.ts the shared sizes and the card every
               panel stands on
 scripts/      dev tooling: tailnet.sh, the device-report Vite plugin,
-              and vite-licences.ts, which gathers LICENSE and the
-              licences of what the site ships into licences.txt
+              vite-licences.ts, which gathers LICENSE and the licences
+              of what the site ships into licences.txt, vite-offline.ts,
+              which builds sw.js and lists in it everything else the
+              build ships, and icons.ts, which draws public/'s icons
+public/       copied beside index.html: the manifest and the icons
 ```
 
 Dev-only device reports: every page load, every audio state change and,

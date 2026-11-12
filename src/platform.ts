@@ -25,6 +25,8 @@ export function readPlatform(): PlatformReport {
       'Audio Session API': 'audioSession' in navigator,
       'Web MIDI': 'requestMIDIAccess' in navigator,
       'Screen Wake Lock': 'wakeLock' in navigator,
+      // Keeps the site to start and play offline (src/sw/sw.ts)
+      'Service Worker': 'serviceWorker' in navigator,
     },
   }
 }

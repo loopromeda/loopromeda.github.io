@@ -479,8 +479,32 @@ dragging knobs during notes.
   - [ ] iOS: Safari clears script-written storage after seven days
         without a visit, home-screen apps excepted; Export is the backup.
         Check `persist()` and the file share on an iPhone.
-- [ ] `vite-plugin-pwa`: manifest, icons, offline cache
-- [ ] Screen Wake Lock while the instrument is open (feature-detected)
+- [x] Manifest, icons, offline cache, 2026-11-12. Not `vite-plugin-pwa`:
+      Workbox's build brings a large tree of build tools for what a page
+      of code does here. `public/manifest.webmanifest` (standalone, any
+      orientation, the page's #0b0b10), the icons drawn by
+      `scripts/icons.ts` (asked for by ashon: an infinity leaning at 45
+      degrees, an 8 tipped over, its loops rounded squares, one bold
+      stroke crossing over itself, green on black, shading a little from
+      emerald-300 to 600; a maskable one for Android, an apple-touch-icon
+      for iOS, and a 32 px favicon.ico beside the SVG favicon for browsers
+      that take no SVG).
+      `scripts/vite-offline.ts` builds `src/sw/sw.ts` into `sw.js` and
+      writes into it every other file the build ships (public/ and
+      licences.txt too) and a hash of them all as its version. The worker
+      saves them all or none, past the HTTP cache, and serves them, and
+      index.html for the site's address. A new version waits rather than
+      taking over a page being played: the status line shows Update
+      (`src/offline.ts`), which reloads onto it, and Settings, Browser
+      says whether the site is saved. The dev server registers none.
+      Checked in desktop Chrome on `pnpm preview`: saved 14 files, then
+      with the server stopped a reload started, played (the worklet from
+      the cache) and opened licences.txt; a new build showed Update, which
+      reloaded onto it (#/settings kept) and dropped the old cache.
+- [x] Screen Wake Lock while the audio runs, 2026-11-12 (`src/wakeLock.ts`):
+      asked for again when the page comes back to the front, where the
+      browser let it go. Settings, Playing: Keep screen on (on by
+      default). To be seen on the Fold: the screen no longer dims.
 
 **Exit:** installs to the home screen, works offline, presets survive reloads.
 

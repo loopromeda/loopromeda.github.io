@@ -36,6 +36,8 @@ export interface AppSettings {
   readonly audioDetails: boolean
   /** The waveform shows what a frame costs to draw */
   readonly waveformTiming: boolean
+  /** The screen stays on while the audio runs (src/wakeLock.ts) */
+  readonly keepAwake: boolean
 }
 
 /** The whole synth at once, the lowest delay, everything shown */
@@ -46,6 +48,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   velocity: 'touch',
   audioDetails: true,
   waveformTiming: true,
+  keepAwake: true,
 }
 
 /** Where the settings are kept */
@@ -78,15 +81,23 @@ export function readSettings(storage?: SettingsStorage): AppSettings {
     return { ...DEFAULT_SETTINGS }
   }
 
-  const { voices, latency, waveform, velocity, audioDetails, waveformTiming } =
-    saved as {
-      voices: unknown
-      latency: unknown
-      waveform: unknown
-      velocity: unknown
-      audioDetails: unknown
-      waveformTiming: unknown
-    }
+  const {
+    voices,
+    latency,
+    waveform,
+    velocity,
+    audioDetails,
+    waveformTiming,
+    keepAwake,
+  } = saved as {
+    voices: unknown
+    latency: unknown
+    waveform: unknown
+    velocity: unknown
+    audioDetails: unknown
+    waveformTiming: unknown
+    keepAwake: unknown
+  }
   return {
     voices: isVoiceLimit(voices) ? voices : DEFAULT_SETTINGS.voices,
     latency: isLatency(latency) ? latency : DEFAULT_SETTINGS.latency,
@@ -101,6 +112,8 @@ export function readSettings(storage?: SettingsStorage): AppSettings {
       typeof waveformTiming === 'boolean'
         ? waveformTiming
         : DEFAULT_SETTINGS.waveformTiming,
+    keepAwake:
+      typeof keepAwake === 'boolean' ? keepAwake : DEFAULT_SETTINGS.keepAwake,
   }
 }
 
@@ -124,6 +137,7 @@ export function writeSettings(
         velocity: settings.velocity,
         audioDetails: settings.audioDetails,
         waveformTiming: settings.waveformTiming,
+        keepAwake: settings.keepAwake,
       })
     )
   } catch {

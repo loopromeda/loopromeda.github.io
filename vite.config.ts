@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 import { deviceReport } from './scripts/vite-device-report.ts'
 import { licences } from './scripts/vite-licences.ts'
+import { offline } from './scripts/vite-offline.ts'
 
 export default defineConfig({
   // GitHub Pages serves the site at the root of loopromeda.github.io
@@ -15,6 +16,9 @@ export default defineConfig({
     // licences.txt: ours, and those of what the site ships. Tailwind's
     // preflight lands in the stylesheet.
     licences({ title: 'Loopromeda', also: ['tailwindcss'] }),
+    // sw.js: the service worker, holding what the build ships, to play
+    // offline
+    offline({ worker: 'src/sw/sw.ts' }),
   ],
   server: {
     // Phones reach this server over the tailnet: `tailscale serve`

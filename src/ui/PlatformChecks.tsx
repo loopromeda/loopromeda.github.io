@@ -5,6 +5,7 @@ const hints: Record<string, string> = {
   'Audio Session API': 'iOS only: Android has no silent-switch mute',
   'Web MIDI': 'Not in iOS Safari; MIDI stays optional',
   'Screen Wake Lock': 'Optional: keeps the screen on while playing',
+  'Service Worker': 'Without it the site needs the network to start',
 }
 
 /**

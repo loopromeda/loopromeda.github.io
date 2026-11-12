@@ -9,6 +9,7 @@ import {
 } from 'react'
 import type { Engine } from '../engine/engine'
 import type { BenchReport } from '../engine/protocol'
+import type { OfflineState } from '../offline'
 import type { PlatformReport } from '../platform'
 import {
   VOICE_LIMITS,
@@ -57,13 +58,17 @@ const SOURCE = 'https://github.com/loopromeda/loopromeda.github.io'
  * Debug holds Measure CPU: the audio thread times the heaviest sound at 8
  * to 32 voices, to choose Voices by. onBench gets its results too (the dev
  * server keeps them in device-reports.jsonl). Browser lists what this
- * browser offers the synth. About says whose it is, and opens the
- * licences (licences.txt, scripts/vite-licences.ts) and the source.
+ * browser offers the synth, and whether the site is saved to play offline
+ * (src/offline.ts), with the update when a newer version waits. About
+ * says whose it is, and opens the licences (licences.txt,
+ * scripts/vite-licences.ts) and the source.
  */
 export function SettingsDialog({
   engine,
   platform,
   settings,
+  offline,
+  onUpdate,
   onChange,
   onClose,
   onBench,
@@ -71,6 +76,10 @@ export function SettingsDialog({
   engine: Engine
   platform: PlatformReport
   settings: AppSettings
+  /** Where the site's offline copy stands */
+  offline: OfflineState
+  /** Reloads the page onto the version waiting */
+  onUpdate: () => void
   onChange: (settings: AppSettings) => void
   onClose: () => void
   onBench?: (report: BenchReport) => void
@@ -168,6 +177,17 @@ export function SettingsDialog({
             value={settings.velocity}
             onChange={(velocity) => set({ velocity })}
           />
+          <Choice
+            label="Keep screen on"
+            hint={
+              platform.checks['Screen Wake Lock']
+                ? 'While the audio runs and this page is in front.'
+                : 'This browser cannot keep the screen on: it dims as usual.'
+            }
+            options={ON_OFF}
+            value={settings.keepAwake}
+            onChange={(keepAwake) => set({ keepAwake })}
+          />
         </Group>
 
         <Group title="Debug">
@@ -188,6 +208,7 @@ export function SettingsDialog({
 
         <Group title="Browser">
           <PlatformChecks platform={platform} />
+          <OfflineRow state={offline} onUpdate={onUpdate} />
         </Group>
 
         <Group title="About">
@@ -295,6 +316,63 @@ function Choice<T extends string | number | boolean>({
           </button>
         ))}
       </div>
+    </Row>
+  )
+}
+
+/** The offline copy's state, as the row reads it */
+const OFFLINE_LABELS: Readonly<Record<OfflineState, string>> = {
+  off: 'off',
+  saving: 'saving…',
+  ready: 'ready',
+  update: 'ready',
+}
+
+const OFFLINE_HINTS: Readonly<Record<OfflineState, string>> = {
+  off: 'A build served over HTTPS saves itself in the browser; this page is not saved, so it needs the network to start.',
+  saving: 'Saving the site in the browser, to start and play with no network.',
+  ready:
+    'Saved in the browser: it starts and plays with no network. A new version is saved as it comes, and waits for Update.',
+  update:
+    'A new version is saved. Update reloads the page onto it; the sound and this view come back.',
+}
+
+/**
+ * Whether the site is saved to play offline, and once a newer version
+ * waits, the update
+ */
+function OfflineRow({
+  state,
+  onUpdate,
+}: {
+  state: OfflineState
+  onUpdate: () => void
+}) {
+  const id = useId()
+  return (
+    <Row
+      label="Offline"
+      labelId={`${id}-label`}
+      hint={OFFLINE_HINTS[state]}
+      hintId={`${id}-hint`}
+      live
+    >
+      {state === 'update' ? (
+        <button
+          type="button"
+          aria-describedby={`${id}-hint`}
+          onClick={onUpdate}
+          className={BUTTON}
+        >
+          Update
+        </button>
+      ) : (
+        <span
+          className={`text-[13px] ${state === 'ready' ? 'text-emerald-400' : 'text-zinc-500'}`}
+        >
+          {OFFLINE_LABELS[state]}
+        </span>
+      )}
     </Row>
   )
 }

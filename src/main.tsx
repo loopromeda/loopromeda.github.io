@@ -5,18 +5,34 @@ import { App } from './App'
 import { Engine } from './engine/engine'
 import type { BenchReport } from './engine/protocol'
 import './index.css'
+import { Offline } from './offline'
 import { readPlatform, sendReport } from './platform'
 import { FACTORY_PRESETS } from './state/factory'
 import { Library } from './state/library'
 import { readSettings } from './state/settings'
 import { touchHeld } from './ui/held'
 import type { ScopeStats } from './ui/Scope'
+import { ScreenAwake } from './wakeLock'
 
 const root = document.getElementById('root')
 if (!root) throw new Error('index.html has no #root')
 
 const platform = readPlatform()
 const engine = new Engine()
+const awake = new ScreenAwake(
+  'wakeLock' in navigator ? navigator.wakeLock : undefined,
+  document
+)
+
+// The offline copy, in a build only: the dev server's files change under
+// it. Registered once the page has loaded, so that saving the site does
+// not compete with loading it.
+const offline = new Offline()
+if (import.meta.env.PROD) {
+  window.addEventListener('load', () => {
+    void offline.register(`${import.meta.env.BASE_URL}sw.js`)
+  })
+}
 
 /** localStorage, or none where the browser refuses it (a private window) */
 function localStore(): Storage | undefined {
@@ -112,6 +128,8 @@ createRoot(root).render(
       engine={engine}
       library={library}
       storage={storage}
+      offline={offline}
+      awake={awake}
       onScopeStats={reportScope}
       onBench={reportBench}
     />

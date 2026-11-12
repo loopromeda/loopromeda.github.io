@@ -27,6 +27,16 @@ The tailnet needs MagicDNS and HTTPS certificates enabled (Tailscale admin
 console → DNS). The very first request after that waits about half a minute
 while Tailscale obtains the certificate; later ones are instant.
 
+### Offline
+
+A build saves itself in the browser to start and play with no network (a
+service worker, `src/sw/sw.ts`); the dev server never registers one. To
+try it:
+
+```sh
+pnpm build && pnpm preview   # http://127.0.0.1:4173
+```
+
 ## Check
 
 ```sh

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
 import type { Engine } from './engine/engine'
 import type { BenchReport } from './engine/protocol'
+import type { Offline } from './offline'
 import type { PlatformReport } from './platform'
 import type { Library } from './state/library'
 import { readSettings, writeSettings, type AppSettings } from './state/settings'
@@ -23,6 +24,8 @@ import { SoundEditor } from './ui/SoundEditor'
 import { StatusBar } from './ui/StatusBar'
 import { SurfaceButton } from './ui/SurfaceButton'
 import { SurfacePicker } from './ui/SurfacePicker'
+import { UpdateButton } from './ui/UpdateButton'
+import type { ScreenAwake } from './wakeLock'
 
 const page =
   'flex h-full flex-col px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]'
@@ -63,12 +66,18 @@ const KEYS_SIZE = [
  * keeps its tile picked. Audio still waits for a tap, which browsers ask
  * for: until then a cover over it all takes the tap. Only a failure to
  * start has a page of its own.
+ *
+ * While the audio runs, the screen stays on (awake, unless the settings
+ * turn it off). A newer version of the site, once saved for offline,
+ * waits for the status line's Update.
  */
 export function App({
   platform,
   engine,
   library,
   storage,
+  offline,
+  awake,
   onScopeStats,
   onBench,
 }: {
@@ -77,12 +86,20 @@ export function App({
   library: Library
   /** Where the choice of keys or pads, and the settings, are kept */
   storage?: SurfaceStorage
+  /** The site's offline copy, and its updates */
+  offline: Offline
+  /** Keeps the screen on */
+  awake: ScreenAwake
   onScopeStats?: (stats: ScopeStats) => void
   /** Gets the results of Measure CPU, in the settings */
   onBench?: (report: BenchReport) => void
 }) {
   const snapshot = useSyncExternalStore(engine.subscribe, engine.getSnapshot)
   const { state } = snapshot
+  const offlineState = useSyncExternalStore(
+    offline.subscribe,
+    offline.getSnapshot
+  )
   const [sheet, setSheet] = useState<Sheet | null>(() => sheetOf(location.hash))
   // Back, Forward, or an address typed: the sheet it names
   useEffect(() => {
@@ -122,6 +139,9 @@ export function App({
     writeSurface(storage, next)
   }
   const [settings, setSettings] = useState(() => readSettings(storage))
+  useEffect(() => {
+    awake.want(settings.keepAwake && state === 'running')
+  }, [awake, settings.keepAwake, state])
   // Called from a click: a new latency starts the audio again, which only
   // a click may do
   const changeSettings = (next: AppSettings) => {
@@ -241,6 +261,9 @@ export function App({
         snapshot={snapshot}
         details={settings.audioDetails}
       >
+        {offlineState === 'update' && (
+          <UpdateButton onUpdate={offline.update} />
+        )}
         <SettingsButton onOpen={() => showSheet('settings')} />
       </StatusBar>
       {/* Not over the cover: the page opened at #/settings shows them once
@@ -250,6 +273,8 @@ export function App({
           engine={engine}
           platform={platform}
           settings={settings}
+          offline={offlineState}
+          onUpdate={offline.update}
           onChange={changeSettings}
           onClose={closeSheet}
           onBench={onBench}

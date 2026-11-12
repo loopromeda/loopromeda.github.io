@@ -16,8 +16,13 @@ export default defineConfig(
   {
     // The app, in the browser
     files: ['src/**'],
-    ignores: ['src/worklet/**'],
+    ignores: ['src/worklet/**', 'src/sw/**'],
     languageOptions: { globals: globals.browser },
+  },
+  {
+    // The service worker: ServiceWorkerGlobalScope
+    files: ['src/sw/**'],
+    languageOptions: { globals: globals.serviceworker },
   },
   {
     // The audio thread: AudioWorkletGlobalScope, no window or document

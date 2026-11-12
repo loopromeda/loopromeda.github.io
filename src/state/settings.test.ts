@@ -54,6 +54,7 @@ describe('the settings choices', () => {
     expect(typeof DEFAULT_SETTINGS.waveform).toBe('boolean')
     expect(typeof DEFAULT_SETTINGS.audioDetails).toBe('boolean')
     expect(typeof DEFAULT_SETTINGS.waveformTiming).toBe('boolean')
+    expect(typeof DEFAULT_SETTINGS.keepAwake).toBe('boolean')
   })
 })
 
@@ -86,6 +87,7 @@ describe('readSettings', () => {
       velocity: 'full',
       audioDetails: false,
       waveformTiming: false,
+      keepAwake: false,
     }
     const voices = storageWith(JSON.stringify({ ...good, voices: 6 }))
     expect(readSettings(voices)).toEqual({ ...good, voices: 16 })
@@ -98,6 +100,8 @@ describe('readSettings', () => {
     expect(readSettings(velocity)).toEqual({ ...good, velocity: 'touch' })
     const waveform = storageWith(JSON.stringify({ ...good, waveform: 'yes' }))
     expect(readSettings(waveform)).toEqual({ ...good, waveform: true })
+    const awake = storageWith(JSON.stringify({ ...good, keepAwake: 'on' }))
+    expect(readSettings(awake)).toEqual({ ...good, keepAwake: true })
   })
 
   it('defaults voices that is not one of the counts, even as a number', () => {
@@ -126,6 +130,8 @@ describe('readSettings', () => {
       velocity: 'full',
       audioDetails: false,
       waveformTiming: false,
+      // Kept before the setting was there: its default
+      keepAwake: true,
     })
   })
 })
@@ -140,6 +146,7 @@ describe('writeSettings', () => {
       velocity: 'full',
       audioDetails: false,
       waveformTiming: true,
+      keepAwake: false,
     }
     writeSettings(storage, settings)
     expect(readSettings(storage)).toEqual(settings)
@@ -154,6 +161,7 @@ describe('writeSettings', () => {
       velocity: 'full',
       audioDetails: true,
       waveformTiming: false,
+      keepAwake: true,
     })
     expect(JSON.parse(storage.items.get(SETTINGS_KEY) ?? 'null')).toEqual({
       version: 1,
@@ -163,6 +171,7 @@ describe('writeSettings', () => {
       velocity: 'full',
       audioDetails: true,
       waveformTiming: false,
+      keepAwake: true,
     })
   })
 
