@@ -3,8 +3,12 @@ import type { Library } from '../state/library'
 
 /**
  * The sound's name at the left of the keyboard's header: the preset it
- * came from (Untitled without one), a dot while it is edited. A tap opens
- * the preset browser above the keyboard, and closes it again.
+ * came from (Untitled without one), a dot while it is edited. It stands
+ * one width whatever the name, cut short if long, so the header keeps its
+ * place from preset to preset: 12rem, or where the header has the keys'
+ * navigator under it (held upright) the room its buttons leave it
+ * (PlaySurface). A tap opens the preset browser above the keyboard, and
+ * closes it again.
  */
 export function PatchButton({
   library,
@@ -30,15 +34,17 @@ export function PatchButton({
       aria-controls="presets"
       aria-label={`Patch: ${name}${changed ? ', edited' : ''}`}
       onClick={onToggle}
-      className="flex h-11 min-w-0 items-center gap-2 rounded-[10px] bg-white/5 px-3 text-[13px] font-medium text-zinc-200 aria-expanded:bg-white/10"
+      className="flex h-11 w-48 min-w-0 items-center gap-2 rounded-[10px] bg-white/5 px-3 text-[13px] font-medium text-zinc-200 aria-expanded:bg-white/10"
     >
-      <span className="truncate">{name}</span>
-      {changed && (
-        <span
-          aria-hidden="true"
-          className="size-1.5 shrink-0 rounded-full bg-emerald-400"
-        />
-      )}
+      <span className="flex min-w-0 flex-1 items-center gap-2">
+        <span className="truncate">{name}</span>
+        {changed && (
+          <span
+            aria-hidden="true"
+            className="size-1.5 shrink-0 rounded-full bg-emerald-400"
+          />
+        )}
+      </span>
       <svg
         width="14"
         height="14"

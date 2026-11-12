@@ -32,9 +32,9 @@ export function SurfaceIcon({ kind }: { kind: SurfaceKind }) {
 }
 
 /**
- * Next to the patch on the keyboard's header: what notes are played on,
- * keys or pads, as its picture. A tap opens the choice above the keyboard
- * (and the pads' key), and closes it again.
+ * At the right of the keyboard's header, after the octave controls: what
+ * notes are played on, keys or pads, as its picture. A tap opens the
+ * choice above the keyboard (and the pads' key), and closes it again.
  */
 export function SurfaceButton({
   settings,

@@ -47,7 +47,7 @@ const STARTS: Readonly<Record<SurfaceKind, number>> = { keys: 0, pads: 3 }
 const OCTAVE: Readonly<Record<SurfaceKind, number>> = { keys: 7, pads: 1 }
 /**
  * From this width (CSS px) the keys' navigator stands in the header, between
- * the menus and the arrows; under it, in a strip of its own below
+ * the patch and the arrows; under it, in a strip of its own below
  */
 const NAVIGATOR_IN_HEADER = 704
 
@@ -137,21 +137,27 @@ const sameFit = (a: Fit, b: Fit) =>
  * playing the notes of settings' key; the arrows shift them an octave.
  * Touches go straight to the engine; React renders only the keys or pads,
  * again when they move, the key or the size changes. The header row holds
- * `menus` (the patch, the surface) at its left and the octave controls at
- * its right, the navigator between them on a wide screen and in a strip
- * under them on a narrow one. Given fullVelocity, every note plays at full
- * velocity, wherever a finger lands.
+ * `start` (the patch) at its left, and at its right the octave controls
+ * and after them `end` (the surface, putting the controls away); the
+ * navigator stands between on a wide screen and in a strip under them on
+ * a narrow one, where `start` takes the room the rest leaves. Given
+ * fullVelocity, every note plays at full velocity, wherever a finger
+ * lands.
  */
 export function PlaySurface({
   engine,
   settings,
-  menus,
+  start,
+  end,
   fullVelocity = false,
   className = 'flex-1',
 }: {
   engine: Engine
   settings: SurfaceSettings
-  menus?: ReactNode
+  /** At the header's left */
+  start?: ReactNode
+  /** At the header's right, after the octave controls */
+  end?: ReactNode
   fullVelocity?: boolean
   /** Its height in the page's column */
   className?: string
@@ -291,9 +297,15 @@ export function PlaySurface({
       className={`flex flex-col gap-2 ${className}`}
       style={style}
     >
-      {/* A narrow header keeps the patch's name and drops the range */}
+      {/* A narrow header (a phone's, under 26rem) keeps the patch's name
+          and every button, and drops the range */}
       <div className="@container flex h-11 shrink-0 items-center gap-3">
-        <div className="flex min-w-0 items-center gap-2">{menus}</div>
+        {/* Held upright, the patch takes the room the buttons leave */}
+        <div
+          className={`flex min-w-0 items-center gap-2 ${inHeader ? '' : 'flex-1 *:flex-1'}`}
+        >
+          {start}
+        </div>
         {inHeader && keysNavigator('ml-auto h-7 max-w-md min-w-40 flex-1')}
         <div
           className={`flex shrink-0 items-center gap-2 ${inHeader ? '' : 'ml-auto'}`}
@@ -304,7 +316,7 @@ export function PlaySurface({
             onClick={() => shift(-1)}
             path="M11 4l-5 5 5 5"
           />
-          <span className="font-mono text-[13px] whitespace-nowrap text-zinc-400 @max-[21rem]:sr-only">
+          <span className="font-mono text-[13px] whitespace-nowrap text-zinc-400 @max-[26rem]:sr-only">
             {range}
           </span>
           <IconButton
@@ -314,6 +326,7 @@ export function PlaySurface({
             path="M7 4l5 5-5 5"
           />
         </div>
+        {end && <div className="flex shrink-0 items-center gap-2">{end}</div>}
       </div>
       {inStrip && keysNavigator('h-6 shrink-0')}
       <div ref={surfaceRef} className="relative min-h-28 flex-1">

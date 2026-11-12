@@ -370,6 +370,12 @@ right, benchmark within budget.
         of 109×66, 768×1024 4×4 of 181×130, 1280×800 8×2 of 153×160,
         844×390 8×1 of 98×112. A header narrower than 21rem (a 360 px
         phone) drops the note range so the patch's name fits.
+        2026-11-12, asked for by ashon: the surface's button and the one
+        that puts the controls away stand at the header's right end,
+        after the octave controls, and the patch's name one width
+        whatever it is: 12rem, and held upright (the navigator in its
+        strip) all the room the buttons leave. A header under 26rem (a
+        phone's) drops the range to fit them.
 - [ ] Knob/Slider components: vertical drag, fine-adjust, double-tap reset; values go
       straight to the engine, React only for structure
 - [ ] Layout: landscape-first for playing, portrait for editing; `viewport-fit=cover` + safe-area insets

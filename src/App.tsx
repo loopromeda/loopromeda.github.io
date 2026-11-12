@@ -55,13 +55,13 @@ const KEYS_SIZE = [
  * The sound's editor (its parts as tiles, the output waveform in the
  * amp's, the picked one's knobs under them), the keys or pads filling the
  * rest (on a tablet or a Fold open, the editor takes what the keys do not
- * need: KEYS_SIZE), and a status line under it. The buttons at the left
- * of the keyboard's header open the presets, and the choice of keys or
- * pads, over the controls: what is played on stays there to try them on.
- * The third puts the controls away, for a screen too short to play on
- * under them. The settings (this device's: voices, latency, what the
- * screen shows, and what the browser offers) open from the status line's
- * right end, in the same place.
+ * need: KEYS_SIZE), and a status line under it. The patch at the left of
+ * the keyboard's header opens the presets, and the first button at its
+ * right end the choice of keys or pads, over the controls: what is played
+ * on stays there to try them on. The last puts the controls away, for a
+ * screen too short to play on under them. The settings (this device's:
+ * voices, latency, what the screen shows, and what the browser offers)
+ * open from the status line's right end, in the same place.
  *
  * A reload comes back to the same view: each sheet has an address
  * (pages.ts), the sound and the device's choices are kept, and the editor
@@ -228,13 +228,15 @@ export function App({
         className={controls ? KEYS_SIZE : 'flex-1'}
         settings={surface}
         fullVelocity={settings.velocity === 'full'}
-        menus={
+        start={
+          <PatchButton
+            library={library}
+            open={sheet === 'presets'}
+            onToggle={() => toggle('presets')}
+          />
+        }
+        end={
           <>
-            <PatchButton
-              library={library}
-              open={sheet === 'presets'}
-              onToggle={() => toggle('presets')}
-            />
             <SurfaceButton
               settings={surface}
               open={sheet === 'surface'}
