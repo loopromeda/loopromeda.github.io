@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import type { Engine } from '../engine/engine'
 import {
   addChain,
@@ -37,16 +37,7 @@ import {
   sendKey,
   type Sound,
 } from '../state/sound/sound'
-import {
-  BUTTON,
-  BUTTON_DANGER,
-  CARD,
-  knobRow,
-  KNOB_SIZE,
-  PANEL_BODY,
-  SMALL_BUTTON,
-  TALL_HIT,
-} from './controls'
+import { CARD, knobRow, KNOB_SIZE, PANEL_BODY, TALL_HIT } from './controls'
 import {
   GLYPHS,
   MOD_COLOR,
@@ -61,6 +52,7 @@ import {
   lookOf,
   type Look,
 } from './editor'
+import { ConfirmDialog } from './ConfirmDialog'
 import { Knob, NEUTRAL_ARC } from './Knob'
 import { knoblessDests, routesTo } from '../state/sound/knob'
 
@@ -74,11 +66,52 @@ interface Choice {
   readonly add: (() => void) | undefined
 }
 
-/** One action of the "⋯" menu */
+/** One of a part's actions, a small button in the panel's header */
 interface Action {
+  /** What it does, for a screen reader and a pointer's tooltip */
   readonly label: string
+  /** Its picture: a stroked path in an 18×18 box */
+  readonly icon: string
+  /** Does it; none where it cannot (the first part moving earlier) */
   readonly run: (() => void) | undefined
   readonly danger?: boolean
+  /** Asked first, with this said of what goes with it */
+  readonly confirm?: string
+}
+
+/** The actions' pictures, in an 18×18 box */
+const ICONS = {
+  // Arrows move a part; the bar under a chevron puts the panel away
+  left: 'M14 9H4M8 5L4 9l4 4',
+  right: 'M4 9h10M10 5l4 4-4 4',
+  up: 'M9 14V4M5 8l4-4 4 4',
+  down: 'M9 4v10M5 10l4 4 4-4',
+  remove: 'M3.5 5h11M7.5 5V3.5h3V5M5 5l.8 9.5h6.4L13 5M7.8 8v4M10.2 8v4',
+  hide: 'M4 4l5 5 5-5M4 14h10',
+} as const
+
+/** A header's small square button, and the one that removes */
+const ACTION_BUTTON = `${TALL_HIT} flex size-7 shrink-0 items-center justify-center rounded-md bg-white/5 text-zinc-200 disabled:opacity-30`
+const REMOVE_BUTTON = `${TALL_HIT} flex size-7 shrink-0 items-center justify-center rounded-md bg-red-500/15 text-red-200`
+
+/** A stroked 14 px picture in an action's button */
+function ActionIcon({ path, className }: { path: string; className?: string }) {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 18 18"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className={className}
+    >
+      <path d={path} />
+    </svg>
+  )
 }
 
 /** A chain an input may feed, as a toggle: on while it takes the input */
@@ -126,7 +159,6 @@ interface View {
   readonly choices?: readonly Choice[]
   readonly choiceNote?: string
   readonly actions?: readonly Action[]
-  readonly actionNote?: string
 }
 
 const INPUT_HINTS: Record<InputKind, string> = {
@@ -154,9 +186,10 @@ const KIND_GLYPHS = {
 
 /**
  * The panel under the graph: the knobs of the tile picked, in its chain's
- * colour; for a "+", the kinds it adds; behind "⋯", moving the part and
- * removing it. An input picks the chains it feeds here, an oscillator its
- * FM source, a ring its two inputs.
+ * colour; for a "+", the kinds it adds. Its header moves the part a place
+ * either way and removes it (asked first: ConfirmDialog), and hides the
+ * panel (onHide), the graph taking its room. An input picks the chains it
+ * feeds here, an oscillator its FM source, a ring its two inputs.
  */
 export function PartPanel({
   engine,
@@ -164,26 +197,27 @@ export function PartPanel({
   picked,
   pick,
   focus,
-  menu,
-  onMenu,
   onRoute,
   onMap,
+  onHide,
 }: {
   engine: Engine
   sound: Sound
   picked: string
   pick: (id: string, input?: string) => void
   focus: string | undefined
-  menu: boolean
-  onMenu: (open: boolean) => void
   /** Opens the routes into a destination: a knob held, a target tapped */
   onRoute: (target: string, key: string) => void
   /** Routes from source into the tiles picked, starting at target */
   onMap: (source: string, target?: string) => void
+  /** Hides the panel, for the graph to have its room */
+  onHide: () => void
 }) {
   const view = viewOf(engine, sound, picked, focus, pick)
-  const open = menu && view.actions !== undefined
   const { chip } = view
+  /** The action being asked about, and the part it was for */
+  const [asking, setAsking] = useState<{ id: string; action: Action }>()
+  const question = asking?.id === picked ? asking.action : undefined
 
   return (
     <section
@@ -227,48 +261,58 @@ export function PartPanel({
         <span className="min-w-0 truncate text-[11px] text-zinc-400">
           {view.kind}
         </span>
-        <span className="ml-auto flex shrink-0 items-center gap-1.5">
-          {view.refs}
-          {view.actions && (
+        <span className="ml-auto flex shrink-0 items-center gap-1">
+          {view.refs && <span className="mr-1 flex gap-1.5">{view.refs}</span>}
+          {view.actions?.map((action) => (
             <button
+              key={action.label}
               type="button"
-              aria-label="Move or remove"
-              aria-expanded={open}
-              onClick={() => onMenu(!open)}
-              className={`${SMALL_BUTTON} w-7 justify-center px-0 text-sm aria-expanded:bg-white/15`}
+              aria-label={`${action.label}: ${view.title}`}
+              title={action.label}
+              disabled={!action.run}
+              onClick={
+                action.confirm === undefined
+                  ? action.run
+                  : () => setAsking({ id: picked, action })
+              }
+              className={action.danger ? REMOVE_BUTTON : ACTION_BUTTON}
             >
-              ⋯
+              <ActionIcon path={action.icon} />
             </button>
-          )}
+          ))}
+          {/* Down, the way the panel goes; beside the graph, to the right */}
+          <button
+            type="button"
+            aria-label="Hide the knobs"
+            title="Hide the knobs"
+            onClick={onHide}
+            className={`${ACTION_BUTTON} ml-1`}
+          >
+            <ActionIcon
+              path={ICONS.hide}
+              className="md:-rotate-90 wide:rotate-0"
+            />
+          </button>
         </span>
       </div>
+      {question && (
+        <ConfirmDialog
+          title={`${question.label} ${view.title}?`}
+          message={question.confirm ?? ''}
+          confirm={question.label}
+          onConfirm={() => {
+            setAsking(undefined)
+            question.run?.()
+          }}
+          onCancel={() => setAsking(undefined)}
+        />
+      )}
 
-      {!open && !view.choices && view.feeds && view.feeds.length > 0 && (
+      {!view.choices && view.feeds && view.feeds.length > 0 && (
         <Feeds title={view.title} feeds={view.feeds} />
       )}
       <div className={PANEL_BODY}>
-        {open ? (
-          <>
-            <div className="flex gap-2">
-              {view.actions?.map((action) => (
-                <button
-                  key={action.label}
-                  type="button"
-                  disabled={!action.run}
-                  onClick={action.run}
-                  className={`${action.danger ? BUTTON_DANGER : BUTTON} flex-1 px-2`}
-                >
-                  {action.label}
-                </button>
-              ))}
-            </div>
-            {view.actionNote && (
-              <p className="text-[11px] leading-snug text-zinc-500">
-                {view.actionNote}
-              </p>
-            )}
-          </>
-        ) : view.choices ? (
+        {view.choices ? (
           <>
             <div className="flex gap-2">
               {view.choices.map((choice) => (
@@ -339,12 +383,12 @@ export function PartPanel({
                       style={{ border: `1.5px dashed ${MOD_LOOK.ring}` }}
                       className={`${KNOB_SIZE} relative flex aspect-square items-center justify-center rounded-full`}
                     >
-                      <svg viewBox="0 0 18 12" width={18} height={12}>
+                      <svg viewBox="0 0 18 12" width={24} height={16}>
                         <path
                           d={GLYPHS.route}
                           fill="none"
                           stroke={MOD_COLOR}
-                          strokeWidth={1.6}
+                          strokeWidth={1.4}
                           strokeLinecap="round"
                           strokeLinejoin="round"
                         />
@@ -594,11 +638,16 @@ function viewOf(
         knobs: knobsOf(picked, ITEM_KINDS[part.kind].knobs),
         color: look.ink,
         actions: [
-          { label: '◂ Move left', run: move(-1) },
-          { label: 'Move right ▸', run: move(1) },
-          { label: 'Remove', run: remove(chain.id), danger: true },
+          { label: 'Move left', icon: ICONS.left, run: move(-1) },
+          { label: 'Move right', icon: ICONS.right, run: move(1) },
+          {
+            label: 'Remove',
+            icon: ICONS.remove,
+            run: remove(chain.id),
+            danger: true,
+            confirm: 'The routes into it go with it.',
+          },
         ],
-        actionNote: 'Or hold the tile and drag it, into another chain too.',
       }
     }
     case 'chain': {
@@ -617,12 +666,19 @@ function viewOf(
         ],
         color: look.ink,
         actions: [
-          { label: '▴ Move up', run: move(-1) },
-          { label: 'Move down ▾', run: move(1) },
-          { label: 'Remove', run: remove(), danger: true },
+          { label: 'Move up', icon: ICONS.up, run: move(-1) },
+          { label: 'Move down', icon: ICONS.down, run: move(1) },
+          {
+            label: 'Remove',
+            icon: ICONS.remove,
+            run: remove(),
+            danger: true,
+            confirm:
+              found.part.items.length === 0
+                ? 'The routes into it go with it.'
+                : `Its ${found.part.items.length === 1 ? 'item goes' : `${found.part.items.length} items go`} with it, and the routes into them.`,
+          },
         ],
-        actionNote:
-          'Removing a chain removes its items. Or hold its letter and drag the row up or down.',
       }
     }
     case 'modulator': {
@@ -648,20 +704,34 @@ function viewOf(
         },
         color: NEUTRAL_ARC,
         actions: [
-          { label: '◂ Earlier', run: move(-1) },
-          { label: 'Later ▸', run: move(1) },
-          { label: 'Remove', run: remove(), danger: true },
+          { label: 'Move earlier', icon: ICONS.left, run: move(-1) },
+          { label: 'Move later', icon: ICONS.right, run: move(1) },
+          {
+            label: 'Remove',
+            icon: ICONS.remove,
+            run: remove(),
+            danger: true,
+            confirm:
+              count === 0
+                ? 'Nothing is routed from it.'
+                : `Its ${count === 1 ? 'route goes' : `${count} routes go`} with it.`,
+          },
         ],
-        actionNote:
-          'Removing a modulator removes its routes. Or hold the tile and drag it along the rack.',
       }
     }
     case 'input': {
       const { part } = found
       const actions: Action[] = [
-        { label: '▴ Move up', run: move(-1) },
-        { label: 'Move down ▾', run: move(1) },
-        { label: 'Remove', run: remove(), danger: true },
+        { label: 'Move up', icon: ICONS.up, run: move(-1) },
+        { label: 'Move down', icon: ICONS.down, run: move(1) },
+        {
+          label: 'Remove',
+          icon: ICONS.remove,
+          run: remove(),
+          danger: true,
+          confirm:
+            'Its sends go with it, and the routes into it; what reads it (FM, a ring) stops.',
+        },
       ]
       const feeding: Feed[] = sound.chains.map((chain, index) => ({
         chain: chain.id,
@@ -685,7 +755,6 @@ function viewOf(
         color: NEUTRAL_ARC,
         feeds: feeding,
         actions,
-        actionNote: 'Removing an input removes its sends and routes.',
       }
       if (part.kind === 'osc') {
         return {

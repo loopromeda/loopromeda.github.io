@@ -155,7 +155,13 @@ as a graph of flat tiles, flowing left to right.
   happens in its place, the graph still in view (ashon found a sheet
   over the whole editor too big, 2026-11-11): hold a knob for the routes
   into it, or tap a modulator's Route and pick tiles, their knobs turned
-  into depths from it.
+  into depths from it. Its header moves the part a place either way
+  (arrows) and removes it, asking first in a dialog (since 2026-11-12,
+  ashon: the "⋯" menu that held them spelled out, and a removal
+  confirmed). Its last button hides it, the graph taking its room to
+  show more chains (ashon, 2026-11-12): a bar under the graph, or a
+  narrow column beside it from md, brings it back, as picking a tile
+  does; a tile held to be dragged leaves it hidden.
 - **Dragging.** A tile held (a touch kept still 450 ms, as a knob is
   held; a mouse moved with its button down) lifts and follows the
   finger, picked; a bar on a seam shows where it would go, and near an

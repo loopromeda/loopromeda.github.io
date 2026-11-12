@@ -75,6 +75,24 @@ type Place = Spot & { readonly to: number; readonly chain?: string }
 
 /** The tile picked, kept for the tab: a reload picks it again */
 const PICKED_KEY = 'loopromeda.picked'
+/** Kept for the tab too: '0' while the panel is hidden */
+const PANEL_KEY = 'loopromeda.panel'
+
+function readPanel(): boolean {
+  try {
+    return sessionStorage.getItem(PANEL_KEY) !== '0'
+  } catch {
+    return true
+  }
+}
+
+function keepPanel(shown: boolean): void {
+  try {
+    sessionStorage.setItem(PANEL_KEY, shown ? '1' : '0')
+  } catch {
+    // As with the tile picked: it is hidden all the same
+  }
+}
 
 function readPicked(): string {
   try {
@@ -97,8 +115,13 @@ interface Picking {
   readonly engine: Engine
   readonly sound: Sound
   readonly picked: string
-  /** Picks id; a chain's peg picks the chain with the input it is for */
+  /**
+   * Picks id, showing the panel if hidden; a chain's peg picks the chain
+   * with the input it is for
+   */
   readonly pick: (id: string, input?: string) => void
+  /** Picks the tile held to be dragged, leaving the panel as it is */
+  readonly hold: (id: string) => void
   /** The tiles in a sky ring: what the picked part reaches (reachOf) */
   readonly reach: ReadonlySet<string>
 }
@@ -108,9 +131,11 @@ interface Picking {
  * The editor): the modulators' rack and the voice above (beside, at the
  * left, on a wider screen), the inputs in a column, a row per chain (its
  * head, its items, the amp at the end of every row), and under it all the
- * panel of the tile picked. Tapping a
+ * panel of the tile picked (beside the graph on a wider screen). Tapping a
  * tile picks it; a peg between an input and a chain picks the chain, its
- * knob for that input lit.
+ * knob for that input lit. The panel hides (its header's last button),
+ * the graph taking its room to show more of the chains, a bar under it
+ * bringing it back; picking a tile brings it back too.
  *
  * It redraws when the sound's shape changes (shapeKey: a part added, an
  * input feeding a chain, a wave changed); a knob turning redraws only the
@@ -136,7 +161,7 @@ export function SoundEditor({
   const sound = engine.getSound()
   const [chosen, setChosen] = useState(readPicked)
   const [focus, setFocus] = useState<string | undefined>(undefined)
-  const [menu, setMenu] = useState(false)
+  const [panel, setPanel] = useState(readPanel)
   const [routing, setRouting] = useState<RouteTarget | null>(null)
   /** The source routed from while tiles are picked, if any */
   const [mapping, setMapping] = useState<string | null>(null)
@@ -146,18 +171,27 @@ export function SoundEditor({
     routing && destOf(sound, routing.target, routing.key) ? routing : null
   const from = mapping !== null && isSource(sound, mapping) ? mapping : null
 
-  const pick = (id: string, input?: string) => {
+  const show = (shown: boolean) => {
+    setPanel(shown)
+    keepPanel(shown)
+  }
+  const hold = (id: string) => {
     setChosen(id)
     keepPicked(id)
-    setFocus(input)
-    setMenu(false)
+    setFocus(undefined)
     setRouting(null)
+  }
+  const pick = (id: string, input?: string) => {
+    hold(id)
+    setFocus(input)
+    if (!panel) show(true)
   }
   const picking: Picking = {
     engine,
     sound,
     picked,
     pick,
+    hold,
     reach: reachOf(sound, from ?? picked),
   }
   const closeRoutes = () => setRouting(null)
@@ -191,8 +225,16 @@ export function SoundEditor({
   // takes the rest of the height. Held upright, the rack stands over the
   // graph; on a wider screen, whose graph has width to spare and little
   // height, it stands at its left, a column.
+  // Hidden, the panel leaves a bar under the graph, or beside it from md
+  // (the panel's own side: a short screen has no height for a bar)
   return (
-    <div className="flex min-h-0 flex-col gap-3 md:grid md:grid-cols-[minmax(0,1fr)_clamp(22rem,36%,40rem)] md:grid-rows-[minmax(0,1fr)] max-md:flex-1 roomy:flex-1 wide:flex">
+    <div
+      className={
+        panel
+          ? 'flex min-h-0 flex-col gap-3 md:grid md:grid-cols-[minmax(0,1fr)_clamp(22rem,36%,40rem)] md:grid-rows-[minmax(0,1fr)] max-md:flex-1 roomy:flex-1 wide:flex'
+          : 'flex min-h-0 flex-col gap-2 md:grid md:grid-cols-[minmax(0,1fr)_2.75rem] md:grid-rows-[minmax(0,1fr)] max-md:flex-1 roomy:flex-1 wide:flex'
+      }
+    >
       <section
         aria-label="The sound, flowing left to right"
         className={`flex min-h-[8.75rem] min-w-0 flex-col overflow-hidden max-md:flex-1 md:flex-row wide:flex-1 ${CARD}`}
@@ -204,34 +246,70 @@ export function SoundEditor({
           scope={scope}
         />
       </section>
-      <div className="grid h-[calc(7.5rem_+_var(--knob))] max-h-[calc(100%-9.5rem)] min-h-0 shrink-0 overflow-y-auto overscroll-contain rounded-xl [--knob:clamp(3rem,calc((100vw_-_4.5rem)/8.5),4.5rem)] md:h-0 md:max-h-none md:min-h-full md:[--knob:3rem] wide:h-[calc(7.5rem_+_var(--knob))] wide:min-h-0 wide:[--knob:4.5rem]">
-        {into ? (
-          <RoutesInto
-            engine={engine}
-            sound={sound}
-            at={into}
-            onClose={closeRoutes}
-          />
-        ) : from !== null ? (
-          <RoutesFrom
-            engine={engine}
-            sound={sound}
-            source={from}
-            picked={picked}
-            onSource={setMapping}
-            onClose={closeMap}
-          />
-        ) : (
-          <PartPanel
-            {...picking}
-            focus={picked === chosen ? focus : undefined}
-            menu={menu}
-            onMenu={setMenu}
-            onRoute={route}
-            onMap={map}
-          />
-        )}
-      </div>
+      {!panel && (
+        <button
+          type="button"
+          aria-label={`Show the knobs: ${partName(sound, picked)}`}
+          onClick={() => show(true)}
+          className={`flex h-9 shrink-0 items-center gap-2 px-3 text-left md:h-auto md:justify-center md:px-0 wide:h-9 wide:justify-start wide:px-3 ${CARD}`}
+        >
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 18 18"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+            className="shrink-0 text-zinc-300 md:-rotate-90 wide:rotate-0"
+          >
+            <path d="M4 11l5-5 5 5" />
+          </svg>
+          <span
+            aria-hidden
+            className="text-xs font-semibold text-zinc-200 md:hidden wide:inline"
+          >
+            Show the knobs
+          </span>
+          <span
+            aria-hidden
+            className="min-w-0 truncate text-[11px] text-zinc-400 md:hidden wide:inline"
+          >
+            {partName(sound, picked)}
+          </span>
+        </button>
+      )}
+      {panel && (
+        <div className="grid h-[calc(7.5rem_+_var(--knob))] max-h-[calc(100%-9.5rem)] min-h-0 shrink-0 overflow-y-auto overscroll-contain rounded-xl [--knob:clamp(3rem,calc((100vw_-_4.5rem)/8.5),4.5rem)] md:h-0 md:max-h-none md:min-h-full md:[--knob:3rem] wide:h-[calc(7.5rem_+_var(--knob))] wide:min-h-0 wide:[--knob:4.5rem]">
+          {into ? (
+            <RoutesInto
+              engine={engine}
+              sound={sound}
+              at={into}
+              onClose={closeRoutes}
+            />
+          ) : from !== null ? (
+            <RoutesFrom
+              engine={engine}
+              sound={sound}
+              source={from}
+              picked={picked}
+              onSource={setMapping}
+              onClose={closeMap}
+            />
+          ) : (
+            <PartPanel
+              {...picking}
+              focus={picked === chosen ? focus : undefined}
+              onRoute={route}
+              onMap={map}
+              onHide={() => show(false)}
+            />
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -251,6 +329,7 @@ function Rack({
   sound,
   picked,
   pick,
+  hold,
   reach,
   source,
 }: Picking & { source: string | null }) {
@@ -295,7 +374,7 @@ function Rack({
       }
     },
     drop: (id, at) => engine.edit((current) => movePart(current, id, at.to)),
-    lift: (id) => pick(id),
+    lift: (id) => hold(id),
   })
   return (
     <div className="mx-2 mt-2 mb-1 flex h-[4.25rem] shrink-0 items-center gap-1.5 rounded-lg bg-white/[0.03] pr-0.5 pl-1.5 md:mr-1 md:mb-2 md:h-auto md:w-[4.25rem] md:flex-col md:px-0 md:pt-1.5 md:pb-0.5">
@@ -377,6 +456,7 @@ function Graph({
   sound,
   picked,
   pick,
+  hold,
   reach,
   focus,
   scope,
@@ -443,7 +523,7 @@ function Graph({
           ? movePart(current, id, at.to)
           : moveItem(current, id, at.chain, at.to)
       ),
-    lift: (id) => pick(id),
+    lift: (id) => hold(id),
   })
 
   return (

@@ -89,7 +89,8 @@ src/ui/       React components; SoundEditor.tsx the sound as tiles
               amp holding Scope.tsx, the output waveform over the amp's
               envelope, its filters, drives and modulators their pictures
               (Picture.tsx, drawn from outline.ts); PartPanel.tsx the
-              picked tile's knobs, adds and moves;
+              picked tile's knobs, adds and moves (ConfirmDialog.tsx asks
+              before a removal);
               RoutePanels.tsx routing in the panel's place: the routes into
               a knob held, or a source's depths on the tiles picked;
               tileDrag.ts holds a tile and drags it to a new place; Knob.tsx

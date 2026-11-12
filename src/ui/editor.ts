@@ -106,7 +106,9 @@ export const GLYPHS = {
   smooth: 'M1 8 C4 2 6 2 9 6 S14 10 17 4',
   sum: 'M13 2 H5 L10 6 L5 10 H13',
   plus: 'M9 2 V10 M5 6 H13',
-  route: 'M1 8 C4 2 7 2 9 6 S13 10 16 6 M13 4 L16 6 L14 9',
+  // A wave that runs on into an arrow's shaft: a source moving something
+  route:
+    'M1 6 C1.8 3.6 2.8 3 4 3 C6 3 6.4 9 8.2 9 C9.8 9 10.2 6 12 6 H16.5 M14 3.5 L16.5 6 L14 8.5',
 } as const
 
 const WAVE_GLYPHS = [GLYPHS.sine, GLYPHS.triangle, GLYPHS.saw, GLYPHS.square]
