@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react'
 import type { Engine } from './engine/engine'
 import type { BenchReport } from './engine/protocol'
 import type { Offline } from './offline'
@@ -64,10 +70,12 @@ const KEYS_SIZE = [
  * amp's, the picked one's knobs under them), the keys or pads filling the
  * rest (on a tablet or a Fold open, the editor takes what the keys do not
  * need: KEYS_SIZE), and a status line under it. The patch at the left of
- * the keyboard's header opens the presets, and the first button at its
- * right end the choice of keys or pads, over the controls: what is played
- * on stays there to try them on. The last puts the controls away, for a
- * screen too short to play on under them. The mod wheel stands at the
+ * the keyboard's header opens the presets, a popover on it over the page
+ * as it is (a tap in the editor puts them away), and the first button at
+ * its right end the choice of keys or pads, a popover on it the same way:
+ * what is played on stays there to try them on. The last puts the
+ * controls away, for a screen too short to play on under them. The mod
+ * wheel stands at the
  * keys' left (the surface's choices hide it); its Route opens its routes
  * in the editor's panel, bringing the controls back for them. The
  * settings (this device's: voices, latency, what the screen shows, and
@@ -173,11 +181,12 @@ export function App({
     if (next.voices !== settings.voices) engine.setVoices(next.voices)
     if (next.latency !== settings.latency) engine.setLatency(next.latency)
   }
-  // The presets and the surface open over the controls; the settings open
-  // as a dialog over everything instead
-  const covered = sheet === 'presets' || sheet === 'surface'
-  // Put away, the controls still come back under a sheet: it needs room
-  const controls = !surface.hideControls || covered
+  // The presets and the surface are popovers over the page, which stays as
+  // it is; the settings a dialog over everything
+  const popover = sheet === 'presets' || sheet === 'surface'
+  const patchRef = useRef<HTMLButtonElement>(null)
+  const surfaceRef = useRef<HTMLButtonElement>(null)
+  const controls = !surface.hideControls
   // Until the audio has run, the cover asks for the tap that starts it;
   // starting it again (a new latency) shows a note instead
   const [ran, setRan] = useState(false)
@@ -208,11 +217,14 @@ export function App({
   return (
     <main className={`${page} gap-2`}>
       {/* Shrinks when the page is short (the graph pans), so the keys and
-          the status line stay on screen; a sheet open over it has room */}
+          the status line stay on screen */}
       <div
-        className={`relative flex flex-col ${covered ? 'min-h-[min(22rem,50dvh)]' : 'min-h-0'} ${controls ? EDITOR_SIZE : ''}`}
+        className={`relative flex min-h-0 flex-col ${controls ? EDITOR_SIZE : ''}`}
+        // A touch in the editor puts a popover away (one on the keys
+        // plays, the popover left open to try)
+        onPointerDownCapture={popover ? closeSheet : undefined}
       >
-        <div inert={covered} className="flex min-h-0 flex-1 flex-col">
+        <div className="flex min-h-0 flex-1 flex-col">
           {/* Hidden, not unmounted: the editor keeps the tile picked */}
           <div
             id="controls"
@@ -230,16 +242,6 @@ export function App({
             />
           </div>
         </div>
-        {sheet === 'presets' && (
-          <PresetBrowser library={library} onClose={closeSheet} />
-        )}
-        {sheet === 'surface' && (
-          <SurfacePicker
-            settings={surface}
-            onChange={changeSurface}
-            onClose={closeSheet}
-          />
-        )}
       </div>
       <PlaySurface
         engine={engine}
@@ -251,6 +253,7 @@ export function App({
         }
         start={
           <PatchButton
+            ref={patchRef}
             library={library}
             open={sheet === 'presets'}
             onToggle={() => toggle('presets')}
@@ -259,6 +262,7 @@ export function App({
         end={
           <>
             <SurfaceButton
+              ref={surfaceRef}
               settings={surface}
               open={sheet === 'surface'}
               onToggle={() => toggle('surface')}
@@ -282,6 +286,21 @@ export function App({
           </>
         }
       />
+      {sheet === 'presets' && (
+        <PresetBrowser
+          library={library}
+          anchor={patchRef}
+          onClose={closeSheet}
+        />
+      )}
+      {sheet === 'surface' && (
+        <SurfacePicker
+          settings={surface}
+          anchor={surfaceRef}
+          onChange={changeSurface}
+          onClose={closeSheet}
+        />
+      )}
       <StatusBar
         engine={engine}
         snapshot={snapshot}

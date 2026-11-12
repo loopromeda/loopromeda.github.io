@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react'
+import { useSyncExternalStore, type Ref } from 'react'
 import type { Library } from '../state/library'
 
 /**
@@ -7,14 +7,16 @@ import type { Library } from '../state/library'
  * one width whatever the name, cut short if long, so the header keeps its
  * place from preset to preset: 12rem, or where the header has the keys'
  * navigator under it (held upright) the room its buttons leave it
- * (PlaySurface). A tap opens the preset browser above the keyboard, and
- * closes it again.
+ * (PlaySurface). A tap opens the presets, a popover standing on it
+ * (PresetBrowser, which ref places), and closes them again.
  */
 export function PatchButton({
+  ref,
   library,
   open,
   onToggle,
 }: {
+  ref?: Ref<HTMLButtonElement>
   library: Library
   open: boolean
   onToggle: () => void
@@ -29,6 +31,7 @@ export function PatchButton({
 
   return (
     <button
+      ref={ref}
       type="button"
       aria-expanded={open}
       aria-controls="presets"
@@ -57,7 +60,7 @@ export function PatchButton({
         aria-hidden="true"
         className={`shrink-0 text-zinc-500 ${open ? 'rotate-180' : ''}`}
       >
-        {/* Up: the browser opens above the keyboard */}
+        {/* Up: the presets open above it, but for the controls put away */}
         <path d="M3.5 8.5L7 5l3.5 3.5" />
       </svg>
     </button>

@@ -7,6 +7,7 @@ import {
   type ChangeEvent,
   type FormEvent,
   type ReactNode,
+  type RefObject,
 } from 'react'
 import type {
   Library,
@@ -24,14 +25,18 @@ import {
   type PresetFile,
 } from '../state/presets'
 import {
-  BUTTON,
-  BUTTON_CONFIRM,
-  BUTTON_DANGER,
-  CARD,
-  FIELD,
-  OPTION,
+  RAISED,
+  SMALL_BUTTON,
+  SMALL_CONFIRM,
+  SMALL_DANGER,
+  SMALL_FIELD,
+  SMALL_OPTION,
+  SMALL_SELECT,
 } from './controls'
-import { IconButton } from './IconButton'
+import { NEUTRAL_LOOK } from './editor'
+import { FadeRow } from './FadeRow'
+import { SmallIconButton } from './IconButton'
+import { usePlacement } from './placement'
 
 /** Which presets the list shows */
 type Filter = 'all' | 'mine' | PresetCategory
@@ -49,26 +54,50 @@ interface Row {
   readonly preset: Preset
 }
 
+/**
+ * A row of 28 px controls that pans sideways (FadeRow), as the editor's
+ * panel's do: to the popover's edges, 8 px taller above and below for
+ * their hit areas and as much drawn back
+ */
+const PAN =
+  '-mx-2.5 -my-2 min-w-0 flex-1 overflow-y-hidden overscroll-x-contain py-2'
+
 /** What an export is called, shared or downloaded */
 const FILE_NAME = 'loopromeda-presets.json'
 
 /**
- * The presets, over the sound's controls while the
- * keyboard below stays playable: a tap on a row loads that preset, so
- * presets can be tried one after another. The header saves (over the
- * user's preset, or as a new one), the next row filters by category or
- * holds the form at hand (a name, a deletion to confirm, the file
- * actions), and a line at the bottom says what happened. Presets move
- * between devices as a file: Export shares or downloads the user's,
- * Import adds a file's.
+ * The popover's size, in rem, where the page has room for it: as wide as
+ * its header's name and buttons want, as tall as a dozen rows under its
+ * two
+ */
+const WANT_W = 26
+const WANT_H = 30
+
+/**
+ * The presets, a popover from the patch's button (anchor): over the
+ * controls, above the button (below it, the controls put away), the
+ * page left as it is around it, so the sound's graph shows each preset
+ * tried and the keyboard stays playable. It looks as the editor's panel
+ * does, on the same glass: a chip and a name over 28 px controls, 10 px
+ * in from its edges; its rows 44 px, for the finger that tries them. A
+ * tap on a row loads that preset, so presets can be tried one after
+ * another. The header saves (over the user's preset, or as a new one),
+ * the next row filters by category or holds the form at hand (a name, a
+ * deletion to confirm, the file actions), and a line at the bottom says
+ * what happened. Presets move between devices as a file: Export shares
+ * or downloads the user's, Import adds a file's.
  */
 export function PresetBrowser({
   library,
+  anchor,
   onClose,
 }: {
   library: Library
+  /** The button it opens from, which places it */
+  anchor: RefObject<HTMLElement | null>
   onClose: () => void
 }) {
+  const placed = usePlacement(anchor, WANT_W, WANT_H)
   const snapshot = useSyncExternalStore(library.subscribe, library.getSnapshot)
   const { current, edited, problem, user } = snapshot
   const [filter, setFilter] = useState<Filter>('all')
@@ -77,6 +106,7 @@ export function PresetBrowser({
   const listRef = useRef<HTMLUListElement>(null)
   const importRef = useRef<HTMLInputElement>(null)
   const preset = current && find(snapshot, current)
+  const shown = rows(snapshot, filter)
   const mine = current?.source === 'user' ? current.name : undefined
   // Rename and Delete are steps of More: it stays pressed through them
   const more =
@@ -85,12 +115,14 @@ export function PresetBrowser({
   const toggle = (kind: Mode['kind'], open: boolean) =>
     setMode({ kind: open ? 'filters' : kind })
 
-  // Open on the current preset
+  // Open on the current preset, once there is a list to scroll
+  const ready = placed !== undefined
   useLayoutEffect(() => {
+    if (!ready) return
     listRef.current
       ?.querySelector('[aria-current]')
       ?.scrollIntoView({ block: 'nearest' })
-  }, [])
+  }, [ready])
 
   const done = (text: string) => {
     setMessage(text)
@@ -156,66 +188,100 @@ export function PresetBrowser({
     <section
       id="presets"
       aria-labelledby="presets-heading"
-      className={`absolute inset-0 z-10 flex flex-col gap-2 px-3 pt-1.5 pb-2 ${CARD}`}
+      // Unseen until placed, a frame after it opens
+      style={
+        placed && {
+          left: placed.left,
+          top: placed.top,
+          width: placed.width,
+          height: placed.height,
+        }
+      }
+      className={`fixed z-10 flex flex-col gap-2 p-2.5 ${RAISED} ${placed ? '' : 'invisible'}`}
     >
-      {/* A narrow header keeps its buttons and drops the heading from view */}
-      <div className="@container flex h-11 shrink-0 items-center justify-end gap-1.5">
+      {/* As a panel's header: its chip, its name, what it shows, and the
+          actions at its right, the last one apart */}
+      <div className="flex h-7 shrink-0 items-center gap-2">
+        <span
+          aria-hidden
+          className="flex h-5 w-[26px] shrink-0 items-center justify-center rounded-[5px]"
+          style={{
+            background: '#1c1c23',
+            boxShadow: `inset 0 0 0 1.5px ${NEUTRAL_LOOK.ring}`,
+          }}
+        >
+          <svg viewBox="0 0 18 12" width={15} height={10}>
+            <path
+              d="M3.5 2.5h11M3.5 6h11M3.5 9.5h7"
+              fill="none"
+              stroke={NEUTRAL_LOOK.ink}
+              strokeWidth={1.8}
+              strokeLinecap="round"
+            />
+          </svg>
+        </span>
         <h2
           id="presets-heading"
-          className="mr-auto min-w-0 truncate px-1 text-[11px] font-medium tracking-widest text-zinc-500 uppercase @max-[21rem]:sr-only"
+          className="shrink-0 text-sm font-semibold whitespace-nowrap text-zinc-100"
         >
           Patches
         </h2>
-        {mine && (
+        <span className="min-w-0 truncate text-[11px] text-zinc-400">
+          {plural(shown.length, 'preset')}
+        </span>
+        <span className="ml-auto flex shrink-0 items-center gap-1">
+          {mine && (
+            <button
+              type="button"
+              disabled={!edited}
+              onClick={save}
+              className={SMALL_BUTTON}
+            >
+              Save
+            </button>
+          )}
           <button
             type="button"
-            disabled={!edited}
-            onClick={save}
-            className={BUTTON}
+            aria-pressed={mode.kind === 'saveAs'}
+            onClick={() => toggle('saveAs', mode.kind === 'saveAs')}
+            className={SMALL_BUTTON}
           >
-            Save
+            Save as…
           </button>
-        )}
-        <button
-          type="button"
-          aria-pressed={mode.kind === 'saveAs'}
-          onClick={() => toggle('saveAs', mode.kind === 'saveAs')}
-          className={BUTTON}
-        >
-          Save as…
-        </button>
-        <IconButton
-          label="More"
-          pressed={more}
-          onClick={() => toggle('more', more)}
-          path="M4 9h.01M9 9h.01M14 9h.01"
-        />
-        <IconButton
-          label="Close patches"
-          onClick={onClose}
-          path="M5 5l8 8M13 5l-8 8"
-        />
+          <SmallIconButton
+            label="More"
+            pressed={more}
+            onClick={() => toggle('more', more)}
+            path="M4 9h.01M9 9h.01M14 9h.01"
+          />
+          <SmallIconButton
+            label="Close patches"
+            onClick={onClose}
+            path="M5 5l8 8M13 5l-8 8"
+            className="ml-1"
+          />
+        </span>
       </div>
 
-      <div className="flex h-11 shrink-0 items-center gap-1.5">
+      <div className="flex h-7 shrink-0 items-center gap-1.5">
         {mode.kind === 'filters' && (
           <Filters filter={filter} onChange={setFilter} />
         )}
         {mode.kind === 'more' && (
-          <div className="flex min-w-0 flex-1 gap-1.5 overflow-x-auto [scrollbar-width:none]">
+          <FadeRow className={PAN} row="items-center gap-1.5 px-2.5">
             {mine && (
               <>
                 <button
                   type="button"
                   onClick={() => setMode({ kind: 'rename' })}
-                  className={BUTTON}
+                  className={SMALL_BUTTON}
                 >
                   Rename
                 </button>
                 <button
                   type="button"
                   onClick={() => setMode({ kind: 'delete' })}
-                  className={BUTTON}
+                  className={SMALL_BUTTON}
                 >
                   Delete
                 </button>
@@ -225,18 +291,18 @@ export function PresetBrowser({
               type="button"
               disabled={user.length === 0}
               onClick={() => void exportAll()}
-              className={BUTTON}
+              className={SMALL_BUTTON}
             >
               Export
             </button>
             <button
               type="button"
               onClick={() => importRef.current?.click()}
-              className={BUTTON}
+              className={SMALL_BUTTON}
             >
               Import
             </button>
-          </div>
+          </FadeRow>
         )}
         {(mode.kind === 'saveAs' || mode.kind === 'rename') && (
           <NameForm
@@ -253,13 +319,13 @@ export function PresetBrowser({
             <p className="min-w-0 flex-1 truncate px-1 text-[13px] text-zinc-300">
               Delete “{mine}”?
             </p>
-            <button type="button" onClick={remove} className={BUTTON_DANGER}>
+            <button type="button" onClick={remove} className={SMALL_DANGER}>
               Delete
             </button>
             <button
               type="button"
               onClick={() => setMode({ kind: 'filters' })}
-              className={BUTTON}
+              className={SMALL_BUTTON}
             >
               Cancel
             </button>
@@ -270,9 +336,9 @@ export function PresetBrowser({
       <ul
         ref={listRef}
         aria-label="Presets"
-        className="-mx-1 min-h-0 flex-1 overflow-y-auto overscroll-contain"
+        className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
       >
-        {rows(snapshot, filter).map((row) => (
+        {shown.map((row) => (
           <PresetRow
             key={`${row.source}:${row.preset.name}`}
             row={row}
@@ -293,12 +359,20 @@ export function PresetBrowser({
         )}
       </ul>
 
-      <p
-        aria-live="polite"
-        className={`h-4 shrink-0 truncate px-1 text-[11px] ${problem ? 'text-amber-300' : 'text-zinc-500'}`}
-      >
+      {/* What happened, told; and shown, only while there is something to
+          show, so the list ends as far in from the popover's edge as its
+          sides do */}
+      <p aria-live="polite" className="sr-only">
         {problem ?? message}
       </p>
+      {(problem ?? message) && (
+        <p
+          aria-hidden
+          className={`h-4 shrink-0 truncate px-1 text-[11px] ${problem ? 'text-amber-300' : 'text-zinc-500'}`}
+        >
+          {problem ?? message}
+        </p>
+      )}
 
       <input
         ref={importRef}
@@ -313,7 +387,10 @@ export function PresetBrowser({
   )
 }
 
-/** All, Mine and the categories, sideways when they do not fit */
+/**
+ * All, Mine and the categories, sideways when they do not fit: the row
+ * runs to the popover's edges and fades out where there are more (PAN)
+ */
 function Filters({
   filter,
   onChange,
@@ -327,10 +404,11 @@ function Filters({
     ...PRESET_CATEGORIES.map((category) => ({ id: category, label: category })),
   ]
   return (
-    <div
+    <FadeRow
       role="group"
       aria-label="Show"
-      className="-mx-3 flex min-w-0 flex-1 gap-1.5 overflow-x-auto overscroll-x-contain px-3 [scrollbar-width:none]"
+      className={PAN}
+      row="items-center gap-1.5 px-2.5"
     >
       {filters.map(({ id, label }) => (
         <button
@@ -338,12 +416,12 @@ function Filters({
           type="button"
           aria-pressed={filter === id}
           onClick={() => onChange(id)}
-          className={OPTION}
+          className={SMALL_OPTION}
         >
           {label}
         </button>
       ))}
-    </div>
+    </FadeRow>
   )
 }
 
@@ -383,7 +461,7 @@ function NameForm({
         onChange={(event) => setName(event.currentTarget.value)}
         onFocus={(event) => event.currentTarget.select()}
         // WebKit inherits the page's user-select: none, which stops typing
-        className={`${FIELD} flex-1 select-text`}
+        className={`${SMALL_FIELD} flex-1 select-text`}
       />
       <select
         aria-label="Category"
@@ -391,7 +469,7 @@ function NameForm({
         onChange={(event) =>
           setCategory(event.currentTarget.value as PresetCategory)
         }
-        className={`${FIELD} shrink-0`}
+        className={`${SMALL_SELECT} shrink-0`}
       >
         {PRESET_CATEGORIES.map((each) => (
           <option key={each} value={each}>
@@ -402,7 +480,7 @@ function NameForm({
       <button
         type="submit"
         disabled={!cleanName(name)}
-        className={BUTTON_CONFIRM}
+        className={SMALL_CONFIRM}
       >
         {submit}
       </button>
@@ -433,7 +511,7 @@ function PresetRow({
         type="button"
         aria-current={current ? 'true' : undefined}
         onClick={() => onLoad({ source, name: preset.name })}
-        className="flex h-11 w-full items-center gap-2 rounded-[10px] px-3 text-left text-[13px] text-zinc-300 aria-[current]:bg-white/10 aria-[current]:text-white"
+        className="flex h-11 w-full items-center gap-2 rounded-lg px-2.5 text-left text-[13px] text-zinc-300 aria-[current]:bg-white/10 aria-[current]:text-white"
       >
         <svg
           width="14"

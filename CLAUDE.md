@@ -104,7 +104,8 @@ src/viz/      pure display math (scope trigger and decimation, envelope
               position, a knob turning finer as the finger strays
               sideways in fine.ts, the mod wheel's turn, double tap and
               ridges in wheel.ts, the XY pad's pitch, Slide, lines and
-              a glide's dot in xy.ts)
+              a glide's dot in xy.ts, where a popover stands by its
+              button in popover.ts)
 src/ui/       React components; SoundEditor.tsx the sound as tiles
               (editor.ts: their names, lines, pictograms and colours), its
               amp holding Scope.tsx, the output waveform over the amp's
@@ -121,12 +122,15 @@ src/ui/       React components; SoundEditor.tsx the sound as tiles
               holds which note, and bends it), KeysNavigator.tsx moves the keys a white key at a
               time over C−1 to G9 (all of MIDI's notes), ModWheel.tsx the mod wheel at their
               left (the Wheel source) and its Route, PresetBrowser.tsx
-              loads, saves and moves presets,
+              loads, saves and moves presets, a popover on the patch's
+              button (placement.ts places it), SurfacePicker.tsx one on
+              the surface's (keys, pads or XY, the pads' key),
               SettingsDialog.tsx, a modal dialog, holds the settings,
               Measure CPU and the browser's checks; pages.ts gives each
               sheet an address (#/presets), so a reload keeps it and Back
-              closes it; controls.ts the shared sizes and the card every
-              panel stands on
+              closes it; controls.ts the shared sizes, the insets and
+              the card every panel stands on; FadeRow.tsx a row that
+              pans sideways, faded out where there is more
 scripts/      dev tooling: tailnet.sh, the device-report Vite plugin,
               vite-licences.ts, which gathers LICENSE and the licences
               of what the site ships into licences.txt, vite-offline.ts,

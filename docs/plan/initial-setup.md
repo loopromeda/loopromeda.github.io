@@ -468,8 +468,9 @@ right, benchmark within budget.
         Fold folded shut (about 490×670 CSS px), where the tabs and knob
         panel took 270 px and left the pads two rows: the button after the
         surface's hides the tabs and panels (not the waveform) and is kept
-        with the surface's settings. A sheet (presets, surface) brings them
-        back while it is open, as it needs their room. Measured in frames,
+        with the surface's settings. A sheet (presets, surface) brought them
+        back while it was open, as it needed their room, until both became
+        popovers (2026-11-12), which leave them as they are. Measured in frames,
         shown → hidden: 490×671 pads 6×2 of 73×78 px → 4×4 of 112×107,
         360×720 4×3 → 4×4, 930×566 pads 66 → 174 px tall, 844×390 8×1 and
         89 px of scroll → 8×2 and none.
@@ -575,6 +576,58 @@ dragging knobs during notes.
         browser can share a file, a download otherwise) and Import, which
         is how presets move between devices. Checked in desktop Chrome at
         1000×613 and 360×600: save, reload, rename, delete.
+  - [x] A popover, 2026-11-12, asked for by ashon ("팝오버 형태로
+        오버레이로... 부모 레이아웃을 유지하면서"): it stands on the patch's
+        button, over the page as it is, on glass like the editor's panel.
+        Up to 26 × 30 rem, above the button and as tall as the room there,
+        or below it where there is more room below (the controls put
+        away, which it no longer brings back); its height does not follow
+        the list, so filtering moves nothing (`src/viz/popover.ts`,
+        `src/ui/placement.ts`). The editor under it stays live and shows
+        each preset tried; a touch in the editor puts it away, one on the
+        keys plays. Measured in frames: 416 × 275 above the button at
+        945 × 555, 416 × 459 below it with the controls put away, 358 ×
+        480 at 390 × 844, 416 × 178 at 844 × 390 (where the sheet it
+        replaced was about 200 tall).
+  - [x] The play surface's choices a popover too, 2026-11-12, asked for
+        by ashon ("패드 선택 부분도 다른 오버레이처럼 팝오버 기반으로"):
+        Keys, Pads or XY, the mod wheel, and the pads' root and scale
+        stand on the surface's button as the presets do on the patch's,
+        on the same glass under the same header (a chip, "Play on", what
+        it plays, the close). Unlike the presets' it stands as tall as
+        its choices, measured as they change (the pads' key takes more
+        than the keys' line of help), up to the room the page has, past
+        which they scroll (`src/ui/SurfacePicker.tsx`). The pads under it
+        play while a key is chosen. Checked in a frame at 390×844, keys
+        and pads, and at 1000×600, where the scales scroll. Its choices on
+        one grid, the same day, asked for by ashon ("내부 버튼들 크기도 잘
+        정리해 줘"): the scales, which wrapped as wide as their names, three
+        to a row, each as wide as the next (a long name on two lines,
+        `OPTION_CELL` in `src/ui/controls.ts`), under the kinds' three and
+        the roots' six, two to a column. Measured in frames: the scales
+        104 px wide at 360×720, 114 at 390×844, 117 from 454 px, no name
+        cut, the popover as tall as before.
+  - [x] Insets, 2026-11-12, after ashon saw the presets' close button
+        6 px from the top and 12 from the side ("컨테이너들의 상하좌우 여백
+        ... 정돈해 줘"): a card keeps what stands on it as far in from all
+        four edges, 12 px where its controls are 44 px (the sheets, the
+        dialogs; the confirm dialog was 16), 10 where they are 28 (the
+        editor's panels, which were 8 at the top); the presets'
+        rows stand in as far as its buttons, and the line saying what
+        happened shows only while there is something to say. A row that
+        pans sideways runs to the card's edges and fades out at a side
+        with more past it (`src/ui/FadeRow.tsx`): the presets' categories
+        and file actions, a panel's views, chains and routes.
+  - [x] The presets look as the editor's panel does, 2026-11-12, asked
+        for by ashon beside the knob panel ("우측처럼 룩앤필을 맞추면
+        어떨까"): a neutral chip, the name and how many presets show in
+        its header, 28 px controls (Save, Save as…, More, the close a
+        little apart; the categories; the forms) whose touch still
+        reaches 44 px, and the panel's 10 px inset; the rows stay 44 px
+        for the finger that tries them. The 28 px fields, selects,
+        options and icon buttons are shared (`src/ui/controls.ts`,
+        `SmallIconButton`). At 390 × 844 the header now has room for its
+        name, which a 44 px header hid there.
   - [ ] iOS: Safari clears script-written storage after seven days
         without a visit, home-screen apps excepted; Export is the backup.
         Check `persist()` and the file share on an iPhone.
