@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { LFO_MAX_RATE, LFO_MIN_RATE } from '../../dsp/lfo'
 import { clampValue } from '../params'
 import {
   AMP_SPEC,
@@ -33,6 +34,11 @@ describe('the kinds of part', () => {
       MAX_MODULATORS,
       MAX_ROUTES,
     ]).toEqual([6, 4, 6, 8, 16])
+  })
+
+  it("turns an LFO's rate over the range the DSP holds it in", () => {
+    const rate = MODULATOR_KINDS.lfo.knobs.find((knob) => knob.key === 'rate')
+    expect([rate?.min, rate?.max]).toEqual([LFO_MIN_RATE, LFO_MAX_RATE])
   })
 
   it.each(SPECS)('gives %s knobs with defaults in range', (_, spec) => {

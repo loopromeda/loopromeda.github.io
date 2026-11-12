@@ -1,8 +1,21 @@
 import { describe, expect, it } from 'vitest'
 import { ChainSynth } from './chainSynth'
 import { LOWPASS } from './filter'
+import { LFO_MAX_RATE, LFO_MIN_RATE, LFO_SINE } from './lfo'
 import { SAW } from './oscillator'
-import { INPUT_OSC, INPUT_RING, ITEM_FILTER, NO_INPUT } from './slots'
+import {
+  INPUT_OSC,
+  INPUT_RING,
+  ITEM_CUTOFF,
+  ITEM_FILTER,
+  MOD_LFO,
+  NO_INPUT,
+  SOURCE_OFF,
+  SOURCE_VELOCITY,
+  itemDest,
+  modulatorSource,
+  rateDest,
+} from './slots'
 
 const SAMPLE_RATE = 48000
 
@@ -19,6 +32,26 @@ function twoSaws(): ChainSynth {
   synth.setItemCount(0, 1)
   synth.setItemKind(0, 0, ITEM_FILTER)
   synth.setFilter(0, 0, LOWPASS, 20000, 0, 0)
+  return synth
+}
+
+/**
+ * twoSaws through a resonant filter whose cutoff an LFO at rate (Hz)
+ * sweeps 3 octaves either way, and with octaves, a route from the note's
+ * velocity moving the LFO's rate that far
+ */
+function wobbled(rate: number, octaves?: number): ChainSynth {
+  const synth = twoSaws()
+  synth.setFilter(0, 0, LOWPASS, 2000, 0.3, 0)
+  synth.modulatorCount = 1
+  synth.setModulatorKind(0, MOD_LFO)
+  synth.setLfo(0, LFO_SINE, rate, 0, false)
+  synth.routeCount = octaves === undefined ? 1 : 2
+  const cutoff = itemDest(0, 0, ITEM_CUTOFF)
+  synth.setRoute(0, modulatorSource(0), cutoff, 3, SOURCE_OFF)
+  if (octaves !== undefined) {
+    synth.setRoute(1, SOURCE_VELOCITY, rateDest(0), octaves, SOURCE_OFF)
+  }
   return synth
 }
 
@@ -65,6 +98,14 @@ describe('ChainSynth', () => {
     synth.setItemKind(0, 0, 3)
     synth.setRoute(16, 1, 0, 1, 0)
     expect(play(synth)).toEqual(before)
+  })
+
+  it("keeps an LFO's rate within its knob's range, however far it is routed", () => {
+    // At its top, a route up plays as none; at its bottom, a route down
+    expect(play(wobbled(LFO_MAX_RATE, 4))).toEqual(play(wobbled(LFO_MAX_RATE)))
+    expect(play(wobbled(LFO_MIN_RATE, -4))).toEqual(play(wobbled(LFO_MIN_RATE)))
+    // Within the range, a route still moves it
+    expect(play(wobbled(5, 2))).not.toEqual(play(wobbled(5)))
   })
 
   it('plays nothing while no note is held', () => {

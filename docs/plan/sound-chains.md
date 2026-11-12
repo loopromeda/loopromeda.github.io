@@ -244,7 +244,13 @@ as a graph of flat tiles, flowing left to right.
      are tapped beside the knobs. A routed knob carries a
      sky count and an arc to where its routes take it at full
      (`knobReach` in `src/state/sound/knob.ts`: octaves multiply, the
-     rest add). A modulator's panel lists where it goes. The panel's
+     rest add), and the sound stops at the knob's ends as the arc does:
+     levels, FM, resonance and drive at 0 and 1, a cutoff in the
+     filter, and since 2026-11-12 an LFO's rate at 0.05 to 50 Hz
+     (`LFO_MIN_RATE`, `LFO_MAX_RATE` in `src/dsp/lfo.ts`). Unheld, a
+     route took it up to 16 times its knob, an LFO swinging a cutoff at
+     hundreds of hertz, which ashon heard as an overload; the output
+     itself never clipped. A modulator's panel lists where it goes. The panel's
      header pictured an envelope, an LFO or a filter's response
      (`src/ui/outline.ts`); since 2026-11-12 the tiles draw them
      instead, the modulators' in the rack under their names. Dragging

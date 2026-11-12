@@ -19,6 +19,15 @@ export const LFO_SAMPLE_HOLD = 4
 export const LFO_SMOOTH = 5
 
 /**
+ * An LFO's rate in Hz, from its knob's bottom to its top (kinds.ts): the
+ * routes into it move it this far and no further. Past the top it would
+ * swing what it moves at an audio rate, a cutoff's sweep heard as a rasp
+ * rather than a wobble.
+ */
+export const LFO_MIN_RATE = 0.05
+export const LFO_MAX_RATE = 50
+
+/**
  * The fade age stops counting here. Any fade this long is over by then and
  * the gain sits at 1, and a plain counter would keep working for no effect.
  */

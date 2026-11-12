@@ -1,7 +1,7 @@
 import { Adsr, AdsrShape } from './adsr'
 import { tanhApprox } from './fastMath'
 import { Filter, LOWPASS } from './filter'
-import { Lfo } from './lfo'
+import { LFO_MAX_RATE, LFO_MIN_RATE, Lfo } from './lfo'
 import { Noise } from './noise'
 import { Oscillator, SQUARE } from './oscillator'
 import { midiToFrequency } from './pitch'
@@ -414,7 +414,8 @@ export class ChainVoice {
       const lfo = this.#lfos[settings.lfoOrdinal[m] as number] as Lfo
       const base = settings.lfoRate[m] as number
       const octaves = this.#lfoOctaves[m] as number
-      const rate = octaves === 0 ? base : base * Math.pow(2, octaves)
+      // Routes move the rate within its knob's range, as its arc shows
+      const rate = octaves === 0 ? base : lfoRate(base * Math.pow(2, octaves))
       if (used[1 + m] === 1) {
         const shape = settings.lfoShape[m] as number
         lfo.process(out, rate, shape, settings.lfoFade[m] as number, 0, length)
@@ -835,6 +836,15 @@ export function pitchesToSteps(
     for (let i = start; i < end; i++) buffer[i] = from + slope * (i - start)
     from = to
   }
+}
+
+/** An LFO's rate in Hz moved by routes, held within its knob's range */
+function lfoRate(rate: number): number {
+  return rate > LFO_MIN_RATE
+    ? rate < LFO_MAX_RATE
+      ? rate
+      : LFO_MAX_RATE
+    : LFO_MIN_RATE
 }
 
 /** value within [0, 1] */
