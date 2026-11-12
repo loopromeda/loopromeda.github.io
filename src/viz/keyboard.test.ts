@@ -6,6 +6,9 @@ import {
   MAX_WHITE,
   MIN_VELOCITY,
   MIN_WHITE,
+  REACH_LOWEST,
+  REACH_OCTAVES,
+  REACH_WHITES,
   cNote,
   isBlack,
   keyAt,
@@ -18,6 +21,8 @@ import {
   slideFrom,
   velocityAt,
   whiteCount,
+  whiteStep,
+  whitesAbove,
 } from './keyboard'
 
 describe('noteName', () => {
@@ -100,17 +105,18 @@ describe('keyboardLayout', () => {
 })
 
 describe('keysPlace', () => {
-  it('stands the keys with middle C in their middle', () => {
-    expect(keysPlace(1)).toEqual({ lowest: 53, down: 2, up: 3 }) // F3–F4
-    expect(keysPlace(2)).toEqual({ lowest: 48, down: 2, up: 3 }) // C3–C5
-    expect(keysPlace(3)).toEqual({ lowest: 41, down: 1, up: 2 }) // F2–F5
-    expect(keysPlace(4)).toEqual({ lowest: 36, down: 1, up: 2 }) // C2–C6
-    expect(keysPlace(5)).toEqual({ lowest: 29, down: 0, up: 1 }) // F1–F6
-    expect(keysPlace(6)).toEqual({ lowest: 24, down: 0, up: 1 }) // C1–C7
+  it('stands one octave from middle C, more with it in their middle', () => {
+    // Moves in white keys: seven of them an octave
+    expect(keysPlace(1)).toEqual({ lowest: 60, down: 21, up: 21 }) // C4–C5
+    expect(keysPlace(2)).toEqual({ lowest: 48, down: 14, up: 21 }) // C3–C5
+    expect(keysPlace(3)).toEqual({ lowest: 41, down: 10, up: 18 }) // F2–F5
+    expect(keysPlace(4)).toEqual({ lowest: 36, down: 7, up: 14 }) // C2–C6
+    expect(keysPlace(5)).toEqual({ lowest: 29, down: 3, up: 11 }) // F1–F6
+    expect(keysPlace(6)).toEqual({ lowest: 24, down: 0, up: 7 }) // C1–C7
   })
 
   it('puts middle C on the white key at or just right of the middle', () => {
-    for (let octaves = 1; octaves <= 6; octaves++) {
+    for (let octaves = 2; octaves <= 6; octaves++) {
       const whites = keyboardLayout(keysPlace(octaves).lowest, octaves)
         .filter((key) => !key.black)
         .map((key) => key.note)
@@ -118,8 +124,43 @@ describe('keysPlace', () => {
     }
   })
 
-  it('fits seven octaves from C1 to C8, with nowhere to shift', () => {
+  it('fits seven octaves from C1 to C8, with nowhere to move', () => {
     expect(keysPlace(7)).toEqual({ lowest: 24, down: 0, up: 0 })
+  })
+
+  it('moves only within C1 to C8', () => {
+    for (let octaves = 1; octaves <= 7; octaves++) {
+      const { lowest, down, up } = keysPlace(octaves)
+      expect(whiteStep(lowest, -down)).toBe(cNote(1))
+      const top = whiteStep(whiteStep(lowest, up), 7 * octaves)
+      expect(top).toBe(cNote(8))
+    }
+  })
+})
+
+describe('the reach', () => {
+  it('spans C1 to C8 in REACH_WHITES white keys', () => {
+    const whites = keyboardLayout(REACH_LOWEST, REACH_OCTAVES).filter(
+      (key) => !key.black
+    )
+    expect(whites).toHaveLength(REACH_WHITES)
+    expect(whites[0]?.note).toBe(cNote(1))
+    expect(whites[whites.length - 1]?.note).toBe(cNote(8))
+  })
+
+  it('counts white keys above C1', () => {
+    expect(whitesAbove(cNote(1))).toBe(0)
+    expect(whitesAbove(60)).toBe(21)
+    expect(whitesAbove(61)).toBe(21) // C#4: the white key below it
+    expect(whitesAbove(cNote(8))).toBe(REACH_WHITES - 1)
+  })
+
+  it('steps from white key to white key, across octaves', () => {
+    expect(whiteStep(60, 1)).toBe(62) // C4 to D4
+    expect(whiteStep(64, 1)).toBe(65) // E4 to F4
+    expect(whiteStep(60, -1)).toBe(59) // C4 to B3
+    expect(whiteStep(41, 7)).toBe(53) // F2 to F3
+    expect(whiteStep(60, 0)).toBe(60)
   })
 })
 
@@ -128,8 +169,10 @@ describe('middleC', () => {
     expect(middleC(41, 3)).toBe(60)
     expect(middleC(48, 2)).toBe(60)
     expect(middleC(53, 1)).toBe(60)
+    expect(middleC(60, 1)).toBe(60)
     expect(middleC(53, 3)).toBe(72)
-    expect(middleC(24, 7)).toBe(72)
+    // C1 to C8: C4 and C5 as near the middle, the lower taken
+    expect(middleC(24, 7)).toBe(60)
   })
 })
 

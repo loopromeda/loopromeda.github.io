@@ -16,28 +16,40 @@ import {
   type SurfaceSettings,
 } from '../state/surface'
 import {
+  REACH_WHITES,
   cNote,
   keysFit,
   keysPlace,
   middleC,
   noteName,
   pitchName,
+  whiteCount,
+  whiteStep,
+  whitesAbove,
 } from '../viz/keyboard'
 import { padGrid, padNote, type PadGrid } from '../viz/pads'
 import { COMPUTER_ID, Hands } from './hands'
 import { IconButton } from './IconButton'
 import { Keys } from './Keys'
+import { KeysNavigator } from './KeysNavigator'
 import { Pads } from './Pads'
 
 /** The pads' lowest note is in octave 1 or higher, their highest C8 or lower */
 const LOWEST = 1
 const TOP = 8
 /**
- * Where each surface starts: the keys with middle C in their middle
- * (keysPlace), shifted no octaves, the pads (two octaves and more of
- * them) on the root in octave 3. Each keeps its own octave.
+ * Where each surface starts: the keys where keysPlace stands them, moved
+ * no white keys, the pads (two octaves and more of them) on the root in
+ * octave 3. Each keeps its own place.
  */
 const STARTS: Readonly<Record<SurfaceKind, number>> = { keys: 0, pads: 3 }
+/** What the arrows and Z and X move: the keys 7 white keys, the pads 1 */
+const OCTAVE: Readonly<Record<SurfaceKind, number>> = { keys: 7, pads: 1 }
+/**
+ * From this width (CSS px) the keys' navigator stands in the header, between
+ * the menus and the arrows; under it, in a strip of its own below
+ */
+const NAVIGATOR_IN_HEADER = 704
 
 /**
  * Computer keys (KeyboardEvent.code) for the keys: each plays as many
@@ -104,28 +116,34 @@ interface Fit {
   /** How tall the keys would be, keysFit's length */
   length: number
   grid: PadGrid
+  /** Whether the header has room for the keys' navigator */
+  wide: boolean
 }
 
 const sameFit = (a: Fit, b: Fit) =>
   a.octaves === b.octaves &&
   a.length === b.length &&
   a.grid.columns === b.grid.columns &&
-  a.grid.rows === b.grid.rows
+  a.grid.rows === b.grid.rows &&
+  a.wide === b.wide
 
 /**
  * Where notes are played, on piano keys or on pads (settings.kind), sized
  * by className in the page's column: App gives it the rest, or, on a roomy
  * screen, the keys' own length, which the section holds as --key-length
- * (the pads stand as tall). Keys: as many octaves as fit at a finger's
- * width (one on a phone held upright, more on a wide window: keysFit).
- * The keys start with middle C in their middle. Pads: as many as fit at a
- * fingertip's size, playing the notes of settings' key. Both shift an
- * octave at a time.
+ * (the pads stand as tall), under what stands above them, --play-head.
+ * Keys: as many octaves as fit at a finger's width (one on a phone held
+ * upright, more on a wide window: keysFit), standing where keysPlace puts
+ * them (one octave from middle C up, more around it); the arrows move
+ * them an octave, the navigator (KeysNavigator, C1 to C8 drawn small) a
+ * white key at a time. Pads: as many as fit at a fingertip's size,
+ * playing the notes of settings' key; the arrows shift them an octave.
  * Touches go straight to the engine; React renders only the keys or pads,
- * again when the octave, the key or the size changes. The header row holds
+ * again when they move, the key or the size changes. The header row holds
  * `menus` (the patch, the surface) at its left and the octave controls at
- * its right. Given fullVelocity, every note plays at full velocity, wherever
- * a finger lands.
+ * its right, the navigator between them on a wide screen and in a strip
+ * under them on a narrow one. Given fullVelocity, every note plays at full
+ * velocity, wherever a finger lands.
  */
 export function PlaySurface({
   engine,
@@ -147,6 +165,7 @@ export function PlaySurface({
     octaves: 1,
     length: 0,
     grid: { columns: 4, rows: 4 },
+    wide: false,
   })
   const surfaceRef = useRef<HTMLDivElement>(null)
   const { kind, root, scale } = settings
@@ -155,7 +174,7 @@ export function PlaySurface({
   const count = grid.columns * grid.rows
   // The top pad's height above the bottom one
   const span = padNote(count - 1, 0, scaleSteps(scale))
-  // The keys: octaves from where they stand around middle C; the pads:
+  // The keys: white keys moved from where keysPlace stands them; the pads:
   // the octave of their lowest root
   const place = keysPlace(fit.octaves)
   const lowest = pads ? LOWEST : -place.down
@@ -163,9 +182,14 @@ export function PlaySurface({
     ? Math.max(Math.floor((cNote(TOP) - root - span) / 12) - 1, LOWEST)
     : place.up
   const first = Math.min(Math.max(starts[kind], lowest), highest)
-  const lowestNote = pads ? cNote(first) + root : place.lowest + 12 * first
+  const lowestNote = pads ? cNote(first) + root : whiteStep(place.lowest, first)
   const highestNote = lowestNote + (pads ? span : 12 * fit.octaves)
   const range = `${noteName(lowestNote)} – ${noteName(highestNote)}`
+  // The navigator, for keys that do not reach C1 to C8 at once
+  const whites = whiteCount(fit.octaves)
+  const navigator = !pads && whites < REACH_WHITES
+  const inHeader = navigator && fit.wide
+  const inStrip = navigator && !fit.wide
   const notes = useMemo(
     () =>
       pads
@@ -183,19 +207,34 @@ export function PlaySurface({
     const observer = new ResizeObserver(([entry]) => {
       const width = entry?.contentRect.width ?? 0
       const height = entry?.contentRect.height ?? 0
-      const next = { ...keysFit(width), grid: padGrid(width, height) }
+      const next = {
+        ...keysFit(width),
+        grid: padGrid(width, height),
+        wide: width >= NAVIGATOR_IN_HEADER,
+      }
       setFit((was) => (sameFit(was, next) ? was : next))
     })
     observer.observe(surface)
     return () => observer.disconnect()
   }, [])
 
-  const shift = useCallback(
-    (by: number) => {
-      const next = Math.min(Math.max(first + by, lowest), highest)
-      setStarts((was) => ({ ...was, [kind]: next }))
+  /** Moves the keys or pads to first, kept within their reach */
+  const moveTo = useCallback(
+    (to: number) => {
+      const next = Math.min(Math.max(to, lowest), highest)
+      if (next !== first) setStarts((was) => ({ ...was, [kind]: next }))
     },
     [kind, first, lowest, highest]
+  )
+  const shift = useCallback(
+    (octaves: number) => moveTo(first + octaves * OCTAVE[kind]),
+    [moveTo, first, kind]
+  )
+  // The navigator counts the keys' place in white keys up from C1
+  const position = whitesAbove(lowestNote)
+  const navigate = useCallback(
+    (to: number) => moveTo(to - place.down),
+    [moveTo, place.down]
   )
 
   // Computer keys, for a desktop: they play, Z and X shift the octave
@@ -233,22 +272,37 @@ export function PlaySurface({
     }
   }, [hands, pads, notes, lowestNote, fit.octaves, shift])
 
+  const keysNavigator = (className: string) => (
+    <KeysNavigator
+      position={position}
+      whites={whites}
+      range={range}
+      onMove={navigate}
+      className={className}
+    />
+  )
+
   // Its header and the surface's least height are its minimum: on a short
-  // screen the controls above give way (their graph pans), not the keys
+  // screen the controls above give way (their graph pans), not the keys.
+  // What stands above the keys, for App to size them by: the header and its
+  // gap (2.75rem and 0.5rem), and the navigator's strip and its gap
+  const style = {
+    '--play-head': inStrip ? '5.25rem' : '3.25rem',
+    ...(fit.length > 0 && { '--key-length': `${fit.length}px` }),
+  } as CSSProperties
   return (
     <section
       aria-label="Play surface"
       className={`flex flex-col gap-2 ${className}`}
-      style={
-        fit.length > 0
-          ? ({ '--key-length': `${fit.length}px` } as CSSProperties)
-          : undefined
-      }
+      style={style}
     >
       {/* A narrow header keeps the patch's name and drops the range */}
       <div className="@container flex h-11 shrink-0 items-center gap-3">
         <div className="flex min-w-0 items-center gap-2">{menus}</div>
-        <div className="ml-auto flex shrink-0 items-center gap-2">
+        {inHeader && keysNavigator('ml-auto h-7 max-w-md min-w-40 flex-1')}
+        <div
+          className={`flex shrink-0 items-center gap-2 ${inHeader ? '' : 'ml-auto'}`}
+        >
           <IconButton
             label="Octave down"
             disabled={first <= lowest}
@@ -266,6 +320,7 @@ export function PlaySurface({
           />
         </div>
       </div>
+      {inStrip && keysNavigator('h-6 shrink-0')}
       <div ref={surfaceRef} className="relative min-h-28 flex-1">
         {pads ? (
           <Pads
@@ -282,7 +337,7 @@ export function PlaySurface({
             lowest={lowestNote}
             octaves={fit.octaves}
             fullVelocity={fullVelocity}
-            label={`Keys ${range}. Computer keys A to K play them; Z and X shift the octave`}
+            label={`Keys ${range}. Computer keys A to K play them; Z and X shift them an octave`}
           />
         )}
       </div>

@@ -96,7 +96,8 @@ src/ui/       React components; SoundEditor.tsx the sound as tiles
               turns one knob of one part (or a source's depth into one),
               finer with the finger off to the side; PlaySurface.tsx plays
               notes on Keys.tsx or Pads.tsx (hands.ts: who holds which
-              note), PresetBrowser.tsx loads, saves and moves presets,
+              note), KeysNavigator.tsx moves the keys a white key at a
+              time over C1 to C8, PresetBrowser.tsx loads, saves and moves presets,
               SettingsDialog.tsx, a modal dialog, holds the settings,
               Measure CPU and the browser's checks; pages.ts gives each
               sheet an address (#/presets), so a reload keeps it and Back

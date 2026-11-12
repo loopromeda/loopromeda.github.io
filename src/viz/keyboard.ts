@@ -91,47 +91,72 @@ export function keysFit(width: number): KeysFit {
   return { octaves, length: Math.round(white * KEY_LENGTH) }
 }
 
-/** Middle C: the keys stand with it in their middle */
+/** Middle C: the keys stand around it */
 export const MIDDLE_C = 60
-/** The lowest and the highest note the keys reach: C1 and C8 */
+/** The lowest note the keys reach, C1; RANGE octaves above it, C8 */
 const BOTTOM = cNote(1)
-const TOP = cNote(8)
 
-/** Where keys stand, and how far they shift */
+/**
+ * The keys' whole reach, C1 to C8, as one keyboard of RANGE octaves from
+ * REACH_LOWEST: what the navigator draws (keyboardLayout)
+ */
+export const REACH_LOWEST = BOTTOM
+export const REACH_OCTAVES = RANGE
+/** The white keys from C1 to C8 */
+export const REACH_WHITES = whiteCount(RANGE)
+
+/**
+ * How many white keys the white key note stands above C1: C1 is 0, C4
+ * 21, C8 49 (a black key counts as the white key below it)
+ */
+export function whitesAbove(note: number): number {
+  return whiteIndex(note) - whiteIndex(BOTTOM)
+}
+
+/** The white key whites white keys above note's (below it, for fewer) */
+export function whiteStep(note: number, whites: number): number {
+  return whiteAt(whiteIndex(note) + whites)
+}
+
+/** Where keys stand, and how far they move */
 export interface KeysPlace {
   /** Their lowest note, a white key's */
   readonly lowest: number
-  /** How many octaves they shift down from there, and up, in C1 to C8 */
+  /**
+   * How many white keys they move down from there, and up, in C1 to C8
+   * (seven of them an octave)
+   */
   readonly down: number
   readonly up: number
 }
 
 /**
- * Keys octaves octaves wide with middle C in their middle: from a C for
- * an even number of octaves (C3 to C5), from an F for an odd one (F3 to
- * F4, F2 to F5: C4 the white key just right of the middle). Where that
- * would reach past C1 or C8 they stand an octave in, or at C1 (seven
- * octaves only fit from there).
+ * Where keys octaves octaves wide stand: one octave from middle C (C4 to
+ * C5); more with middle C in their middle, from a C for an even number
+ * of octaves (C3 to C5), from an F for an odd one (F2 to F5: C4 the
+ * white key just right of the middle). Where that would reach past C1 or
+ * C8 they stand at C1 (seven octaves only fit from there). They move a
+ * white key at a time, anywhere in C1 to C8.
  */
 export function keysPlace(octaves: number): KeysPlace {
-  const span = 12 * octaves
-  const below = Math.floor(whiteCount(octaves) / 2)
-  let lowest = whiteAt(Math.max(whiteIndex(MIDDLE_C) - below, 0))
-  while (lowest < BOTTOM) lowest += 12
-  if (lowest + span > TOP) lowest = BOTTOM
+  const whites = whiteCount(octaves)
+  const room = REACH_WHITES - whites
+  const below = octaves === 1 ? 0 : Math.floor(whites / 2)
+  const start = Math.min(Math.max(whitesAbove(MIDDLE_C) - below, 0), room)
   return {
-    lowest,
-    down: Math.floor((lowest - BOTTOM) / 12),
-    up: Math.max(Math.floor((TOP - span - lowest) / 12), 0),
+    lowest: whiteStep(BOTTOM, start),
+    down: start,
+    up: Math.max(room - start, 0),
   }
 }
 
 /**
- * The C nearest the middle of keys from lowest, octaves octaves wide:
- * where the computer keys start (C4 where the keys stand around it)
+ * The C nearest the middle of keys from lowest, octaves octaves wide, the
+ * lower of two as near: where the computer keys start (C4 where the keys
+ * stand around it, or from it)
  */
 export function middleC(lowest: number, octaves: number): number {
-  return 12 * Math.round((lowest + 6 * octaves) / 12)
+  return 12 * Math.ceil((lowest + 6 * octaves) / 12 - 0.5)
 }
 
 /**

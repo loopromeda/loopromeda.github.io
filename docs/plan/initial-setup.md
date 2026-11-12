@@ -349,7 +349,18 @@ right, benchmark within budget.
         middle, from a C for an even number of octaves (C3–C5) and from an
         F for an odd one (F3–F4 on a phone, F2–F5 on the Fold open), and
         the computer keys start on the C nearest their middle (`keysPlace`
-        and `middleC` in `src/viz/keyboard.ts`).
+        and `middleC` in `src/viz/keyboard.ts`). Later that day, also
+        asked for by ashon: one octave starts on C4 (C4–C5), and the keys
+        move a white key at a time between C1 and C8 by a navigator, the
+        whole reach drawn small with the keys on screen framed, a finger
+        dragging the frame or tapping beside it to bring the frame there
+        (`src/ui/KeysNavigator.tsx`; to a keyboard a slider, the arrows a
+        white key, Page Up and Down an octave). It stands in the header
+        from a 704 px wide surface, and under it in a 24 px strip on a
+        narrower one; the arrows and Z/X still move an octave. Checked in
+        desktop Chrome at 390×844 (C4–C5, the strip), 844×390 and
+        1000×608 (in the header): a drag moved C3–C5 to F4–F6, a tap at
+        the left end to C1, End to C6–C8.
         Computer keys play the pads too (A–; then Q–P). Measured in frames:
         360×720 4×3 pads of 79×65 px, 390×844 4×4 of 87×73, 930×566 8×2
         of 109×66, 768×1024 4×4 of 181×130, 1280×800 8×2 of 153×160,
