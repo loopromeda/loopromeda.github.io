@@ -7,6 +7,7 @@
  */
 import {
   AMP,
+  SENDS,
   VOICE,
   sendKey,
   type Refs,
@@ -15,8 +16,8 @@ import {
 } from './sound'
 
 /**
- * One knob's new value: on part (an input, chain, item, modulator or
- * route id, amp or voice), by key. A chain's send from an input is its
+ * One knob's new value: on part (an input, chain, item, modulator, route
+ * or effect id, amp or voice), by key. A chain's send from an input is its
  * knob send.<input id>, a route's amount its knob ROUTE_AMOUNT.
  */
 export interface KnobChange {
@@ -66,6 +67,10 @@ export function knobChanges(before: Sound, after: Sound): KnobChange[] | null {
   })
   compare(AMP, before.amp, after.amp)
   compare(VOICE, before.voice, after.voice)
+  compare(SENDS, before.sends, after.sends)
+  after.effects.forEach((effect, f) => {
+    compare(effect.id, before.effects[f]?.values ?? {}, effect.values)
+  })
   return changes
 }
 
@@ -104,7 +109,11 @@ function sameStructure(before: Sound, after: Sound): boolean {
       )
     }) &&
     sameKeys(before.amp, after.amp) &&
-    sameKeys(before.voice, after.voice)
+    sameKeys(before.voice, after.voice) &&
+    sameKeys(before.sends, after.sends) &&
+    same(before.effects, after.effects, (a, b) => {
+      return a.id === b.id && a.kind === b.kind && sameKeys(a.values, b.values)
+    })
   )
 }
 

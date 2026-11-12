@@ -1,7 +1,9 @@
+import { initMix, setMixValue, type Mix } from '../state/mix'
 import { knobChanges } from '../state/sound/diff'
 import { initSound, type Sound } from '../state/sound/sound'
 import processorUrl from '../worklet/processor.ts?worker&url'
 import {
+  PART_OUTPUTS,
   PROCESSOR_NAME,
   type BenchReport,
   type FromWorklet,
@@ -47,6 +49,54 @@ const seconds = (value: unknown): number | undefined =>
 export const WAVEFORM_SIZE = 2048
 
 /**
+ * The spectrum's FFT (AnalyserNode.fftSize): 85 ms at 48 kHz, its bins
+ * 11.7 Hz apart, half as many bins as this
+ */
+export const SPECTRUM_SIZE = 4096
+
+/**
+ * How much of the last frame's spectrum each new one keeps
+ * (smoothingTimeConstant): a little steadier than the analyser's 0.8
+ * would be slow
+ */
+const SPECTRUM_SMOOTHING = 0.7
+
+/**
+ * Which output a view shows: the master (everything, after the soft
+ * clip), or part k's own sound (after its inserts, before its sends,
+ * unclipped)
+ */
+export type OutputSource = 'master' | number
+
+/**
+ * What an output's views read in a display frame (readOutput): the two
+ * sides' latest WAVEFORM_SIZE samples, oldest first, and the spectrum of
+ * both, SPECTRUM_SIZE / 2 bins in decibels (getFloatFrequencyData)
+ */
+export interface MasterFrame {
+  readonly left: Float32Array<ArrayBuffer>
+  readonly right: Float32Array<ArrayBuffer>
+  readonly spectrum: Float32Array<ArrayBuffer>
+}
+
+/** Buffers for readOutput, the sizes it fills */
+export function masterFrame(): MasterFrame {
+  return {
+    left: new Float32Array(WAVEFORM_SIZE),
+    right: new Float32Array(WAVEFORM_SIZE),
+    spectrum: new Float32Array(SPECTRUM_SIZE / 2),
+  }
+}
+
+/** An output's taps: each side's samples, the sum's waveform, spectrum */
+interface Taps {
+  readonly left: AnalyserNode
+  readonly right: AnalyserNode
+  readonly waveform: AnalyserNode
+  readonly spectrum: AnalyserNode
+}
+
+/**
  * The page's audio: one AudioContext and one AudioWorkletNode, which runs
  * all of the DSP (src/worklet). The main thread only sends it intents.
  * Subscribe-and-snapshot, for useSyncExternalStore.
@@ -59,13 +109,18 @@ export const WAVEFORM_SIZE = 2048
 export class Engine {
   #context: AudioContext | undefined
   #node: AudioWorkletNode | undefined
-  /** Taps the output for displays; passes the signal through unchanged */
-  #analyser: AnalyserNode | undefined
+  /** Tap the output for displays; pass the signal through unchanged */
+  #taps: Taps | undefined
+  /** Each part's own output, tapped as the master's, heard nowhere */
+  #partTaps: readonly Taps[] = []
   #snapshot: EngineSnapshot = { state: 'idle' }
   /** The sound, as the main thread has it */
   #sound: Sound = initSound()
   /** The sound the worklet plays, as last sent; none before it exists */
   #sent: Sound | undefined
+  /** The session's mix (src/state/mix.ts): the buses and the master */
+  #mix: Mix = initMix()
+  readonly #mixListeners = new Set<() => void>()
   readonly #listeners = new Set<() => void>()
   readonly #soundListeners = new Set<() => void>()
   /** Who waits for the measurement under way, answered in order */
@@ -122,24 +177,29 @@ export class Engine {
 
     try {
       await context.audioWorklet.addModule(processorUrl)
+      const outputs = 1 + PART_OUTPUTS
       const node = new AudioWorkletNode(context, PROCESSOR_NAME, {
         numberOfInputs: 0,
-        outputChannelCount: [1],
-      })
-      // In the path rather than beside it: an analyser that does not reach
-      // the destination is not guaranteed to be rendered in every browser
-      const analyser = new AnalyserNode(context, {
-        fftSize: WAVEFORM_SIZE,
-        smoothingTimeConstant: 0,
+        // The master, then each part's own: stereo, as the effects spread
+        // the voices (src/dsp/effects.ts)
+        numberOfOutputs: outputs,
+        outputChannelCount: Array.from({ length: outputs }, () => 2),
       })
       node.port.onmessage = (event: MessageEvent<FromWorklet>) =>
         this.#receive(event.data)
-      node.connect(analyser).connect(context.destination)
-      this.#analyser = analyser
+      this.#taps = tap(context, node, 0, context.destination)
+      // The parts' reach the destination silenced, so that every browser
+      // renders their analysers and none is heard twice
+      const hush = new GainNode(context, { gain: 0 })
+      hush.connect(context.destination)
+      this.#partTaps = Array.from({ length: PART_OUTPUTS }, (_, k) =>
+        tap(context, node, k + 1, hush)
+      )
       this.#node = node
       // The worklet starts with no sound: catch it up, ahead of any note
       this.#sent = undefined
       this.#sync()
+      this.#post({ t: 'mix', mix: this.#mix })
       if (this.#voices !== undefined) {
         this.#post({ t: 'voices', count: this.#voices })
       }
@@ -250,7 +310,8 @@ export class Engine {
     this.#node?.disconnect()
     this.#context = undefined
     this.#node = undefined
-    this.#analyser = undefined
+    this.#taps = undefined
+    this.#partTaps = []
     this.#sent = undefined
     // A measurement under way on the old worklet will not answer
     for (const resolve of this.#benchWaiting.splice(0)) resolve(undefined)
@@ -322,13 +383,66 @@ export class Engine {
     return () => this.#soundListeners.delete(listener)
   }
 
+  /** The session's mix: a document never changed in place */
+  readonly getMix = (): Mix => this.#mix
+
   /**
-   * Copies the latest WAVEFORM_SIZE output samples into `into`, oldest
-   * first. False (and `into` untouched) until the engine has started.
+   * Plays mix instead (setMixValue's, or read from storage): the audio
+   * thread gets it whole; listeners hear of it after
    */
-  readWaveform(into: Float32Array<ArrayBuffer>): boolean {
-    if (!this.#analyser) return false
-    this.#analyser.getFloatTimeDomainData(into)
+  setMix(mix: Mix): void {
+    if (mix === this.#mix) return
+    this.#mix = mix
+    this.#post({ t: 'mix', mix })
+    for (const listener of this.#mixListeners) listener()
+  }
+
+  /** Sets one knob of the mix (a bus's, an effect's, the master's) */
+  editMix(part: string, key: string, value: number): void {
+    this.setMix(setMixValue(this.#mix, part, key, value))
+  }
+
+  /** Calls listener after each change to the mix; returns the way to stop */
+  readonly subscribeMix = (listener: () => void): (() => void) => {
+    this.#mixListeners.add(listener)
+    return () => this.#mixListeners.delete(listener)
+  }
+
+  /** An output's taps; none before the audio starts, nor past the parts */
+  #tapsOf(source: OutputSource): Taps | undefined {
+    return source === 'master' ? this.#taps : this.#partTaps[source]
+  }
+
+  /**
+   * Copies the latest WAVEFORM_SIZE samples of an output (the master's
+   * unless another is named) into `into`, oldest first, the two sides
+   * mixed down. False (and `into` untouched) until the engine has
+   * started.
+   */
+  readWaveform(
+    into: Float32Array<ArrayBuffer>,
+    source: OutputSource = 'master'
+  ): boolean {
+    const taps = this.#tapsOf(source)
+    if (!taps) return false
+    taps.waveform.getFloatTimeDomainData(into)
+    return true
+  }
+
+  /**
+   * Fills frame (masterFrame's) with an output (the master's unless
+   * another is named) as it is now: each side's samples and the
+   * spectrum. Once a display frame at most: each spectrum read smooths
+   * it again (smoothingTimeConstant), so views share one read
+   * (OutputTap, src/ui/frames.ts). False (and frame untouched) until the
+   * engine has started.
+   */
+  readOutput(frame: MasterFrame, source: OutputSource = 'master'): boolean {
+    const taps = this.#tapsOf(source)
+    if (!taps) return false
+    taps.left.getFloatTimeDomainData(frame.left)
+    taps.right.getFloatTimeDomainData(frame.right)
+    taps.spectrum.getFloatFrequencyData(frame.spectrum)
     return true
   }
 
@@ -410,4 +524,43 @@ export class Engine {
     this.#snapshot = next
     for (const listener of this.#listeners) listener()
   }
+}
+
+/**
+ * Output k of node's taps, in its path to end (the destination, or a
+ * silenced way to it) rather than beside it (an analyser that does not
+ * reach the destination is not rendered in every browser): the sides
+ * split, each through an analyser, merged again, then through the
+ * waveform's analyser (which mixes them down for itself) and the
+ * spectrum's. An analyser passes its input on unchanged.
+ */
+function tap(
+  context: AudioContext,
+  node: AudioNode,
+  output: number,
+  end: AudioNode
+): Taps {
+  const samples = () =>
+    new AnalyserNode(context, {
+      fftSize: WAVEFORM_SIZE,
+      smoothingTimeConstant: 0,
+    })
+  const left = samples()
+  const right = samples()
+  const waveform = samples()
+  const spectrum = new AnalyserNode(context, {
+    fftSize: SPECTRUM_SIZE,
+    smoothingTimeConstant: SPECTRUM_SMOOTHING,
+    minDecibels: -100,
+    maxDecibels: 0,
+  })
+  const split = new ChannelSplitterNode(context, { numberOfOutputs: 2 })
+  const merge = new ChannelMergerNode(context, { numberOfInputs: 2 })
+  node.connect(split, output)
+  split.connect(left, 0)
+  split.connect(right, 1)
+  left.connect(merge, 0, 0)
+  right.connect(merge, 0, 1)
+  merge.connect(waveform).connect(spectrum).connect(end)
+  return { left, right, waveform, spectrum }
 }

@@ -1,9 +1,11 @@
 import { ChainSynth } from './chainSynth'
+import { EffectRack } from './effects'
 import { BANDPASS, HIGHPASS, LOWPASS } from './filter'
+import { Mixer, Strip } from './output'
 import { LFO_SAMPLE_HOLD, LFO_SINE, LFO_SMOOTH, LFO_TRIANGLE } from './lfo'
 import { SAW, SINE, SQUARE, TRIANGLE } from './oscillator'
 import {
-  DEST_AMP,
+  DEST_PAN,
   DEST_PITCH,
   INPUT_FM,
   INPUT_NOISE,
@@ -16,7 +18,12 @@ import {
   ITEM_DRIVE_AMOUNT,
   ITEM_FILTER,
   ITEM_RESONANCE,
+  FX_CHORUS,
+  FX_DELAY,
+  FX_REVERB,
   MAX_CHAINS,
+  MAX_BUSES,
+  MAX_EFFECTS,
   MAX_INPUTS,
   MAX_ITEMS,
   MAX_MODULATORS,
@@ -121,7 +128,8 @@ export function chainStressSynth(
     [env(3), itemDest(3, 5, ITEM_CUTOFF), 4, SOURCE_OFF],
     [SOURCE_KEY, itemDest(0, 2, ITEM_RESONANCE), 0.3, SOURCE_VELOCITY],
     [lfo(1), itemDest(1, 1, ITEM_DRIVE_AMOUNT), 0.3, SOURCE_OFF],
-    [SOURCE_RANDOM, DEST_AMP, 0.2, lfo(0)],
+    // Each voice placed anew every sample (the gain's route is cheaper)
+    [SOURCE_RANDOM, DEST_PAN, 0.5, lfo(0)],
     [lfo(0), rateDest(5), 1, SOURCE_OFF],
     [SOURCE_SLIDE, itemDest(3, 0, ITEM_CUTOFF), 1, lfo(2)],
   ]
@@ -136,6 +144,78 @@ export function chainStressSynth(
     synth.slide(key, 0.5)
   }
   return synth
+}
+
+/** The two heaviest kinds of effect, which a stress rack takes in turn */
+const HEAVIEST: readonly number[] = [FX_CHORUS, FX_REVERB]
+
+/**
+ * A full rack: MAX_EFFECTS effects of kinds, in turn (FX_CHORUS,
+ * FX_DELAY, FX_REVERB), each with a Mix of 1/2, dry and wet both whole,
+ * so none skips its dry or its wet. A delay is a ping-pong one, its
+ * feedback high; a reverb long. Unless asked for others, the two
+ * heaviest kinds in turn, a chorus and a reverb (chainSynth.bench.ts
+ * measures a full rack of each kind: on an M3, 0.038 ms, 0.031 and a
+ * delay's 0.006 a block).
+ */
+export function chainStressRack(
+  sampleRate: number,
+  kinds: readonly number[] = HEAVIEST
+): EffectRack {
+  const rack = new EffectRack(sampleRate)
+  fill(rack, kinds)
+  return rack
+}
+
+/** Sets rack as chainStressRack makes one */
+function fill(rack: EffectRack, kinds = HEAVIEST): void {
+  rack.count = MAX_EFFECTS
+  for (let k = 0; k < MAX_EFFECTS; k++) {
+    const kind = kinds[k % kinds.length] ?? FX_REVERB
+    rack.setKind(k, kind)
+    if (kind === FX_CHORUS) rack.setChorus(k, 0.6 + 0.3 * k, 0.5, 0.5)
+    else if (kind === FX_DELAY) rack.setDelay(k, 0.35, 0.6, 0.6, true, 0.5)
+    else rack.setReverb(k, 0.8, 4, 0.4, 0.5)
+  }
+}
+
+/**
+ * The worklet's whole output at its heaviest (output.ts): the stress
+ * synth's voices through a full rack of inserts, sent whole to every
+ * bus, each bus a full rack too, then the master's, its level, the clip.
+ * process fills out with the left and keeps a right of its own, sized
+ * to out the first time and whenever it changes.
+ */
+export function chainStressOutput(
+  sampleRate: number,
+  voices: number,
+  playing = voices
+): {
+  readonly strip: Strip
+  readonly mixer: Mixer
+  process(out: Float32Array): void
+} {
+  const synth = chainStressSynth(sampleRate, voices, playing)
+  const strip = new Strip(synth, chainStressRack(sampleRate))
+  const mixer = new Mixer(sampleRate)
+  for (let k = 0; k < MAX_BUSES; k++) {
+    const send = strip.sends[k]
+    if (send) send.goal = 1
+    mixer.setBus(k, true, 1)
+    const rack = mixer.bus(k)
+    if (rack) fill(rack)
+  }
+  fill(mixer.master)
+  const strips = [strip]
+  let right = new Float32Array(0)
+  return {
+    strip,
+    mixer,
+    process(out) {
+      if (right.length !== out.length) right = new Float32Array(out.length)
+      mixer.render(strips, out, right)
+    },
+  }
 }
 
 /** What timeBlocks measured */

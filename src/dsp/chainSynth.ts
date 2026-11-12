@@ -1,5 +1,6 @@
 import { VoiceAllocator } from './allocator'
 import { ChainSettings, ChainVoice } from './chainVoice'
+import { softClip } from './clip'
 import { Smoother } from './smoother'
 import {
   INPUT_FM,
@@ -89,6 +90,8 @@ export class ChainSynth {
   readonly #amounts: Smoother[] = []
   /** The mod wheel, 0..1: the Wheel source, the same for every voice */
   readonly #wheel: Smoother
+  /** Where the voices stand between the sides, -1..1 (pan) */
+  readonly #pan: Smoother
   readonly #smoothers: Smoother[] = []
   /** True after a change to the structure, until the next block */
   #restructured = true
@@ -129,6 +132,8 @@ export class ChainSynth {
     smoothers(MAX_ROUTES, 0, this.#amounts)
     this.#wheel = new Smoother(sampleRate, WHEEL_SMOOTHING, 0)
     this.#smoothers.push(this.#wheel)
+    this.#pan = new Smoother(sampleRate, SMOOTHING, 0)
+    this.#smoothers.push(this.#pan)
     this.#settings.bendCoef = 1 - Math.exp(-3 / (BEND_TIME * sampleRate))
   }
 
@@ -319,6 +324,16 @@ export class ChainSynth {
   }
 
   /**
+   * Where the voices stand between the sides in stereo (process given
+   * right): -1 left, 0 the middle, 1 right, a route to DEST_PAN moving each
+   * voice from there. Glides there, as a knob turned does.
+   */
+  set pan(value: number) {
+    // Not a number passes and is ignored (target)
+    target(this.#pan, value < -1 ? -1 : value > 1 ? 1 : value)
+  }
+
+  /**
    * Route r (0..MAX_ROUTES-1): source (slots.ts) to dest, amount in the
    * destination's own units (semitones, octaves, levels), times via (a
    * source; SOURCE_OFF: times 1). A new amount on the same routing glides;
@@ -484,27 +499,35 @@ export class ChainSynth {
     }
   }
 
-  /** Renders the next block into out */
-  process(out: Float32Array): void {
+  /**
+   * Whether process() soft-clips its sum (clip.ts): off where effects follow
+   * and the clip comes after them (src/worklet/processor.ts)
+   */
+  clip = true
+
+  /**
+   * Renders the next block into out; given right (as long, another
+   * buffer), in stereo, out the left side, each voice where its pan puts
+   * it. Without, in mono, the pan unheard.
+   */
+  process(out: Float32Array, right?: Float32Array): void {
     if (this.#restructured) {
       this.#restructured = false
       this.#order()
       this.#snap()
     }
     out.fill(0)
+    right?.fill(0)
     if (this.activeVoices > 0) {
       for (let start = 0; start < out.length; start += CHUNK) {
         const end = Math.min(start + CHUNK, out.length)
         this.#prepare(end - start)
         for (let i = 0; i < this.#voices.length; i++) {
-          ;(this.#voices[i] as ChainVoice).render(out, start, end)
+          ;(this.#voices[i] as ChainVoice).render(out, start, end, right)
         }
       }
-      // tanh: about unity gain for quiet signals (-0.1 dB at 0.2), and never
-      // past ±1 however many voices pile up
-      for (let i = 0; i < out.length; i++) {
-        out[i] = Math.tanh((out[i] as number) * VOICE_LEVEL)
-      }
+      this.#level(out)
+      if (right) this.#level(right)
     }
     // Free-running LFOs run on in silence too
     const settings = this.#settings
@@ -514,6 +537,24 @@ export class ChainSynth {
         (settings.lfoPhase[m] as number) +
         ((settings.lfoRate[m] as number) * out.length) / this.#sampleRate
       settings.lfoPhase[m] = phase - Math.floor(phase)
+    }
+  }
+
+  /**
+   * The voices' sum at VOICE_LEVEL, and with clip on the output's clip
+   * (clip.ts): untouched up to -6 dBFS, and never past ±1 however many
+   * voices pile up
+   */
+  #level(out: Float32Array): void {
+    if (this.clip) {
+      const bend = softClip
+      for (let i = 0; i < out.length; i++) {
+        out[i] = bend((out[i] as number) * VOICE_LEVEL)
+      }
+    } else {
+      for (let i = 0; i < out.length; i++) {
+        out[i] = (out[i] as number) * VOICE_LEVEL
+      }
     }
   }
 
@@ -618,6 +659,8 @@ export class ChainSynth {
     const settings = this.#settings
     settings.sourceUsed.fill(0)
     settings.destUsed.fill(0)
+    settings.panMoving = moving(this.#pan) ? 1 : 0
+    this.#pan.fill(settings.pan, 0, length)
     const modulators = settings.modulatorCount
     const exists = (source: number) =>
       source <= modulators || source >= SOURCE_VELOCITY

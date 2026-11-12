@@ -165,6 +165,21 @@ describe('formatValue', () => {
     expect(formatValue(getParam('filter.keytrack'), 0.5)).toBe('50%')
   })
 
+  it('names the side a pan leans to, and the middle', () => {
+    const pan = {
+      min: -1,
+      max: 1,
+      default: 0,
+      curve: 'linear',
+      step: 0,
+      unit: 'pan',
+    } as const
+    expect(formatValue(pan, 0)).toBe('C')
+    expect(formatValue(pan, 0.004)).toBe('C')
+    expect(formatValue(pan, -0.5)).toBe('L 50')
+    expect(formatValue(pan, 1.2)).toBe('R 100')
+  })
+
   it('renders slow rates to three figures', () => {
     const rate = getParam('lfo1.rate')
     expect(formatValue(rate, 0.05)).toBe('0.05 Hz')

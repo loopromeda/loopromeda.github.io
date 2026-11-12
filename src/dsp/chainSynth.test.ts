@@ -5,12 +5,14 @@ import { LFO_MAX_RATE, LFO_MIN_RATE, LFO_SINE } from './lfo'
 import { SAW, SINE } from './oscillator'
 import { midiToFrequency } from './pitch'
 import {
+  DEST_PAN,
   INPUT_OSC,
   INPUT_RING,
   ITEM_CUTOFF,
   ITEM_FILTER,
   MOD_LFO,
   NO_INPUT,
+  SOURCE_KEY,
   SOURCE_OFF,
   SOURCE_VELOCITY,
   SOURCE_WHEEL,
@@ -327,3 +329,118 @@ describe('ChainSynth', () => {
     expect(block.every((x) => x === 0)).toBe(true)
   })
 })
+
+/** seconds of synth's output in stereo, the two sides */
+function stereo(
+  synth: ChainSynth,
+  seconds: number
+): { left: Float32Array; right: Float32Array } {
+  const length = Math.round((seconds * SAMPLE_RATE) / 128) * 128
+  const left = new Float32Array(length)
+  const right = new Float32Array(length)
+  const l = new Float32Array(128)
+  const r = new Float32Array(128)
+  for (let at = 0; at < length; at += 128) {
+    synth.process(l, r)
+    left.set(l, at)
+    right.set(r, at)
+  }
+  return { left, right }
+}
+
+/** The sum of the squares: a render's energy */
+function energy(samples: Float32Array): number {
+  let sum = 0
+  for (let i = 0; i < samples.length; i++) sum += (samples[i] as number) ** 2
+  return sum
+}
+
+describe('ChainSynth in stereo', () => {
+  it('stands a voice in the middle as it plays in mono', () => {
+    const mono = sine()
+    mono.noteOn(1, 60, 0.8)
+    const centred = sine()
+    centred.noteOn(1, 60, 0.8)
+    const expected = render(mono, 0.1)
+    const { left, right } = stereo(centred, 0.1)
+    expect(left).toEqual(expected)
+    expect(right).toEqual(expected)
+  })
+
+  it('puts a voice panned to a side in that side alone, 3 dB up', () => {
+    const mono = sine()
+    mono.noteOn(1, 60, 0.8)
+    const panned = sine()
+    panned.pan = -1
+    panned.noteOn(1, 60, 0.8)
+    const expected = render(mono, 0.1)
+    const { left, right } = stereo(panned, 0.1)
+    expect(right.every((x) => x === 0)).toBe(true)
+    for (let i = 0; i < left.length; i += 11) {
+      expect(left[i]).toBeCloseTo(Math.SQRT2 * (expected[i] as number), 6)
+    }
+  })
+
+  it('keeps a voice as loud wherever it stands', () => {
+    const mono = sine()
+    mono.noteOn(1, 60, 0.8)
+    const whole = energy(render(mono, 0.1))
+    for (const pan of [-0.6, 0.3, 0.9]) {
+      const panned = sine()
+      panned.pan = pan
+      panned.noteOn(1, 60, 0.8)
+      const { left, right } = stereo(panned, 0.1)
+      // As loud as mono in each of two sides
+      expect((energy(left) + energy(right)) / (2 * whole)).toBeCloseTo(1, 6)
+      expect(energy(right) > energy(left)).toBe(pan > 0)
+    }
+  })
+
+  it('moves each voice by a route to its pan: the key spreads them', () => {
+    const balance = (note: number): number => {
+      const synth = sine()
+      synth.routeCount = 1
+      synth.setRoute(0, SOURCE_KEY, DEST_PAN, 1, SOURCE_OFF)
+      synth.noteOn(1, note, 0.8)
+      const { left, right } = stereo(synth, 0.1)
+      return Math.sqrt(energy(right) / energy(left))
+    }
+    // 24 semitones under C4 is half the Key source's way left: an eighth
+    // of a turn, tan(22.5°) to the right of the left
+    expect(balance(36)).toBeCloseTo(Math.tan(Math.PI / 8), 3)
+    expect(balance(84)).toBeCloseTo(1 / Math.tan(Math.PI / 8), 3)
+    expect(balance(60)).toBeCloseTo(1, 6)
+  })
+
+  it('glides to a new pan, never jumping there', () => {
+    const synth = sine()
+    synth.noteOn(1, 60, 0.8)
+    stereo(synth, 0.05)
+    synth.pan = 1
+    const { left, right } = stereo(synth, 0.3)
+    // Each sample's sides are the voice times their gains: their ratio is
+    // where it stands. It starts out from the middle.
+    const at = left.findIndex((x) => Math.abs(x) > 1e-3)
+    expect((right[at] as number) / (left[at] as number)).toBeCloseTo(1, 1)
+    const end = left.length - 128
+    expect(loudestOf(left, end) / loudestOf(right, end)).toBeLessThan(1e-4)
+  })
+
+  it('leaves the pan unheard in mono', () => {
+    const centred = sine()
+    centred.noteOn(1, 60, 0.8)
+    const panned = sine()
+    panned.pan = -1
+    panned.noteOn(1, 60, 0.8)
+    expect(render(panned, 0.05)).toEqual(render(centred, 0.05))
+  })
+})
+
+/** The largest sample of samples from `from` on */
+function loudestOf(samples: Float32Array, from: number): number {
+  let most = 0
+  for (let i = from; i < samples.length; i++) {
+    most = Math.max(most, Math.abs(samples[i] as number))
+  }
+  return most
+}

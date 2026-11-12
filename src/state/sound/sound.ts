@@ -1,20 +1,25 @@
 /**
  * A sound as a document (docs/plan/sound-chains.md): inputs that make
  * sound, chains that mix inputs and pass them through items, modulators,
- * routes from sources to knobs, and the output (amp) and voice settings.
+ * routes from sources to knobs, the output (amp) and voice settings, the
+ * inserts the voices pass through once summed, and how much of it goes
+ * to each of the session's buses (docs/plan/effects-parts-sequencer.md).
  * Plain data, never changed in place: an edit (edit.ts) returns a new one.
  */
 import { clampValue } from '../params'
 import {
   AMP_SPEC,
   CHAIN_SPEC,
+  EFFECT_KINDS,
   INPUT_KINDS,
   ITEM_KINDS,
   MODULATOR_KINDS,
   NOTE_SOURCES,
   SEND_DEST,
+  SENDS_SPEC,
   VOICE_SPEC,
   type DestSpec,
+  type EffectKind,
   type InputKind,
   type ItemKind,
   type KindSpec,
@@ -58,6 +63,17 @@ export interface Modulator {
   readonly values: Values
 }
 
+/**
+ * An effect in a row, in stereo, on what reaches it summed: one of a
+ * sound's inserts after its amp, or of the mix's on a bus or the master
+ * (src/state/mix.ts); a row runs in its order
+ */
+export interface Effect {
+  readonly id: string
+  readonly kind: EffectKind
+  readonly values: Values
+}
+
 export interface Route {
   readonly id: string
   /** A modulator's id or a note source (velocity, key, slide, random) */
@@ -81,19 +97,25 @@ export interface Sound {
   readonly amp: Values
   /** VOICE_SPEC's knobs */
   readonly voice: Values
+  /** The inserts after the amp, in order */
+  readonly effects: readonly Effect[]
+  /** SENDS_SPEC's knobs: how much goes to each bus, by its letter */
+  readonly sends: Values
 }
 
 /** The targets that are not parts, always there */
 export const AMP = 'amp'
 export const VOICE = 'voice'
+export const SENDS = 'sends'
 
-/** Each part's id prefix: i1, c1, x1, m1, r1 */
+/** Each part's id prefix: i1, c1, x1, m1, r1, f1 */
 export const PREFIX = {
   input: 'i',
   chain: 'c',
   item: 'x',
   modulator: 'm',
   route: 'r',
+  effect: 'f',
 } as const
 
 export type PartType = keyof typeof PREFIX
@@ -113,6 +135,7 @@ export function allIds(sound: Sound): Set<string> {
   }
   for (const modulator of sound.modulators) ids.add(modulator.id)
   for (const route of sound.routes) ids.add(route.id)
+  for (const effect of sound.effects) ids.add(effect.id)
   return ids
 }
 
@@ -185,6 +208,8 @@ export function initSound(): Sound {
     routes: [],
     amp: defaults(AMP_SPEC.knobs),
     voice: defaults(VOICE_SPEC.knobs),
+    effects: [],
+    sends: defaults(SENDS_SPEC.knobs),
   }
 }
 
@@ -255,6 +280,7 @@ export type Part =
   | { type: 'item'; part: Item; index: number; chain: Chain }
   | { type: 'modulator'; part: Modulator; index: number }
   | { type: 'route'; part: Route; index: number }
+  | { type: 'effect'; part: Effect; index: number }
 
 /** The part id names, or undefined */
 export function findPart(sound: Sound, id: string): Part | undefined {
@@ -281,6 +307,10 @@ export function findPart(sound: Sound, id: string): Part | undefined {
   if (index >= 0) {
     return { type: 'route', part: sound.routes[index] as Route, index }
   }
+  index = sound.effects.findIndex((effect) => effect.id === id)
+  if (index >= 0) {
+    return { type: 'effect', part: sound.effects[index] as Effect, index }
+  }
   return undefined
 }
 
@@ -291,6 +321,7 @@ export function findPart(sound: Sound, id: string): Part | undefined {
 export function specOf(sound: Sound, target: string): KindSpec | undefined {
   if (target === AMP) return AMP_SPEC
   if (target === VOICE) return VOICE_SPEC
+  if (target === SENDS) return SENDS_SPEC
   const found = findPart(sound, target)
   switch (found?.type) {
     case 'input':
@@ -301,6 +332,8 @@ export function specOf(sound: Sound, target: string): KindSpec | undefined {
       return MODULATOR_KINDS[found.part.kind]
     case 'chain':
       return CHAIN_SPEC
+    case 'effect':
+      return EFFECT_KINDS[found.part.kind]
     default:
       return undefined
   }
@@ -353,11 +386,13 @@ const CHAIN_LETTERS = 'ABCDEFGH'
 /**
  * A part's name on screen, from its place and kind, never stored: IN 2,
  * Chain A, Filter (A Filter 2 where a chain has two), ENV 1, LFO 2, Amp,
- * Voice; a note source by its own name
+ * Voice, Reverb (Delay 2 where the sound has two); a note source by its
+ * own name
  */
 export function partName(sound: Sound, id: string): string {
   if (id === AMP) return AMP_SPEC.label
   if (id === VOICE) return VOICE_SPEC.label
+  if (id === SENDS) return SENDS_SPEC.label
   if (isNoteSource(id)) return NOTE_SOURCES[id]
   const found = findPart(sound, id)
   switch (found?.type) {
@@ -386,6 +421,12 @@ export function partName(sound: Sound, id: string): string {
     }
     case 'route':
       return `Route ${found.index + 1}`
+    case 'effect': {
+      const { part } = found
+      const same = sound.effects.filter((effect) => effect.kind === part.kind)
+      const label = EFFECT_KINDS[part.kind].label
+      return same.length > 1 ? `${label} ${same.indexOf(part) + 1}` : label
+    }
     default:
       return id
   }

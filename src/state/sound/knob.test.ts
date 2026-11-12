@@ -188,7 +188,7 @@ describe('partDests', () => {
     expect(of('c1')).toEqual(['Level', 'IN 1', 'IN 2'])
     expect(partDests(sound, 'c1')[2]?.key).toBe(sendKey('i2'))
     expect(of(VOICE)).toEqual(['Pitch'])
-    expect(of(AMP)).toEqual(['Gain'])
+    expect(of(AMP)).toEqual(['Gain', 'Pan'])
     // Noise, an Env, nothing at all
     expect(of('i2')).toEqual([])
     expect(of('nope')).toEqual([])

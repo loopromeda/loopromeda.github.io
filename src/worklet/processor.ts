@@ -1,15 +1,18 @@
 import { ChainSynth, VOICE_COUNT } from '../dsp/chainSynth'
-import { chainStressSynth, timeBlocks } from '../dsp/chainStress'
+import { chainStressOutput, timeBlocks } from '../dsp/chainStress'
+import { EffectRack } from '../dsp/effects'
+import { Mixer, Strip } from '../dsp/output'
 import {
   BENCH_MAX_VOICES,
   GLIDE_REPORTS,
+  PART_OUTPUTS,
   PROCESSOR_NAME,
   type BenchResult,
   type FromWorklet,
   type ToWorklet,
 } from '../engine/protocol'
 import { LoadMeter } from './load'
-import { SoundPlayer } from './sound'
+import { SoundPlayer, applyMix } from './sound'
 
 /** A measurement's warm-up and timing, per voice count, in milliseconds */
 const BENCH_WARMUP_MS = 50
@@ -23,16 +26,30 @@ const clock = (globalThis as { performance?: { now(): number } }).performance
 const now = clock ? () => clock.now() : () => Date.now()
 
 /**
- * The audio thread's shell around src/dsp's ChainSynth: messages in,
- * blocks out, and its load (LoadMeter) out twice a second, and the notes
- * still gliding while the page watches them (an XY pad). SoundPlayer
- * keeps the sound's knobs and hands each change to the synth in its own
- * terms. Nothing is allocated in process(): each report goes out in one
- * message object, reused (postMessage copies it).
+ * The audio thread's shell around src/dsp's ChainSynth and the mix after
+ * it (output.ts): messages in, stereo blocks out (the voices through
+ * their inserts and sends, the returns, the master, a soft clip on each
+ * side last; after it each part's own sound, for its views), its load
+ * (LoadMeter) out twice a second, and the notes still gliding while the
+ * page watches them (an XY pad). SoundPlayer
+ * keeps the sound's knobs and hands each change to the synth, its
+ * inserts and its sends in their own terms. Nothing is allocated in
+ * process(): each report goes out in one message object, reused
+ * (postMessage copies it).
  */
 class SynthProcessor extends AudioWorkletProcessor {
   readonly #synth = new ChainSynth(sampleRate)
-  readonly #player = new SoundPlayer(this.#synth)
+  readonly #strip = new Strip(this.#synth, new EffectRack(sampleRate))
+  readonly #strips = [this.#strip]
+  readonly #mixer = new Mixer(sampleRate)
+  readonly #player = new SoundPlayer(this.#strip)
+  /** The other side, for an output of one channel (never asked for) */
+  readonly #spare = new Float32Array(128)
+  /** Each part's own output, after the master's: set from process's */
+  readonly #taps: (Float32Array[] | undefined)[] = Array.from(
+    { length: PART_OUTPUTS },
+    () => undefined
+  )
   readonly #meter = new LoadMeter(sampleRate)
   readonly #load: { t: 'load'; load: number; voices: number } = {
     t: 'load',
@@ -90,8 +107,12 @@ class SynthProcessor extends AudioWorkletProcessor {
           this.#player.set(part, key, value)
         }
         break
+      case 'mix':
+        applyMix(this.#mixer, message.mix, this.#strips)
+        break
       case 'panic':
-        this.#synth.releaseAll()
+        this.#strip.reset()
+        this.#mixer.reset()
         break
       case 'voices':
         this.#synth.voiceLimit = message.count
@@ -103,10 +124,10 @@ class SynthProcessor extends AudioWorkletProcessor {
   }
 
   /**
-   * Times the heaviest sound at each voice count, here on the audio thread
-   * (its priority, its core, its JIT), and posts the results back. A
-   * measurement asked for by hand: it builds synths, and the audio stops
-   * for about a third of a second a count while it runs.
+   * Times the heaviest sound at each voice count, the mix too, here
+   * on the audio thread (its priority, its core, its JIT), and posts the
+   * results back. A measurement asked for by hand: it builds synths, and
+   * the audio stops for about a third of a second a count while it runs.
    */
   #bench(counts: readonly number[]): void {
     const block = new Float32Array(128)
@@ -114,9 +135,9 @@ class SynthProcessor extends AudioWorkletProcessor {
     for (const count of counts) {
       const voices = Math.min(Math.max(Math.round(count), 1), BENCH_MAX_VOICES)
       if (!Number.isFinite(voices)) continue
-      const synth = chainStressSynth(sampleRate, voices)
-      timeBlocks(synth, block, BENCH_WARMUP_MS, now)
-      results.push({ voices, ...timeBlocks(synth, block, BENCH_MS, now) })
+      const output = chainStressOutput(sampleRate, voices)
+      timeBlocks(output, block, BENCH_WARMUP_MS, now)
+      results.push({ voices, ...timeBlocks(output, block, BENCH_MS, now) })
     }
     const report: FromWorklet = {
       t: 'bench',
@@ -127,18 +148,23 @@ class SynthProcessor extends AudioWorkletProcessor {
   }
 
   process(_inputs: Float32Array[][], outputs: Float32Array[][]): boolean {
-    const out = outputs[0]?.[0]
-    if (!out) return true
+    const left = outputs[0]?.[0]
+    if (!left) return true
+    const right = outputs[0]?.[1]
     const meter = this.#meter
     meter.begin(now())
-    this.#synth.process(out)
+    const length = left.length
+    // One channel only (never asked for): the left, the right thrown away
+    const taps = this.#taps
+    for (let k = 0; k < taps.length; k++) taps[k] = outputs[k + 1]
+    this.#mixer.render(this.#strips, left, right ?? this.#spare, taps)
     if (meter.end(now())) {
       const report = this.#load
       report.load = meter.load
       report.voices = this.#synth.activeVoices
       this.port.postMessage(report satisfies FromWorklet)
     }
-    if (this.#watching) this.#reportGlides(out.length)
+    if (this.#watching) this.#reportGlides(length)
     return true
   }
 

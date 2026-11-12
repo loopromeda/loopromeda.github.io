@@ -1,5 +1,5 @@
 import { Adsr, AdsrShape } from './adsr'
-import { tanhApprox } from './fastMath'
+import { sinCycles, tanhApprox } from './fastMath'
 import { Filter, LOWPASS } from './filter'
 import { LFO_MAX_RATE, LFO_MIN_RATE, Lfo } from './lfo'
 import { Noise } from './noise'
@@ -9,6 +9,7 @@ import { Smoother } from './smoother'
 import {
   DEST_AMP,
   DEST_COUNT,
+  DEST_PAN,
   DEST_PITCH,
   INPUT_FM,
   INPUT_NOISE,
@@ -160,6 +161,12 @@ export class ChainSettings {
   readonly amp: AdsrShape
   /** How far velocity sets loudness: 0 not at all, 1 fully */
   ampVelocity = 0.5
+  /**
+   * Per sample: where the voices stand between the sides, -1 (left) to 1
+   * (right), before routes; and per chunk, 1 while it glides
+   */
+  readonly pan: Float32Array
+  panMoving = 0
   /** The pitch glide's one-pole coefficient per sample; 1 jumps */
   glideCoef = 1
   /**
@@ -216,6 +223,7 @@ export class ChainSettings {
     buffers(MAX_ROUTES, this.routeAmount)
     buffers(SOURCE_COUNT, this.sources)
     buffers(DEST_COUNT, this.dests)
+    this.pan = new Float32Array(chunk)
     this.mix = new Float32Array(chunk)
     this.chainMix = new Float32Array(chunk)
     this.increments = new Float32Array(chunk)
@@ -417,9 +425,17 @@ export class ChainVoice {
 
   /**
    * Adds the voice into out[start..end), at most one chunk (the settings'
-   * buffer length); the settings' per-sample buffers hold that chunk
+   * buffer length); the settings' per-sample buffers hold that chunk.
+   * Given right, out is the left side and the voice stands between the two
+   * where its pan and the routes to it put it (place); without, in mono,
+   * its pan unheard.
    */
-  render(out: Float32Array, start: number, end: number): void {
+  render(
+    out: Float32Array,
+    start: number,
+    end: number,
+    right?: Float32Array
+  ): void {
     if (this.#waiting && !this.#amp.active) {
       this.#waiting = false
       this.#begin(this.#nextNote, this.#nextVelocity, this.#nextFrom)
@@ -442,6 +458,10 @@ export class ChainVoice {
         const gain = 1 + (amp[i] as number)
         mix[i] = (mix[i] as number) * (gain > 0 ? gain : 0)
       }
+    }
+    if (right) {
+      place(mix, out, right, start, length, settings)
+      return
     }
     for (let i = 0; i < length; i++) {
       out[start + i] = (out[start + i] ?? 0) + (mix[i] as number)
@@ -915,6 +935,53 @@ function lfoRate(rate: number): number {
       ? rate
       : LFO_MAX_RATE
     : LFO_MIN_RATE
+}
+
+/**
+ * Adds a voice's mix[0..length) into left and right from start, where the
+ * settings' pan and the routes to it put it, within -1..1. Equal power: a
+ * quarter turn across, the sides √2·cos and √2·sin of it, so a voice in
+ * the middle stands in each side as it does in mono, and is as loud
+ * wherever it stands (at an edge one side 3 dB up, the other silent).
+ * Still and unrouted, the gains hold for the chunk.
+ */
+function place(
+  mix: Float32Array,
+  left: Float32Array,
+  right: Float32Array,
+  start: number,
+  length: number,
+  settings: ChainSettings
+): void {
+  const pan = settings.pan
+  const routed = settings.destUsed[DEST_PAN] === 1
+  // A local: in the benchmark's module runner an import read is a getter
+  const sine = sinCycles
+  if (!routed && settings.panMoving === 0) {
+    const at = clampPan(pan[0] as number)
+    // The middle exactly as mono, no rounding in it
+    const l = at === 0 ? 1 : Math.SQRT2 * sine((at + 1) * 0.125 + 0.25)
+    const r = at === 0 ? 1 : Math.SQRT2 * sine((at + 1) * 0.125)
+    for (let i = 0; i < length; i++) {
+      const m = mix[i] as number
+      left[start + i] = (left[start + i] as number) + m * l
+      right[start + i] = (right[start + i] as number) + m * r
+    }
+    return
+  }
+  const mod = routed ? settings.dests[DEST_PAN] : undefined
+  for (let i = 0; i < length; i++) {
+    const at = clampPan((pan[i] as number) + (mod ? (mod[i] as number) : 0))
+    const turn = (at + 1) * 0.125
+    const m = (mix[i] as number) * Math.SQRT2
+    left[start + i] = (left[start + i] as number) + m * sine(turn + 0.25)
+    right[start + i] = (right[start + i] as number) + m * sine(turn)
+  }
+}
+
+/** A pan within [-1, 1]; not a number, the middle */
+function clampPan(value: number): number {
+  return value > -1 ? (value < 1 ? value : 1) : value <= -1 ? -1 : 0
 }
 
 /** value within [0, 1] */

@@ -9,6 +9,7 @@ import { Offline } from './offline'
 import { readPlatform, sendReport } from './platform'
 import { FACTORY_PRESETS } from './state/factory'
 import { Library } from './state/library'
+import { loadMix, saveMix } from './state/mix'
 import { readSettings } from './state/settings'
 import { touchHeld } from './ui/held'
 import type { ScopeStats } from './ui/Scope'
@@ -83,11 +84,29 @@ engine.setLatency(settings.latency)
 // starts; the engine hands every value to the worklet as it loads
 const library = new Library(engine, FACTORY_PRESETS, storage)
 library.restore()
-// The sound is kept a moment after each change; a page going away (a tab
-// closed, a phone switching apps) keeps it at once
-window.addEventListener('pagehide', library.flush)
+// The session's mix (the returns, the master), kept apart from the sound:
+// a preset brings its own sends, never the room they send to
+engine.setMix(loadMix(storage))
+let mixTimer: ReturnType<typeof setTimeout> | undefined
+const keepMix = () => {
+  if (mixTimer === undefined) return
+  clearTimeout(mixTimer)
+  mixTimer = undefined
+  saveMix(storage, engine.getMix())
+}
+engine.subscribeMix(() => {
+  clearTimeout(mixTimer)
+  mixTimer = setTimeout(keepMix, 500)
+})
+// The sound and the mix are kept a moment after each change; a page going
+// away (a tab closed, a phone switching apps) keeps them at once
+const keep = () => {
+  library.flush()
+  keepMix()
+}
+window.addEventListener('pagehide', keep)
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'hidden') library.flush()
+  if (document.visibilityState === 'hidden') keep()
 })
 let reportScope: ((stats: ScopeStats) => void) | undefined
 let reportBench: ((report: BenchReport) => void) | undefined

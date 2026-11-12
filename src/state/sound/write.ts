@@ -13,16 +13,20 @@ import {
   AMOUNT_SPEC,
   AMP_SPEC,
   CHAIN_SPEC,
+  EFFECT_KINDS,
   INPUT_KINDS,
   ITEM_KINDS,
   MAX_CHAINS,
+  MAX_EFFECTS,
   MAX_INPUTS,
   MAX_ITEMS,
   MAX_MODULATORS,
   MAX_ROUTES,
   MODULATOR_KINDS,
   SEND_SPEC,
+  SENDS_SPEC,
   VOICE_SPEC,
+  type EffectKind,
   type InputKind,
   type ItemKind,
   type KindSpec,
@@ -31,6 +35,7 @@ import {
 } from './kinds'
 import {
   AMP,
+  SENDS,
   VOICE,
   destOf,
   isIdOf,
@@ -40,6 +45,7 @@ import {
   sendKey,
   valuesFor,
   type Chain,
+  type Effect,
   type Input,
   type Modulator,
   type PartType,
@@ -92,6 +98,10 @@ export interface WrittenSound {
   readonly amp?: WrittenKnobs
   /** The voice's knobs: mode and glide */
   readonly voice?: WrittenKnobs
+  /** The inserts after the amp, in the order written: nothing names them */
+  readonly effects?: readonly WrittenPart<EffectKind>[]
+  /** How much goes to each bus, by letter (a whole unless written) */
+  readonly sends?: WrittenKnobs
 }
 
 /** The sound written, its parts numbered in the order written */
@@ -99,7 +109,12 @@ export function writeSound(written: WrittenSound): Sound {
   /** Each part's id, by the name it was written under */
   const ids = new Map<string, string>()
   const name = (partName: string, id: string) => {
-    if (ids.has(partName) || partName === AMP || partName === VOICE) {
+    if (
+      ids.has(partName) ||
+      partName === AMP ||
+      partName === VOICE ||
+      partName === SENDS
+    ) {
       throw new Error(`the name ${partName} is taken`)
     }
     if (isNoteSource(partName)) {
@@ -203,6 +218,18 @@ export function writeSound(written: WrittenSound): Sound {
     }
   })
 
+  const effectList = written.effects ?? []
+  most('effects', effectList.length, MAX_EFFECTS)
+  const effects: Effect[] = effectList.map((effect, at) => {
+    const owner = `effect ${at + 1}`
+    const spec = kindSpec(EFFECT_KINDS, effect.kind, owner)
+    return {
+      id: `f${at + 1}`,
+      kind: effect.kind,
+      values: knobValues(owner, spec.knobs, split(effect, spec).knobs),
+    }
+  })
+
   const parts: Sound = {
     inputs,
     chains,
@@ -210,6 +237,8 @@ export function writeSound(written: WrittenSound): Sound {
     routes: [],
     amp: knobValues(AMP, AMP_SPEC.knobs, written.amp ?? {}),
     voice: knobValues(VOICE, VOICE_SPEC.knobs, written.voice ?? {}),
+    effects,
+    sends: knobValues(SENDS, SENDS_SPEC.knobs, written.sends ?? {}),
   }
 
   /** A route's source: a modulator by its name, or a note's source */

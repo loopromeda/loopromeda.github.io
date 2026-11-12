@@ -23,6 +23,7 @@ import {
   INPUT_KINDS,
   ITEM_KINDS,
   MODULATOR_KINDS,
+  SENDS_SPEC,
   VOICE_SPEC,
   type KnobSpec,
   type ModulatorKind,
@@ -76,15 +77,18 @@ export function soundFromV1(values: ArrayLike<number>): Sound {
     const spec = getParam(id)
     return clampValue(spec, values[paramIndex(id)] ?? spec.default)
   }
-  /** The old knobs under prefix, as a part's knobs keyed without it */
+  /**
+   * The old knobs under prefix, as a part's knobs keyed without it; one
+   * the old parameters had none for (the amp's pan) at its default
+   */
   const knobs = (prefix: string, specs: readonly KnobSpec[]): Values =>
     valuesFor(
       specs,
       Object.fromEntries(
-        specs.map((knob) => [
-          knob.key,
-          value(`${prefix}.${knob.key}` as ParamId),
-        ])
+        specs.flatMap((knob) => {
+          const id = `${prefix}.${knob.key}` as ParamId
+          return paramIndex(id) < 0 ? [] : [[knob.key, value(id)]]
+        })
       )
     )
 
@@ -273,5 +277,7 @@ export function soundFromV1(values: ArrayLike<number>): Sound {
     routes,
     amp: knobs('amp', AMP_SPEC.knobs),
     voice: knobs('voice', VOICE_SPEC.knobs),
+    effects: [],
+    sends: defaults(SENDS_SPEC.knobs),
   }
 }

@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { ChainSynth } from '../dsp/chainSynth'
+import { EffectRack } from '../dsp/effects'
 import { SQUARE } from '../dsp/oscillator'
 import * as slots from '../dsp/slots'
 import { knobChanges } from '../state/sound/diff'
 import {
   addChain,
+  addEffect,
   addInput,
   addItem,
   addModulator,
@@ -16,8 +18,16 @@ import {
   type Added,
 } from '../state/sound/edit'
 import * as kinds from '../state/sound/kinds'
-import { AMP, VOICE, initSound, type Sound } from '../state/sound/sound'
-import { SoundPlayer, applySound } from './sound'
+import { Mixer, Strip } from '../dsp/output'
+import {
+  addMixEffect,
+  initMix,
+  removeMixPart,
+  setMixValue,
+  type Mix,
+} from '../state/mix'
+import { AMP, SENDS, VOICE, initSound, type Sound } from '../state/sound/sound'
+import { SoundPlayer, applyMix, applySound } from './sound'
 
 const SAMPLE_RATE = 48000
 const BLOCK = 128
@@ -84,6 +94,87 @@ describe('the chain engine', () => {
     expect(slots.MAX_ITEMS).toBe(kinds.MAX_ITEMS)
     expect(slots.MAX_MODULATORS).toBe(kinds.MAX_MODULATORS)
     expect(slots.MAX_ROUTES).toBe(kinds.MAX_ROUTES)
+    expect(slots.MAX_EFFECTS).toBe(kinds.MAX_EFFECTS)
+    expect(slots.MAX_BUSES).toBe(kinds.MAX_BUSES)
+  })
+
+  it('plays the sound through its inserts and sends, as knobs move', () => {
+    const synth = new ChainSynth(SAMPLE_RATE)
+    const strip = new Strip(synth, new EffectRack(SAMPLE_RATE))
+    const player = new SoundPlayer(strip)
+    let sound = addEffect(initSound(), 'chorus').sound
+    sound = addEffect(sound, 'delay').sound
+    sound = setValue(sound, SENDS, 'b', 0.5)
+    player.load(sound)
+    expect(strip.inserts.count).toBe(2)
+    expect(strip.inserts.kindOf(1)).toBe(slots.FX_DELAY)
+    const [a, b, c] = strip.sends
+    expect(b?.now).toBe(0)
+    b?.step(BLOCK)
+    expect(b?.now).toBe(0.5)
+    a?.step(BLOCK)
+    expect(a?.now).toBe(1)
+    player.set(SENDS, 'c', 0.25)
+    c?.step(BLOCK)
+    expect(c?.now).toBe(0.25)
+    // A sound with no inserts runs none, and sends to A alone
+    player.load(initSound())
+    expect(strip.inserts.count).toBe(0)
+    b?.step(BLOCK)
+    expect(b?.now).toBe(0)
+  })
+
+  it('hands the session’s mix to the strips, the buses and the master', () => {
+    const echo = (mix: Mix): number => {
+      const mixer = new Mixer(SAMPLE_RATE)
+      const strip = new Strip(
+        new ChainSynth(SAMPLE_RATE),
+        new EffectRack(SAMPLE_RATE)
+      )
+      applyMix(mixer, mix, [strip])
+      // Its fader where the mix has it before the note, not gliding there
+      strip.level.snap()
+      strip.pan.snap()
+      // A short release, so what sounds later is the echo
+      const short = setValue(initSound(), AMP, 'release', 0)
+      new SoundPlayer(strip).load(setValue(short, SENDS, 'b', 1))
+      strip.synth.noteOn(1, 60, 1)
+      // The note for 20 ms, then the echo alone: where is it loudest?
+      const left = new Float32Array(BLOCK * 60)
+      const block = new Float32Array(BLOCK)
+      const right = new Float32Array(BLOCK)
+      for (let at = 0; at < left.length; at += BLOCK) {
+        if (at >= 0.02 * SAMPLE_RATE) strip.synth.releaseAll()
+        mixer.render([strip], block, right)
+        left.set(block, at)
+      }
+      const from = Math.round(0.08 * SAMPLE_RATE)
+      let loudest = from
+      for (let i = from; i < left.length; i++) {
+        if (Math.abs(left[i] ?? 0) > Math.abs(left[loudest] ?? 0)) loudest = i
+      }
+      return Math.abs(left[loudest] ?? 0) > 1e-3 ? loudest / SAMPLE_RATE : 0
+    }
+    let mix = setMixValue(initMix(), 'e1', 'time', 0.1)
+    mix = setMixValue(mix, 'e1', 'feedback', 0)
+    expect(echo(mix)).toBeGreaterThan(0.1)
+    expect(echo(mix)).toBeLessThan(0.13)
+    expect(echo(setMixValue(mix, 'b', 'level', 0))).toBe(0)
+    // Its pan: the left side, where echo listens, silent at the right edge
+    expect(echo(setMixValue(mix, 'b', 'pan', 1))).toBe(0)
+    expect(echo(setMixValue(mix, 'b', 'pan', -1))).toBeGreaterThan(0.1)
+    expect(echo(setMixValue(mix, 'master', 'level', 0))).toBe(0)
+    // The sound's strip, before its sends: its fader takes the echo too
+    expect(echo(setMixValue(mix, 'p1', 'level', 0))).toBe(0)
+    expect(echo(setMixValue(mix, 'p1', 'pan', 1))).toBe(0)
+    expect(echo(setMixValue(mix, 'p1', 'level', 0.5))).toBeGreaterThan(0.1)
+    // B and C gone: what is sent to a letter with no bus goes unheard
+    expect(echo(removeMixPart(removeMixPart(mix, 'c'), 'b'))).toBe(0)
+    // Its delay moved to the master, after a dry bus: heard again, later
+    const moved = addMixEffect(removeMixPart(mix, 'e1'), 'master', 'delay')
+    const later = setMixValue(moved.mix, moved.id ?? '', 'time', 0.15)
+    const dry = setMixValue(later, moved.id ?? '', 'mix', 1)
+    expect(echo(dry)).toBeGreaterThan(0.15)
   })
 
   it("routes the wheel, which plays where the synth's wheel stands", () => {
@@ -101,6 +192,48 @@ describe('the chain engine', () => {
     }
     expect(maxDifference(at(0), render(sound))).toBe(0)
     expect(maxDifference(at(1), at(0))).toBeGreaterThan(0.01)
+  })
+
+  it('places the voices by the amp’s pan, and by a route to it', () => {
+    /** How loud each side is, a quarter second into C4 */
+    const sides = (sound: Sound, turn?: (player: SoundPlayer) => void) => {
+      const mixer = new Mixer(SAMPLE_RATE)
+      mixer.clip = false
+      const strip = new Strip(
+        new ChainSynth(SAMPLE_RATE),
+        new EffectRack(SAMPLE_RATE)
+      )
+      const player = new SoundPlayer(strip)
+      player.load(sound)
+      strip.synth.noteOn(1, 60, 1)
+      const left = new Float32Array(BLOCK)
+      const right = new Float32Array(BLOCK)
+      for (let b = 0; b < 100; b++) {
+        if (b === 10) turn?.(player)
+        mixer.render([strip], left, right)
+      }
+      return [peak(left), peak(right)]
+    }
+    const [left, right] = sides(setValue(initSound(), AMP, 'pan', -1))
+    expect(left).toBeGreaterThan(0.01)
+    expect(right).toBe(0)
+    // Turned to the other side under the note
+    const [after, other] = sides(setValue(initSound(), AMP, 'pan', -1), (p) =>
+      p.set(AMP, 'pan', 1)
+    )
+    expect(after).toBeLessThan(1e-6)
+    expect(other).toBeGreaterThan(0.01)
+    // A route from the velocity, the note played at 1, takes it all the
+    // way right
+    const routed = setRoute(
+      addRoute(initSound(), { source: 'velocity', target: AMP, key: 'pan' })
+        .sound,
+      'r1',
+      { amount: 1 }
+    )
+    const [none, all] = sides(routed)
+    expect(none).toBeLessThan(1e-6)
+    expect(all).toBeGreaterThan(0.01)
   })
 
   it('plays nothing without a chain, or with no sends', () => {

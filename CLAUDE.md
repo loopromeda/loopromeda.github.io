@@ -49,13 +49,22 @@ src/dsp/      pure DSP (oscillators, envelopes, LFOs, filters, voices);
               chainSynth.ts is the whole instrument, a sound built from
               parts: voice pool, allocator, mono/legato, routes, mix;
               chainVoice.ts one voice of it; slots.ts numbers the parts,
-              sources and destinations; chainStress.ts is the heaviest
-              sound it can hold, for measuring; fastMath.ts the cheaper
-              tanh and sine the voices call per sample
+              sources and destinations; effects.ts the chorus, delay
+              and reverb, in stereo, in racks: a part's inserts, a
+              bus's, the master's; output.ts a part's strip (its
+              synth, inserts, fader and sends) and the mixer after
+              them (up to four buses, the master, the clip); clip.ts
+              the soft
+              clip the output ends in, untouched up to -6 dBFS, and
+              its inverse for the meters; chainStress.ts is the
+              heaviest sound it can hold, and the effects after it,
+              for measuring; fastMath.ts the
+              cheaper tanh and sine the voices call per sample
 src/worklet/  the AudioWorkletProcessor around src/dsp; own globals and
               tsconfig (tsconfig.worklet.json), loaded via ?worker&url;
               sound.ts loads a sound document onto the ChainSynth and
-              sets its knobs one by one (Node-testable); load.ts the
+              its effects, and sets its knobs one by one (Node-testable);
+              load.ts the
               share of its time the synth takes, for the status line
 src/sw/       the service worker (own globals, tsconfig.sw.json): keeps
               what the build ships for offline, a new version waiting
@@ -64,7 +73,10 @@ src/sw/       the service worker (own globals, tsconfig.sw.json): keeps
               audio runs
 src/engine/   AudioContext lifecycle, unlock, node wiring; the sound,
               held here and edited, sent whole or as the knobs that
-              moved; protocol.ts is the message types both threads share
+              moved; the session's mix, sent whole; the analysers on the
+              output (each side, the waveform, the spectrum), the
+              master's and each part's own (the node's later outputs);
+              protocol.ts is the message types both threads share
               (plain data only)
 src/state/    params.ts: the knob schema and the old parameters;
               presets.ts: the preset and file format (version 2 holds
@@ -73,11 +85,16 @@ src/state/    params.ts: the knob schema and the old parameters;
               last sound, kept in localStorage;
               surface.ts: keys or pads, the pads' key (root and scale);
               settings.ts: the device's settings (voices, latency,
-              velocity, what the screen shows); sound/: a sound as a
-              document of inputs, chains, modulators and routes, its
-              edits, reading it from JSON and from the old parameters,
-              a knob by part and key and the routes into it (knob.ts),
-              and the knobs that moved between two (diff.ts)
+              velocity, what the screen shows); mix.ts: the session's
+              mix (each part's fader, a level and a balance; the buses
+              every part sends to, lettered by
+              their place, each a row of effects, a level and a balance,
+              and the master's effects and level), kept in
+              localStorage; sound/: a sound as a
+              document of inputs, chains, modulators, routes, inserts
+              and sends, its edits, reading it from JSON and from the old
+              parameters, a knob by part and key and the routes into it
+              (knob.ts), and the knobs that moved between two (diff.ts)
 src/viz/      pure display math (scope trigger and decimation, envelope
               and LFO outlines, filter response, drive curve, keyboard
               and pad grid geometry, the sound editor's input column

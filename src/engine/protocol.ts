@@ -6,11 +6,20 @@
  * src/worklet (AudioWorkletGlobalScope), so it stays free of either: plain
  * data only.
  */
+import type { Mix } from '../state/mix'
 import type { KnobChange } from '../state/sound/diff'
 import type { Sound } from '../state/sound/sound'
 
 /** The name the processor registers under and the node is created with */
 export const PROCESSOR_NAME = 'loopromeda-synth'
+
+/**
+ * The parts the worklet renders, each a stereo output of the node's after
+ * the first (the master's): a part's own sound, after its inserts and
+ * before its sends, for its views to show apart from the mix. One until
+ * the parts come (docs/plan/effects-parts-sequencer.md, 2).
+ */
+export const PART_OUTPUTS = 1
 
 export type ToWorklet =
   /** A touch (`id`: its pointerId) starts a note; velocity in [0, 1] */
@@ -35,6 +44,11 @@ export type ToWorklet =
    * changes, all applied before the next block
    */
   | { t: 'knobs'; changes: readonly KnobChange[] }
+  /**
+   * The session's mix (src/state/mix.ts), whole: its buses, their
+   * effects and the master, on a change and to catch a new worklet up
+   */
+  | { t: 'mix'; mix: Mix }
   /** Everything stops: all notes released */
   | { t: 'panic' }
   /**

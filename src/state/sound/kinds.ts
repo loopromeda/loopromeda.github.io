@@ -39,6 +39,11 @@ export const MAX_CHAINS = 4
 export const MAX_ITEMS = 6
 export const MAX_MODULATORS = 8
 export const MAX_ROUTES = 16
+/**
+ * Effects in a row: a sound's inserts after its amp, a bus's, the
+ * master's
+ */
+export const MAX_EFFECTS = 4
 
 /** The oscillator waves, in src/dsp/oscillator.ts's order */
 export const WAVE_NAMES = ['Sine', 'Triangle', 'Saw', 'Square'] as const
@@ -59,6 +64,29 @@ function level(key: string, label: string, initial: number): KnobSpec {
     unit: '%',
   }
 }
+
+/**
+ * Where something stands between the sides, -1..1, the middle at 0: a
+ * voice's pan, which places one signal (equal power)
+ */
+const PAN: KnobSpec = {
+  key: 'pan',
+  label: 'Pan',
+  min: -1,
+  max: 1,
+  default: 0,
+  curve: 'linear',
+  step: 0,
+  unit: 'pan',
+}
+
+/**
+ * A stereo signal's balance, kept under the key pan: towards a side the
+ * other is turned down, nothing moved (sideGain in src/dsp/output.ts).
+ * Named apart from a voice's Pan, which moves the sound itself (ashon,
+ * 2026-11-13: "밸런스로 가자").
+ */
+const BALANCE: KnobSpec = { ...PAN, label: 'Balance' }
 
 /** An ADSR's four knobs */
 function adsr(sustain: number): readonly KnobSpec[] {
@@ -243,6 +271,200 @@ export const ITEM_KINDS = {
   },
 } as const satisfies Readonly<Record<string, KindSpec>>
 
+/** An effect's Mix: none of it at 0, it alone at 1, both whole between */
+function mix(initial: number): KnobSpec {
+  return {
+    key: 'mix',
+    label: 'Mix',
+    min: 0,
+    max: 1,
+    default: initial,
+    curve: 'linear',
+    step: 0,
+    unit: '%',
+  }
+}
+
+/**
+ * The effects a sound's inserts, a bus and the master are made of: each
+ * runs on what reaches it summed, in stereo, in a row with the others
+ * there. No route moves them, as a note's sources are each voice's own.
+ */
+export const EFFECT_KINDS = {
+  chorus: {
+    label: 'Chorus',
+    knobs: [
+      {
+        key: 'rate',
+        label: 'Rate',
+        min: 0.05,
+        max: 5,
+        default: 0.6,
+        curve: 'exponential',
+        step: 0,
+        unit: 'Hz',
+      },
+      {
+        key: 'depth',
+        label: 'Depth',
+        min: 0,
+        max: 1,
+        default: 0.5,
+        curve: 'linear',
+        step: 0,
+        unit: '%',
+      },
+      mix(0.5),
+    ],
+    dests: [],
+    refs: [],
+  },
+  delay: {
+    label: 'Delay',
+    knobs: [
+      {
+        key: 'time',
+        label: 'Time',
+        min: 0.01,
+        max: 2,
+        default: 0.35,
+        curve: 'exponential',
+        step: 0,
+        unit: 's',
+      },
+      {
+        key: 'feedback',
+        label: 'Feedback',
+        min: 0,
+        max: 1,
+        default: 0.4,
+        curve: 'linear',
+        step: 0,
+        unit: '%',
+      },
+      {
+        key: 'tone',
+        label: 'Tone',
+        min: 0,
+        max: 1,
+        default: 0.6,
+        curve: 'linear',
+        step: 0,
+        unit: '%',
+      },
+      {
+        key: 'mode',
+        label: 'Mode',
+        min: 0,
+        max: 1,
+        default: 0,
+        curve: 'linear',
+        step: 1,
+        unit: '',
+        choices: ['Stereo', 'Ping-pong'],
+      },
+      mix(0.3),
+    ],
+    dests: [],
+    refs: [],
+  },
+  reverb: {
+    label: 'Reverb',
+    knobs: [
+      {
+        key: 'size',
+        label: 'Size',
+        min: 0,
+        max: 1,
+        default: 0.6,
+        curve: 'linear',
+        step: 0,
+        unit: '%',
+      },
+      {
+        key: 'decay',
+        label: 'Decay',
+        min: 0.2,
+        max: 10,
+        default: 2,
+        curve: 'exponential',
+        step: 0,
+        unit: 's',
+      },
+      {
+        key: 'damp',
+        label: 'Damp',
+        min: 0,
+        max: 1,
+        default: 0.5,
+        curve: 'linear',
+        step: 0,
+        unit: '%',
+      },
+      mix(0.3),
+    ],
+    dests: [],
+    refs: [],
+  },
+} as const satisfies Readonly<Record<string, KindSpec>>
+
+/**
+ * The session's buses (docs/plan/effects-parts-sequencer.md), by letter:
+ * every part sends to each, by its Sends part's knobs, and each comes
+ * back into the master. Kept with the session (src/state/mix.ts), never
+ * with a preset; a preset keeps how much its sound sends to each letter.
+ */
+export const BUS_IDS = ['a', 'b', 'c', 'd'] as const
+
+export type BusId = (typeof BUS_IDS)[number]
+
+/** The most buses a mix holds: one for each letter */
+export const MAX_BUSES = BUS_IDS.length
+
+/**
+ * How much of a sound goes to each bus, after its inserts: all of it to
+ * A, which the session's mix starts as a dry path, none to the others
+ */
+export const SENDS_SPEC: KindSpec = {
+  label: 'Sends',
+  knobs: BUS_IDS.map((id, k) => level(id, id.toUpperCase(), k === 0 ? 1 : 0)),
+  dests: [],
+  refs: [],
+}
+
+/**
+ * A bus's own knobs, after its effects: how loud it comes back, and where
+ * it stands between the sides (a balance: in the middle both as they are)
+ */
+export const BUS_SPEC: KindSpec = {
+  label: 'Bus',
+  knobs: [level('level', 'Level', 1), BALANCE],
+  dests: [],
+  refs: [],
+}
+
+/**
+ * A part's channel in the mix, its fader: how loud it goes on, after its
+ * inserts and before its sends (so its echoes follow it), and where it
+ * stands between the sides (a balance, as a bus's). Kept with the
+ * session, as the buses are: a preset loaded plays at the level its part
+ * was given.
+ */
+export const STRIP_SPEC: KindSpec = {
+  label: 'Strip',
+  knobs: [level('level', 'Level', 1), BALANCE],
+  dests: [],
+  refs: [],
+}
+
+/** The master after the buses: its effects, then its level, the clip */
+export const MASTER_SPEC: KindSpec = {
+  label: 'Master',
+  knobs: [level('level', 'Level', 1)],
+  dests: [],
+  refs: [],
+}
+
 /** What moves knobs, through routes */
 export const MODULATOR_KINDS = {
   env: {
@@ -321,7 +543,10 @@ export const SEND_DEST: DestSpec = {
   unit: '%',
 }
 
-/** The output, always there: the amp envelope and velocity's say */
+/**
+ * The output, always there: the amp envelope, velocity's say, and where
+ * each voice stands between the sides
+ */
 export const AMP_SPEC: KindSpec = {
   label: 'Amp',
   knobs: [
@@ -336,9 +561,14 @@ export const AMP_SPEC: KindSpec = {
       step: 0,
       unit: '%',
     },
+    PAN,
   ],
-  // The voice's gain: 1 plus this, never below 0
-  dests: [{ key: 'gain', label: 'Gain', scale: 1, unit: '%' }],
+  dests: [
+    // The voice's gain: 1 plus this, never below 0
+    { key: 'gain', label: 'Gain', scale: 1, unit: '%' },
+    // Added to the pan, each voice its own: a side is 100%
+    { key: 'pan', label: 'Pan', scale: 1, unit: '%' },
+  ],
   refs: [],
 }
 
@@ -402,6 +632,7 @@ export const NOTE_SOURCES = {
 export type InputKind = keyof typeof INPUT_KINDS
 export type ItemKind = keyof typeof ITEM_KINDS
 export type ModulatorKind = keyof typeof MODULATOR_KINDS
+export type EffectKind = keyof typeof EFFECT_KINDS
 export type NoteSource = keyof typeof NOTE_SOURCES
 
 /** The kinds in the order the editor offers them */
@@ -410,3 +641,4 @@ export const ITEM_KIND_ORDER = Object.keys(ITEM_KINDS) as ItemKind[]
 export const MODULATOR_KIND_ORDER = Object.keys(
   MODULATOR_KINDS
 ) as ModulatorKind[]
+export const EFFECT_KIND_ORDER = Object.keys(EFFECT_KINDS) as EffectKind[]

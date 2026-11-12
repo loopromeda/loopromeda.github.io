@@ -79,6 +79,7 @@ describe('destinations and sources', () => {
       'LFO 1 Rate',
       'LFO 2 Rate',
       'Amp Gain',
+      'Amp Pan',
     ])
   })
 

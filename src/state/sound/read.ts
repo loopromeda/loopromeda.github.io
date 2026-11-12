@@ -3,22 +3,28 @@
  * version wrote, a hand edit): what is well formed is kept, clamped to
  * its knobs' ranges and to the limits, and the rest is dropped. Parts of
  * unknown kinds go; a part with a bad or repeated id gets a new one;
- * sends, references and routes that name nothing go too.
+ * sends, references and routes that name nothing go too. A sound written
+ * before the session's buses, which sent to its delay and its reverb,
+ * sends to the buses the session's first mix has for them.
  */
 import { clampValue } from '../params'
 import {
   AMOUNT_SPEC,
   AMP_SPEC,
+  BUS_IDS,
   CHAIN_SPEC,
+  EFFECT_KINDS,
   INPUT_KINDS,
   ITEM_KINDS,
   MAX_CHAINS,
+  MAX_EFFECTS,
   MAX_INPUTS,
   MAX_ITEMS,
   MAX_MODULATORS,
   MAX_ROUTES,
   MODULATOR_KINDS,
   SEND_SPEC,
+  SENDS_SPEC,
   VOICE_SPEC,
 } from './kinds'
 import {
@@ -31,12 +37,14 @@ import {
   refLoops,
   valuesFor,
   type Chain,
+  type Effect,
   type Input,
   type Item,
   type Modulator,
   type PartType,
   type Route,
   type Sound,
+  type Values,
 } from './sound'
 
 type Data = Readonly<Record<string, unknown>>
@@ -129,6 +137,18 @@ export function readSound(value: unknown): Sound {
     })
   }
 
+  // A sound saved before effects has none
+  const effects: Effect[] = []
+  for (const entry of list(value.effects)) {
+    if (effects.length >= MAX_EFFECTS) break
+    if (!isData(entry) || !isKey(EFFECT_KINDS, entry.kind)) continue
+    effects.push({
+      id: idFor('effect', entry.id),
+      kind: entry.kind,
+      values: valuesFor(EFFECT_KINDS[entry.kind].knobs, data(entry.values)),
+    })
+  }
+
   const parts: Sound = {
     inputs: withRefs,
     chains,
@@ -136,6 +156,8 @@ export function readSound(value: unknown): Sound {
     routes: [],
     amp: valuesFor(AMP_SPEC.knobs, data(value.amp)),
     voice: valuesFor(VOICE_SPEC.knobs, data(value.voice)),
+    effects,
+    sends: readSends(data(value.sends)),
   }
 
   const routes: Route[] = []
@@ -163,6 +185,24 @@ export function readSound(value: unknown): Sound {
   }
 
   return { ...parts, routes }
+}
+
+/**
+ * A sound's sends, by bus letter. A sound written before buses sent all
+ * of itself dry and some to the session's delay and reverb: that is A
+ * whole, B its delay's, C its reverb's, as the first mix stands
+ * (src/state/mix.ts's initMix).
+ */
+function readSends(given: Data): Values {
+  const old =
+    !BUS_IDS.some((id) => Object.hasOwn(given, id)) &&
+    (Object.hasOwn(given, 'delay') || Object.hasOwn(given, 'reverb'))
+  if (!old) return valuesFor(SENDS_SPEC.knobs, given)
+  return valuesFor(SENDS_SPEC.knobs, {
+    a: 1,
+    b: given.delay,
+    c: given.reverb,
+  })
 }
 
 function isData(value: unknown): value is Data {

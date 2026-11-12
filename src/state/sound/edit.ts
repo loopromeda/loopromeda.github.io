@@ -1,8 +1,8 @@
 /**
- * The edits a sound takes: add, remove and move parts, set knobs, sends
- * and references, connect routes. Each returns a new sound, or the same
- * one when the edit does nothing (a limit reached, an id unknown, a value
- * unchanged), so a caller can compare by identity.
+ * The edits a sound takes: add, remove and move parts (effects too), set
+ * knobs, sends and references, connect routes. Each returns a new sound,
+ * or the same one when the edit does nothing (a limit reached, an id
+ * unknown, a value unchanged), so a caller can compare by identity.
  *
  * Removing a part removes what names it: an input's sends and the routes
  * to it; a chain's items and the routes to them; a modulator's routes from
@@ -11,22 +11,28 @@
 import { clampValue } from '../params'
 import {
   AMOUNT_SPEC,
+  BUS_IDS,
   CHAIN_SPEC,
+  EFFECT_KINDS,
   INPUT_KINDS,
   ITEM_KINDS,
   MAX_CHAINS,
+  MAX_EFFECTS,
   MAX_INPUTS,
   MAX_ITEMS,
   MAX_MODULATORS,
   MAX_ROUTES,
   MODULATOR_KINDS,
   SEND_SPEC,
+  type BusId,
+  type EffectKind,
   type InputKind,
   type ItemKind,
   type ModulatorKind,
 } from './kinds'
 import {
   AMP,
+  SENDS,
   VOICE,
   allIds,
   defaults,
@@ -126,6 +132,14 @@ export function addModulator(sound: Sound, kind: ModulatorKind): Added {
   }
 }
 
+/** A new effect of kind at the end, after the others, at its defaults */
+export function addEffect(sound: Sound, kind: EffectKind): Added {
+  if (sound.effects.length >= MAX_EFFECTS) return { sound, id: null }
+  const id = nextId('effect', allIds(sound))
+  const effect = { id, kind, values: defaults(EFFECT_KINDS[kind].knobs) }
+  return { sound: { ...sound, effects: [...sound.effects, effect] }, id }
+}
+
 /** What a new route connects */
 export interface RouteSpec {
   readonly source: string
@@ -190,7 +204,7 @@ export function setValue(
   const set = (values: Values): Values | undefined =>
     values[key] === next ? undefined : { ...values, [key]: next }
 
-  if (target === AMP || target === VOICE) {
+  if (target === AMP || target === VOICE || target === SENDS) {
     const values = set(sound[target])
     return values ? { ...sound, [target]: values } : sound
   }
@@ -221,6 +235,13 @@ export function setValue(
       modulators[found.index] = { ...found.part, values }
       return { ...sound, modulators }
     }
+    case 'effect': {
+      const values = set(found.part.values)
+      if (!values) return sound
+      const effects = [...sound.effects]
+      effects[found.index] = { ...found.part, values }
+      return { ...sound, effects }
+    }
     default:
       return sound
   }
@@ -245,6 +266,26 @@ export function setSend(
   const others = without(chain.sends, inputId)
   const sends = next > 0 ? { ...others, [inputId]: next } : others
   return replaceChain(sound, { ...chain, sends })
+}
+
+/**
+ * The sound's sends once the mix's bus `bus` is removed and those after
+ * it move up a letter (removeMixPart): each send follows its bus, the
+ * last letter sends nothing, and what went to `bus` goes
+ */
+export function sendsWithout(sound: Sound, bus: BusId): Sound {
+  const from = BUS_IDS.indexOf(bus)
+  if (from < 0) return sound
+  const sends: Record<string, number> = { ...sound.sends }
+  BUS_IDS.forEach((id, k) => {
+    if (k < from) return
+    const next = BUS_IDS[k + 1]
+    sends[id] = next === undefined ? 0 : (sound.sends[next] ?? 0)
+  })
+  const same = BUS_IDS.every(
+    (id) => (sends[id] ?? 0) === (sound.sends[id] ?? 0)
+  )
+  return same ? sound : { ...sound, sends }
 }
 
 /**
@@ -319,12 +360,17 @@ export function removePart(sound: Sound, id: string): Sound {
         ...sound,
         routes: sound.routes.filter((route) => route.id !== id),
       }
+    case 'effect':
+      return {
+        ...sound,
+        effects: sound.effects.filter((effect) => effect.id !== id),
+      }
   }
 }
 
 /**
  * Moves the part id names to index to among its own (inputs, the items of
- * its chain, chains, modulators, routes); nothing else changes, as
+ * its chain, chains, modulators, routes, effects); nothing else changes, as
  * everything names parts by id
  */
 export function movePart(sound: Sound, id: string, to: number): Sound {
@@ -350,6 +396,10 @@ export function movePart(sound: Sound, id: string, to: number): Sound {
     case 'route': {
       const routes = moved(sound.routes, found.index, to)
       return routes ? { ...sound, routes } : sound
+    }
+    case 'effect': {
+      const effects = moved(sound.effects, found.index, to)
+      return effects ? { ...sound, effects } : sound
     }
   }
 }

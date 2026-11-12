@@ -31,7 +31,9 @@ function preset(
  * nothing left out, a cutoff the old keytracking moved rounded). The
  * others use what the old synth had not: more inputs and chains, drives,
  * filters in a row, feedback FM, routes into a chain's sends and the
- * amp's gain.
+ * amp's gain. Since 2026-11-12 pads, plucks and keys send to the
+ * session's delay and reverb, a few through a chorus of their own: to B
+ * and C, the buses the session's first mix has them on (src/state/mix.ts).
  */
 export const FACTORY_PRESETS: readonly Preset[] = [
   // A new patch's sound: a saw into an open lowpass (initSound)
@@ -213,6 +215,7 @@ export const FACTORY_PRESETS: readonly Preset[] = [
     ],
     amp: { sustain: 0.85, release: 0.25 },
     voice: { mode: 'Legato', glide: 0.08 },
+    sends: { b: 0.4 },
   }),
   preset('Chip Lead', 'Lead', {
     inputs: { square: { kind: 'osc', wave: 'Square', width: 0.25 } },
@@ -327,6 +330,8 @@ export const FACTORY_PRESETS: readonly Preset[] = [
       { from: 'drift', to: 'filter.cutoff', by: 0.8 },
     ],
     amp: { attack: 0.8, decay: 1, sustain: 0.9, release: 2.5, velocity: 0.2 },
+    effects: [{ kind: 'chorus', rate: 0.4, depth: 0.5, mix: 0.4 }],
+    sends: { c: 0.6 },
   }),
   preset('PWM Pad', 'Pad', {
     inputs: {
@@ -348,6 +353,7 @@ export const FACTORY_PRESETS: readonly Preset[] = [
       { from: 'pwm2', to: 'detuned.width', by: 0.3 },
     ],
     amp: { attack: 0.5, decay: 1, sustain: 0.9, release: 1.8, velocity: 0.2 },
+    sends: { c: 0.5 },
   }),
   preset('Glass Pad', 'Pad', {
     inputs: {
@@ -361,6 +367,7 @@ export const FACTORY_PRESETS: readonly Preset[] = [
     },
     routes: [{ from: 'shimmer', to: 'carrier.fm', by: 0.08 }],
     amp: { attack: 1, decay: 1.5, sustain: 0.8, release: 3, velocity: 0.2 },
+    sends: { c: 0.8 },
   }),
   preset('Strings', 'Pad', {
     // Three saws spread apart, one an octave up, as a section is
@@ -393,6 +400,8 @@ export const FACTORY_PRESETS: readonly Preset[] = [
       { from: 'random', to: 'filter.cutoff', by: 0.3 },
     ],
     amp: { attack: 0.6, decay: 1, sustain: 0.9, release: 1.5, velocity: 0.3 },
+    effects: [{ kind: 'chorus', rate: 0.5, depth: 0.4, mix: 0.35 }],
+    sends: { c: 0.6 },
   }),
   preset('Choir Pad', 'Pad', {
     // The vowel "ah": a band for each of its first two formants, fixed
@@ -426,6 +435,7 @@ export const FACTORY_PRESETS: readonly Preset[] = [
     },
     routes: [{ from: 'vowel', to: 'second.cutoff', by: 0.3 }],
     amp: { attack: 0.4, decay: 1, sustain: 0.9, release: 1.5, velocity: 0.2 },
+    sends: { c: 0.7 },
   }),
   preset('Breath Pad', 'Pad', {
     // A soft pad, and a second chain of noise in a moving band: its breath
@@ -458,6 +468,7 @@ export const FACTORY_PRESETS: readonly Preset[] = [
       { from: 'gust', to: 'band.cutoff', by: 1 },
     ],
     amp: { attack: 0.9, decay: 1, sustain: 0.9, release: 2, velocity: 0.2 },
+    sends: { c: 0.6 },
   }),
 
   preset('Soft Pluck', 'Pluck', {
@@ -481,6 +492,7 @@ export const FACTORY_PRESETS: readonly Preset[] = [
       { from: 'velocity', to: 'filter.cutoff', by: 1 },
     ],
     amp: { attack: 0.002, decay: 0.7, sustain: 0, release: 0.5, velocity: 0.7 },
+    sends: { b: 0.5, c: 0.4 },
   }),
   preset('Square Pluck', 'Pluck', {
     inputs: {
@@ -507,6 +519,7 @@ export const FACTORY_PRESETS: readonly Preset[] = [
     modulators: { strikeEnv: { kind: 'env', attack: 0.001, decay: 0.07 } },
     routes: [{ from: 'strikeEnv', to: 'tine.fm', by: 0.45 }],
     amp: { attack: 0.001, decay: 0.9, sustain: 0, release: 0.4, velocity: 0.6 },
+    sends: { c: 0.4 },
   }),
   preset('Marimba', 'Pluck', {
     // The bar's fourth harmonic rings only for the strike: a route into
@@ -519,6 +532,7 @@ export const FACTORY_PRESETS: readonly Preset[] = [
     modulators: { strike: { kind: 'env', attack: 0.001, decay: 0.08 } },
     routes: [{ from: 'strike', to: 'main.send.overtone', by: 0.5 }],
     amp: { attack: 0.001, decay: 0.6, sustain: 0, release: 0.3, velocity: 0.6 },
+    sends: { c: 0.3 },
   }),
 
   preset('E-Piano', 'Keys', {
@@ -538,6 +552,7 @@ export const FACTORY_PRESETS: readonly Preset[] = [
       release: 0.5,
       velocity: 0.6,
     },
+    effects: [{ kind: 'chorus', rate: 0.8, depth: 0.4, mix: 0.4 }],
   }),
   preset('FM Bell', 'Keys', {
     inputs: {
@@ -549,6 +564,7 @@ export const FACTORY_PRESETS: readonly Preset[] = [
     modulators: { env: { kind: 'env', decay: 1.5 } },
     routes: [{ from: 'env', to: 'carrier.fm', by: 0.35 }],
     amp: { attack: 0.001, decay: 3, sustain: 0, release: 2 },
+    sends: { c: 0.6 },
   }),
   preset('Organ', 'Keys', {
     inputs: {
@@ -559,6 +575,7 @@ export const FACTORY_PRESETS: readonly Preset[] = [
     modulators: { vibrato: { kind: 'lfo', rate: 6.5, trigger: 'Free' } },
     routes: [{ from: 'vibrato', to: 'voice.pitch', by: 0.08 }],
     amp: { attack: 0.004, decay: 0.1, sustain: 1, release: 0.06, velocity: 0 },
+    effects: [{ kind: 'chorus', rate: 0.9, depth: 0.3, mix: 0.35 }],
   }),
   preset('Clav', 'Keys', {
     // A thin pulse through two filters in a row: lows cut, then a
@@ -601,6 +618,7 @@ export const FACTORY_PRESETS: readonly Preset[] = [
     modulators: { fans: { kind: 'lfo', rate: 5, trigger: 'Free' } },
     routes: [{ from: 'fans', to: 'amp.gain', by: -0.35 }],
     amp: { attack: 0.001, decay: 2.5, sustain: 0, release: 0.8, velocity: 0.6 },
+    sends: { c: 0.5 },
   }),
 
   preset('Kick', 'Drums', {
@@ -725,6 +743,7 @@ export const FACTORY_PRESETS: readonly Preset[] = [
       release: 0.2,
       velocity: 0.6,
     },
+    sends: { c: 0.4 },
   }),
   preset('Cowbell', 'Drums', {
     // Two squares about 2:3 apart, in a band: the old drum machines' bell
@@ -766,6 +785,7 @@ export const FACTORY_PRESETS: readonly Preset[] = [
     modulators: { steps: { kind: 'lfo', shape: 'S&H', rate: 8 } },
     // A random note within an octave up, eight times a second
     routes: [{ from: 'steps', to: 'voice.pitch', by: 12 }],
+    sends: { b: 0.6 },
   }),
   preset('Zap', 'FX', {
     inputs: { saw: { kind: 'osc' } },
@@ -800,6 +820,7 @@ export const FACTORY_PRESETS: readonly Preset[] = [
       { from: 'rise', to: 'filter.cutoff', by: 3 },
     ],
     amp: { attack: 0.5, sustain: 1, release: 1 },
+    sends: { c: 0.7 },
   }),
   preset('Wind', 'FX', {
     // Noise in two resonant bands, each blown about by a gust of its own
@@ -836,6 +857,7 @@ export const FACTORY_PRESETS: readonly Preset[] = [
       { from: 'weather', to: 'gust.rate', by: 1.5 },
     ],
     amp: { attack: 0.8, sustain: 1, release: 1.5, velocity: 0.2 },
+    sends: { c: 0.6 },
   }),
   preset('Siren', 'FX', {
     inputs: { square: { kind: 'osc', wave: 'Square', width: 0.35 } },

@@ -18,7 +18,7 @@ mix         chain A ← IN 1 100%, IN 2 60%      chain B ← IN 3 100%, IN 4 30%
 chains      A: [Filter LP] → [Drive]                  B: [Filter BP]
                └───────────────── sum ────────────────────┘
                                    │
-output                   amp envelope → voice
+output                amp envelope, pan → voice
 
 modulators  [Env] [Env] [LFO] [LFO] …     sources: these, velocity, key,
 routes      source → any knob × amount            slide, random, wheel
@@ -32,14 +32,24 @@ routes      source → any knob × amount            slide, random, wheel
 - **Chains** each take a mix of inputs (a send level per input; an input
   can feed several chains, or none) and pass it through their items in
   order. Items process: a filter, drive, more later. The chains are summed.
-- **The output** is the amp envelope (and velocity) and the voice (mode,
-  glide): one of each, always there.
+- **The output** is the amp envelope (and velocity, and the pan) and the
+  voice (mode, glide): one of each, always there.
+- **The pan** (since 2026-11-12, ashon: "사운드 패닝도 되도록 해 보자",
+  chosen over a pan per chain and one for the whole sound) is the amp's
+  last knob, -1 (L 100) to 1 (R 100), C in the middle: where each voice
+  stands between the sides, the voices summed in stereo since. A route
+  moves each voice from there on its own: an LFO pans it to and fro, the
+  key spreads the notes across (low left, high right), random gives each
+  note a place. Equal power: a quarter turn across, the sides √2·cos and
+  √2·sin of it, so a voice in the middle is in each side as it was in
+  mono (every sound saved before plays as it did) and is as loud
+  wherever it stands, one side 3 dB up at an edge, the other silent.
 - **Modulators** are envelopes and LFOs. **Routes** connect a source (a
   modulator, velocity, key, slide (a finger's on a pad, or up the XY
   pad), random, the wheel) to any knob that
   can be modulated, by an amount of that knob's modulation scale,
-  optionally scaled by a via source. Pitch of the whole voice and the
-  amp's gain are destinations too.
+  optionally scaled by a via source. Pitch of the whole voice, the
+  amp's gain and its pan are destinations too.
 - **The wheel** (since 2026-11-12, ashon: a mod wheel beside the keys
   for dynamics) is a strip at the keys' or pads' left, 0..1, the same
   for every note; it moves nothing until a route reads it, and is grey

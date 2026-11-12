@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { ChainSynth, POLY } from '../dsp/chainSynth'
-import { applySound } from '../worklet/sound'
+import { EffectRack } from '../dsp/effects'
+import { Mixer, Strip } from '../dsp/output'
+import { SoundPlayer, applyMix, applySound } from '../worklet/sound'
 import { FACTORY_PRESETS } from './factory'
+import { initMix } from './mix'
 import { PRESET_CATEGORIES, cleanName, type Preset } from './presets'
 import { readSound } from './sound/read'
 import { VOICE, initSound } from './sound/sound'
@@ -116,6 +119,48 @@ describe('FACTORY_PRESETS', () => {
       expect(loudest).toBeLessThan(0.9)
       // Every preset has died away three seconds after the key
       expect(peak(released, released.length - at(0.1))).toBeLessThan(0.001)
+    }
+  )
+
+  it.each(
+    FACTORY_PRESETS.filter(
+      (preset) =>
+        preset.sound.effects.length > 0 ||
+        Object.values(preset.sound.sends).some((send) => send > 0)
+    ).map((preset) => [preset.name, preset] as const)
+  )(
+    '%s rings out through its inserts and sends, under the clip',
+    (_, preset) => {
+      // As the worklet plays it, in the session's mix at its defaults
+      const strip = new Strip(
+        new ChainSynth(SAMPLE_RATE),
+        new EffectRack(SAMPLE_RATE)
+      )
+      new SoundPlayer(strip).load(preset.sound)
+      const mixer = new Mixer(SAMPLE_RATE)
+      mixer.clip = false
+      applyMix(mixer, initMix())
+      const strips = [strip]
+      const left = new Float32Array(BLOCK)
+      const right = new Float32Array(BLOCK)
+      /** The loudest of either side, over seconds */
+      const play = (seconds: number) => {
+        let loudest = 0
+        for (let b = 0; b < (seconds * SAMPLE_RATE) / BLOCK; b++) {
+          mixer.render(strips, left, right)
+          loudest = Math.max(loudest, peak(left), peak(right))
+        }
+        return loudest
+      }
+      strip.synth.noteOn(1, 60, 0.8)
+      const held = play(0.5)
+      strip.synth.noteOff(1)
+      const released = play(3)
+      expect(Number.isFinite(held + released)).toBe(true)
+      expect(Math.max(held, released)).toBeLessThan(0.9)
+      // The returns' tails have died away 10 s after the key
+      play(6.9)
+      expect(play(0.1)).toBeLessThan(0.001)
     }
   )
 

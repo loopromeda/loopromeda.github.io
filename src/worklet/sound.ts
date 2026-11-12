@@ -4,13 +4,20 @@
  * references and routes as slot numbers, and each knob in the synth's
  * units (an oscillator's semitones from its octave, semi and fine; a
  * route's amount times its destination's scale). The worklet's processor
- * loads each sound it is sent and sets each knob it is sent; tests run it
- * to hear what a sound does. No AudioWorklet globals.
+ * loads each sound it is sent and sets each knob it is sent, and the
+ * session's mix (applyMix); tests run them to hear what a sound does. No
+ * AudioWorklet globals.
  */
-import type { ChainSynth } from '../dsp/chainSynth'
+import { ChainSynth } from '../dsp/chainSynth'
+import type { EffectRack } from '../dsp/effects'
+import type { Mixer, Strip } from '../dsp/output'
 import {
   DEST_AMP,
+  DEST_PAN,
   DEST_PITCH,
+  FX_CHORUS,
+  FX_DELAY,
+  FX_REVERB,
   INPUT_FM,
   INPUT_NOISE,
   INPUT_OSC,
@@ -39,21 +46,38 @@ import {
   rateDest,
   sendDest,
 } from '../dsp/slots'
-import type { NoteSource } from '../state/sound/kinds'
+import type { Mix } from '../state/mix'
+import {
+  BUS_IDS,
+  BUS_SPEC,
+  EFFECT_KINDS,
+  MASTER_SPEC,
+  STRIP_SPEC,
+  type EffectKind,
+  type KnobSpec,
+  type NoteSource,
+} from '../state/sound/kinds'
 import { ROUTE_AMOUNT } from '../state/sound/diff'
 import {
   AMP,
+  SENDS,
   VOICE,
   destOf,
   isNoteSource,
   sendInput,
   sendKey,
+  type Effect,
   type Sound,
 } from '../state/sound/sound'
 
 const INPUT_KIND = { osc: INPUT_OSC, noise: INPUT_NOISE, ring: INPUT_RING }
 const ITEM_KIND = { filter: ITEM_FILTER, drive: ITEM_DRIVE }
 const MODULATOR_KIND = { env: MOD_ENV, lfo: MOD_LFO }
+const EFFECT_KIND: Record<EffectKind, number> = {
+  chorus: FX_CHORUS,
+  delay: FX_DELAY,
+  reverb: FX_REVERB,
+}
 const NOTE_SOURCE: Record<NoteSource, number> = {
   velocity: SOURCE_VELOCITY,
   key: SOURCE_KEY,
@@ -73,18 +97,26 @@ interface Held {
 }
 
 /**
- * Plays sounds on a chain synth: load gives it a whole sound, set one of
- * its knobs, as the main thread sends them (src/state/sound/diff.ts). A
- * knob set allocates nothing; a load builds the player's own record of
- * the sound.
+ * Plays sounds on a chain synth, or on a strip (output.ts: a synth, its
+ * inserts and its sends): load gives it a whole sound, set one of its
+ * knobs, as the main thread sends them (src/state/sound/diff.ts). A knob
+ * set allocates nothing; a load builds the player's own record of the
+ * sound. On a synth alone, the inserts and the sends go unheard.
  */
 export class SoundPlayer {
   readonly synth: ChainSynth
-  /** By part id (and amp, voice): its knobs, and their setter */
+  readonly strip: Strip | undefined
+  /** By part id (and amp, voice, sends): its knobs, and their setter */
   readonly #parts = new Map<string, Held>()
 
-  constructor(synth: ChainSynth) {
-    this.synth = synth
+  constructor(target: ChainSynth | Strip) {
+    if (target instanceof ChainSynth) {
+      this.synth = target
+      this.strip = undefined
+    } else {
+      this.synth = target.synth
+      this.strip = target
+    }
   }
 
   /** Gives the synth all of sound: its structure, every knob, every route */
@@ -193,11 +225,30 @@ export class SoundPlayer {
         value('release')
       )
       synth.ampVelocity = value('velocity')
+      synth.pan = value('pan')
     })
     hold(VOICE, { ...sound.voice }, (value) => {
       synth.mode = value('mode')
       synth.glide = value('glide')
     })
+
+    const strip = this.strip
+    if (strip) {
+      const rack = strip.inserts
+      rack.count = sound.effects.length
+      sound.effects.forEach((effect, f) => {
+        rack.setKind(f, EFFECT_KIND[effect.kind])
+        hold(effect.id, { ...effect.values }, (value) =>
+          setEffect(rack, f, effect.kind, value)
+        )
+      })
+      hold(SENDS, { ...sound.sends }, (value) => {
+        BUS_IDS.forEach((id, k) => {
+          const send = strip.sends[k]
+          if (send) send.goal = value(id)
+        })
+      })
+    }
 
     const source = (id: string | null): number => {
       if (id === null) return SOURCE_OFF
@@ -208,7 +259,9 @@ export class SoundPlayer {
     /** Where a route to (target, key) writes, or undefined if nowhere */
     const destOfRoute = (target: string, key: string): number | undefined => {
       if (target === VOICE) return key === 'pitch' ? DEST_PITCH : undefined
-      if (target === AMP) return key === 'gain' ? DEST_AMP : undefined
+      if (target === AMP) {
+        return key === 'gain' ? DEST_AMP : key === 'pan' ? DEST_PAN : undefined
+      }
       const i = inputs.get(target)
       if (i !== undefined) {
         const param = { pitch: INPUT_PITCH, width: INPUT_WIDTH, fm: INPUT_FM }
@@ -271,4 +324,78 @@ export class SoundPlayer {
 /** Gives synth all of sound: its structure, every knob, every route */
 export function applySound(synth: ChainSynth, sound: Sound): void {
   new SoundPlayer(synth).load(sound)
+}
+
+/** Hands slot k of rack the knobs of an effect of kind, read by value */
+function setEffect(
+  rack: EffectRack,
+  k: number,
+  kind: EffectKind,
+  value: Read
+): void {
+  switch (kind) {
+    case 'chorus':
+      rack.setChorus(k, value('rate'), value('depth'), value('mix'))
+      return
+    case 'delay':
+      rack.setDelay(
+        k,
+        value('time'),
+        value('feedback'),
+        value('tone'),
+        value('mode') === 1,
+        value('mix')
+      )
+      return
+    case 'reverb':
+      rack.setReverb(
+        k,
+        value('size'),
+        value('decay'),
+        value('damp'),
+        value('mix')
+      )
+  }
+}
+
+/** A part's knobs by key, a knob missing at its default */
+function reader(knobs: readonly KnobSpec[], values: Values | undefined): Read {
+  return (key) =>
+    values?.[key] ?? knobs.find((knob) => knob.key === key)?.default ?? 0
+}
+
+/** Gives rack effects, in their order: each slot's kind, then its knobs */
+function applyEffects(rack: EffectRack, effects: readonly Effect[]): void {
+  rack.count = effects.length
+  effects.forEach((effect, k) => {
+    rack.setKind(k, EFFECT_KIND[effect.kind])
+    const knobs = EFFECT_KINDS[effect.kind].knobs
+    setEffect(rack, k, effect.kind, reader(knobs, effect.values))
+  })
+}
+
+/**
+ * Gives the mixer and the strips the session's mix (src/state/mix.ts):
+ * each strip's fader by its part's place, each bus on or off by its
+ * letter, its effects and level, and the master's. A knob missing is its
+ * default, a strip missing at full in the middle.
+ */
+export function applyMix(
+  mixer: Mixer,
+  mix: Mix,
+  strips: readonly Strip[] = []
+): void {
+  strips.forEach((strip, k) => {
+    const value = reader(STRIP_SPEC.knobs, mix.strips[k]?.values)
+    strip.setFader(value('level'), value('pan'))
+  })
+  BUS_IDS.forEach((id, k) => {
+    const bus = mix.buses.find((each) => each.id === id)
+    const value = reader(BUS_SPEC.knobs, bus?.values)
+    mixer.setBus(k, bus !== undefined, value('level'), value('pan'))
+    const rack = mixer.bus(k)
+    if (rack) applyEffects(rack, bus?.effects ?? [])
+  })
+  applyEffects(mixer.master, mix.master.effects)
+  mixer.setMaster(reader(MASTER_SPEC.knobs, mix.master.values)('level'))
 }

@@ -13,9 +13,10 @@ export type Curve = 'linear' | 'quadratic' | 'exponential' | 'bipolar'
 
 /**
  * How a value is rendered on screen: 's' shows milliseconds below 1 s, 'Hz'
- * kilohertz from 1 kHz, and '%' signs the value when the range is two-sided
+ * kilohertz from 1 kHz, '%' signs the value when the range is two-sided,
+ * and 'pan' names a side, -1..1: L 50, C, R 100
  */
-export type Unit = '' | '%' | 'oct' | 'st' | 'ct' | 's' | 'Hz'
+export type Unit = '' | '%' | 'oct' | 'st' | 'ct' | 's' | 'Hz' | 'pan'
 
 /** One knob: its range, its mapping and how to display it */
 export interface ParamSpec extends ValueSpec {
@@ -649,6 +650,10 @@ export function formatValue(spec: ValueSpec, value: number): string {
   if (spec.unit === '%') {
     const r = Math.round(v * 100)
     return `${spec.min < 0 ? sign(r) : ''}${Math.abs(r)}%`
+  }
+  if (spec.unit === 'pan') {
+    const r = Math.round(v * 100)
+    return r < 0 ? `L ${-r}` : r > 0 ? `R ${r}` : 'C'
   }
   if (spec.unit === 's') {
     const ms = Math.round(v * 1000)

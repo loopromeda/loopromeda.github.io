@@ -12,6 +12,10 @@ export const MAX_CHAINS = 4
 export const MAX_ITEMS = 6
 export const MAX_MODULATORS = 8
 export const MAX_ROUTES = 16
+/** Effects in a row (src/dsp/effects.ts): inserts, a bus's, the master's */
+export const MAX_EFFECTS = 4
+/** The mix's buses, each a row of effects (src/dsp/output.ts) */
+export const MAX_BUSES = 4
 
 /** Input kinds: an oscillator, white noise, two inputs multiplied */
 export const INPUT_OSC = 0
@@ -21,6 +25,11 @@ export const INPUT_RING = 2
 /** Chain item kinds */
 export const ITEM_FILTER = 0
 export const ITEM_DRIVE = 1
+
+/** Effect kinds */
+export const FX_CHORUS = 0
+export const FX_DELAY = 1
+export const FX_REVERB = 2
 
 /** Modulator kinds */
 export const MOD_ENV = 0
@@ -58,13 +67,15 @@ export const KEY_SPAN = 48
 export const DEST_PITCH = 0
 /** The voice's gain: 1 plus this, never below 0 */
 export const DEST_AMP = 1
+/** The voice's place between the sides: added to its pan, -1..1 */
+export const DEST_PAN = 2
 
 /** An input's destinations: pitch (semitones), pulse width, FM depth */
 export const INPUT_PITCH = 0
 export const INPUT_WIDTH = 1
 export const INPUT_FM = 2
 const INPUT_DESTS = 3
-const FIRST_INPUT_DEST = 2
+const FIRST_INPUT_DEST = 3
 
 /** Input i's destination param (INPUT_PITCH, INPUT_WIDTH or INPUT_FM) */
 export function inputDest(i: number, param: number): number {

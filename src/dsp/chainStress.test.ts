@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { chainStressSynth, timeBlocks } from './chainStress'
+import { chainStressOutput, chainStressSynth, timeBlocks } from './chainStress'
+import { MAX_EFFECTS } from './slots'
 
 describe('chainStressSynth', () => {
   it('holds as many notes as asked, on as many voices as asked', () => {
@@ -19,6 +20,29 @@ describe('chainStressSynth', () => {
       }
     }
     expect(peak).toBeGreaterThan(0.1)
+  })
+})
+
+describe('chainStressOutput', () => {
+  it('renders the voices through a full rack and the returns, clipped', () => {
+    const output = chainStressOutput(48000, 16)
+    expect(output.strip.synth.activeVoices).toBe(16)
+    expect(output.strip.inserts.count).toBe(MAX_EFFECTS)
+    const block = new Float32Array(128)
+    let peak = 0
+    for (let n = 0; n < 375; n++) {
+      output.process(block)
+      // Clipped: a very loud sample rounds to 1 in a Float32Array
+      for (const sample of block) {
+        expect(Math.abs(sample)).toBeLessThanOrEqual(1)
+        peak = Math.max(peak, Math.abs(sample))
+      }
+    }
+    expect(peak).toBeGreaterThan(0.1)
+    // A block of another length is rendered whole too
+    const long = new Float32Array(256)
+    output.process(long)
+    expect(long.every((sample) => Number.isFinite(sample))).toBe(true)
   })
 })
 

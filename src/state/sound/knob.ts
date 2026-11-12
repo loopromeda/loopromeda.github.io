@@ -17,6 +17,7 @@ import {
 } from './kinds'
 import {
   AMP,
+  SENDS,
   VOICE,
   destOf,
   findPart,
@@ -55,6 +56,7 @@ export function knobSpec(
 export function knobValue(sound: Sound, part: string, key: string): number {
   if (part === AMP) return sound.amp[key] ?? 0
   if (part === VOICE) return sound.voice[key] ?? 0
+  if (part === SENDS) return sound.sends[key] ?? 0
   const found = findPart(sound, part)
   if (!found) return 0
   switch (found.type) {
