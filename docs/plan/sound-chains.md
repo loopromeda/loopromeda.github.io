@@ -252,5 +252,21 @@ as a graph of flat tiles, flowing left to right.
      and moves them, setting styles straight on the elements as a knob
      does; `src/viz/drop.ts` finds the seam a tile goes into; `moveItem`
      in `src/state/sound/edit.ts` takes an item into another chain.
-5. The factory presets rebuilt as sounds.
+5. The factory presets rebuilt as sounds. Done 2026-11-12, asked for
+   by ashon: `src/state/sound/write.ts` writes a sound by names (parts
+   named, choices by name, a route's amount in its destination's units)
+   and throws on a typo, and `src/state/factory.ts` writes every preset
+   with it. The 22 old ones are the sounds they converted to (open
+   filters that did nothing left out, cutoffs the old keytracking moved
+   rounded, Init now a new patch's saw); 18 new ones use what the old
+   synth had not: Reese and Growl Bass (two saws beating, drives),
+   Fifth, Scream and Feedback Lead (a drive before and after a band,
+   feedback FM), Strings, Choir and Breath Pad (four inputs, two chains
+   of formant bands, a chain of noise), Kalimba and Marimba (a route
+   into a send), Clav and Vibes (two filters in a row, a tremolo on the
+   amp's gain), Tom, Clap and Cowbell, and Riser, Wind and Siren (an
+   LFO moving another's rate). Measured at C4, a held sound's RMS is
+   about 0.1 to 0.2, as the old presets' is; every preset sounds there
+   without clipping and dies within three seconds of its key
+   (`src/state/factory.test.ts`).
 6. The drum kit on top: sixteen sounds, one per pad.

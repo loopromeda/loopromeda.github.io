@@ -2,11 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { ChainSynth, POLY } from '../dsp/chainSynth'
 import { applySound } from '../worklet/sound'
 import { FACTORY_PRESETS } from './factory'
-import { defaultValues } from './params'
 import { PRESET_CATEGORIES, cleanName, type Preset } from './presets'
 import { readSound } from './sound/read'
-import { VOICE } from './sound/sound'
-import { soundFromV1 } from './sound/v1'
+import { VOICE, initSound } from './sound/sound'
 
 const SAMPLE_RATE = 48000
 const BLOCK = 128
@@ -59,11 +57,11 @@ const named = (name: string): Preset => {
 }
 
 describe('FACTORY_PRESETS', () => {
-  it('starts with Init, the old defaults', () => {
+  it('starts with Init, a new patch', () => {
     expect(FACTORY_PRESETS[0]).toEqual({
       name: 'Init',
       category: 'Basic',
-      sound: soundFromV1(defaultValues()),
+      sound: initSound(),
     })
   })
 

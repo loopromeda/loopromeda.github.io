@@ -1,484 +1,855 @@
-import {
-  MOD_DESTS,
-  MOD_SOURCES,
-  getParam,
-  modSlotIds,
-  paramIndex,
-  type ParamId,
-} from './params'
-import {
-  fullValues,
-  type Preset,
-  type PresetCategory,
-  type PresetValues,
-} from './presets'
-import { soundFromV1 } from './sound/v1'
-
-/** A value as a preset is written here: a number, or a choice ('Saw') */
-type Written = number | string
-
-type Source = (typeof MOD_SOURCES)[number]
-type Dest = (typeof MOD_DESTS)[number]['name']
+import type { Preset, PresetCategory } from './presets'
+import { writeSound, type WrittenSound } from './sound/write'
 
 /**
- * One matrix route, its amount in the destination's own units: 24 for
- * +24 st on a pitch, 2 for +2 octaves on Cutoff, 0.3 for 30% on a level
- * or a width (MOD_DESTS)
- */
-interface Route {
-  readonly source: Source
-  readonly dest: Dest
-  readonly amount: number
-  readonly via?: Source
-}
-
-type Slot = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8
-
-/**
- * A factory preset, written as the old parameters that differ from their
- * defaults and played as the sound they convert to (src/state/sound/v1.ts),
- * until the factory set is rebuilt as sounds (docs/plan/sound-chains.md,
- * step 5). A choice is written by its name and a route by its slot, in
- * its destination's units; a slot not routed keeps its default routing at
- * no amount. An unknown id or choice throws, so a typo fails the tests,
- * not a phone.
+ * A factory preset, written as a sound (src/state/sound/write.ts): its
+ * parts under names of their own, choices by name, a route's amount in its
+ * destination's units (octaves on a cutoff, semitones on a pitch, a share
+ * of a level). A typo throws, naming the preset, so it fails the tests.
  */
 function preset(
   name: string,
   category: PresetCategory,
-  written: Partial<Record<ParamId, Written>>,
-  routes: Partial<Record<Slot, Route>> = {}
+  written: WrittenSound
 ): Preset {
-  const values = v1Values(name, written, routes)
-  return { name, category, sound: soundFromV1(fullValues(values)) }
-}
-
-/** What preset() writes, as the old parameters' values */
-function v1Values(
-  name: string,
-  written: Partial<Record<ParamId, Written>>,
-  routes: Partial<Record<Slot, Route>>
-): PresetValues {
-  const values: Partial<Record<ParamId, number>> = {}
-  for (const [id, value] of Object.entries(written) as [ParamId, Written][]) {
-    values[id] = typeof value === 'number' ? value : choice(id, value)
+  try {
+    return { name, category, sound: writeSound(written) }
+  } catch (error) {
+    throw new Error(`${name}: ${(error as Error).message}`, { cause: error })
   }
-  for (const [slot, route] of Object.entries(routes) as [string, Route][]) {
-    const ids = modSlotIds(Number(slot))
-    const dest = MOD_DESTS.findIndex((entry) => entry.name === route.dest)
-    if (dest < 0) throw new RangeError(`${name}: no destination ${route.dest}`)
-    values[ids.source] = choice(ids.source, route.source)
-    values[ids.dest] = dest
-    values[ids.amount] = route.amount / (MOD_DESTS[dest]?.scale ?? 1)
-    values[ids.via] = choice(ids.via, route.via ?? 'Off')
-  }
-  for (const id of Object.keys(values)) {
-    if (paramIndex(id) < 0) throw new RangeError(`${name}: no parameter ${id}`)
-  }
-  return values
-}
-
-/** The index of a choice by its name ('Saw' on a wave) */
-function choice(id: ParamId, name: string): number {
-  const index = getParam(id).choices?.indexOf(name) ?? -1
-  if (index < 0) throw new RangeError(`${id} has no choice ${name}`)
-  return index
 }
 
 /**
- * The presets the app ships with: a starter set across the categories,
- * every one of them the one voice (plan §3, "Instruments are patches").
- * The keyboard starts at C4, and a phone's speaker barely plays below 200
- * Hz, so the basses keep overtones above it. Each voice enters the mix at
- * a quarter, so the oscillator levels add up to about 1.6 at most.
+ * The presets the app ships with, across the categories. The keyboard
+ * starts at C4, and a phone's speaker barely plays below 200 Hz, so the
+ * basses keep overtones above it. Each voice enters the mix at a quarter,
+ * so a chain's sends add up to 2 or so at most, and a sound's chains
+ * about as much: a held note's RMS near 0.15.
+ *
+ * 22 of them were written as the old fixed parameters until 2026-11-12
+ * and are rebuilt here as the sounds those converted to (filters that did
+ * nothing left out, a cutoff the old keytracking moved rounded). The
+ * others use what the old synth had not: more inputs and chains, drives,
+ * filters in a row, feedback FM, routes into a chain's sends and the
+ * amp's gain.
  */
 export const FACTORY_PRESETS: readonly Preset[] = [
-  preset('Init', 'Basic', {}),
+  // A new patch's sound: a saw into an open lowpass (initSound)
+  preset('Init', 'Basic', {
+    inputs: { saw: { kind: 'osc' } },
+    chains: {
+      main: { sends: { saw: 1 }, items: { filter: { kind: 'filter' } } },
+    },
+  }),
 
   preset('Saw Bass', 'Bass', {
-    'osc1.wave': 'Saw',
-    'osc1.octave': -1,
-    'osc2.wave': 'Square',
-    'osc2.octave': -2,
-    'osc2.level': 0.5,
-    'filter.cutoff': 420,
-    'filter.resonance': 0.25,
-    'filter.envAmount': 0.4,
-    'filter.keytrack': 0.3,
-    'filterEnv.decay': 0.25,
-    'filterEnv.sustain': 0.15,
-    'amp.attack': 0.002,
-    'amp.decay': 0.4,
-    'amp.sustain': 0.8,
-    'amp.release': 0.08,
-    'voice.mode': 'Mono',
+    inputs: {
+      saw: { kind: 'osc', octave: -1 },
+      sub: { kind: 'osc', wave: 'Square', octave: -2 },
+    },
+    chains: {
+      main: {
+        sends: { saw: 1, sub: 0.5 },
+        items: {
+          filter: {
+            kind: 'filter',
+            cutoff: 340,
+            resonance: 0.25,
+            keytrack: 0.3,
+          },
+        },
+      },
+    },
+    modulators: { filterEnv: { kind: 'env', decay: 0.25, sustain: 0.15 } },
+    routes: [{ from: 'filterEnv', to: 'filter.cutoff', by: 4 }],
+    amp: { attack: 0.002, decay: 0.4, sustain: 0.8, release: 0.08 },
+    voice: { mode: 'Mono' },
   }),
   preset('Sub Bass', 'Bass', {
-    'osc1.octave': -1,
-    // An octave up, so a phone speaker hears the note at all
-    'osc2.wave': 'Triangle',
-    'osc2.level': 0.35,
-    'amp.attack': 0.003,
-    'amp.decay': 0.2,
-    'amp.sustain': 0.9,
-    'amp.release': 0.12,
-    'voice.mode': 'Legato',
-    'voice.glide': 0.04,
+    inputs: {
+      sub: { kind: 'osc', wave: 'Sine', octave: -1 },
+      // An octave up, so a phone speaker hears the note at all
+      body: { kind: 'osc', wave: 'Triangle' },
+    },
+    chains: { main: { sends: { sub: 1, body: 0.35 } } },
+    amp: { attack: 0.003, decay: 0.2, sustain: 0.9, release: 0.12 },
+    voice: { mode: 'Legato', glide: 0.04 },
   }),
-  preset(
-    'Acid Bass',
-    'Bass',
-    {
-      'osc1.wave': 'Saw',
-      'osc1.octave': -1,
-      'filter.cutoff': 220,
-      'filter.resonance': 0.78,
-      'filter.envAmount': 0.5,
-      'filter.keytrack': 0.5,
-      'filterEnv.decay': 0.2,
-      'amp.attack': 0.002,
-      'amp.decay': 0.3,
-      'amp.sustain': 0.85,
-      'amp.release': 0.06,
-      'amp.velocity': 0.3,
-      'voice.mode': 'Legato',
-      'voice.glide': 0.07,
+  preset('Acid Bass', 'Bass', {
+    inputs: { saw: { kind: 'osc', octave: -1 } },
+    chains: {
+      main: {
+        sends: { saw: 1 },
+        items: {
+          filter: {
+            kind: 'filter',
+            cutoff: 155,
+            resonance: 0.78,
+            keytrack: 0.5,
+          },
+        },
+      },
     },
-    // Harder notes open the filter further, like an accent
-    { 4: { source: 'Velo', dest: 'Cutoff', amount: 1.5 } }
-  ),
-  preset(
-    'FM Bass',
-    'Bass',
-    {
-      'osc1.octave': -1,
-      'osc2.octave': -1,
-      'fm.amount': 0.35,
-      'modEnv.decay': 0.25,
-      'amp.attack': 0.002,
-      'amp.decay': 0.5,
-      'amp.sustain': 0.6,
-      'amp.release': 0.1,
-      'voice.mode': 'Mono',
+    modulators: { filterEnv: { kind: 'env', decay: 0.2 } },
+    routes: [
+      { from: 'filterEnv', to: 'filter.cutoff', by: 5 },
+      // Harder notes open the filter further, like an accent
+      { from: 'velocity', to: 'filter.cutoff', by: 1.5 },
+    ],
+    amp: { attack: 0.002, sustain: 0.85, release: 0.06, velocity: 0.3 },
+    voice: { mode: 'Legato', glide: 0.07 },
+  }),
+  preset('FM Bass', 'Bass', {
+    inputs: {
+      carrier: {
+        kind: 'osc',
+        wave: 'Sine',
+        octave: -1,
+        fm: 0.35,
+        fmSource: 'modulator',
+      },
+      // Heard only through the carrier: a 1:1 modulator
+      modulator: { kind: 'osc', wave: 'Sine', octave: -1 },
     },
-    { 7: { source: 'Mod Env', dest: 'FM', amount: 0.4 } }
-  ),
-  preset(
-    'Wobble Bass',
-    'Bass',
-    {
-      'osc1.wave': 'Saw',
-      'osc1.octave': -1,
-      'osc2.wave': 'Saw',
-      'osc2.octave': -1,
-      'osc2.fine': 10,
-      'osc2.level': 0.7,
-      'filter.cutoff': 260,
-      'filter.resonance': 0.5,
-      'amp.attack': 0.003,
-      'amp.sustain': 1,
-      'amp.release': 0.1,
-      'lfo1.rate': 3,
-      'lfo1.shape': 'Triangle',
-      'voice.mode': 'Mono',
+    chains: { main: { sends: { carrier: 1 } } },
+    modulators: { env: { kind: 'env', decay: 0.25 } },
+    routes: [{ from: 'env', to: 'carrier.fm', by: 0.4 }],
+    amp: { attack: 0.002, decay: 0.5, sustain: 0.6, release: 0.1 },
+    voice: { mode: 'Mono' },
+  }),
+  preset('Wobble Bass', 'Bass', {
+    inputs: {
+      saw: { kind: 'osc', octave: -1 },
+      detuned: { kind: 'osc', octave: -1, fine: 10 },
     },
-    { 3: { source: 'LFO 1', dest: 'Cutoff', amount: 3 } }
-  ),
+    chains: {
+      main: {
+        sends: { saw: 1, detuned: 0.7 },
+        items: { filter: { kind: 'filter', cutoff: 260, resonance: 0.5 } },
+      },
+    },
+    modulators: { lfo: { kind: 'lfo', shape: 'Triangle', rate: 3 } },
+    routes: [{ from: 'lfo', to: 'filter.cutoff', by: 3 }],
+    amp: { attack: 0.003, sustain: 1, release: 0.1 },
+    voice: { mode: 'Mono' },
+  }),
+  preset('Reese Bass', 'Bass', {
+    // Two saws a little apart, beating, and a slow sweep under them
+    inputs: {
+      low: { kind: 'osc', octave: -1, fine: -14 },
+      high: { kind: 'osc', octave: -1, fine: 14 },
+    },
+    chains: {
+      main: {
+        sends: { low: 0.8, high: 0.8 },
+        items: {
+          filter: { kind: 'filter', cutoff: 650, resonance: 0.2 },
+          drive: { kind: 'drive', drive: 0.35 },
+        },
+      },
+    },
+    modulators: {
+      sweep: { kind: 'lfo', shape: 'Triangle', rate: 0.25, trigger: 'Free' },
+    },
+    routes: [{ from: 'sweep', to: 'filter.cutoff', by: 1 }],
+    amp: { attack: 0.005, sustain: 1, release: 0.15 },
+    voice: { mode: 'Legato', glide: 0.05 },
+  }),
+  preset('Growl Bass', 'Bass', {
+    inputs: {
+      saw: { kind: 'osc', octave: -1 },
+      square: { kind: 'osc', wave: 'Square', octave: -1, width: 0.3 },
+    },
+    chains: {
+      main: {
+        sends: { saw: 1, square: 0.5 },
+        items: {
+          filter: {
+            kind: 'filter',
+            cutoff: 300,
+            resonance: 0.45,
+            keytrack: 0.4,
+          },
+          drive: { kind: 'drive', drive: 0.6 },
+        },
+      },
+    },
+    modulators: { filterEnv: { kind: 'env', decay: 0.3, sustain: 0.2 } },
+    routes: [
+      { from: 'filterEnv', to: 'filter.cutoff', by: 4 },
+      // Harder notes bite: more drive
+      { from: 'velocity', to: 'drive.drive', by: 0.35 },
+    ],
+    amp: { attack: 0.002, decay: 0.4, sustain: 0.8, release: 0.1 },
+    voice: { mode: 'Mono' },
+  }),
 
-  preset(
-    'Saw Lead',
-    'Lead',
-    {
-      'osc1.wave': 'Saw',
-      'osc2.wave': 'Saw',
-      'osc2.fine': 12,
-      'osc2.level': 0.8,
-      'filter.cutoff': 2800,
-      'filter.resonance': 0.2,
-      'filter.envAmount': 0.2,
-      'filter.keytrack': 0.5,
-      'filterEnv.decay': 0.4,
-      'filterEnv.sustain': 0.3,
-      'amp.decay': 0.3,
-      'amp.sustain': 0.85,
-      'amp.release': 0.25,
-      'lfo1.rate': 5.5,
-      'voice.mode': 'Legato',
-      'voice.glide': 0.08,
+  preset('Saw Lead', 'Lead', {
+    inputs: {
+      saw: { kind: 'osc' },
+      detuned: { kind: 'osc', fine: 12 },
     },
-    // Vibrato only while the finger slides up or down its key
-    { 1: { source: 'LFO 1', dest: 'Pitch', amount: 0.6, via: 'Slide' } }
-  ),
-  preset(
-    'Chip Lead',
-    'Lead',
-    {
-      'osc1.wave': 'Square',
-      'osc1.width': 0.25,
-      'amp.attack': 0.002,
-      'amp.decay': 0.1,
-      'amp.sustain': 0.8,
-      'amp.release': 0.1,
-      'lfo1.rate': 6.5,
-      // The vibrato sets in after the note starts
-      'lfo1.fade': 0.35,
-      'voice.mode': 'Mono',
+    chains: {
+      main: {
+        sends: { saw: 1, detuned: 0.8 },
+        items: {
+          filter: {
+            kind: 'filter',
+            cutoff: 2800,
+            resonance: 0.2,
+            keytrack: 0.5,
+          },
+        },
+      },
     },
-    { 1: { source: 'LFO 1', dest: 'Pitch', amount: 0.35 } }
-  ),
+    modulators: {
+      filterEnv: { kind: 'env', decay: 0.4, sustain: 0.3 },
+      vibrato: { kind: 'lfo', rate: 5.5 },
+    },
+    routes: [
+      { from: 'filterEnv', to: 'filter.cutoff', by: 2 },
+      // Vibrato only while the finger slides up or down its key
+      { from: 'vibrato', to: 'voice.pitch', by: 0.6, via: 'slide' },
+    ],
+    amp: { sustain: 0.85, release: 0.25 },
+    voice: { mode: 'Legato', glide: 0.08 },
+  }),
+  preset('Chip Lead', 'Lead', {
+    inputs: { square: { kind: 'osc', wave: 'Square', width: 0.25 } },
+    chains: { main: { sends: { square: 1 } } },
+    // The vibrato sets in after the note starts
+    modulators: { vibrato: { kind: 'lfo', rate: 6.5, fade: 0.35 } },
+    routes: [{ from: 'vibrato', to: 'voice.pitch', by: 0.35 }],
+    amp: { attack: 0.002, decay: 0.1, sustain: 0.8, release: 0.1 },
+    voice: { mode: 'Mono' },
+  }),
+  preset('Fifth Lead', 'Lead', {
+    inputs: {
+      root: { kind: 'osc' },
+      fifth: { kind: 'osc', semi: 7, fine: 6 },
+    },
+    chains: {
+      main: {
+        sends: { root: 1, fifth: 0.6 },
+        items: {
+          filter: {
+            kind: 'filter',
+            cutoff: 3000,
+            resonance: 0.15,
+            keytrack: 0.5,
+          },
+          drive: { kind: 'drive', drive: 0.3 },
+        },
+      },
+    },
+    modulators: { vibrato: { kind: 'lfo', rate: 5.5, fade: 0.4 } },
+    routes: [{ from: 'vibrato', to: 'voice.pitch', by: 0.25 }],
+    amp: { attack: 0.004, sustain: 0.9, release: 0.2 },
+    voice: { mode: 'Legato', glide: 0.06 },
+  }),
+  preset('Scream Lead', 'Lead', {
+    // Driven hard first, then a resonant band of it: a vocal edge
+    inputs: { saw: { kind: 'osc' } },
+    chains: {
+      main: {
+        sends: { saw: 1 },
+        items: {
+          drive: { kind: 'drive', drive: 0.8 },
+          band: {
+            kind: 'filter',
+            type: 'BP',
+            cutoff: 1400,
+            resonance: 0.7,
+            keytrack: 0.7,
+          },
+          edge: { kind: 'drive', drive: 0.25 },
+        },
+      },
+    },
+    modulators: {
+      filterEnv: { kind: 'env', attack: 0.05, decay: 0.6, sustain: 0.4 },
+      vibrato: { kind: 'lfo', rate: 5, fade: 0.5 },
+    },
+    routes: [
+      { from: 'filterEnv', to: 'band.cutoff', by: 1.5 },
+      { from: 'vibrato', to: 'voice.pitch', by: 0.3 },
+    ],
+    amp: { attack: 0.005, sustain: 0.9, release: 0.15 },
+    voice: { mode: 'Mono', glide: 0.04 },
+  }),
+  preset('Feedback Lead', 'Lead', {
+    inputs: {
+      // A sine modulating itself: the more, the nearer a saw it grows
+      tone: { kind: 'osc', wave: 'Sine', fm: 0.25, fmSource: 'tone' },
+      sub: { kind: 'osc', wave: 'Square', octave: -1, width: 0.4 },
+    },
+    chains: { main: { sends: { tone: 1, sub: 0.3 } } },
+    modulators: { env: { kind: 'env', decay: 0.5, sustain: 0.3 } },
+    routes: [
+      { from: 'env', to: 'tone.fm', by: 0.35, via: 'velocity' },
+      // Slide a finger up its key to brighten the note
+      { from: 'slide', to: 'tone.fm', by: 0.3 },
+    ],
+    amp: { attack: 0.003, sustain: 0.85, release: 0.2 },
+    voice: { mode: 'Legato', glide: 0.05 },
+  }),
 
-  preset(
-    'Warm Pad',
-    'Pad',
-    {
-      'osc1.wave': 'Saw',
-      'osc1.level': 0.85,
-      'osc2.wave': 'Saw',
-      'osc2.fine': 9,
-      'osc2.level': 0.85,
-      'filter.cutoff': 900,
-      'filter.resonance': 0.15,
-      'filter.envAmount': 0.2,
-      'filter.keytrack': 0.4,
-      'filterEnv.attack': 1.2,
-      'filterEnv.decay': 2,
-      'filterEnv.sustain': 0.5,
-      'filterEnv.release': 2,
-      'amp.attack': 0.8,
-      'amp.decay': 1,
-      'amp.sustain': 0.9,
-      'amp.release': 2.5,
-      'amp.velocity': 0.2,
-      'lfo2.rate': 0.2,
+  preset('Warm Pad', 'Pad', {
+    inputs: {
+      saw: { kind: 'osc' },
+      detuned: { kind: 'osc', fine: 9 },
     },
-    { 3: { source: 'LFO 2', dest: 'Cutoff', amount: 0.8 } }
-  ),
-  preset(
-    'PWM Pad',
-    'Pad',
-    {
-      'osc1.wave': 'Square',
-      'osc1.level': 0.8,
-      'osc2.wave': 'Square',
-      'osc2.fine': -7,
-      'osc2.level': 0.8,
-      'filter.cutoff': 2600,
-      'filter.keytrack': 0.3,
-      'amp.attack': 0.5,
-      'amp.decay': 1,
-      'amp.sustain': 0.9,
-      'amp.release': 1.8,
-      'amp.velocity': 0.2,
-      'lfo1.rate': 0.6,
-      'lfo1.trigger': 'Free',
-      'lfo2.rate': 0.45,
+    chains: {
+      main: {
+        sends: { saw: 0.85, detuned: 0.85 },
+        items: {
+          filter: {
+            kind: 'filter',
+            cutoff: 900,
+            resonance: 0.15,
+            keytrack: 0.4,
+          },
+        },
+      },
     },
-    {
-      6: { source: 'LFO 1', dest: 'Width 1', amount: 0.3 },
-      7: { source: 'LFO 2', dest: 'Width 2', amount: 0.3 },
-    }
-  ),
-  preset(
-    'Glass Pad',
-    'Pad',
-    {
+    modulators: {
+      filterEnv: {
+        kind: 'env',
+        attack: 1.2,
+        decay: 2,
+        sustain: 0.5,
+        release: 2,
+      },
+      drift: { kind: 'lfo', shape: 'Triangle', rate: 0.2, trigger: 'Free' },
+    },
+    routes: [
+      { from: 'filterEnv', to: 'filter.cutoff', by: 2 },
+      { from: 'drift', to: 'filter.cutoff', by: 0.8 },
+    ],
+    amp: { attack: 0.8, decay: 1, sustain: 0.9, release: 2.5, velocity: 0.2 },
+  }),
+  preset('PWM Pad', 'Pad', {
+    inputs: {
+      square: { kind: 'osc', wave: 'Square' },
+      detuned: { kind: 'osc', wave: 'Square', fine: -7 },
+    },
+    chains: {
+      main: {
+        sends: { square: 0.8, detuned: 0.8 },
+        items: { filter: { kind: 'filter', cutoff: 2600, keytrack: 0.3 } },
+      },
+    },
+    modulators: {
+      pwm: { kind: 'lfo', rate: 0.6, trigger: 'Free' },
+      pwm2: { kind: 'lfo', shape: 'Triangle', rate: 0.45, trigger: 'Free' },
+    },
+    routes: [
+      { from: 'pwm', to: 'square.width', by: 0.3 },
+      { from: 'pwm2', to: 'detuned.width', by: 0.3 },
+    ],
+    amp: { attack: 0.5, decay: 1, sustain: 0.9, release: 1.8, velocity: 0.2 },
+  }),
+  preset('Glass Pad', 'Pad', {
+    inputs: {
+      carrier: { kind: 'osc', wave: 'Sine', fm: 0.12, fmSource: 'modulator' },
       // A 3:1 modulator: 19 semitones up
-      'osc2.octave': 1,
-      'osc2.semi': 7,
-      'fm.amount': 0.12,
-      'amp.attack': 1,
-      'amp.decay': 1.5,
-      'amp.sustain': 0.8,
-      'amp.release': 3,
-      'amp.velocity': 0.2,
-      'lfo2.shape': 'Smooth',
-      'lfo2.rate': 0.15,
+      modulator: { kind: 'osc', wave: 'Sine', octave: 1, semi: 7 },
     },
-    { 7: { source: 'LFO 2', dest: 'FM', amount: 0.08 } }
-  ),
-
-  preset(
-    'Soft Pluck',
-    'Pluck',
-    {
-      'osc1.wave': 'Saw',
-      'filter.cutoff': 300,
-      'filter.resonance': 0.3,
-      'filter.envAmount': 0.55,
-      'filter.keytrack': 0.5,
-      'filterEnv.decay': 0.35,
-      'amp.attack': 0.002,
-      'amp.decay': 0.7,
-      'amp.sustain': 0,
-      'amp.release': 0.5,
-      'amp.velocity': 0.7,
+    chains: { main: { sends: { carrier: 1 } } },
+    modulators: {
+      shimmer: { kind: 'lfo', shape: 'Smooth', rate: 0.15, trigger: 'Free' },
     },
-    { 4: { source: 'Velo', dest: 'Cutoff', amount: 1 } }
-  ),
-  preset('Square Pluck', 'Pluck', {
-    'osc1.wave': 'Square',
-    'osc1.width': 0.3,
-    'osc2.wave': 'Saw',
-    'osc2.octave': 1,
-    'osc2.level': 0.3,
-    'filter.cutoff': 500,
-    'filter.envAmount': 0.45,
-    'filter.keytrack': 0.6,
-    'filterEnv.decay': 0.18,
-    'amp.attack': 0.001,
-    'amp.decay': 0.35,
-    'amp.sustain': 0,
-    'amp.release': 0.3,
-    'amp.velocity': 0.6,
+    routes: [{ from: 'shimmer', to: 'carrier.fm', by: 0.08 }],
+    amp: { attack: 1, decay: 1.5, sustain: 0.8, release: 3, velocity: 0.2 },
+  }),
+  preset('Strings', 'Pad', {
+    // Three saws spread apart, one an octave up, as a section is
+    inputs: {
+      left: { kind: 'osc', fine: -10 },
+      middle: { kind: 'osc' },
+      right: { kind: 'osc', fine: 10 },
+      octave: { kind: 'osc', octave: 1, fine: 4 },
+    },
+    chains: {
+      main: {
+        sends: { left: 0.6, middle: 0.6, right: 0.6, octave: 0.3 },
+        items: {
+          filter: {
+            kind: 'filter',
+            cutoff: 2200,
+            resonance: 0.1,
+            keytrack: 0.4,
+          },
+        },
+      },
+    },
+    modulators: {
+      ensemble: { kind: 'lfo', rate: 5.5, trigger: 'Free' },
+    },
+    routes: [
+      { from: 'ensemble', to: 'left.pitch', by: 0.12 },
+      { from: 'ensemble', to: 'right.pitch', by: -0.12 },
+      // Every note a little brighter or darker than the last
+      { from: 'random', to: 'filter.cutoff', by: 0.3 },
+    ],
+    amp: { attack: 0.6, decay: 1, sustain: 0.9, release: 1.5, velocity: 0.3 },
+  }),
+  preset('Choir Pad', 'Pad', {
+    // The vowel "ah": a band for each of its first two formants, fixed
+    // whatever the note, the second wandering a little
+    inputs: {
+      saw: { kind: 'osc' },
+      detuned: { kind: 'osc', fine: 8 },
+    },
+    chains: {
+      low: {
+        sends: { saw: 0.7, detuned: 0.7 },
+        items: {
+          first: { kind: 'filter', type: 'BP', cutoff: 750, resonance: 0.5 },
+        },
+      },
+      high: {
+        level: 0.7,
+        sends: { saw: 0.7, detuned: 0.7 },
+        items: {
+          second: {
+            kind: 'filter',
+            type: 'BP',
+            cutoff: 1150,
+            resonance: 0.5,
+          },
+        },
+      },
+    },
+    modulators: {
+      vowel: { kind: 'lfo', shape: 'Smooth', rate: 0.3, trigger: 'Free' },
+    },
+    routes: [{ from: 'vowel', to: 'second.cutoff', by: 0.3 }],
+    amp: { attack: 0.4, decay: 1, sustain: 0.9, release: 1.5, velocity: 0.2 },
+  }),
+  preset('Breath Pad', 'Pad', {
+    // A soft pad, and a second chain of noise in a moving band: its breath
+    inputs: {
+      saw: { kind: 'osc' },
+      detuned: { kind: 'osc', fine: -8 },
+      air: { kind: 'noise' },
+    },
+    chains: {
+      tone: {
+        sends: { saw: 0.8, detuned: 0.8 },
+        items: {
+          filter: { kind: 'filter', cutoff: 1100, keytrack: 0.4 },
+        },
+      },
+      breath: {
+        level: 0.6,
+        sends: { air: 0.5 },
+        items: {
+          band: { kind: 'filter', type: 'BP', cutoff: 2500, resonance: 0.6 },
+        },
+      },
+    },
+    modulators: {
+      swell: { kind: 'env', attack: 1.5, decay: 2, sustain: 0.6, release: 2 },
+      gust: { kind: 'lfo', shape: 'Smooth', rate: 0.4, trigger: 'Free' },
+    },
+    routes: [
+      { from: 'swell', to: 'filter.cutoff', by: 1.5 },
+      { from: 'gust', to: 'band.cutoff', by: 1 },
+    ],
+    amp: { attack: 0.9, decay: 1, sustain: 0.9, release: 2, velocity: 0.2 },
   }),
 
-  preset(
-    'E-Piano',
-    'Keys',
-    {
-      // Oscillator 2 a sine at the same pitch: a 1:1 modulator
-      'fm.amount': 0.08,
-      'modEnv.decay': 0.9,
-      'amp.attack': 0.002,
-      'amp.decay': 2,
-      'amp.sustain': 0.15,
-      'amp.release': 0.5,
-      'amp.velocity': 0.6,
+  preset('Soft Pluck', 'Pluck', {
+    inputs: { saw: { kind: 'osc' } },
+    chains: {
+      main: {
+        sends: { saw: 1 },
+        items: {
+          filter: {
+            kind: 'filter',
+            cutoff: 300,
+            resonance: 0.3,
+            keytrack: 0.5,
+          },
+        },
+      },
     },
-    // Harder notes ring brighter at first
-    { 7: { source: 'Mod Env', dest: 'FM', amount: 0.2, via: 'Velo' } }
-  ),
-  preset(
-    'FM Bell',
-    'Keys',
-    {
-      // 22 semitones up, a 3.56:1 modulator: inharmonic, like a bell
-      'osc2.octave': 2,
-      'osc2.semi': -2,
-      'fm.amount': 0.2,
-      'modEnv.decay': 1.5,
-      'amp.attack': 0.001,
-      'amp.decay': 3,
-      'amp.sustain': 0,
-      'amp.release': 2,
+    modulators: { filterEnv: { kind: 'env', decay: 0.35 } },
+    routes: [
+      { from: 'filterEnv', to: 'filter.cutoff', by: 5.5 },
+      { from: 'velocity', to: 'filter.cutoff', by: 1 },
+    ],
+    amp: { attack: 0.002, decay: 0.7, sustain: 0, release: 0.5, velocity: 0.7 },
+  }),
+  preset('Square Pluck', 'Pluck', {
+    inputs: {
+      square: { kind: 'osc', wave: 'Square', width: 0.3 },
+      saw: { kind: 'osc', octave: 1 },
     },
-    { 7: { source: 'Mod Env', dest: 'FM', amount: 0.35 } }
-  ),
-  preset(
-    'Organ',
-    'Keys',
-    {
-      'osc2.octave': 1,
-      'osc2.level': 0.6,
-      'amp.attack': 0.004,
-      'amp.decay': 0.1,
-      'amp.sustain': 1,
-      'amp.release': 0.06,
-      'amp.velocity': 0,
-      'lfo1.rate': 6.5,
-      'lfo1.trigger': 'Free',
+    chains: {
+      main: {
+        sends: { square: 1, saw: 0.3 },
+        items: { filter: { kind: 'filter', cutoff: 500, keytrack: 0.6 } },
+      },
     },
-    { 1: { source: 'LFO 1', dest: 'Pitch', amount: 0.08 } }
-  ),
+    modulators: { filterEnv: { kind: 'env', decay: 0.18 } },
+    routes: [{ from: 'filterEnv', to: 'filter.cutoff', by: 4.5 }],
+    amp: { attack: 0.001, decay: 0.35, sustain: 0, velocity: 0.6 },
+  }),
+  preset('Kalimba', 'Pluck', {
+    inputs: {
+      tine: { kind: 'osc', wave: 'Sine', fm: 0.05, fmSource: 'strike' },
+      // Near 3:1, struck bright and gone at once
+      strike: { kind: 'osc', wave: 'Sine', octave: 1, semi: 7 },
+    },
+    chains: { main: { sends: { tine: 1 } } },
+    modulators: { strikeEnv: { kind: 'env', attack: 0.001, decay: 0.07 } },
+    routes: [{ from: 'strikeEnv', to: 'tine.fm', by: 0.45 }],
+    amp: { attack: 0.001, decay: 0.9, sustain: 0, release: 0.4, velocity: 0.6 },
+  }),
+  preset('Marimba', 'Pluck', {
+    // The bar's fourth harmonic rings only for the strike: a route into
+    // its send
+    inputs: {
+      bar: { kind: 'osc', wave: 'Sine' },
+      overtone: { kind: 'osc', wave: 'Sine', octave: 2 },
+    },
+    chains: { main: { sends: { bar: 1, overtone: 0.05 } } },
+    modulators: { strike: { kind: 'env', attack: 0.001, decay: 0.08 } },
+    routes: [{ from: 'strike', to: 'main.send.overtone', by: 0.5 }],
+    amp: { attack: 0.001, decay: 0.6, sustain: 0, release: 0.3, velocity: 0.6 },
+  }),
 
-  preset(
-    'Kick',
-    'Drums',
-    {
-      'osc1.octave': -1,
-      'modEnv.attack': 0.001,
-      'modEnv.decay': 0.09,
-      'amp.attack': 0.001,
-      'amp.decay': 0.4,
-      'amp.sustain': 0,
-      'amp.release': 0.3,
-      'amp.velocity': 0.6,
+  preset('E-Piano', 'Keys', {
+    inputs: {
+      carrier: { kind: 'osc', wave: 'Sine', fm: 0.08, fmSource: 'modulator' },
+      // A sine at the same pitch: a 1:1 modulator
+      modulator: { kind: 'osc', wave: 'Sine' },
     },
+    chains: { main: { sends: { carrier: 1 } } },
+    modulators: { tineEnv: { kind: 'env', decay: 0.9 } },
+    // Harder notes ring brighter at first
+    routes: [{ from: 'tineEnv', to: 'carrier.fm', by: 0.2, via: 'velocity' }],
+    amp: {
+      attack: 0.002,
+      decay: 2,
+      sustain: 0.15,
+      release: 0.5,
+      velocity: 0.6,
+    },
+  }),
+  preset('FM Bell', 'Keys', {
+    inputs: {
+      carrier: { kind: 'osc', wave: 'Sine', fm: 0.2, fmSource: 'modulator' },
+      // 22 semitones up, a 3.56:1 modulator: inharmonic, like a bell
+      modulator: { kind: 'osc', wave: 'Sine', octave: 2, semi: -2 },
+    },
+    chains: { main: { sends: { carrier: 1 } } },
+    modulators: { env: { kind: 'env', decay: 1.5 } },
+    routes: [{ from: 'env', to: 'carrier.fm', by: 0.35 }],
+    amp: { attack: 0.001, decay: 3, sustain: 0, release: 2 },
+  }),
+  preset('Organ', 'Keys', {
+    inputs: {
+      sine: { kind: 'osc', wave: 'Sine' },
+      octave: { kind: 'osc', wave: 'Sine', octave: 1 },
+    },
+    chains: { main: { sends: { sine: 1, octave: 0.6 } } },
+    modulators: { vibrato: { kind: 'lfo', rate: 6.5, trigger: 'Free' } },
+    routes: [{ from: 'vibrato', to: 'voice.pitch', by: 0.08 }],
+    amp: { attack: 0.004, decay: 0.1, sustain: 1, release: 0.06, velocity: 0 },
+  }),
+  preset('Clav', 'Keys', {
+    // A thin pulse through two filters in a row: lows cut, then a
+    // plucked lowpass
+    inputs: { pulse: { kind: 'osc', wave: 'Square', width: 0.15 } },
+    chains: {
+      main: {
+        sends: { pulse: 1 },
+        items: {
+          lows: { kind: 'filter', type: 'HP', cutoff: 250 },
+          filter: {
+            kind: 'filter',
+            cutoff: 1800,
+            resonance: 0.3,
+            keytrack: 0.5,
+          },
+        },
+      },
+    },
+    modulators: { filterEnv: { kind: 'env', decay: 0.15 } },
+    routes: [
+      { from: 'filterEnv', to: 'filter.cutoff', by: 2 },
+      { from: 'velocity', to: 'filter.cutoff', by: 1 },
+    ],
+    amp: {
+      attack: 0.001,
+      decay: 0.5,
+      sustain: 0.25,
+      release: 0.08,
+      velocity: 0.6,
+    },
+  }),
+  preset('Vibes', 'Keys', {
+    inputs: {
+      bar: { kind: 'osc', wave: 'Sine' },
+      overtone: { kind: 'osc', wave: 'Sine', octave: 2 },
+    },
+    chains: { main: { sends: { bar: 1, overtone: 0.15 } } },
+    // The vibraphone's fans: a tremolo on the voice's gain
+    modulators: { fans: { kind: 'lfo', rate: 5, trigger: 'Free' } },
+    routes: [{ from: 'fans', to: 'amp.gain', by: -0.35 }],
+    amp: { attack: 0.001, decay: 2.5, sustain: 0, release: 0.8, velocity: 0.6 },
+  }),
+
+  preset('Kick', 'Drums', {
+    inputs: { sine: { kind: 'osc', wave: 'Sine', octave: -1 } },
+    chains: { main: { sends: { sine: 1 } } },
+    modulators: { drop: { kind: 'env', attack: 0.001, decay: 0.09 } },
     // Three octaves down to the key's pitch in a tenth of a second
-    { 2: { source: 'Mod Env', dest: 'Pitch', amount: 36 } }
-  ),
-  preset(
-    'Snare',
-    'Drums',
-    {
-      'osc1.wave': 'Triangle',
-      'osc1.level': 0.6,
-      'noise.level': 0.75,
-      'filter.cutoff': 9000,
-      'modEnv.attack': 0.001,
-      'modEnv.decay': 0.04,
-      'amp.attack': 0.001,
-      'amp.decay': 0.2,
-      'amp.sustain': 0,
-      'amp.release': 0.18,
-      'amp.velocity': 0.6,
+    routes: [{ from: 'drop', to: 'voice.pitch', by: 36 }],
+    amp: { attack: 0.001, decay: 0.4, sustain: 0, velocity: 0.6 },
+  }),
+  preset('Snare', 'Drums', {
+    inputs: {
+      body: { kind: 'osc', wave: 'Triangle' },
+      noise: { kind: 'noise' },
     },
-    { 2: { source: 'Mod Env', dest: 'Pitch', amount: 12 } }
-  ),
+    chains: {
+      main: {
+        sends: { body: 0.6, noise: 0.75 },
+        items: { filter: { kind: 'filter', cutoff: 9000 } },
+      },
+    },
+    modulators: { drop: { kind: 'env', attack: 0.001, decay: 0.04 } },
+    routes: [{ from: 'drop', to: 'voice.pitch', by: 12 }],
+    amp: {
+      attack: 0.001,
+      decay: 0.2,
+      sustain: 0,
+      release: 0.18,
+      velocity: 0.6,
+    },
+  }),
   preset('Closed Hat', 'Drums', {
     // Two squares two octaves up, ring-modulated: metal, with noise
-    'osc1.wave': 'Square',
-    'osc1.octave': 2,
-    'osc1.level': 0,
-    'osc2.wave': 'Square',
-    'osc2.octave': 2,
-    'osc2.semi': 6,
-    'osc2.fine': 35,
-    'ring.level': 0.5,
-    'noise.level': 0.6,
-    'filter.type': 'HP',
-    'filter.cutoff': 7000,
-    'filter.resonance': 0.2,
-    'amp.attack': 0.001,
-    'amp.decay': 0.06,
-    'amp.sustain': 0,
-    'amp.release': 0.05,
-    'amp.velocity': 0.6,
+    inputs: {
+      square: { kind: 'osc', wave: 'Square', octave: 2 },
+      square2: { kind: 'osc', wave: 'Square', octave: 2, semi: 6, fine: 35 },
+      noise: { kind: 'noise' },
+      metal: { kind: 'ring', a: 'square', b: 'square2' },
+    },
+    chains: {
+      main: {
+        sends: { noise: 0.6, metal: 0.5 },
+        items: {
+          filter: { kind: 'filter', type: 'HP', cutoff: 7000, resonance: 0.2 },
+        },
+      },
+    },
+    amp: {
+      attack: 0.001,
+      decay: 0.06,
+      sustain: 0,
+      release: 0.05,
+      velocity: 0.6,
+    },
   }),
   preset('Open Hat', 'Drums', {
-    'osc1.wave': 'Square',
-    'osc1.octave': 2,
-    'osc1.level': 0,
-    'osc2.wave': 'Square',
-    'osc2.octave': 2,
-    'osc2.semi': 6,
-    'osc2.fine': 35,
-    'ring.level': 0.5,
-    'noise.level': 0.6,
-    'filter.type': 'HP',
-    'filter.cutoff': 6500,
-    'filter.resonance': 0.2,
-    'amp.attack': 0.001,
-    'amp.decay': 0.45,
-    'amp.sustain': 0,
-    'amp.release': 0.35,
-    'amp.velocity': 0.6,
+    inputs: {
+      square: { kind: 'osc', wave: 'Square', octave: 2 },
+      square2: { kind: 'osc', wave: 'Square', octave: 2, semi: 6, fine: 35 },
+      noise: { kind: 'noise' },
+      metal: { kind: 'ring', a: 'square', b: 'square2' },
+    },
+    chains: {
+      main: {
+        sends: { noise: 0.6, metal: 0.5 },
+        items: {
+          filter: { kind: 'filter', type: 'HP', cutoff: 6500, resonance: 0.2 },
+        },
+      },
+    },
+    amp: {
+      attack: 0.001,
+      decay: 0.45,
+      sustain: 0,
+      release: 0.35,
+      velocity: 0.6,
+    },
+  }),
+  preset('Tom', 'Drums', {
+    inputs: {
+      head: { kind: 'osc', wave: 'Sine' },
+      noise: { kind: 'noise' },
+    },
+    chains: {
+      main: {
+        sends: { head: 1, noise: 0.15 },
+        items: { filter: { kind: 'filter', cutoff: 3000 } },
+      },
+    },
+    modulators: { drop: { kind: 'env', attack: 0.001, decay: 0.12 } },
+    routes: [{ from: 'drop', to: 'voice.pitch', by: 9 }],
+    amp: {
+      attack: 0.001,
+      decay: 0.35,
+      sustain: 0,
+      release: 0.3,
+      velocity: 0.6,
+    },
+  }),
+  preset('Clap', 'Drums', {
+    // Noise in a band, and its first moments torn into bursts: a saw
+    // LFO on the gain, faded out by an envelope
+    inputs: { noise: { kind: 'noise' } },
+    chains: {
+      main: {
+        sends: { noise: 1 },
+        items: {
+          band: { kind: 'filter', type: 'BP', cutoff: 1200, resonance: 0.3 },
+          crack: { kind: 'drive', drive: 0.3 },
+        },
+      },
+    },
+    modulators: {
+      bursts: { kind: 'lfo', shape: 'Saw', rate: 50 },
+      flutter: { kind: 'env', attack: 0.001, decay: 0.05 },
+    },
+    routes: [{ from: 'bursts', to: 'amp.gain', by: -0.9, via: 'flutter' }],
+    amp: {
+      attack: 0.001,
+      decay: 0.22,
+      sustain: 0,
+      release: 0.2,
+      velocity: 0.6,
+    },
+  }),
+  preset('Cowbell', 'Drums', {
+    // Two squares about 2:3 apart, in a band: the old drum machines' bell
+    inputs: {
+      low: { kind: 'osc', wave: 'Square', octave: 1 },
+      high: { kind: 'osc', wave: 'Square', octave: 1, semi: 7, fine: -20 },
+    },
+    chains: {
+      main: {
+        sends: { low: 0.7, high: 0.7 },
+        items: {
+          band: {
+            kind: 'filter',
+            type: 'BP',
+            cutoff: 800,
+            resonance: 0.35,
+            keytrack: 1,
+          },
+        },
+      },
+    },
+    amp: {
+      attack: 0.001,
+      decay: 0.3,
+      sustain: 0,
+      release: 0.2,
+      velocity: 0.6,
+    },
   }),
 
-  preset(
-    'Blips',
-    'FX',
-    {
-      'osc1.wave': 'Square',
-      'filter.cutoff': 3000,
-      'filter.resonance': 0.4,
-      'lfo1.shape': 'S&H',
-      'lfo1.rate': 8,
+  preset('Blips', 'FX', {
+    inputs: { square: { kind: 'osc', wave: 'Square' } },
+    chains: {
+      main: {
+        sends: { square: 1 },
+        items: { filter: { kind: 'filter', cutoff: 3000, resonance: 0.4 } },
+      },
     },
+    modulators: { steps: { kind: 'lfo', shape: 'S&H', rate: 8 } },
     // A random note within an octave up, eight times a second
-    { 1: { source: 'LFO 1', dest: 'Pitch', amount: 12 } }
-  ),
-  preset(
-    'Zap',
-    'FX',
-    {
-      'osc1.wave': 'Saw',
-      'modEnv.decay': 0.15,
-      'amp.attack': 0.001,
-      'amp.decay': 0.25,
-      'amp.sustain': 0,
-      'amp.release': 0.15,
+    routes: [{ from: 'steps', to: 'voice.pitch', by: 12 }],
+  }),
+  preset('Zap', 'FX', {
+    inputs: { saw: { kind: 'osc' } },
+    chains: { main: { sends: { saw: 1 } } },
+    modulators: { drop: { kind: 'env', decay: 0.15 } },
+    routes: [{ from: 'drop', to: 'voice.pitch', by: 30 }],
+    amp: { attack: 0.001, decay: 0.25, sustain: 0, release: 0.15 },
+  }),
+  preset('Riser', 'FX', {
+    // Held, noise sweeps up a resonant band and a saw climbs an octave
+    inputs: {
+      air: { kind: 'noise' },
+      saw: { kind: 'osc' },
     },
-    { 2: { source: 'Mod Env', dest: 'Pitch', amount: 30 } }
-  ),
+    chains: {
+      sweep: {
+        sends: { air: 0.8 },
+        items: {
+          band: { kind: 'filter', type: 'BP', cutoff: 300, resonance: 0.6 },
+        },
+      },
+      climb: {
+        level: 0.5,
+        sends: { saw: 0.7 },
+        items: { filter: { kind: 'filter', cutoff: 800, keytrack: 0.5 } },
+      },
+    },
+    modulators: { rise: { kind: 'env', attack: 4, sustain: 1, release: 1 } },
+    routes: [
+      { from: 'rise', to: 'band.cutoff', by: 5 },
+      { from: 'rise', to: 'saw.pitch', by: 12 },
+      { from: 'rise', to: 'filter.cutoff', by: 3 },
+    ],
+    amp: { attack: 0.5, sustain: 1, release: 1 },
+  }),
+  preset('Wind', 'FX', {
+    // Noise in two resonant bands, each blown about by a gust of its own
+    inputs: { air: { kind: 'noise' } },
+    chains: {
+      low: {
+        sends: { air: 1 },
+        items: {
+          band: { kind: 'filter', type: 'BP', cutoff: 600, resonance: 0.8 },
+        },
+      },
+      high: {
+        level: 0.8,
+        sends: { air: 1 },
+        items: {
+          whistle: {
+            kind: 'filter',
+            type: 'BP',
+            cutoff: 1500,
+            resonance: 0.85,
+          },
+        },
+      },
+    },
+    modulators: {
+      gust: { kind: 'lfo', shape: 'Smooth', rate: 0.3, trigger: 'Free' },
+      gust2: { kind: 'lfo', shape: 'Smooth', rate: 0.45, trigger: 'Free' },
+      // A slower one moves how fast the first gusts come
+      weather: { kind: 'lfo', shape: 'Smooth', rate: 0.07, trigger: 'Free' },
+    },
+    routes: [
+      { from: 'gust', to: 'band.cutoff', by: 1.5 },
+      { from: 'gust2', to: 'whistle.cutoff', by: 1 },
+      { from: 'weather', to: 'gust.rate', by: 1.5 },
+    ],
+    amp: { attack: 0.8, sustain: 1, release: 1.5, velocity: 0.2 },
+  }),
+  preset('Siren', 'FX', {
+    inputs: { square: { kind: 'osc', wave: 'Square', width: 0.35 } },
+    chains: {
+      main: {
+        sends: { square: 0.8 },
+        items: { filter: { kind: 'filter', cutoff: 2500, keytrack: 0.5 } },
+      },
+    },
+    modulators: {
+      wail: { kind: 'lfo', shape: 'Triangle', rate: 0.5, trigger: 'Key' },
+    },
+    routes: [{ from: 'wail', to: 'voice.pitch', by: 7 }],
+    amp: { attack: 0.02, sustain: 1, release: 0.3 },
+    voice: { mode: 'Mono' },
+  }),
 ]

@@ -68,8 +68,9 @@ src/engine/   AudioContext lifecycle, unlock, node wiring; the sound,
               (plain data only)
 src/state/    params.ts: the knob schema and the old parameters;
               presets.ts: the preset and file format (version 2 holds
-              sounds); factory.ts: the shipped presets; library.ts: user
-              presets and the last sound, kept in localStorage;
+              sounds); factory.ts: the shipped presets, written by
+              name (sound/write.ts); library.ts: user presets and the
+              last sound, kept in localStorage;
               surface.ts: keys or pads, the pads' key (root and scale);
               settings.ts: the device's settings (voices, latency,
               velocity, what the screen shows); sound/: a sound as a
