@@ -3,7 +3,9 @@
 A polyphonic synthesizer for mobile browsers (iOS Safari, Android Chrome),
 played by touch, installable as a PWA. The plan and the decisions behind it:
 `docs/plan/initial-setup.md`; the sound built from inputs, chains and
-modulators, under way: `docs/plan/sound-chains.md`. What real devices did:
+modulators: `docs/plan/sound-chains.md`; effects, then parts and a drum
+kit, then a step sequencer, under way:
+`docs/plan/effects-parts-sequencer.md`. What real devices did:
 `docs/platform-notes.md`.
 
 ## Commands
@@ -99,7 +101,10 @@ src/viz/      pure display math (scope trigger and decimation, envelope
               and LFO outlines, filter response, drive curve, keyboard
               and pad grid geometry, the sound editor's input column
               (and left of it what each input reads, pegged to it) and
-              chain rows in graph.ts and where a tile dragged goes in
+              chain rows in graph.ts, the mix's strip, bus rows and
+              master in mixGraph.ts, the master's views (spectrum,
+              spectrogram, stereo, meters) in master.ts, and where a
+              tile dragged goes in
               drop.ts, hit-testing, velocity and Slide from a touch's
               position, a knob turning finer as the finger strays
               sideways in fine.ts, the mod wheel's turn, double tap and
@@ -107,10 +112,15 @@ src/viz/      pure display math (scope trigger and decimation, envelope
               a glide's dot in xy.ts, where a popover stands by its
               button in popover.ts)
 src/ui/       React components; SoundEditor.tsx the sound as tiles
-              (editor.ts: their names, lines, pictograms and colours), its
-              amp holding Scope.tsx, the output waveform over the amp's
-              envelope, its filters, drives and modulators their pictures
-              (Picture.tsx, drawn from outline.ts); PartPanel.tsx the
+              (editor.ts: their names, lines, pictograms and colours), or,
+              switched to Mix, the session's mix; the sound's Out and the
+              mix's Master hold a view of the output (MasterViews.tsx:
+              Scope.tsx's waveform, the spectrum, the spectrogram, the
+              stereo, the meters; frames.ts draws them a display frame
+              at a time, the output read once a frame), its filters,
+              drives and modulators their pictures (Picture.tsx, drawn
+              from outline.ts); MasterSheet.tsx all the views at size
+              (#/master); PartPanel.tsx the
               picked tile's knobs, adds and moves (ConfirmDialog.tsx asks
               before a removal);
               RoutePanels.tsx routing in the panel's place: the routes into

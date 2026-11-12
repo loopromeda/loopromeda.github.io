@@ -1,0 +1,394 @@
+# Effects, parts and a sequencer
+
+Asked for by ashon, 2026-11-12 ("1,2,3 작업을 진행해 보면 좋겠네"): three
+pieces of work, in this order, each building on the last:
+
+1. **Effects** after the voices: chorus, delay, reverb.
+2. **Parts**: the synth and a drum kit of 16 pad sounds, side by side.
+3. **A step sequencer** playing the kit and the synth.
+
+## What ashon chose
+
+Asked as four choices, 2026-11-12:
+
+- **Effects are a free chain**, not a fixed Chorus → Delay → Reverb and
+  not one global set: added, removed and reordered as a chain's items
+  are, up to four, kept with each sound. Revised by ashon the same day,
+  before it was committed (below): a sound keeps only its inserts, and
+  the delay and the reverb are the session's, every part sending to them.
+- **A Part switch** (Synth | Kit) in the header. With Kit, the editor
+  edits the picked pad's sound and the play area shows 16 pads, a tap
+  playing and picking one; with Synth, Keys, Pads and XY as now. Ruled
+  out: the Pads surface always playing the kit.
+- **The sequencer's scope**: the kit's 16 lanes as a drum grid, plus one
+  synth track (a note, a length and a velocity per step); tempo, swing,
+  a pattern 16 to 64 steps long, one pattern kept in the session. Ruled
+  out for now: the kit alone; patterns A to D chained into a song.
+- **The sequencer's place**: a new play surface, Seq, beside Keys, Pads
+  and XY, its transport and tempo in the surface's header. The editor
+  stays above it, so sounds can be edited while it plays. Ruled out: a
+  sheet of its own (#/seq).
+
+Then, asked whether an instrument usually holds its own delay and reverb
+("인스트루먼트에서는 딜레이 리버브가 빠지고, 이후에 거는 방식은 별로인가?"),
+ashon chose a mixer's way: inserts on each part, two shared returns
+after them, and a master, its output shown well, more than the scope
+("마스터링 되는 사운드도 파형이나 주파수 시각화가 잘 나오면 좋겠네").
+The master was to stand at the end of the sound's graph, showing a
+spectrum, a spectrogram, the two sides against each other and the
+levels. Then ashon asked for the instrument and the mix after it to be
+seen apart ("인스트루먼트 체인과, 이후에 조합하는 체인을 나누어서 볼 수
+있게 하는건 어때?"), and chose a Sound | Mix switch in the editor, the
+sends turned in either. Last, the spectrogram showed a faint line over
+every sine ("위에 보면 선이 쭉 남잖아 이게 궁금한거야"): the third
+harmonic the master's tanh made, 52 dB under the note. ashon chose a
+clip that leaves everything under a knee untouched ("진행해 줘").
+
+Then ashon asked why the delay and the reverb stood side by side in the
+mix rather than in a chain ("왜 여기서는 둘이 공존하는거야? 여기서도 fx가
+다양하게 체인될 수 있도록"), and for the wet and dry channels to be the
+user's to build too ("웻 드라이 채널도 사용자가 직접 구성할 수 있게"):
+the two returns became buses, up to four, each a row of effects, the dry
+path one of them, and the master a row of its own. Last, ashon asked
+for a delay and a reverb to come in at a Mix of about 30% ("100%는
+일반적이진 않은 것 같아"). Then, looking at it on a phone: the Out's
+name over its view, as the other tiles stand ("레이블이 위에 있고 하단에
+시각화가 오도록"); the meters as black as the views and a little wider;
+bus B becoming A when A is removed ("Bus A가 지워지면 B가 다시 A가
+되도록"); a colour for each bus ("각 버스별로 색상이 들어가서"); a pan
+for each bus besides its level ("각 버스별로 볼륨과 팬을"); and the
+page's margins and the gaps between its cards as a card's inside, 8 px
+("전체 컨테이너 패딩도 8픽셀로", "메인 컨테이너의 갭도 8픽셀로").
+
+## 1. Effects
+
+Done 2026-11-12, not committed yet.
+
+### The model
+
+A channel strip per part, then the session's mix, since 2026-11-12 its
+buses (before them two fixed returns, a delay and a reverb, and a dry
+path straight to the master):
+
+```
+part: voices → inserts → fader ─┬─ send A → Bus A: its effects → level ─┐
+                                ├─ send B → Bus B: its effects → level ─┤
+                                ├─ send C → Bus C: its effects → level ─┤
+                                └─ send D → Bus D: its effects → level ─┴→
+                                      Master: its effects → level → clip
+```
+
+- **Inserts** (`Sound.effects`, `src/state/sound/sound.ts`): each an id
+  (`f1`, `f2`, …), a kind and its knobs, in the order they run, up to
+  `MAX_EFFECTS` (4), of the three kinds below.
+- **Sends** (`Sound.sends`): how much of the sound, after its inserts,
+  goes to each bus, by its letter (A to D), 0 to 100%, kept with the
+  sound and its presets: all of it to A, none to the others, unless set.
+  A sound saved before sends sends to A alone; one saved before buses
+  (sends to a delay and a reverb) sends all of itself to A, its delay's
+  to B and its reverb's to C, where the starting mix has them.
+- **A strip's fader** (`Mix.strips`, `STRIP_SPEC`), since 2026-11-13,
+  asked for by ashon ("각 사운드별 아웃풋 레벨도 조절할 수 있어야
+  제대로 믹싱할 수 있을 것 같아. 악기의 밸런스도 제대로 잡고"): each
+  part's Level, 0 to 100%, and Balance (as a bus's), after its
+  inserts and before its sends, so that its echoes follow it down, as a
+  desk's post-fader sends do. The session's, as the buses are, by the
+  part's place (`p1`, the sound's, the only one so far, `PARTS`): a
+  preset loaded plays at the level its part was given, so a balance set
+  between instruments stays. A mix kept before strips reads at full in
+  the middle; the worklet glides to a new value over a block.
+- **The mix** (`src/state/mix.ts`): up to four buses (`MAX_BUSES`),
+  lettered by their place, A first, as a desk numbers its aux sends,
+  each its effects (`e1`, `e2`, …, unique in the mix), a Level and a
+  Balance; and the master, its effects and its Level. A bus added comes
+  after the last; one removed takes its effects with it, those after it
+  move up a letter (their effects keep their ids), and so do the sound's
+  sends to them (`sendsWithout`), the last letter's going to 0. A preset
+  kept in the library keeps its letters. Kept with the
+  session in localStorage (`loopromeda.mix`, version 2), never with a
+  preset, sent to the worklet whole (`{ t: 'mix' }`). A session starts
+  as the mix before buses sounded: A dry (no effects), B a delay, C a
+  reverb, the master bare. A version 1 mix (the two returns' knobs and
+  the master's) is read as those buses, at the returns' knobs and
+  levels.
+
+| part   | knobs                                                                                  |
+| ------ | -------------------------------------------------------------------------------------- |
+| Chorus | Rate 0.05–5 Hz (0.6), Depth (50%), Mix (50%)                                           |
+| Delay  | Time 0.01–2 s (0.35), Feedback (40%), Tone (60%), Mode: Stereo or Ping-pong, Mix (30%) |
+| Reverb | Size (60%), Decay 0.2–10 s (2), Damp (50%), Mix (30%)                                  |
+| Bus    | Level (100%), Pan (the middle): a balance                                              |
+| Master | Level (100%), after its effects and before the clip                                    |
+
+Mix keeps an effect's dry signal whole up to its middle and the wet
+whole past it. Every effect comes in at its kind's defaults, wherever it
+is added: an insert, on a bus, on the master. The starting mix's delay
+and reverb are wet only, at 100%: they are returns, a sound's dry
+reaching the master through A. At 30% they would pass the dry on too,
+and every preset sending to them would come out louder and drier than
+it did. A bus with no effects is a dry path, named Dry; one with some is
+named by its first (Delay, Delay +1). No route moves an effect's knob, a
+send or the mix: a route's sources are each voice's own, and the
+effects hear all the voices at once.
+
+### The sound
+
+`src/dsp/effects.ts`, pure: an `EffectRack` holds four slots (a part's
+inserts, a bus's, the master's), each playing the kind set on it. A
+slot's processor of a kind is built the first time it is set to that
+kind (`setKind`, on the message that sets it, never in `process`) and
+kept: a delay holds a megabyte of lines, and most racks never play one.
+
+- **Chorus**: a copy of each side read 12 ms behind, swept 6 ms either
+  way by a sine, the right a quarter cycle behind the left: width from
+  one channel.
+- **Delay**: up to 2 s, a time change gliding over 50 ms (a tape's
+  pitch bend, no click); feedback up to 0.95 through a lowpass (Tone,
+  500 Hz to 20 kHz), so the echoes darken; Ping-pong sends the first
+  echo left, the next right, and so on.
+- **Reverb**: an eight-line feedback delay network (lines 29.7 to 73.1
+  ms, scaled by Size down to 0.3, Householder mixing), each line's gain
+  set for Decay to be its fall to −60 dB, each line damped by a lowpass
+  (20 kHz down to 1 kHz), after four allpass diffusers; the two sides
+  read the lines with opposite signs, so they are uncorrelated.
+- A rack **rests** once its input has been silent and its output under
+  −120 dB for 2.5 s, and wakes with the next sound.
+
+The output path (`src/dsp/output.ts`): a `Strip` is a part's synth (its
+clip off, its voices summed in stereo, each where the amp's pan puts it,
+since 2026-11-12), its inserts, its fader (a level and a balance,
+`setFader`, since 2026-11-13), and a send to each bus, each gliding
+(`Ramp`); at full in the middle the fader leaves the block untouched.
+The `Mixer` renders every strip, sums each into the buses that are on,
+runs each bus through its effects and adds it at its level and its
+balance, then runs the master's effects, scales by the master and soft
+clips each side. A strip's and a bus's balance (`sideGain`) moves
+nothing: in the middle both sides as they are, so a bus at its default
+sounds as before it had one; towards a side the other falls as a
+quarter cosine, −3 dB halfway, silent at the edge. A voice's Pan (the
+Amp's) moves the voice itself, equal power. The two were both named
+Pan until 2026-11-13, when ashon chose to call the strip's and the
+buses' Balance ("밸런스로 가자"); the key stays `pan`, so what was kept
+reads as it was. A bus turned off
+stops where it is: on again, it starts from silence, so the buses after
+one removed restart their tails as they move up. The worklet's node
+outputs two channels.
+
+The clip (`src/dsp/clip.ts`) passes everything up to a knee at −6 dBFS
+untouched and bends past it, `k + (1 − k)·tanh((|x| − k)/(1 − k))`
+with k = 0.5, its value, slope and curvature meeting the straight line
+at the knee, towards ±1, never beyond. tanh alone bent from the first
+sample. A sine's harmonics, all of them over its fundamental:
+
+| Into the clip | tanh, out | tanh, harmonics | Knee, out | Knee, harmonics |
+| ------------- | --------- | --------------- | --------- | --------------- |
+| −20 dBFS      | −20.0 dB  | 0.083%          | −20.0 dB  | none            |
+| −12 dBFS      | −12.2 dB  | 0.52%           | −12.0 dB  | none            |
+| −6 dBFS       | −6.7 dB   | 2.0%            | −6.0 dB   | none            |
+| −3 dBFS       | −4.3 dB   | 3.7%            | −3.1 dB   | 0.61%           |
+| 0 dBFS        | −2.4 dB   | 6.7%            | −1.1 dB   | 4.5%            |
+| +3 dBFS       | −1.0 dB   | 11.3%           | −0.2 dB   | 12.2%           |
+| +6 dBFS       | −0.3 dB   | 17.3%           | −0.0 dB   | 20.9%           |
+
+So a sound played as loud as the Init sound's note (−15 dBFS) comes out
+as it went in, where tanh gave it a third harmonic 52 dB under it. Sine
+chords at full velocity, the loudest product at a sum or difference
+(f₁ + f₂ − f₃, 2f₁ − f₂) under the notes, tanh then the knee: C4 G4
+(peaks at −9.1 dBFS) −42.6 dB, none; C4 E4 G4 (−5.6) −36.7 dB, none;
+C4 E4 G4 C5 (−3.6, past the knee 4.5% of the time) −37.0 dB, −71.5 dB,
+and none with the master at 70%. Under tanh those products came and
+went about once a second in the spectrogram: equal temperament's fifth
+is 2 cents narrow, so 3 × C4 and 2 × G4 are 0.9 Hz apart, and products
+that nearly meet beat at that rate. Past about +2 dBFS the knee gives a
+little more than tanh did, nearing full scale sooner. A knee at −3 dBFS
+was the other choice: clean to −3, 2.8% at 0 dBFS, 22% at +6.
+
+Measured (M3 Max, one 128-frame block, `pnpm bench`): the heaviest
+sound's 16 voices 0.81 ms; through a full rack of choruses and both
+returns 0.86 ms. Since the pan, the heaviest sound routes random to it
+and every voice is placed anew each sample: through the effects 0.89
+ms. Since the buses, the heaviest output is that sound through a full
+rack of inserts, sent whole to four buses, each a full rack, and the
+master a full rack too (24 effects, choruses and reverbs in turn):
+1.02 ms of the block's 2.67 (1.06 with the buses' pan, within the
+noise). A full rack of each kind: four choruses
+0.038 ms, four reverbs 0.031, four delays 0.006. Measure CPU times the
+whole output (`chainStressOutput`).
+
+### What the output looks like
+
+The engine taps the node's output (`src/engine/engine.ts`): a splitter
+into an analyser per side (2048 samples), the two merged again into the
+scope's analyser, then one for the spectrum (4096 bins, smoothing 0.7,
+−100 to 0 dB) before the speakers. Since 2026-11-13, asked for by ashon
+("사운드에서는 사운드 아웃풋이 시각화로 보이게 해 줘. 믹스에서는 전체
+아웃풋에 대한 시각화. 믹스에서는 각 사운드 채널별로 시각화가 별도로"),
+the node has an output for each part after the master's
+(`PART_OUTPUTS`, one until the parts come): the part's own sound, after
+its inserts and its fader and before its sends (what it gives the mix,
+so that the strips' meters compare as their faders set them), unclipped,
+copied there as the mixer
+renders it (`Mixer.render`'s taps). Each is tapped as the master is and
+reaches the speakers through a gain of 0, so that every browser renders
+its analysers and none is heard twice. The Sound's Out and the Mix's
+strip show the part's; the Mix's Master and the sheet the master's. A
+part's meters read its levels as they are (`sampleLevels`), the
+master's what went into the clip (`unclippedLevels`). Each output has
+a view of its own, since 2026-11-13, asked for by ashon ("시각화
+스타일이 각각 다르게 설정항 수 있으면 좋겠어"): the sound's (its Out and
+its strip, one picture of one output) chosen in its panel, the
+master's in the Master's, each kept in localStorage
+(`loopromeda.partViews`, by part, `loopromeda.masterView`); a part with
+none kept shows the master's. `OutputTap`
+(`src/ui/frames.ts`), one for each output, reads them once a display
+frame however many views draw it, since a second read of the spectrum
+would smooth it twice. Checked in a frame with the sound's send to A at
+0: a note held moves the Out's and the strip's views, the Master's not.
+The views
+(`src/ui/MasterViews.tsx`, their math in `src/viz/master.ts`), each a
+canvas drawn every frame while the audio runs:
+
+- **Scope**: the waveform, as before.
+- **Spectrum**: 20 Hz to 20 kHz on a logarithmic axis, filled under its
+  line, a line of the peaks falling 18 dB a second over it. Below about
+  a kilohertz a bin spans several columns, and the columns between bins
+  read a monotone cubic through them (`levelAt`), round where straight
+  lines cornered and never above a bin. A sine there shows the
+  analyser's window (Blackman, fixed): a sidelobe each side about 60 dB
+  under it, four bins off, a small hump apart from the peak at the low
+  end, where the bins stand furthest apart.
+- **Spectrogram**: the spectrum over time, scrolling 40 px a second, a
+  line across at each decade and a line down each second, drawn into
+  the picture so that they scroll away with it (how long a tail rings
+  is counted in them); in the sheet the decades are named.
+- **Stereo**: a goniometer of the latest 1024 samples (mid up, side
+  across) and the two sides' correlation, −1 to +1.
+- **Meters**: each side's RMS and peak going into the clip, recovered
+  from the clipped output (the clip's inverse), −60 to +6 dB, amber
+  past 0 dB, where the clip is driven hard; the highest peak held is
+  named. A part's is one bar, since 2026-11-13, asked for by ashon
+  ("사운드의 경우 모노 악기일 수 있을텐데 볼륨 막대가 두개일 필요는
+  없을 것 같아"): its peak the louder side's, its RMS the two sides'
+  together, so that a mono sound reads as either side does; the
+  master keeps its two.
+
+### The editor
+
+The rack's first switch shows the sound or the mix in the graph's place;
+each keeps its tile picked, the panel follows, and both ask the card for
+the same height, so the keys under them stay put.
+
+- **Sound**: the inserts stand after the amp, item-sized and as tall as
+  it; "+ FX" stands in the "+" row under them. The **Out** tile ends the
+  row, filling what the rest leave of the frame: its name over the
+  sends, a short bar for each bus in its colour, by its letter (across,
+  two to a line for four), and under them the output's view and a
+  sliver of meters, as a filter's picture stands under its name. A
+  short Out (one slot) keeps them beside its name. The meters are as
+  black as the views (their tracks a breath lighter): the sound's one
+  bar 10 px wide in the Out and the strip, the master's two 14 in the
+  Master. The Amp's line reads Env, since 2026-11-13 (ashon: "amp out
+  보다 env 로 바꾸거나 없애도 좋겠네"): it read Out from before the Out
+  tile, which left two Outs side by side.
+- **Squares**, 2026-11-12, asked for by ashon ("In 블록 쪽 가로폭을 조금
+  줄이고 앰프나 필터 부분은 최대한 정사각형"): a frame with room over
+  the graph at rest gives it first to the items, the amp and its
+  inserts, until each is as wide as it is tall; then the "+" and the out
+  widen as before, up to twice, and the inputs and their sources only
+  to one and a half times (102 px, was 136). A tile already wider than
+  tall (a row of one slot) stays as it is, and a frame with no room
+  (a phone held upright) keeps them as they were, so the graph pans no
+  more than before (`src/viz/graph.ts`). Measured in frames, the
+  sound's IN 1, Filter, Amp and Out: on a fold's 948 × 579 102 × 62,
+  130 × 130, 130 × 130, 192 × 130 (were 136, 120 and 104 wide), at
+  1000 × 600 140 squares, at 844 × 390 a 94 square filter, a 115 amp;
+  at 454 × 622 part of the way (82 × 94, 79 × 94).
+- **Mix** (`src/viz/mixGraph.ts`): the sound's strip (Synth) at the left,
+  as tall as the buses beside it (two rows at least), under its name,
+  its fader's level and its sends the sound's own view and meter, as
+  the Out has them, a peg on the seam
+  to each as long as its send; each bus a row, as a chain is, in its
+  letter's colour (the chains' colours, A orange, B violet, C lime, D
+  pink, so that a letter wears one colour in either view): a head with
+  its letter and level, its effects after it and a "+" filling the row
+  to the longest; each bus's level a peg on the bus down the seam after
+  the rows, into the master's effects, as tall as the strip, and the
+  **Master**, which fills the rest with its name over the output's
+  view and wider meters. The level pegs join the master's row, as a
+  sound's chains join its amp: no joint of its own there, which stood
+  on the middle bus's peg. Under the rows "+ Bus" (until every letter
+  has one), and "+ FX" under the master's effects.
+- **Panels**: the Out and the strip open the same panel (named Out in
+  the Sound, Synth in the Mix): the strip's fader, Level and Balance, the
+  mix's, first, then a send to each bus, the sound's, and the view of
+  the sound's output; a bus's
+  panel holds the sound's send to it, its level and its balance, and
+  removes it; an effect's its knobs, and moves it along its row or
+  removes it; "+ Bus" adds a bus after the last, dry or with a first
+  effect; a
+  row's "+" an effect at its end; the Master's its level, the views,
+  and a button that opens them all at size (#/master,
+  `src/ui/MasterSheet.tsx`) over the editor, the keys left playable
+  under them: the spectrum over the spectrogram and the stereo, the
+  meters at the right. Where the views are at least two and a half
+  times as wide as tall (a phone or a fold on its side, asked for by
+  ashon: "폴드 넓은 화면에서는 스테레오가 우측에 더 크게"), the stereo
+  stands beside them instead, a square as tall as both: 185 px on a
+  fold's 833 × 510, 125 on a phone's 844 × 390, where it was 88 and 58.
+
+### Factory presets
+
+Pads, plucks and keys send to the session's delay and reverb, on B and
+C since the buses, a few through a chorus of their own: Warm Pad and Strings a chorus and the reverb; PWM,
+Glass, Choir and Breath Pad, Kalimba, Marimba, FM Bell, Vibes, Clap,
+Riser and Wind the reverb; E-Piano and Organ a chorus alone; Saw Lead
+the delay; Blips the delay, and Soft Pluck the delay and the reverb.
+The delay is the session's now, so Blips' and Soft Pluck's echoes are
+stereo or ping-pong as the session's delay is, no longer as the preset
+had it. Each, through the default mix, stays under the clip and has
+rung out ten seconds after the key (`src/state/factory.test.ts`).
+
+### Later
+
+A delay's time in beats once the sequencer has a tempo; more effect
+kinds (a phaser, an EQ, a compressor); a picture on an effect's tile;
+dragging an effect to move it, along its row or to another, as an item
+is dragged; a strip for each part once there are parts (the sound's
+has its fader, its meter and its view); a bus fed by another (a delay
+into
+the reverb's bus) rather than in a row.
+
+## 2. Parts and the kit
+
+Not started. What it needs:
+
+- **A kit**: 16 pad sounds, each a whole sound (inputs, chains,
+  modulators, routes, its sends to the buses), and inserts for the kit
+  as a whole. A factory kit (kick, snare, hats, toms, clap,
+  cowbell and more, from the Drums presets).
+- **The audio thread** plays two parts and mixes them: two strips into
+  the one mixer, the synth's voices through its inserts, and the kit's
+  pads through the kit's.
+  Each pad is a ChainSynth of its own, with few voices (a hit rarely
+  overlaps itself), so the pads' state never mixes; the cost of 16 of
+  them is measured before the voice counts are fixed.
+- **The engine and the session**: the sound edited is the synth's or
+  the picked pad's; the kit is kept in the session and in its own preset
+  kind (a kit file), the synth's presets as now.
+- **The header's Part switch** and, with Kit, a surface of 16 pads that
+  plays and picks.
+
+## 3. The sequencer
+
+Not started. What it needs:
+
+- **The clock on the audio thread** (the audio thread owns time): the
+  worklet steps through the pattern at the tempo, with swing, and plays
+  each step's notes on the kit and the synth itself, sample-accurate,
+  the main thread only sending the pattern and the transport.
+- **A pattern**: 16 to 64 steps; 16 kit lanes, each step on or off with
+  a velocity; one synth track, each step a note, a length and a
+  velocity. Kept in the session.
+- **The Seq surface**: the grid, the transport (play, stop) and the
+  tempo in its header, the step playing lit as it passes (reported back
+  as the glides are).

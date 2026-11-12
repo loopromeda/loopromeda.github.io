@@ -50,6 +50,14 @@
 @custom-variant wide (@media (width >= 80rem) and (height >= 48rem));
 
 /*
+ * The master's views, at least two and a half times as wide as they are
+ * tall (a phone or a fold on its side): the stereo stands at their
+ * right, a square the whole height (MasterSheet.tsx). A container query,
+ * on the views' own box, which names itself master.
+ */
+@custom-variant broad (@container master (aspect-ratio >= 5 / 2));
+
+/*
  * An instrument, not a document: no page bounce, text selection, long-press
  * callout, zoom (pinched or double-tapped) or tap highlight on touch
  * screens (main.tsx also turns away long presses, and Safari's pinch,

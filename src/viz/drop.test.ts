@@ -2,11 +2,11 @@ import { describe, expect, it } from 'vitest'
 import { chainDrop, itemDrop, seamAt, spanDrop } from './drop'
 import { graphGeometry } from './graph'
 
-const LIMITS = { inputs: 6, chains: 4, items: 6 }
+const LIMITS = { inputs: 6, chains: 4, items: 6, effects: 4 }
 
 /**
- * One input into two chains, a row each: c1 (items x1, x2) from y 6 to 50,
- * c2 (x3) from 56 to 100. Items stand from x 119, 60 wide, 3 apart.
+ * One input into two chains, a row each: c1 (items x1, x2) from y 8 to 52,
+ * c2 (x3) from 58 to 102. Items stand from x 119, 60 wide, 3 apart.
  */
 const geometry = graphGeometry(
   {
@@ -15,6 +15,7 @@ const geometry = graphGeometry(
       { id: 'c1', sends: { i1: 1 }, items: [{ id: 'x1' }, { id: 'x2' }] },
       { id: 'c2', sends: { i1: 1 }, items: [{ id: 'x3' }] },
     ],
+    effects: [],
   },
   LIMITS
 )
@@ -55,7 +56,7 @@ describe('an item dropped', () => {
     expect(itemDrop(geometry, 'x1', 250, 20, 6)).toEqual({
       chain: 'c1',
       to: 1,
-      marker: { x: 242, y: 6, w: 3, h: 44 },
+      marker: { x: 242, y: 8, w: 3, h: 44 },
     })
     // Beside itself it stays
     expect(itemDrop(geometry, 'x1', 130, 20, 6)).toBeUndefined()
@@ -66,11 +67,11 @@ describe('an item dropped', () => {
     expect(itemDrop(geometry, 'x1', 130, 80, 6)).toEqual({
       chain: 'c2',
       to: 0,
-      marker: { x: 116, y: 56, w: 3, h: 44 },
+      marker: { x: 116, y: 58, w: 3, h: 44 },
     })
     // Below the rows, and in the gap between them nearer the second
     expect(itemDrop(geometry, 'x1', 400, 300, 6)?.chain).toBe('c2')
-    expect(itemDrop(geometry, 'x1', 400, 54, 6)).toMatchObject({
+    expect(itemDrop(geometry, 'x1', 400, 56, 6)).toMatchObject({
       chain: 'c2',
       to: 1,
     })
@@ -90,14 +91,14 @@ describe('a chain dropped', () => {
       to: 1,
       marker: {
         x: 80,
-        y: 101.5,
+        y: 103.5,
         w: (geometry.chains[0]?.row.w ?? 0) - 3,
         h: 3,
       },
     })
     expect(chainDrop(geometry, 'c2', 10)).toMatchObject({
       to: 0,
-      marker: { y: 1.5 },
+      marker: { y: 3.5 },
     })
     expect(chainDrop(geometry, 'c2', 70)).toBeUndefined()
     expect(chainDrop(geometry, 'c9', 10)).toBeUndefined()

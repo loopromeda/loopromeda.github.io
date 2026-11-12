@@ -18,6 +18,7 @@ import {
   type SurfaceStorage,
 } from './state/surface'
 import { IconButton } from './ui/IconButton'
+import { MasterSheet } from './ui/MasterSheet'
 import { hashOf, sheetOf, type Sheet } from './ui/pages'
 import { PatchButton } from './ui/PatchButton'
 import { PlatformChecks } from './ui/PlatformChecks'
@@ -66,18 +67,20 @@ const KEYS_SIZE = [
 ].join(' ')
 
 /**
- * The sound's editor (its parts as tiles, the output waveform in the
- * amp's, the picked one's knobs under them), the keys or pads filling the
- * rest (on a tablet or a Fold open, the editor takes what the keys do not
- * need: KEYS_SIZE), and a status line under it. The patch at the left of
- * the keyboard's header opens the presets, a popover on it over the page
- * as it is (a tap in the editor puts them away), and the first button at
- * its right end the choice of keys or pads, a popover on it the same way:
- * what is played on stays there to try them on. The last puts the
- * controls away, for a screen too short to play on under them. The mod
- * wheel stands at the
- * keys' left (the surface's choices hide it); its Route opens its routes
- * in the editor's panel, bringing the controls back for them. The
+ * The sound's editor (its parts as tiles, the output shown in the
+ * master's, the picked one's knobs under them), the keys or pads filling
+ * the rest (on a tablet or a Fold open, the editor takes what the keys do
+ * not need: KEYS_SIZE), and a status line under it. The patch at the left
+ * of the keyboard's header opens the presets, a popover on it over the
+ * page as it is (a tap in the editor puts them away), and the first
+ * button at its right end the choice of keys or pads, a popover on it
+ * the same way: what is played on stays there to try them on. The
+ * master's views at size open over the controls (its panel opens them),
+ * what is played on left there too. The last puts the controls away, for
+ * a screen too short to play on under them. The mod
+ * wheel stands at the keys' left (the surface's choices hide it); its
+ * Route opens its routes in the editor's panel, bringing the controls
+ * back for them. The
  * settings (this device's: voices, latency, what the screen shows, and
  * what the browser offers) open from the status line's right end, in the
  * same place.
@@ -165,7 +168,7 @@ export function App({
   // brought back and any sheet over them closed, to show them
   const [asked, setAsked] = useState<RoutesAsked | undefined>(undefined)
   const routeWheel = () => {
-    if (sheet === 'presets' || sheet === 'surface') closeSheet()
+    if (sheet !== null && sheet !== 'settings') closeSheet()
     if (surface.hideControls) changeSurface({ ...surface, hideControls: false })
     setAsked({ source: 'wheel' })
   }
@@ -181,12 +184,15 @@ export function App({
     if (next.voices !== settings.voices) engine.setVoices(next.voices)
     if (next.latency !== settings.latency) engine.setLatency(next.latency)
   }
-  // The presets and the surface are popovers over the page, which stays as
-  // it is; the settings a dialog over everything
+  // The master's views open over the controls, which they cover; the
+  // presets and the surface popovers over the page, which stays as it is;
+  // the settings a dialog over everything
+  const covered = sheet === 'master'
   const popover = sheet === 'presets' || sheet === 'surface'
   const patchRef = useRef<HTMLButtonElement>(null)
   const surfaceRef = useRef<HTMLButtonElement>(null)
-  const controls = !surface.hideControls
+  // Put away, the controls still come back under a sheet: it needs room
+  const controls = !surface.hideControls || covered
   // Until the audio has run, the cover asks for the tap that starts it;
   // starting it again (a new latency) shows a note instead
   const [ran, setRan] = useState(false)
@@ -217,14 +223,14 @@ export function App({
   return (
     <main className={`${page} gap-2`}>
       {/* Shrinks when the page is short (the graph pans), so the keys and
-          the status line stay on screen */}
+          the status line stay on screen; a sheet open over it has room */}
       <div
-        className={`relative flex min-h-0 flex-col ${controls ? EDITOR_SIZE : ''}`}
+        className={`relative flex flex-col ${covered ? 'min-h-[min(22rem,50dvh)]' : 'min-h-0'} ${controls ? EDITOR_SIZE : ''}`}
         // A touch in the editor puts a popover away (one on the keys
         // plays, the popover left open to try)
         onPointerDownCapture={popover ? closeSheet : undefined}
       >
-        <div className="flex min-h-0 flex-1 flex-col">
+        <div inert={covered} className="flex min-h-0 flex-1 flex-col">
           {/* Hidden, not unmounted: the editor keeps the tile picked */}
           <div
             id="controls"
@@ -239,9 +245,13 @@ export function App({
                   ? { timing: settings.waveformTiming, onStats: onScopeStats }
                   : undefined
               }
+              onMaster={() => showSheet('master')}
             />
           </div>
         </div>
+        {sheet === 'master' && (
+          <MasterSheet engine={engine} onClose={closeSheet} />
+        )}
       </div>
       <PlaySurface
         engine={engine}

@@ -16,6 +16,7 @@ import {
   toValue,
   type ValueSpec,
 } from '../state/params'
+import { mixKnob, mixValue } from '../state/mix'
 import { AMOUNT_SPEC } from '../state/sound/kinds'
 import {
   depthOf,
@@ -213,6 +214,42 @@ export function DepthKnob({
   )
 }
 
+/**
+ * One knob of the session's mix (src/state/mix.ts): a bus's, an effect's
+ * on a bus or the master, the master's. Turned as a knob of the sound
+ * is; nothing routes to it, the routes being each voice's and the mix
+ * after them all.
+ */
+export function MixKnob({
+  engine,
+  part,
+  knob,
+  color = NEUTRAL_ARC,
+}: {
+  engine: Engine
+  part: string
+  knob: string
+  color?: string
+}) {
+  const spec = mixKnob(engine.getMix(), part, knob)
+  if (!spec) return null
+  return (
+    <Dial
+      engine={engine}
+      address={`mix ${part} ${knob}`}
+      turns={{
+        spec,
+        read: () => mixValue(engine.getMix(), part, knob) ?? spec.default,
+        write: (value) => engine.editMix(part, knob, value),
+        format: (value) => formatValue(spec, value),
+      }}
+      color={color}
+      hot={undefined}
+      follow={engine.subscribeMix}
+    />
+  )
+}
+
 /** What a dial turns: a value in its spec's range, read and written */
 interface Turns {
   readonly spec: ValueSpec & { readonly label: string }
@@ -235,6 +272,7 @@ function Dial({
   color,
   hot,
   routed,
+  follow = engine.subscribeSound,
 }: {
   engine: Engine
   /** What it turns, as a key: a new one, a new listener */
@@ -243,6 +281,8 @@ function Dial({
   color: string
   hot: string | undefined
   routed?: Routed
+  /** What it follows for a value set elsewhere: the sound, or the mix */
+  follow?: (listener: () => void) => () => void
 }) {
   const { spec } = turns
   /** The latest of what it turns, for the listener set up once per dial */
@@ -428,12 +468,13 @@ function Dial({
   // added, turned or removed
   useLayoutEffect(
     () =>
-      engine.subscribeSound(() => {
+      follow(() => {
         const value = read()
         if (value !== shownRef.current) show(value)
         showRoutes()
       }),
-    // show, showRoutes and read use only refs; address names what they read
+    // show, showRoutes and read use only refs; address names what they
+    // read, and follow is the engine's, as it is
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [engine, address]
   )

@@ -4,15 +4,26 @@
  * colours parts take, and the key of everything a redraw follows. Pure.
  */
 import {
+  BUS_IDS,
+  EFFECT_KINDS,
   FILTER_TYPE_NAMES,
   INPUT_KINDS,
   ITEM_KINDS,
   VOICE_SPEC,
   WAVE_NAMES,
+  type EffectKind,
 } from '../state/sound/kinds'
+import {
+  MASTER,
+  busLetter,
+  findMixPart,
+  type Mix,
+  type MixOwner,
+} from '../state/mix'
 import { setRef, setValue } from '../state/sound/edit'
 import {
   AMP,
+  SENDS,
   VOICE,
   destOf,
   findPart,
@@ -52,6 +63,16 @@ export const MOD_LOOK: Look = look(MOD_COLOR, 0.6, 0.16)
 /** Chain index's look (A is 0), by its colour */
 export function chainLook(index: number): Look {
   return look(CHAIN_COLORS[index % CHAIN_COLORS.length] as string, 0.6, 0.16)
+}
+
+/**
+ * Bus id's look (a letter of the mix), by its place as a chain's is: A
+ * orange, B violet and so on, so that a letter wears one colour wherever
+ * it stands; neutral for anything else (the master)
+ */
+export function busLook(id: string): Look {
+  const index = (BUS_IDS as readonly string[]).indexOf(id)
+  return index < 0 ? NEUTRAL_LOOK : chainLook(index)
 }
 
 function look(hex: string, ring: number, tint: number): Look {
@@ -107,6 +128,15 @@ export const GLYPHS = {
   sampleHold: 'M1 9 H5 V3 H9 V7 H13 V2 H17',
   smooth: 'M1 8 C4 2 6 2 9 6 S14 10 17 4',
   sum: 'M13 2 H5 L10 6 L5 10 H13',
+  // Two waves a little apart, an echo's taps dying away, a dense tail
+  chorus: 'M1 5 C3 1 6 1 9 5 S15 9 17 5 M1 8 C3 4 6 4 9 8 S15 12 17 8',
+  delay: 'M2 11 V2 M6.5 11 V4.5 M11 11 V7 M15.5 11 V9',
+  reverb:
+    'M1 11 L2.5 2 L3.5 8 L4.5 4 L5.5 9 L6.5 5.5 L7.5 9.5 L8.5 7 L9.5 10 L10.5 8 L11.5 10.5 L13 9.5 L14.5 10.5 H17',
+  // Bars of a meter, the master's
+  master: 'M3 11 V6 M7 11 V2 M11 11 V4 M15 11 V8',
+  // A path that forks, the sound's sends to the returns
+  sends: 'M1 6 H7 L11 2 H17 M7 6 L11 10 H17',
   plus: 'M9 2 V10 M5 6 H13',
   // A wave that runs on into an arrow's shaft: a source moving something
   route:
@@ -123,6 +153,13 @@ const LFO_GLYPHS = [
   GLYPHS.sampleHold,
   GLYPHS.smooth,
 ]
+
+/** An effect's pictogram, by its kind */
+export const EFFECT_GLYPHS: Record<EffectKind, string> = {
+  chorus: GLYPHS.chorus,
+  delay: GLYPHS.delay,
+  reverb: GLYPHS.reverb,
+}
 
 /** The pictogram of the part id names, or '' for one with none (a chain) */
 export function glyphOf(sound: Sound, id: string): string {
@@ -143,6 +180,8 @@ export function glyphOf(sound: Sound, id: string): string {
       return found.part.kind === 'env'
         ? GLYPHS.env
         : (LFO_GLYPHS[found.part.values.shape ?? 0] ?? GLYPHS.sine)
+    case 'effect':
+      return EFFECT_GLYPHS[found.part.kind]
     default:
       return ''
   }
@@ -166,6 +205,126 @@ export function tileLabel(sound: Sound, id: string): string {
     default:
       return partName(sound, id)
   }
+}
+
+/**
+ * The mix's tiles, which stand for the session's buses, their effects
+ * and the master rather than a part of the sound: mix:a, mix:e1,
+ * mix:master
+ */
+export function mixId(part: string): string {
+  return `mix:${part}`
+}
+
+/**
+ * The mix's part a tile's id names (a bus's letter, an effect's id, the
+ * master), if it is one of the mix's tiles and not a "+"
+ */
+export function mixPartOf(id: string): string | undefined {
+  if (!id.startsWith('mix:')) return undefined
+  const part = id.slice('mix:'.length)
+  return part.startsWith('add:') ? undefined : part
+}
+
+/** A "+" of the mix: one adding to a bus's row, the master's, or a bus */
+export function mixAddId(to: MixOwner | 'bus'): string {
+  return `mix:add:${to}`
+}
+
+/** What a mix "+" tile's id adds to: a bus's letter, master, or bus */
+export function mixAddingTo(id: string): string | undefined {
+  return id.startsWith('mix:add:') ? id.slice('mix:add:'.length) : undefined
+}
+
+/** True for any of the mix's tiles, "+" ones too */
+export function isMixId(id: string): boolean {
+  return id.startsWith('mix:')
+}
+
+/**
+ * The tile of the mix to pick when picked names nothing in mix any more
+ * (a bus or an effect removed, another mix read): the master. What is
+ * still there stays picked, and so does the sound's sends.
+ */
+export function stillMixPicked(mix: Mix, picked: string): string {
+  if (picked === SENDS) return picked
+  const part = mixPartOf(picked)
+  if (part !== undefined) {
+    return findMixPart(mix, part) ? picked : mixId(MASTER)
+  }
+  const adding = mixAddingTo(picked)
+  if (adding === 'bus' || adding === MASTER) return picked
+  if (adding !== undefined && findMixPart(mix, adding)?.type === 'bus') {
+    return picked
+  }
+  return mixId(MASTER)
+}
+
+/**
+ * A mix part's name: Bus B, the Master, an effect by its bus and kind
+ * (B Delay, Master Reverb), numbered where its row has two (B Delay 2)
+ */
+export function mixPartName(mix: Mix, part: string): string {
+  const found = findMixPart(mix, part)
+  switch (found?.type) {
+    case 'strip':
+      return 'Synth'
+    case 'bus':
+      return `Bus ${busLetter(found.bus.id)}`
+    case 'master':
+      return 'Master'
+    case 'effect': {
+      const { effect, owner } = found
+      const row =
+        owner === MASTER
+          ? mix.master.effects
+          : (mix.buses.find((bus) => bus.id === owner)?.effects ?? [])
+      const same = row.filter((each) => each.kind === effect.kind)
+      const label = EFFECT_KINDS[effect.kind].label
+      const kind =
+        same.length > 1 ? `${label} ${same.indexOf(effect) + 1}` : label
+      return `${owner === MASTER ? 'Master' : busLetter(owner)} ${kind}`
+    }
+    default:
+      return part
+  }
+}
+
+/** The name of what id picks: a part's (partName), or the mix's Bus B */
+export function pickedName(sound: Sound, mix: Mix, id: string): string {
+  const part = mixPartOf(id)
+  if (part !== undefined) return mixPartName(mix, part)
+  const adding = mixAddingTo(id)
+  if (adding === 'bus') return 'Add a bus'
+  if (adding !== undefined) return 'Add an effect'
+  return partName(sound, id)
+}
+
+/**
+ * A mix tile's line, from its knobs: a strip's level, a bus's and the
+ * master's, an effect's (effectLine)
+ */
+export function mixLine(mix: Mix, part: string): string {
+  const found = findMixPart(mix, part)
+  switch (found?.type) {
+    case 'strip':
+      return percent(found.strip.values.level ?? 0)
+    case 'bus':
+      return percent(found.bus.values.level ?? 0)
+    case 'master':
+      return percent(found.master.values.level ?? 0)
+    case 'effect':
+      return effectLine(found.effect)
+    default:
+      return ''
+  }
+}
+
+/** A time in few characters: 350 ms under a second, 2.4 s past it */
+function shortTime(seconds: number): string {
+  return seconds < 1
+    ? `${Math.round(seconds * 1000)} ms`
+    : `${seconds.toFixed(1)} s`
 }
 
 /** A cutoff in few characters, three figures: 400, 1.20k, 20.0k */
@@ -273,12 +432,13 @@ export function inputLine(sound: Sound, id: string): string {
 
 /**
  * A tile's second line, from its knobs: an oscillator's wave, a filter's
- * type and cutoff, a drive's amount, a chain's level, the amp's Out,
- * the voice's mode. An input no chain takes, but another reads, shows
- * where it goes instead (its pictogram still shows its wave): → IN 1 FM.
+ * type and cutoff, a drive's amount, a chain's level, the amp's Env,
+ * the voice's mode, a chorus's rate.
+ * An input no chain takes, but another reads, shows where it goes
+ * instead (its pictogram still shows its wave): → IN 1 FM.
  */
 export function tileLine(sound: Sound, id: string): string {
-  if (id === AMP) return 'Out'
+  if (id === AMP) return 'Env'
   if (id === VOICE) return VOICE_MODES[Math.round(sound.voice.mode ?? 0)] ?? ''
   const found = findPart(sound, id)
   switch (found?.type) {
@@ -297,8 +457,29 @@ export function tileLine(sound: Sound, id: string): string {
         ? `${FILTER_TYPE_NAMES[values.type ?? 0] ?? ''} ${shortHz(values.cutoff ?? 0)}`
         : percent(values.drive ?? 0)
     }
+    case 'effect':
+      return effectLine(found.part)
     default:
       return ''
+  }
+}
+
+/**
+ * An effect's line, from its knobs: a chorus's rate, a delay's time, a
+ * reverb's decay
+ */
+export function effectLine(effect: {
+  readonly kind: EffectKind
+  readonly values: Readonly<Record<string, number>>
+}): string {
+  const { values } = effect
+  switch (effect.kind) {
+    case 'chorus':
+      return `${(values.rate ?? 0).toFixed(2)} Hz`
+    case 'delay':
+      return shortTime(values.time ?? 0)
+    case 'reverb':
+      return shortTime(values.decay ?? 0)
   }
 }
 
@@ -327,6 +508,20 @@ export function reachOf(sound: Sound, picked: string): Set<string> {
 /** The ids of everything a route moves: their tiles carry a sky dot */
 export function modulated(sound: Sound): Set<string> {
   return new Set(sound.routes.map((route) => route.target))
+}
+
+/**
+ * What a redraw of the mix follows: its buses and the effects on each and
+ * on the master, by id and kind, in order. A knob (a level, a time)
+ * changes the knob and a tile's line, never the whole editor.
+ */
+export function mixShapeKey(mix: Mix): string {
+  const row = (effects: Mix['master']['effects']) =>
+    effects.map((effect) => `${effect.id}:${effect.kind}`).join(',')
+  return [
+    ...mix.buses.map((bus) => `${bus.id}[${row(bus.effects)}]`),
+    `master[${row(mix.master.effects)}]`,
+  ].join(' ')
 }
 
 /**
@@ -362,6 +557,7 @@ export function shapeKey(sound: Sound): string {
       route.target,
       route.key,
     ]),
+    sound.effects.map((effect) => [effect.id, effect.kind]),
   ])
 }
 
@@ -371,7 +567,8 @@ export function shapeKey(sound: Sound): string {
  * chain, else the amp. What is still there stays picked.
  */
 export function stillPicked(sound: Sound, picked: string): string {
-  if (picked === AMP || picked === VOICE) return picked
+  if (picked === AMP || picked === VOICE || picked === SENDS) return picked
+  if (isMixId(picked)) return picked
   const adding = addingTo(picked)
   if (adding === undefined) {
     if (findPart(sound, picked)) return picked
@@ -385,14 +582,17 @@ export function stillPicked(sound: Sound, picked: string): string {
 }
 
 /** The "+" tiles but a chain's, which are add:<chain id> */
-const ADDING = ['input', 'chain', 'modulator']
+const ADDING = ['input', 'chain', 'modulator', 'effect']
 
-/** A "+" tile's id: add:input, add:chain, add:modulator, add:<chain id> */
+/**
+ * A "+" tile's id: add:input, add:chain, add:modulator, add:effect,
+ * add:<chain id>
+ */
 export function addId(what: string): string {
   return `add:${what}`
 }
 
-/** What a "+" tile's id adds (input, chain, modulator, a chain's id) */
+/** What a "+" tile's id adds (input, chain, modulator, effect, a chain's id) */
 export function addingTo(id: string): string | undefined {
   return id.startsWith('add:') ? id.slice('add:'.length) : undefined
 }

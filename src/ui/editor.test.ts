@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  addEffect,
   addInput,
   addItem,
   addModulator,
@@ -94,9 +95,23 @@ describe('tiles', () => {
       'HP 20.0k'
     )
     expect(tileLine(sound, 'c1')).toBe('70%')
-    expect(tileLine(sound, AMP)).toBe('Out')
+    expect(tileLine(sound, AMP)).toBe('Env')
     expect(tileLine(sound, VOICE)).toBe('Poly')
     expect(tileLine(setValue(sound, VOICE, 'mode', 2), VOICE)).toBe('Legato')
+  })
+
+  it('names inserts and writes their lines and pictograms', () => {
+    let sound = busy()
+    sound = addEffect(sound, 'chorus').sound
+    sound = addEffect(sound, 'chorus').sound
+    expect(['f1', 'f2'].map((id) => tileLabel(sound, id))).toEqual([
+      'Chorus 1',
+      'Chorus 2',
+    ])
+    expect(tileLine(sound, 'f1')).toBe('0.60 Hz')
+    expect(tileLine(setValue(sound, 'f2', 'rate', 1.25), 'f2')).toBe('1.25 Hz')
+    expect(glyphOf(sound, 'f1')).toBe(GLYPHS.chorus)
+    expect(lookOf(sound, 'f2')).toBe(NEUTRAL_LOOK)
   })
 
   it('shows where an input no chain takes is heard instead', () => {
@@ -205,6 +220,7 @@ describe('shapeKey', () => {
       setRef(sound, 'i1', 'fmSource', 'i2'),
       removePart(sound, 'r1'),
       addModulator(sound, 'env').sound,
+      addEffect(sound, 'chorus').sound,
     ]
     for (const after of changed) expect(shapeKey(after)).not.toBe(key)
   })
@@ -229,7 +245,9 @@ describe('stillPicked', () => {
     for (const id of ['x2', 'i2', 'c1', 'm1', AMP, VOICE]) {
       expect(stillPicked(sound, id)).toBe(id)
     }
-    for (const id of ['input', 'chain', 'modulator', 'c1'].map(addId)) {
+    for (const id of ['input', 'chain', 'modulator', 'effect', 'c1'].map(
+      addId
+    )) {
       expect(stillPicked(sound, id)).toBe(id)
     }
   })

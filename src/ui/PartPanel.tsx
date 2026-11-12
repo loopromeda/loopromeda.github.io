@@ -1,12 +1,14 @@
-import { useState, type ReactNode } from 'react'
-import type { Engine } from '../engine/engine'
+import { useState, type HTMLAttributes, type ReactNode } from 'react'
+import type { Engine, OutputSource } from '../engine/engine'
 import {
   addChain,
+  addEffect,
   addInput,
   addItem,
   addModulator,
   movePart,
   removePart,
+  sendsWithout,
   setRef,
   setSend,
   type Added,
@@ -14,9 +16,12 @@ import {
 import {
   AMP_SPEC,
   CHAIN_SPEC,
+  EFFECT_KINDS,
+  EFFECT_KIND_ORDER,
   INPUT_KINDS,
   ITEM_KINDS,
   MAX_CHAINS,
+  MAX_EFFECTS,
   MAX_INPUTS,
   MAX_ITEMS,
   MAX_MODULATORS,
@@ -24,12 +29,28 @@ import {
   SEND_SPEC,
   VOICE_SPEC,
   type DestSpec,
+  type EffectKind,
   type InputKind,
   type ItemKind,
   type ModulatorKind,
 } from '../state/sound/kinds'
 import {
+  MASTER,
+  addBus,
+  addMixEffect,
+  busLetter,
+  busName,
+  findMixPart,
+  moveMixEffect,
+  removeMixPart,
+  stripId,
+  type Mix,
+  type MixAdded,
+  type MixOwner,
+} from '../state/mix'
+import {
   AMP,
+  SENDS,
   VOICE,
   findPart,
   partName,
@@ -37,26 +58,42 @@ import {
   sendKey,
   type Sound,
 } from '../state/sound/sound'
-import { knobRow, KNOB_SIZE, PANEL_BODY, TALL_HIT } from './controls'
 import {
+  knobRow,
+  KNOB_SIZE,
+  OPTION,
+  PANEL_BODY,
+  SMALL_ICON_BUTTON,
+  TALL_HIT,
+} from './controls'
+import {
+  EFFECT_GLYPHS,
   GLYPHS,
   MOD_COLOR,
   MOD_LOOK,
   NEUTRAL_LOOK,
   VOICE_LOOK,
   addingTo,
+  busLook,
   chainLetter,
   chainLook,
   destName,
   fmTargets,
   glyphOf,
   heardThrough,
+  isMixId,
   lookOf,
+  mixAddingTo,
+  mixId,
+  mixPartName,
+  mixPartOf,
   toggleFm,
   type Look,
 } from './editor'
 import { ConfirmDialog } from './ConfirmDialog'
-import { Knob, NEUTRAL_ARC } from './Knob'
+import { FadeRow } from './FadeRow'
+import { Knob, MixKnob, NEUTRAL_ARC } from './Knob'
+import { MASTER_VIEWS, SOUND_OUTPUT, type MasterViewKind } from './MasterViews'
 import { knoblessDests, routesTo } from '../state/sound/knob'
 
 /** One kind a "+" offers: its pictogram, name and what it does */
@@ -91,20 +128,35 @@ const ICONS = {
   down: 'M9 4v10M5 10l4 4 4-4',
   remove: 'M3.5 5h11M7.5 5V3.5h3V5M5 5l.8 9.5h6.4L13 5M7.8 8v4M10.2 8v4',
   hide: 'M4 4l5 5 5-5M4 14h10',
+  // Corners pulled out: the master's views, large
+  open: 'M10.5 3.5h4v4M14.5 3.5l-4.5 4.5M7.5 14.5h-4v-4M3.5 14.5L8 10',
 } as const
 
 /** A header's small square button, and the one that removes */
-const ACTION_BUTTON = `${TALL_HIT} flex size-7 shrink-0 items-center justify-center rounded-md bg-white/5 text-zinc-200 disabled:opacity-30`
+const ACTION_BUTTON = SMALL_ICON_BUTTON
 const REMOVE_BUTTON = `${TALL_HIT} flex size-7 shrink-0 items-center justify-center rounded-md bg-red-500/15 text-red-200`
 /**
- * A row of 28 px buttons that pans sideways when long. It stands 8 px taller
- * above and below, for their hit areas (TALL_HIT), and as much drawn back
- * into the gaps around it, so it neither scrolls up and down (a scroller
- * holding what reaches past it does) nor cuts them; a finger or a wheel
- * pans it, without a scrollbar
+ * A row of buttons that pans sideways when long (FadeRow): it runs to the
+ * panel's edges, its buttons stood in from them as far as the panel's
+ * inset, and fades out where there are more. It stands 8 px taller above
+ * and below, for their hit areas (TALL_HIT), and as much drawn back into
+ * the gaps around it, so it neither scrolls up and down (a scroller
+ * holding what reaches past it does) nor cuts them.
  */
-const PAN_ROW =
-  '-my-2 flex shrink-0 items-center gap-1.5 overflow-x-auto overflow-y-hidden overscroll-x-contain py-2 [scrollbar-width:none]'
+function PanRow({
+  children,
+  ...attributes
+}: { children: ReactNode } & HTMLAttributes<HTMLDivElement>) {
+  return (
+    <FadeRow
+      {...attributes}
+      className="-mx-2.5 -my-2 shrink-0 overflow-y-hidden overscroll-x-contain py-2"
+      row="items-center gap-1.5 px-2.5"
+    >
+      {children}
+    </FadeRow>
+  )
+}
 
 /** A stroked 14 px picture in an action's button */
 function ActionIcon({ path, className }: { path: string; className?: string }) {
@@ -173,6 +225,20 @@ interface View {
     hot?: string
     label?: string
   }[]
+  /**
+   * After them, knobs of the session's mix: a bus's, an effect's; before
+   * them with mixFirst, as a strip's fader stands before its sends
+   */
+  readonly mixKnobs?: readonly { part: string; key: string }[]
+  readonly mixFirst?: boolean
+  /**
+   * The views of an output, the one its tiles show (the sound's in the
+   * Out and the mix's strip, the master's in the Master) chosen in a row
+   */
+  readonly views?: {
+    readonly shown: MasterViewKind
+    readonly choose: (view: MasterViewKind) => void
+  }
   /** The knobs' arc: a chain's colour on its own parts, else neutral */
   readonly color: string
   readonly refs?: ReactNode
@@ -205,6 +271,11 @@ const MODULATOR_HINTS: Record<ModulatorKind, string> = {
   env: 'Attack to release',
   lfo: 'Shape and rate',
 }
+const EFFECT_HINTS: Record<EffectKind, string> = {
+  chorus: 'A moving copy, wide',
+  delay: 'Echoes, in time',
+  reverb: 'A room around it',
+}
 const KIND_GLYPHS = {
   osc: GLYPHS.saw,
   noise: GLYPHS.noise,
@@ -233,12 +304,23 @@ export function PartPanel({
   onRoute,
   onMap,
   onHide,
+  viewOf: outputView,
+  chooseView,
+  onMaster,
+  inMix = false,
 }: {
   engine: Engine
   sound: Sound
   picked: string
   pick: (id: string, input?: string) => void
   focus: string | undefined
+  /** The view an output's tiles show, and choosing another */
+  viewOf: (source: OutputSource) => MasterViewKind
+  chooseView: (source: OutputSource, view: MasterViewKind) => void
+  /** Opens the master's views, large; none, no button for it */
+  onMaster?: () => void
+  /** In the mix, where the sound's panel is its strip's (Synth) */
+  inMix?: boolean
   /** Opens the routes into a destination: a knob held, a target tapped */
   onRoute: (target: string, key: string) => void
   /** Routes from source into the tiles picked, starting at target */
@@ -246,8 +328,27 @@ export function PartPanel({
   /** Hides the panel, for the graph to have its room */
   onHide: () => void
 }) {
-  const view = viewOf(engine, sound, picked, focus, pick)
+  /** An output's views, as its panel chooses them */
+  const views = (source: OutputSource) => ({
+    shown: outputView(source),
+    choose: (kind: MasterViewKind) => chooseView(source, kind),
+  })
+  const view =
+    picked === SENDS
+      ? sendsView(engine.getMix(), views(SOUND_OUTPUT), inMix)
+      : isMixId(picked)
+        ? mixView(engine, picked, views('master'), onMaster, pick)
+        : viewOf(engine, sound, picked, focus, pick)
   const { chip } = view
+  const mixKnobs = view.mixKnobs?.map(({ part, key }) => (
+    <MixKnob
+      key={`mix ${part} ${key}`}
+      engine={engine}
+      part={part}
+      knob={key}
+      color={view.color}
+    />
+  ))
   /** The action being asked about, and the part it was for */
   const [asking, setAsking] = useState<{ id: string; action: Action }>()
   const question = asking?.id === picked ? asking.action : undefined
@@ -255,7 +356,7 @@ export function PartPanel({
   return (
     <section
       aria-label={view.title}
-      className="flex min-h-[8.5rem] min-w-0 flex-col gap-2 rounded-xl px-2.5 py-2"
+      className="flex min-h-[8.5rem] min-w-0 flex-col gap-2 rounded-xl p-2.5"
     >
       <div className="flex h-7 shrink-0 items-center gap-2">
         <span
@@ -391,12 +492,17 @@ export function PartPanel({
           </>
         ) : (
           <>
-            {view.knobs.length > 0 || view.knobless?.length ? (
+            {view.knobs.length > 0 ||
+            view.knobless?.length ||
+            view.mixKnobs?.length ? (
               <div
                 className={knobRow(
-                  view.knobs.length + (view.knobless?.length ?? 0)
+                  view.knobs.length +
+                    (view.knobless?.length ?? 0) +
+                    (view.mixKnobs?.length ?? 0)
                 )}
               >
+                {view.mixFirst && mixKnobs}
                 {view.knobs.map(({ part, key, hot, label }) => (
                   <Knob
                     key={`${part} ${key}`}
@@ -409,6 +515,7 @@ export function PartPanel({
                     onHold={(dest) => onRoute(part, dest)}
                   />
                 ))}
+                {!view.mixFirst && mixKnobs}
                 {view.knobless?.map(({ part, dest, count }) => (
                   <button
                     key={`${part} ${dest.key}`}
@@ -456,6 +563,21 @@ export function PartPanel({
             {view.targets && (
               <Targets {...view.targets} onRoute={onRoute} onMap={onMap} />
             )}
+            {view.views && (
+              <PanRow role="group" aria-label="The output shows">
+                {MASTER_VIEWS.map(({ view: kind, label }) => (
+                  <button
+                    key={kind}
+                    type="button"
+                    aria-pressed={view.views?.shown === kind}
+                    onClick={() => view.views?.choose(kind)}
+                    className={`${OPTION} shrink-0`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </PanRow>
+            )}
           </>
         )}
       </div>
@@ -488,7 +610,7 @@ function Feeds({
   // The FM toggles lit say where it is heard already
   const none = !feeds.some((feed) => feed.on) && !fm?.some((into) => into.on)
   return (
-    <div role="group" aria-label={`Chains ${title} feeds`} className={PAN_ROW}>
+    <PanRow role="group" aria-label={`Chains ${title} feeds`}>
       <span className="mr-0.5 shrink-0 text-[11px] text-zinc-500">Into</span>
       {feeds.map((feed) => (
         <button
@@ -551,7 +673,7 @@ function Feeds({
           {through ? `Heard through ${through}` : 'Silent: tap a chain'}
         </span>
       )}
-    </div>
+    </PanRow>
   )
 }
 
@@ -573,7 +695,7 @@ function Targets({
   onMap: (source: string, target?: string) => void
 }) {
   return (
-    <div role="group" aria-label="Routes" className={PAN_ROW}>
+    <PanRow role="group" aria-label="Routes">
       <button
         type="button"
         onClick={() => onMap(source)}
@@ -619,7 +741,7 @@ function Targets({
           ))}
         </>
       )}
-    </div>
+    </PanRow>
   )
 }
 
@@ -629,7 +751,254 @@ function feeds(sound: Sound, chainId: string, inputId: string): boolean {
   return (chain?.sends[inputId] ?? 0) > 0
 }
 
-/** What the panel holds for picked */
+/**
+ * The panel of the sound's output (its Out tile, the mix's strip, there
+ * named Synth): its fader, a level and a balance, the session's (a preset
+ * loaded plays at them, as a desk's channel would), then how much it
+ * sends to each of the session's buses, kept with the sound, and the
+ * view of its own output that both show
+ */
+function sendsView(
+  mix: Mix,
+  views: NonNullable<View['views']>,
+  inMix: boolean
+): View {
+  const strip = stripId(0)
+  return {
+    title: inMix ? 'Synth' : 'Out',
+    kind: 'Its level and balance, then a send to each bus',
+    chip: { look: NEUTRAL_LOOK, glyph: GLYPHS.sends },
+    knobs: mix.buses.map((bus) => ({
+      part: SENDS,
+      key: bus.id,
+      label: `${busLetter(bus.id)} ${busName(bus)}`,
+    })),
+    mixKnobs: [
+      { part: strip, key: 'level' },
+      { part: strip, key: 'pan' },
+    ],
+    mixFirst: true,
+    views,
+    color: NEUTRAL_ARC,
+    note:
+      mix.buses.length === 0
+        ? 'The mix has no bus: add one there to hear the sound.'
+        : 'Level and Balance are the mix’s; the sends, the sound’s own, kept with its preset.',
+  }
+}
+
+/**
+ * The panel of a mix tile: a bus's level and balance after the sound's
+ * send to it (Send, the sound's own, kept with its preset; the rest the
+ * session's); an effect's knobs, on a bus or the master; the master's
+ * level, the views its tile may show, and the button that opens them
+ * large; for a "+", the kinds it adds, or a new bus
+ */
+function mixView(
+  engine: Engine,
+  picked: string,
+  views: NonNullable<View['views']>,
+  onMaster: (() => void) | undefined,
+  pick: (id: string) => void
+): View {
+  // Every edit applies to the engine's mix as it is when tapped
+  const mix = engine.getMix()
+  const edit = (change: (current: Mix) => Mix) =>
+    engine.setMix(change(engine.getMix()))
+  /** Adds to the mix playing, and picks what was added */
+  const added = (add: (current: Mix) => MixAdded) => {
+    const { mix: next, id } = add(engine.getMix())
+    engine.setMix(next)
+    if (id !== null) pick(mixId(id))
+  }
+  const adding = mixAddingTo(picked)
+  if (adding === 'bus') return addBusView(mix, added)
+  if (adding !== undefined) {
+    return addMixEffectView(mix, adding as MixOwner, added)
+  }
+
+  const part = mixPartOf(picked) ?? MASTER
+  const found = findMixPart(mix, part)
+  switch (found?.type) {
+    case 'bus': {
+      const { bus } = found
+      const letter = busLetter(bus.id)
+      const look = busLook(bus.id)
+      return {
+        title: `Bus ${letter}`,
+        kind: `${busName(bus)} · every sound sends to it`,
+        chip: { look, mark: letter },
+        knobs: [{ part: SENDS, key: bus.id, label: 'Send' }],
+        mixKnobs: [
+          { part: bus.id, key: 'level' },
+          { part: bus.id, key: 'pan' },
+        ],
+        color: look.ink,
+        note: 'Send is the sound’s own, kept with its preset.',
+        actions: [
+          {
+            label: 'Remove',
+            icon: ICONS.remove,
+            run: () => {
+              // Those after it move up a letter, the sound's sends too
+              edit((current) => removeMixPart(current, bus.id))
+              engine.edit((sound) => sendsWithout(sound, bus.id))
+              pick(mixId(MASTER))
+            },
+            danger: true,
+            confirm:
+              bus.effects.length === 0
+                ? 'The buses after it move up a letter, the sound’s sends with them.'
+                : 'Its effects go with it. The buses after it move up a letter, the sound’s sends with them.',
+          },
+        ],
+      }
+    }
+    case 'effect': {
+      const { effect, owner, index } = found
+      const row =
+        owner === MASTER
+          ? mix.master.effects
+          : (mix.buses.find((bus) => bus.id === owner)?.effects ?? [])
+      const move = (by: number) => {
+        const to = index + by
+        if (to < 0 || to >= row.length) return undefined
+        return () => edit((current) => moveMixEffect(current, effect.id, to))
+      }
+      const where =
+        owner === MASTER ? 'on the master' : `on bus ${busLetter(owner)}`
+      const look = busLook(owner)
+      return {
+        title: mixPartName(mix, effect.id),
+        kind: `${EFFECT_HINTS[effect.kind]} · ${where}`,
+        chip: { look, glyph: EFFECT_GLYPHS[effect.kind] },
+        knobs: [],
+        mixKnobs: EFFECT_KINDS[effect.kind].knobs.map(({ key }) => ({
+          part: effect.id,
+          key,
+        })),
+        color: owner === MASTER ? NEUTRAL_ARC : look.ink,
+        actions: [
+          { label: 'Move left', icon: ICONS.left, run: move(-1) },
+          { label: 'Move right', icon: ICONS.right, run: move(1) },
+          {
+            label: 'Remove',
+            icon: ICONS.remove,
+            run: () => {
+              edit((current) => removeMixPart(current, effect.id))
+              pick(mixId(owner))
+            },
+            danger: true,
+            confirm: 'Its knobs go with it; its tail stops.',
+          },
+        ],
+      }
+    }
+    default:
+      return {
+        title: 'Master',
+        kind: 'Every bus, through its effects, then the soft clip',
+        chip: { look: NEUTRAL_LOOK, glyph: GLYPHS.master },
+        knobs: [],
+        mixKnobs: [{ part: MASTER, key: 'level' }],
+        views,
+        color: NEUTRAL_ARC,
+        actions: onMaster
+          ? [{ label: 'Open the views', icon: ICONS.open, run: onMaster }]
+          : undefined,
+      }
+  }
+}
+
+/**
+ * The "+ Bus" panel: a bus after the last, on the next letter and in its
+ * colour, dry or with an effect on it to start with
+ */
+function addBusView(
+  mix: Mix,
+  added: (add: (current: Mix) => MixAdded) => void
+): View {
+  const next = addBus(mix).id
+  const room = next !== null
+  const look = busLook(next ?? '')
+  /** A new bus, with an effect of kind on it if given */
+  const withEffect = (kind?: EffectKind) => (current: Mix) => {
+    const bus = addBus(current)
+    if (bus.id === null || kind === undefined) return bus
+    const { mix: next } = addMixEffect(bus.mix, bus.id as MixOwner, kind)
+    return { mix: next, id: bus.id }
+  }
+  return {
+    title: 'Add a bus',
+    kind: room
+      ? `Bus ${next.toUpperCase()}: every sound sends to it`
+      : 'Every letter has its bus',
+    chip: { look, glyph: GLYPHS.plus, add: true },
+    knobs: [],
+    color: NEUTRAL_ARC,
+    choices: [
+      {
+        label: 'Dry',
+        hint: 'Straight to the master',
+        glyph: GLYPHS.sends,
+        look,
+        add: room ? () => added(withEffect()) : undefined,
+      },
+      ...EFFECT_KIND_ORDER.map((kind) => ({
+        label: EFFECT_KINDS[kind].label,
+        hint: EFFECT_HINTS[kind],
+        glyph: EFFECT_GLYPHS[kind],
+        look,
+        add: room ? () => added(withEffect(kind)) : undefined,
+      })),
+    ],
+    choiceNote:
+      'A sound sends to a bus by its letter, kept with its preset: one already sending to it is heard through it at once.',
+  }
+}
+
+/** A bus's "+", or the master's: an effect at the end of its row */
+function addMixEffectView(
+  mix: Mix,
+  owner: MixOwner,
+  added: (add: (current: Mix) => MixAdded) => void
+): View {
+  const found = findMixPart(mix, owner)
+  const row =
+    found?.type === 'bus'
+      ? found.bus.effects
+      : found?.type === 'master'
+        ? found.master.effects
+        : undefined
+  const room = row !== undefined && row.length < MAX_EFFECTS
+  const last = row?.[row.length - 1]
+  const onMaster = owner === MASTER
+  const name = onMaster ? 'the master' : `Bus ${busLetter(owner)}`
+  const look = busLook(owner)
+  return {
+    title: `Add to ${name}`,
+    kind: last
+      ? `After ${mixPartName(mix, last.id)}`
+      : onMaster
+        ? 'First on the master'
+        : 'First on the bus',
+    chip: { look, glyph: GLYPHS.plus, add: true },
+    knobs: [],
+    color: onMaster ? NEUTRAL_ARC : look.ink,
+    choices: EFFECT_KIND_ORDER.map((kind) => ({
+      label: EFFECT_KINDS[kind].label,
+      hint: EFFECT_HINTS[kind],
+      glyph: EFFECT_GLYPHS[kind],
+      look,
+      add: room ? () => added((m) => addMixEffect(m, owner, kind)) : undefined,
+    })),
+    choiceNote: onMaster
+      ? `Every bus goes through it, before the master’s level: up to ${MAX_EFFECTS}, in the order they stand.`
+      : `Up to ${MAX_EFFECTS}, in the order they stand. Its Mix at 100%, it is a return: the wet alone.`,
+  }
+}
+
+/** What the panel holds for picked, a part of the sound or a "+" */
 function viewOf(
   engine: Engine,
   sound: Sound,
@@ -662,7 +1031,7 @@ function viewOf(
   if (picked === AMP) {
     return {
       title: 'Amp',
-      kind: 'Out',
+      kind: 'Each voice’s envelope, velocity and pan',
       chip: { look: NEUTRAL_LOOK, glyph: GLYPHS.env },
       knobs: knobsOf(AMP, AMP_SPEC.knobs),
       knobless: knoblessOf(AMP),
@@ -692,7 +1061,9 @@ function viewOf(
           ? sound.inputs.length
           : found.type === 'chain'
             ? sound.chains.length
-            : sound.modulators.length
+            : found.type === 'effect'
+              ? sound.effects.length
+              : sound.modulators.length
     if (to < 0 || to >= count) return undefined
     return () => engine.edit((current) => movePart(current, picked, to))
   }
@@ -793,6 +1164,27 @@ function viewOf(
               count === 0
                 ? 'Nothing is routed from it.'
                 : `Its ${count === 1 ? 'route goes' : `${count} routes go`} with it.`,
+          },
+        ],
+      }
+    }
+    case 'effect': {
+      const { kind } = found.part
+      return {
+        title,
+        kind: `${EFFECT_HINTS[kind]} · after the amp`,
+        chip: { look: NEUTRAL_LOOK, glyph: EFFECT_GLYPHS[kind] },
+        knobs: knobsOf(picked, EFFECT_KINDS[kind].knobs),
+        color: NEUTRAL_ARC,
+        actions: [
+          { label: 'Move left', icon: ICONS.left, run: move(-1) },
+          { label: 'Move right', icon: ICONS.right, run: move(1) },
+          {
+            label: 'Remove',
+            icon: ICONS.remove,
+            run: remove(AMP),
+            danger: true,
+            confirm: 'Its knobs go with it; its tail stops.',
           },
         ],
       }
@@ -982,6 +1374,25 @@ function addView(
         })
       ),
       choiceNote: 'It moves nothing until it is routed to a knob.',
+    }
+  }
+  if (adding === 'effect') {
+    const room = sound.effects.length < MAX_EFFECTS
+    const last = sound.effects[sound.effects.length - 1]
+    return {
+      title: 'Add an effect',
+      kind: last ? `After ${partName(sound, last.id)}` : 'After the amp',
+      chip: { look: NEUTRAL_LOOK, glyph: GLYPHS.plus, add: true },
+      knobs: [],
+      color: NEUTRAL_ARC,
+      choices: EFFECT_KIND_ORDER.map((kind) => ({
+        label: EFFECT_KINDS[kind].label,
+        hint: EFFECT_HINTS[kind],
+        glyph: EFFECT_GLYPHS[kind],
+        look: NEUTRAL_LOOK,
+        add: room ? () => added((s) => addEffect(s, kind)) : undefined,
+      })),
+      choiceNote: `Every voice goes through it, in stereo, once summed: up to ${MAX_EFFECTS}, in the order they stand.`,
     }
   }
   // A chain's "+": an item at its end

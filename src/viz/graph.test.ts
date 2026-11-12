@@ -488,13 +488,17 @@ describe('graphLayout', () => {
 })
 
 describe('graphGeometry', () => {
-  const LIMITS = { inputs: 6, chains: 4, items: 6 }
+  const LIMITS = { inputs: 6, chains: 4, items: 6, effects: 4 }
 
-  /** sound() with each chain holding the given number of items */
+  /**
+   * sound() with each chain holding the given number of items, and the
+   * given number of effects after the amp
+   */
   function built(
     inputs: string[],
     chains: string[][],
-    items: number[]
+    items: number[],
+    effects = 0
   ): GeometrySound {
     const base = sound(inputs, chains)
     return {
@@ -505,6 +509,7 @@ describe('graphGeometry', () => {
           id: `x${c + 1}${k + 1}`,
         })),
       })),
+      effects: Array.from({ length: effects }, (_, k) => ({ id: `f${k + 1}` })),
     }
   }
 
@@ -522,34 +527,40 @@ describe('graphGeometry', () => {
       LIMITS
     )
     expect(geometry.inputs.map((tile) => [tile.input, tile.box])).toEqual([
-      ['i1', { x: 8, y: 6, w: 68, h: 44 }],
-      ['i2', { x: 8, y: 56, w: 68, h: 94 }],
-      ['i3', { x: 8, y: 156, w: 68, h: 44 }],
+      ['i1', { x: 8, y: 8, w: 68, h: 44 }],
+      ['i2', { x: 8, y: 58, w: 68, h: 94 }],
+      ['i3', { x: 8, y: 158, w: 68, h: 44 }],
     ])
     const [a, b] = geometry.chains
-    expect(a?.head).toEqual({ x: 80, y: 6, w: 36, h: 94 })
-    expect(b?.head).toEqual({ x: 80, y: 106, w: 36, h: 94 })
+    expect(a?.head).toEqual({ x: 80, y: 8, w: 36, h: 94 })
+    expect(b?.head).toEqual({ x: 80, y: 108, w: 36, h: 94 })
     expect(a?.items.map(({ box }) => box.x)).toEqual([119, 182])
     // The amp after A's two items and its "+", 44 wide
-    expect(a?.add).toEqual({ x: 245, y: 6, w: 44, h: 94 })
-    expect(b?.add).toEqual({ x: 182, y: 106, w: 107, h: 94 })
+    expect(a?.add).toEqual({ x: 245, y: 8, w: 44, h: 94 })
+    expect(b?.add).toEqual({ x: 182, y: 108, w: 107, h: 94 })
     // Two slots tall at most, in the rows' middle: the bus takes A and B
     // to it from their middles
-    expect(geometry.amp).toEqual({ x: 292, y: 56, w: 52, h: 94 })
-    expect(geometry.bus).toEqual({ x: 290.5, y: 53, h: 100 })
+    expect(geometry.amp).toEqual({ x: 292, y: 58, w: 52, h: 94 })
+    expect(geometry.bus).toEqual({ x: 290.5, y: 55, h: 100 })
     expect(a?.joints).toEqual([117.5, 180.5, 290.5])
     expect(b?.joints).toEqual([117.5, 290.5])
     // Each peg on the seam, beside its input in that chain's row
     expect(geometry.pegs.map((peg) => [peg.input, peg.chain, peg.y])).toEqual([
-      ['i1', 'c1', 28],
-      ['i2', 'c1', 78],
-      ['i2', 'c2', 128],
-      ['i3', 'c2', 178],
+      ['i1', 'c1', 30],
+      ['i2', 'c1', 80],
+      ['i2', 'c2', 130],
+      ['i3', 'c2', 180],
     ])
     expect(geometry.pegs.every((peg) => peg.x === 78)).toBe(true)
-    expect(geometry.addInput).toEqual({ x: 8, y: 206, w: 68, h: 30 })
-    expect(geometry.addChain).toEqual({ x: 80, y: 206, w: 209, h: 30 })
-    expect([geometry.width, geometry.height]).toEqual([352, 244])
+    expect(geometry.addInput).toEqual({ x: 8, y: 208, w: 68, h: 30 })
+    expect(geometry.addChain).toEqual({ x: 80, y: 208, w: 209, h: 30 })
+    // No inserts: their "+" under the amp, in the "+" row
+    expect(geometry.effects).toEqual([])
+    expect(geometry.addEffect).toEqual({ x: 292, y: 208, w: 52, h: 30 })
+    // The sound's out after the amp, as tall
+    expect(geometry.out).toEqual({ x: 347, y: 58, w: 96, h: 94 })
+    expect(geometry.outJoint).toBe(345.5)
+    expect([geometry.width, geometry.height]).toEqual([451, 246])
   })
 
   it('moves the inputs right past the columns of their sources', () => {
@@ -560,13 +571,13 @@ describe('graphGeometry', () => {
     )
     const inputsX = GRAPH.inputX + GRAPH.sourceW + GRAPH.inputGap
     expect(geometry.inputs.map((tile) => [tile.input, tile.box])).toEqual([
-      ['i1', { x: inputsX, y: 6, w: GRAPH.inputW, h: 44 }],
-      ['i2', { x: GRAPH.inputX, y: 6, w: GRAPH.sourceW, h: 44 }],
+      ['i1', { x: inputsX, y: 8, w: GRAPH.inputW, h: 44 }],
+      ['i2', { x: GRAPH.inputX, y: 8, w: GRAPH.sourceW, h: 44 }],
     ])
     // The read's peg on the seam between, in the middle of the slot
     expect(
       geometry.reads.map(({ from, to, x, y }) => [from, to, x, y])
-    ).toEqual([['i2', 'i1', inputsX - GRAPH.inputGap / 2, 28]])
+    ).toEqual([['i2', 'i1', inputsX - GRAPH.inputGap / 2, 30]])
     // A send's peg past the inputs, and the chains after it
     expect(geometry.pegs[0]?.x).toBe(inputsX + GRAPH.inputW + 2)
     expect(geometry.chains[0]?.head.x).toBe(
@@ -578,35 +589,77 @@ describe('graphGeometry', () => {
   it('leaves out the "+" tiles at the limits', () => {
     const inputs = ['i1', 'i2', 'i3', 'i4', 'i5', 'i6']
     const geometry = graphGeometry(
-      built(inputs, [['i1'], ['i2'], ['i3'], ['i4']], [6, 0, 0, 0]),
+      built(inputs, [['i1'], ['i2'], ['i3'], ['i4']], [6, 0, 0, 0], 4),
       LIMITS
     )
     expect(geometry.addInput).toBeUndefined()
     expect(geometry.addChain).toBeUndefined()
+    expect(geometry.addEffect).toBeUndefined()
     expect(geometry.chains[0]?.add).toBeUndefined()
     // A full chain reaches as far as its six items
     expect(geometry.amp.x).toBe(119 + 6 * 63)
     expect(geometry.chains[1]?.add?.w).toBe(6 * 63 - 3)
     // i5 and i6 feed nothing: their tiles stand after the rows
     expect(geometry.inputs.slice(-2).map((tile) => tile.box.y)).toEqual([
-      206, 256,
+      208, 258,
     ])
-    expect(geometry.height).toBe(256 + 44 + 8)
+    // The "+" row stays, empty as it is
+    expect(geometry.height).toBe(308 + GRAPH.addRow + 8)
+  })
+
+  it('stands the inserts after the amp, as tall as it, the out next', () => {
+    // The mockup's sound with two inserts: the amp at 292, 52 wide
+    const two = built(
+      ['i1', 'i2', 'i3'],
+      [
+        ['i1', 'i2'],
+        ['i2', 'i3'],
+      ],
+      [2, 1],
+      2
+    )
+    const geometry = graphGeometry(two, LIMITS)
+    expect(geometry.amp).toEqual({ x: 292, y: 58, w: 52, h: 94 })
+    expect(geometry.effects).toEqual([
+      { effect: 'f1', box: { x: 347, y: 58, w: 60, h: 94 } },
+      { effect: 'f2', box: { x: 410, y: 58, w: 60, h: 94 } },
+    ])
+    expect(geometry.fxJoints).toEqual([345.5, 408.5])
+    // Their "+" under the amp and them, to the last one's edge
+    expect(geometry.addEffect).toEqual({ x: 292, y: 208, w: 178, h: 30 })
+    expect(geometry.out).toEqual({ x: 473, y: 58, w: 96, h: 94 })
+    expect(geometry.outJoint).toBe(471.5)
+    expect(geometry.width).toBe(473 + 96 + 8)
+    // A frame: the out fills what the rest leave of it
+    const one = built(['i1'], [['i1']], [1], 1)
+    const framed = graphGeometry(one, LIMITS, 451)
+    expect(framed.amp).toMatchObject({ x: 229, w: 52 })
+    expect(framed.effects[0]?.box).toMatchObject({ x: 284, w: 60 })
+    expect(framed.out).toMatchObject({ x: 347, w: 96 })
+    expect(framed.width).toBe(451)
+    // Wider: they widen with the items, the out taking the rest
+    const wide = graphGeometry(one, LIMITS, 600)
+    const box = wide.effects[0]?.box
+    expect(box?.w).toBe(wide.chains[0]?.items[0]?.box.w)
+    expect(wide.amp.x + wide.amp.w + GRAPH.seam).toBe(box?.x)
+    expect((box?.x ?? 0) + (box?.w ?? 0) + GRAPH.seam).toBe(wide.out.x)
+    expect(wide.out.x + wide.out.w + GRAPH.end).toBe(600)
   })
 
   it('stands the amp in the middle of many rows, a bus taking them to it', () => {
     const four = built(['i1'], [['i1'], ['i1'], ['i1'], ['i1']], [1, 1, 1, 1])
     // Four rows 194 tall: the amp two slots, the bus from A's middle to D's
     const rest = graphGeometry(four, LIMITS)
-    expect(rest.amp).toMatchObject({ y: 56, h: 94 })
-    expect(rest.bus).toMatchObject({ y: 28, h: 150 })
-    // A wider amp stands taller, three fifths of its width
+    expect(rest.amp).toMatchObject({ y: 58, h: 94 })
+    expect(rest.bus).toMatchObject({ y: 30, h: 150 })
+    // A wider out stands taller, three fifths of its width, the amp too
     const wide = graphGeometry(four, LIMITS, 1000)
-    expect(wide.amp.w).toBe(GRAPH.ampFill * GRAPH.stretch)
-    expect(wide.amp).toMatchObject({ y: 45, h: 115 })
+    expect(wide.out.w).toBe(GRAPH.outW * GRAPH.stretch)
+    expect(wide.out).toMatchObject({ y: 47, h: 115 })
+    expect(wide.amp).toMatchObject({ y: 47, h: 115 })
     // Two rows of one slot: the amp as tall as they are, no bus
     const two = built(['i1'], [['i1'], ['i1']], [1, 1])
-    expect(graphGeometry(two, LIMITS).amp).toMatchObject({ y: 6, h: 94 })
+    expect(graphGeometry(two, LIMITS).amp).toMatchObject({ y: 8, h: 94 })
     expect(graphGeometry(two, LIMITS).bus).toBeUndefined()
   })
 
@@ -614,16 +667,16 @@ describe('graphGeometry', () => {
     // A chain fed by four inputs: its row four slots, 194 tall
     const fed = built(['i1', 'i2', 'i3', 'i4'], [['i1', 'i2', 'i3', 'i4']], [1])
     const a = graphGeometry(fed, LIMITS).chains[0]
-    expect(a?.head).toMatchObject({ y: 6, h: 194 })
-    expect(a?.items[0]?.box).toMatchObject({ y: 56, h: 94 })
-    expect(a?.add).toMatchObject({ y: 56, h: 94 })
+    expect(a?.head).toMatchObject({ y: 8, h: 194 })
+    expect(a?.items[0]?.box).toMatchObject({ y: 58, h: 94 })
+    expect(a?.add).toMatchObject({ y: 58, h: 94 })
     // Their middle is the row's, where the joints stand
     const box = a?.items[0]?.box
-    expect((box?.y ?? 0) + (box?.h ?? 0) / 2).toBe(6 + 194 / 2)
+    expect((box?.y ?? 0) + (box?.h ?? 0) / 2).toBe(8 + 194 / 2)
     // A row of two slots or one: as tall as it
     const two = built(['i1', 'i2'], [['i1', 'i2']], [1])
     expect(graphGeometry(two, LIMITS).chains[0]?.items[0]?.box).toMatchObject({
-      y: 6,
+      y: 8,
       h: 94,
     })
   })
@@ -631,38 +684,94 @@ describe('graphGeometry', () => {
   it('draws an amp one slot tall when there are no chains', () => {
     const geometry = graphGeometry(built([], [], []), LIMITS)
     expect(geometry.chains).toEqual([])
-    expect(geometry.amp).toEqual({ x: 166, y: 6, w: 52, h: 44 })
+    expect(geometry.amp).toEqual({ x: 166, y: 8, w: 52, h: 44 })
+    expect(geometry.out).toEqual({ x: 221, y: 8, w: 96, h: 44 })
     expect(geometry.bus).toBeUndefined()
-    expect(geometry.addChain).toEqual({ x: 80, y: 6, w: 83, h: 30 })
+    // The "+" row under that one slot
+    expect(geometry.addChain).toEqual({ x: 80, y: 58, w: 83, h: 30 })
+    expect(geometry.height).toBe(58 + 30 + 8)
   })
 
-  it('shares a wider frame among the tiles, up to twice their width', () => {
+  it('widens the items, the amp and its inserts to squares first', () => {
+    // Four inputs into one chain: its item two slots tall, 94, and the
+    // amp and its insert as tall; at rest they are 60, 52 and 60 wide
+    const four = built(
+      ['i1', 'i2', 'i3', 'i4'],
+      [['i1', 'i2', 'i3', 'i4']],
+      [1],
+      1
+    )
+    const rest = graphGeometry(four, LIMITS, 451)
+    expect(rest.chains[0]?.items[0]?.box).toMatchObject({ w: 60, h: 94 })
+    expect(rest.amp).toMatchObject({ w: 52, h: 94 })
+    expect(rest.effects[0]?.box).toMatchObject({ w: 60, h: 94 })
+    expect(rest.out.w).toBe(GRAPH.outW)
+    // A frame too narrow pans: everything stays at rest
+    const narrow = graphGeometry(four, LIMITS, 300)
+    expect(narrow.width).toBe(451)
+    expect(narrow.amp).toEqual(rest.amp)
+    // 69 more go to them alone, each part of the way, the rest as they
+    // are and the out taking what rounding leaves
+    const part = graphGeometry(four, LIMITS, 520)
+    expect(part.inputs[0]?.box.w).toBe(GRAPH.inputW)
+    expect(part.chains[0]?.items[0]?.box.w).toBe(81)
+    expect(part.amp.w).toBe(78)
+    expect(part.effects[0]?.box.w).toBe(81)
+    expect(part.chains[0]?.add?.w).toBe(GRAPH.addMin)
+    expect(part.out.x + part.out.w + GRAPH.end).toBe(520)
+    // Square, as wide as they are tall, and the rest begun on
+    const square = graphGeometry(four, LIMITS, 600)
+    expect(square.chains[0]?.items[0]?.box).toMatchObject({ w: 94, h: 94 })
+    expect(square.amp).toMatchObject({ w: 94, h: 94 })
+    expect(square.effects[0]?.box).toMatchObject({ w: 94, h: 94 })
+    expect(square.inputs[0]?.box.w).toBe(75)
+    expect(square.width).toBe(600)
+    // Past that they stay square, the amp and its insert as tall as the
+    // wider out stands (three fifths of it), the items two slots
+    const huge = graphGeometry(four, LIMITS, 1000)
+    expect(huge.chains[0]?.items[0]?.box).toMatchObject({ w: 94, h: 94 })
+    expect(huge.amp).toMatchObject({ w: 115, h: 115 })
+    expect(huge.effects[0]?.box).toMatchObject({ w: 115, h: 115 })
+    expect(huge.out).toMatchObject({ w: GRAPH.outW * GRAPH.stretch, h: 115 })
+  })
+
+  it('then widens the rest, the inputs least, up to their most', () => {
     const one = built(['i1'], [['i1']], [1])
-    // At rest, one item and its "+": the amp at 119 + 63 + 47, 96 wide
-    const rest = graphGeometry(one, LIMITS, 333)
+    // At rest, one item and its "+": the amp at 119 + 63 + 47, 52 wide,
+    // the out after it, 96 wide: a phone's 390 has room for it
+    const rest = graphGeometry(one, LIMITS, 388)
     expect(rest.inputs[0]?.box.w).toBe(68)
-    expect(rest.amp).toMatchObject({ x: 229, w: 96 })
+    expect(rest.amp).toMatchObject({ x: 229, w: 52 })
+    expect(rest.out).toMatchObject({ x: 284, w: 96 })
     // A frame too narrow pans: everything stays at rest
     const narrow = graphGeometry(one, LIMITS, 300)
-    expect(narrow.width).toBe(333)
+    expect(narrow.width).toBe(388)
     expect(narrow.chains).toEqual(rest.chains)
-    // 187 more: the input, the item, the "+" and the amp widen about 1.7
-    // times (the head stays 36), and the amp takes what rounding leaves
-    const wide = graphGeometry(one, LIMITS, 520)
-    expect(wide.inputs[0]?.box.w).toBe(115)
-    expect(wide.chains[0]?.head).toMatchObject({ x: 127, w: 36 })
-    expect(wide.chains[0]?.items[0]?.box).toMatchObject({ x: 166, w: 101 })
-    expect(wide.chains[0]?.add).toMatchObject({ x: 270, w: 74 })
-    expect(wide.amp).toMatchObject({ x: 347, w: 165 })
-    expect(wide.width).toBe(520)
-    expect(wide.pegs[0]?.x).toBe((8 + 115 + 127) / 2)
-    // At most twice as wide, the amp too; past that the frame's rest is
-    // left empty
+    // A row of one slot: the item, the amp already as wide as they are
+    // tall or wider, stay so; 92 more widen the "+" and the out about
+    // 1.5 times, the input half as much (the head stays 36), and the out
+    // takes what rounding leaves
+    const wide = graphGeometry(one, LIMITS, 480)
+    expect(wide.inputs[0]?.box.w).toBe(85)
+    expect(wide.chains[0]?.head).toMatchObject({ x: 97, w: 36 })
+    expect(wide.chains[0]?.items[0]?.box).toMatchObject({ x: 136, w: 60 })
+    expect(wide.chains[0]?.add).toMatchObject({ x: 199, w: 67 })
+    expect(wide.amp).toMatchObject({ x: 269, w: 52 })
+    expect(wide.out).toMatchObject({ x: 324, w: 148 })
+    expect(wide.width).toBe(480)
+    expect(wide.pegs[0]?.x).toBe((8 + 85 + 97) / 2)
+    // The "+" and the out at most twice as wide, the input one and a
+    // half times; past that the frame's rest is left empty
     const huge = graphGeometry(one, LIMITS, 1000)
-    expect(huge.inputs[0]?.box.w).toBe(GRAPH.inputW * GRAPH.stretch)
-    expect(huge.chains[0]?.items[0]?.box.w).toBe(GRAPH.itemW * GRAPH.stretch)
-    expect(huge.amp).toMatchObject({ x: 401, w: GRAPH.ampFill * GRAPH.stretch })
-    expect(huge.width).toBe(401 + 192 + 8)
+    expect(huge.inputs[0]?.box.w).toBe(GRAPH.inputW * GRAPH.inputStretch)
+    expect(huge.chains[0]?.items[0]?.box.w).toBe(GRAPH.itemW)
+    expect(huge.chains[0]?.add?.w).toBe(GRAPH.addMin * GRAPH.stretch)
+    expect(huge.amp).toMatchObject({ x: 307, w: GRAPH.ampW })
+    expect(huge.out).toMatchObject({
+      x: 362,
+      w: GRAPH.outW * GRAPH.stretch,
+    })
+    expect(huge.width).toBe(362 + 192 + 8)
   })
 
   it('grows the slots in a taller frame, up to twice their height', () => {
@@ -742,6 +851,33 @@ describe('roomBeside', () => {
   it('keeps the tiles clear of the whole dock across the frame', () => {
     const dock = { left: 0, top: 200, right: 420, bottom: 330 }
     expect(roomBeside(frame, dock, 12, 44)).toEqual(roomBeside(frame, dock, 12))
+  })
+
+  it('takes a dock stood in from the sides as across or down', () => {
+    // 8 in from the frame's left, right and bottom: across, and what it
+    // leaves under it covered too
+    const under = { left: 18, top: 200, right: 402, bottom: 312 }
+    expect(roomBeside(frame, under, 0, undefined, 8)).toEqual({
+      w: 400,
+      h: 180,
+      right: 0,
+      bottom: 120,
+    })
+    // 8 in from its top, right and bottom: down
+    const beside = { left: 250, top: 28, right: 402, bottom: 312 }
+    expect(roomBeside(frame, beside, 0, 44, 8)).toEqual({
+      w: 348,
+      h: 300,
+      right: 160,
+      bottom: 0,
+    })
+    // Without the inset, neither: it leaves the whole frame
+    expect(roomBeside(frame, beside, 0, 44)).toEqual({
+      w: 400,
+      h: 300,
+      right: 0,
+      bottom: 0,
+    })
   })
 
   it('never leaves less than nothing', () => {

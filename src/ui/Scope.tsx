@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { WAVEFORM_SIZE, type Engine } from '../engine/engine'
+import { WAVEFORM_SIZE, type Engine, type OutputSource } from '../engine/engine'
 import {
   crossingFraction,
   findRisingEdge,
@@ -78,6 +78,7 @@ export interface ScopeStats {
  */
 export function Scope({
   engine,
+  source = 'master',
   timing = true,
   onStats,
   className = '',
@@ -85,6 +86,8 @@ export function Scope({
   pictureColor = '#e4e4e7',
 }: {
   engine: Engine
+  /** The output it shows: the master's unless another is named */
+  source?: OutputSource
   /** The cost readout is shown */
   timing?: boolean
   onStats?: (stats: ScopeStats) => void
@@ -188,7 +191,7 @@ export function Scope({
     const render = (): boolean => {
       const { width, height } = canvas
       if (!sized || !width || !height) return false
-      if (!engine.readWaveform(samples)) samples.fill(0)
+      if (!engine.readWaveform(samples, source)) samples.fill(0)
       const edge = findRisingEdge(samples, 0, SEARCH_END, HYSTERESIS)
       const start = edge < 0 ? 0 : edge
       const silent = isSilent(samples, SILENCE, start, start + WINDOW)
@@ -339,14 +342,16 @@ export function Scope({
       unsubscribeSound()
       observer.disconnect()
     }
-  }, [engine, picture, pictureColor])
+  }, [engine, source, picture, pictureColor])
 
   return (
     <div className={`relative overflow-hidden contain-strict ${className}`}>
       <canvas
         ref={canvasRef}
         role="img"
-        aria-label="Output waveform"
+        aria-label={
+          source === 'master' ? 'The output’s waveform' : 'The sound’s waveform'
+        }
         className="block h-full w-full"
       />
       <span

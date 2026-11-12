@@ -228,6 +228,16 @@ as a graph of flat tiles, flowing left to right.
   blurred (since 2026-11-12: ashon asked for a blur, a hue and a grain,
   then found the knobs lost on that busier glass and kept the blur
   alone).
+- **Margins.** In the editor's card everything stands 8 px from the
+  card's edges, and its blocks 8 px apart: the rack (a row or a column),
+  the graph's tiles, and the panel or its bar, which stands in from the
+  card's edges as well rather than flush with them (since 2026-11-12,
+  ashon: "전체 UI 배치 부분도 여백을 깔끔하게 정돈해 줘"; the tiles had
+  stood 6 from the top, the rack 12 above them, the panel 20 past
+  them). The graph's own end margin is the gap before the panel. Out
+  of the card the page keeps its own: 16 px at the sides, 12 between
+  the editor, the play section and the status line (8 on a short
+  screen), the keyboard's header 8 above its keys.
 - **Dragging.** A tile held (a touch kept still 450 ms, as a knob is
   held; a mouse moved with its button down) lifts and follows the
   finger, picked; a bar on a seam shows where it would go, and near an
