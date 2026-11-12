@@ -31,24 +31,24 @@ const page =
   'flex h-full flex-col px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]'
 
 /**
- * How the height is shared, the controls out. The keys stand at most as
- * long as their width asks (PlaySurface's --key-length, 14rem until it is
- * measured), and at most 45% of the screen, under what stands above them
- * (--play-head: the header and its gap, 3.25rem, and on a narrow screen
- * the keys' navigator in a strip of its own). On a roomy screen
+ * How the height is shared, the controls out. The keys stand at most 10rem
+ * long, whatever the width, and at most 45% of a short screen, under what
+ * stands above them (PlaySurface's --play-head: the header and its gap,
+ * 3.25rem, and on a narrow screen the keys' navigator in a strip of its
+ * own): one length to lay the rest out around. On a roomy screen
  * (index.css) they stand at that and the editor takes the rest: the keys
  * stay put as inputs and chains come and go, and the graph pans when they
- * do not fit. Held upright (under md),
- * the editor keeps what it needs first and the keys take the rest up to
- * that length; past it, the editor grows, its tiles with it (graph.ts),
- * and what they cannot fill is left an empty canvas.
+ * do not fit. Held upright (under md), the editor keeps what it needs
+ * first and the keys take the rest up to that length; past it, the editor
+ * grows, its tiles with it (graph.ts), and what they cannot fill is left
+ * an empty canvas.
  */
 const EDITOR_SIZE = 'max-md:grow roomy:flex-1'
 // Written out whole, for Tailwind to find
 const KEYS_SIZE = [
   'flex-1 max-md:grow-[999]',
-  'max-md:max-h-[calc(var(--play-head,3.25rem)_+_min(var(--key-length,14rem),45dvh))]',
-  'roomy:flex-[0_0_calc(var(--play-head,3.25rem)_+_min(var(--key-length,14rem),45dvh))]',
+  'max-md:max-h-[calc(var(--play-head,3.25rem)_+_min(10rem,45dvh))]',
+  'roomy:flex-[0_0_calc(var(--play-head,3.25rem)_+_min(10rem,45dvh))]',
 ].join(' ')
 
 /**

@@ -113,8 +113,6 @@ const typing = (target: EventTarget | null): boolean =>
 /** What the surface's box has room for */
 interface Fit {
   octaves: number
-  /** How tall the keys would be, keysFit's length */
-  length: number
   grid: PadGrid
   /** Whether the header has room for the keys' navigator */
   wide: boolean
@@ -122,16 +120,15 @@ interface Fit {
 
 const sameFit = (a: Fit, b: Fit) =>
   a.octaves === b.octaves &&
-  a.length === b.length &&
   a.grid.columns === b.grid.columns &&
   a.grid.rows === b.grid.rows &&
   a.wide === b.wide
 
 /**
  * Where notes are played, on piano keys or on pads (settings.kind), sized
- * by className in the page's column: App gives it the rest, or, on a roomy
- * screen, the keys' own length, which the section holds as --key-length
- * (the pads stand as tall), under what stands above them, --play-head.
+ * by className in the page's column: App gives it the rest, at most the
+ * keys' length (the pads stand as tall), under what stands above them,
+ * which the section holds as --play-head.
  * Keys: as many octaves as fit at a finger's width (one on a phone held
  * upright, more on a wide window: keysFit), standing where keysPlace puts
  * them (one octave from middle C up, more around it); the arrows move
@@ -163,7 +160,6 @@ export function PlaySurface({
   const [starts, setStarts] = useState(STARTS)
   const [fit, setFit] = useState<Fit>({
     octaves: 1,
-    length: 0,
     grid: { columns: 4, rows: 4 },
     wide: false,
   })
@@ -288,7 +284,6 @@ export function PlaySurface({
   // gap (2.75rem and 0.5rem), and the navigator's strip and its gap
   const style = {
     '--play-head': inStrip ? '5.25rem' : '3.25rem',
-    ...(fit.length > 0 && { '--key-length': `${fit.length}px` }),
   } as CSSProperties
   return (
     <section

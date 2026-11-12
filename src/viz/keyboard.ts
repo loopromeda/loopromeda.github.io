@@ -64,14 +64,10 @@ export const MAX_WHITE = 60
 const OCTAVES = 3
 /** C1 to C8, the notes the keys reach */
 const RANGE = 7
-/** How long a white key is for its width, where the page lets it choose */
-export const KEY_LENGTH = 5.5
 
-/** What keys a box holds: how many octaves, and how long they would be */
+/** What keys a box holds: how many octaves */
 export interface KeysFit {
   readonly octaves: number
-  /** KEY_LENGTH times a white key's width (CSS px) */
-  readonly length: number
 }
 
 /**
@@ -87,8 +83,7 @@ export function keysFit(width: number): KeysFit {
     Math.max(Math.min(fit, Math.max(OCTAVES, narrow)), 1),
     RANGE
   )
-  const white = width / whiteCount(octaves)
-  return { octaves, length: Math.round(white * KEY_LENGTH) }
+  return { octaves }
 }
 
 /** Middle C: the keys stand around it */

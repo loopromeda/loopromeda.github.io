@@ -332,6 +332,10 @@ right, benchmark within budget.
         and on a roomy screen (md wide, 30rem tall) the keys stand 5.5
         times as long as a white key is wide, at most 45% of the screen,
         the editor taking the rest (`keysFit` in `src/viz/keyboard.ts`).
+        2026-11-12, asked for by ashon (a length that moved with the
+        width made the layout hard to keep): the keys stand at most
+        10rem whatever the width, still at most 45% of a short screen
+        (`KEYS_SIZE` in `src/App.tsx`).
   - [x] Pads, 2026-11-10, asked for by ashon (piano keys or launchpad
         pads, either to choose): the button next to the patch opens Keys
         or Pads, and for the pads a root (C to B) and a scale (eleven,

@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import {
   BLACK_LENGTH,
   BLACK_WIDTH,
-  KEY_LENGTH,
   MAX_WHITE,
   MIN_VELOCITY,
   MIN_WHITE,
@@ -187,19 +186,15 @@ describe('keysFit', () => {
 
   it('adds octaves where a white key would be wider than a hand wants', () => {
     // A desktop window: 3 octaves would make 78 px white keys
-    expect(keysFit(1722)).toEqual({
-      octaves: 4,
-      length: Math.round((1722 / 29) * KEY_LENGTH),
-    })
+    expect(keysFit(1722)).toEqual({ octaves: 4 })
     expect(1722 / 29).toBeLessThanOrEqual(MAX_WHITE)
     expect(keysFit(1888).octaves).toBe(5)
     // No more than C1 to C8
     expect(keysFit(10000).octaves).toBe(7)
   })
 
-  it('asks for keys KEY_LENGTH times as long as a white key is wide', () => {
-    expect(keysFit(898).length).toBe(Math.round((898 / 22) * KEY_LENGTH))
-    expect(keysFit(0)).toEqual({ octaves: 1, length: 0 })
+  it('holds one octave in a box not yet measured', () => {
+    expect(keysFit(0)).toEqual({ octaves: 1 })
   })
 })
 
