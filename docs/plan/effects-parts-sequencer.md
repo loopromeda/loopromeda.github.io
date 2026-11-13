@@ -154,12 +154,14 @@ kept: a delay holds a megabyte of lines, and most racks never play one.
 - A rack **rests** once its input has been silent and its output under
   −120 dB for 2.5 s, and wakes with the next sound.
 
-The output path (`src/dsp/output.ts`): a `Strip` is a part's synth (its
-clip off, its voices summed in stereo, each where the amp's pan puts it,
-since 2026-11-12), its inserts, its fader (a level and a balance,
-`setFader`, since 2026-11-13), and a send to each bus, each gliding
-(`Ramp`); at full in the middle the fader leaves the block untouched.
-The `Mixer` renders every strip, sums each into the buses that are on,
+The output path (`src/dsp/output.ts`): a `Strip` is a sound's synth
+(its clip off, its voices summed in stereo, each where the amp's pan
+puts it, since 2026-11-12), its inserts and a send to each bus, each
+gliding (`Ramp`). A `Part` is a fader (a level and a balance,
+`setFader`, since 2026-11-13) over its strips: the synth's one, the
+kit's sixteen (2, below); at full in the middle the fader leaves the
+block untouched. The `Mixer` renders every part's strips, each through
+its inserts and its part's fader, sums each into the buses that are on,
 runs each bus through its effects and adds it at its level and its
 balance, then runs the master's effects, scales by the master and soft
 clips each side. A strip's and a bus's balance (`sideGain`) moves
@@ -213,7 +215,14 @@ master a full rack too (24 effects, choruses and reverbs in turn):
 1.02 ms of the block's 2.67 (1.06 with the buses' pan, within the
 noise). A full rack of each kind: four choruses
 0.038 ms, four reverbs 0.031, four delays 0.006. Measure CPU times the
-whole output (`chainStressOutput`).
+whole output (`chainStressOutput`). On the Fold (SM-F971N, Chrome 157,
+the deployed site), 2026-11-13: 0.41, 0.68, 0.98 and 1.28 ms for 8, 16,
+24 and 32 voices, 15% to 48% of a 2.67 ms block, where the sound alone
+took 0.51 to 2.13 ms before its Math was made cheaper (2026-11-11). At
+the default 16 voices the heaviest output, every effect slot taken, is
+within the budget of a third of a block (0.89 ms); 24 voices just past
+it, 32 within half. The browser's JIT runs it faster than the Node bench
+does (1.04 ms for 16 voices), so the two are not compared.
 
 ### What the output looks like
 
@@ -244,7 +253,10 @@ none kept shows the master's. `OutputTap`
 frame however many views draw it, since a second read of the spectrum
 would smooth it twice. Checked in a frame with the sound's send to A at
 0: a note held moves the Out's and the strip's views, the Master's not.
-The views
+On the Fold (Chrome 157, the deployed site) the part's views and meter
+move with its sound (ashon, 2026-11-13: "나머지도 잘 동작하네"), so
+Chrome renders an analyser reached through a gain of 0; Safari on iOS
+is still to try. The views
 (`src/ui/MasterViews.tsx`, their math in `src/viz/master.ts`), each a
 canvas drawn every frame while the audio runs:
 
@@ -307,7 +319,7 @@ the same height, so the keys under them stay put.
   as tall as the buses beside it (two rows at least), under its name,
   its fader's level and its sends the sound's own view and meter, as
   the Out has them, a peg on the seam
-  to each as long as its send; each bus a row, as a chain is, in its
+  to each as long as its send (the strips since 2026-11-13 as below); each bus a row, as a chain is, in its
   letter's colour (the chains' colours, A orange, B violet, C lime, D
   pink, so that a letter wears one colour in either view): a head with
   its letter and level, its effects after it and a "+" filling the row
@@ -353,34 +365,155 @@ rung out ten seconds after the key (`src/state/factory.test.ts`).
 A delay's time in beats once the sequencer has a tempo; more effect
 kinds (a phaser, an EQ, a compressor); a picture on an effect's tile;
 dragging an effect to move it, along its row or to another, as an item
-is dragged; a strip for each part once there are parts (the sound's
-has its fader, its meter and its view); a bus fed by another (a delay
-into
-the reverb's bus) rather than in a row.
+is dragged; a bus fed by another (a delay into the reverb's bus) rather
+than in a row.
 
 ## 2. Parts and the kit
 
-Not started. What it needs:
+Under way since 2026-11-13, asked for by ashon before the sequencer
+("2단계 먼저 진행하면 될 것 같아"): the kit plays, maps presets onto its
+pads and is kept in the session. Still to do: the kit as its own preset kind (a kit
+file, saved and loaded whole), and a hat's choke.
 
-- **A kit**: 16 pad sounds, each a whole sound (inputs, chains,
-  modulators, routes, its sends to the buses), and inserts for the kit
-  as a whole. A factory kit (kick, snare, hats, toms, clap,
-  cowbell and more, from the Drums presets).
-- **The audio thread** plays two parts and mixes them: two strips into
-  the one mixer, the synth's voices through its inserts, and the kit's
-  pads through the kit's.
-  Each pad is a ChainSynth of its own, with few voices (a hit rarely
-  overlaps itself), so the pads' state never mixes; the cost of 16 of
-  them is measured before the voice counts are fixed.
-- **The engine and the session**: the sound edited is the synth's or
-  the picked pad's; the kit is kept in the session and in its own preset
-  kind (a kit file), the synth's presets as now.
-- **The header's Part switch** and, with Kit, a surface of 16 pads that
-  plays and picks.
+### The kit
+
+- **Sixteen pads** (`src/state/kit.ts`), each a preset mapped onto it,
+  any of them, played as it is up to its amp (inputs, chains,
+  modulators, routes), its name the preset's or its place's (Pad 1). A
+  pad's sound keeps the inserts and sends its preset has, as any sound
+  does, but in the kit they go unheard: the kit's chain stands in their
+  place (below). The session keeps the pads beside the synth's sound
+  (`loopromeda.kit`, version 1: each pad's preset and its sound as last
+  played, and the kit's chain), a pad read as a preset file is, so a
+  bad one reads as what can be made of it. The part played and the pad
+  picked are the device's (`loopromeda.part`).
+- **Mapped, not edited**, chosen by ashon 2026-11-13. Asked first
+  whether the kit could be the user's to edit ("여러 보이싱들을 키트에
+  매핑하고 쓸 수 있으면 좋을 것 같거든. 다만 이 키트에서는 별도 체인
+  구성은 하지 않도록"), ashon chose, of the readings put to them, the
+  pads mapping presets alone ("패드에선 매핑만"), and a pad following its
+  preset ("따라 바뀜 (참조)"). A sound is made in the synth and saved as
+  a preset; the kit maps presets onto its pads and edits nothing of
+  their sounds, only its own chain. A pad refers to its preset: saved
+  over in the synth, the preset plays anew on every pad it is mapped
+  onto, and a reload maps each pad again as its preset is then (a new
+  version's factory preset too); a preset renamed is renamed on its
+  pads, one deleted leaves its pads the sound they had, of no preset.
+  The pads as first built were copies, each edited in the kit and saved
+  as a preset of its own.
+- **The factory kit** (`FACTORY_KIT`, `src/state/factory.ts`), the
+  bottom row first: Kick, Snare, Closed Hat, Open Hat, Low Tom, Tom,
+  High Tom, Clap; then Rim, Cowbell, Shaker, Crash, Boom, Conga, Clave
+  and Zap. Eight are new Drums presets (Low Tom, High Tom, Rim, Shaker,
+  Crash, Boom, Conga, Clave), under the clip and rung out as every
+  preset is (`factory.test.ts`). A session with no kit kept starts with
+  it; a kit kept stays as it was.
+- **One chain for the kit**, chosen by ashon 2026-11-13 ("킷 안에 개별
+  사운드마다 믹서 체인을 다르게 해야하던데.. 이 부분은 하나로 관리하게
+  할 수는 없을까?"): the pads, each up to its amp, are summed, then go
+  through the kit's inserts (up to four), its fader (a level and a
+  balance) and its sends, the same whichever pad is picked, as a desk's
+  group or a drum bus. The inserts and the sends are the kit's chain
+  (`KitChain`), kept with the kit (`loopromeda.kit`, and with a kit
+  file when there is one), as a sound keeps its own with its preset;
+  the fader is the mix's, as the synth's is. A bus removed moves the
+  kit's sends up a letter, as it does the synth's.
+- **In the Sound view, not the Mix**, asked by ashon the same day ("키트
+  디자인 부분을 사운드 채널 안으로 다 넣는건 어떨까"), the shape
+  recommended chosen ("권장안으로"): the chain stood first on the kit's
+  strip in the Mix, a row of inserts after it as a bus's, which widened
+  the synth's strip and moved every bus along. The synth's chain is in
+  its sound; the kit is an instrument as much, so its chain stands in
+  its sound's place and travels with the kit. Pads lost their own
+  inserts with it: none of the factory kit's had any, and two rows of
+  FX after a pad's amp, its own and the kit's, read as one too many. A
+  pad's own sends were the first build's, before either: ashon found
+  each pad wanting its mix set apart.
+- **A pad is gated**: a touch strikes its sound at C4 (`PAD_NOTE`) and
+  lifting the finger releases it, so a pad held sustains as a key held
+  does; the touch's place on the pad gives its velocity, and moving the
+  finger up or down its Slide, as on the Pads surface.
+
+### The audio thread
+
+- The worklet plays **two parts**, the synth and the kit, into the one
+  mixer, in the mix's order (`PARTS`, `src/state/mix.ts`), its outputs
+  after the master each part's own sound, for its views. The kit is a
+  group (`Part` with inserts, `src/dsp/output.ts`): its strips summed
+  into one block, which goes once through the kit's chain's inserts,
+  its fader and its sends. A pad's player holds its synth alone, so its
+  sound's own inserts are never set (`src/worklet/processor.ts`); the
+  chain comes whole on each change (`kitChain`, `protocol.ts`). A strip
+  silent (no voice sounding, its inserts at rest) is passed over, its
+  synth still stepped so its LFOs run on; so is the kit's sum when no
+  pad sounds and its inserts rest.
+- **Each pad is a ChainSynth of its own**, of four voices
+  (`PAD_VOICES`): a hit rarely overlaps more than a few of its own, and
+  a fifth steals the oldest; the pads' state never mixes. A note, a
+  Slide, a sound or a knob names its pad (`protocol.ts`); the wheel
+  turns every sound's, panic silences both parts.
+- **Measured** (M3 Max, `pnpm bench`, `src/state/kit.bench.ts`), one
+  128-frame block of the whole mix: the factory kit, every pad's four
+  voices sounding, summed through the kit's chain, 0.27 ms, a quarter
+  of the heaviest output at 16 voices (1.01 ms); the kit at rest 0.002 ms. By that ratio about
+  0.2 ms on the Fold, not measured there: Measure CPU does not time the
+  kit yet.
+
+### The surface and the editor
+
+The two fixed parts became tracks on 2026-11-13 (`tracks-and-song.md`,
+B): the Part switch below is now the track's button and its popover
+(`src/ui/TrackPicker.tsx`), and the Mix holds a strip for each track,
+84 px wide at rest. What follows is as it was built before that.
+
+- **The Part switch** (`src/ui/PartSwitch.tsx`), Synth | Kit, at the
+  left of the keyboard's header before the patch. In a header under
+  26rem only the part chosen stands, and a tap on it switches; the
+  patch's chevron goes there, its room the name's. At 360 px the patch
+  reads four or five letters, as before the switch it read eight or
+  nine; at 320 px none.
+- **With Kit** the surface is the kit's 16 pads (`src/ui/KitPads.tsx`),
+  laid out by `kitGrid` (`src/viz/pads.ts`) as the grid of the most
+  square pads: 8 × 2 in a window 730 px wide, 4 × 4 at 360. A tap
+  plays a pad and picks it, ringed, its preset the patch's and the
+  panel's. The octave buttons and the surface's picker go; the mod
+  wheel stays, turning every pad's routes from it, its Route dimmed:
+  routes are a sound's, made in the synth. Computer keys A to ; and Q
+  to Y play them.
+- **The editor** shows the part played: the synth's sound, or with Kit
+  the kit in its place (`KitGraph`, laid out by `src/viz/kitGraph.ts`):
+  the 16 pads in a block, four by four as the surface stands them, each
+  its preset's name, then the kit's chain, its FX, their "+" and the
+  Kit Out holding the kit's output, whose panels say they are the kit's
+  (Kit Chorus, on the kit, after every pad's amp). The rack holds only
+  the Sound | Mix switch and a line saying a pad plays a preset as it
+  is. A pad's tile picks that pad; its panel names its preset and maps
+  another with a tap, from a row of its category's presets (the Drums
+  for a pad of none), or from all of them, the presets' popover, which
+  then says it maps onto the pad and has no Save. Under the editor the
+  engine takes only the chain of an edit made with a pad picked
+  (`kitChainOf`, through `setSound`): a pad's sound is its preset's.
+  The Mix stands the two parts' strips one over the other (Synth, Kit)
+  at the left of the buses, faders alone, each with its own view and
+  meter; the one played shows its sends by its pegs. Tapping the
+  other one plays it.
+- **The strips' views**, 2026-11-13, asked for by ashon ("믹스
+  탭에서도 신스나 키트 부분에 시각화가 하단에 올 수 있게"): two strips
+  in the column of two rows were 44 px each, too short for a view under
+  the name, so it stood beside it, a sliver 10 px wide on a phone. The
+  strips now go on down the "+" row under the buses, where nothing
+  stood (no "+" there: "+ Bus" starts at the heads), so the mix asks
+  the frame for no more height; and each strip's name and level share
+  one line (`Tile`'s `inline`), its view and meter under them, as the
+  Master's are. At rest with one or two buses each strip is 72 × 62;
+  measured in a frame 412 × 640, a strip 72 × 67, its view 52 × 40 (was
+  10 wide); in one 900 × 600, 108 × 106, its view 88 × 79. The played strip's bars of its sends went, the
+  pegs showing them, for the view to have the room.
 
 ## 3. The sequencer
 
-Not started. What it needs:
+Not started, and revised on 2026-11-13 by `tracks-and-song.md` (D and
+E): a sequence for each track, and a song of them. What it needs:
 
 - **The clock on the audio thread** (the audio thread owns time): the
   worklet steps through the pattern at the tempo, with swing, and plays

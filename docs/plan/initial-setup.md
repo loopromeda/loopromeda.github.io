@@ -513,8 +513,9 @@ right, benchmark within budget.
         events are turned away (`src/main.tsx`), as iOS lets a pinch
         through the viewport's limits. Measured in a frame: the page as
         wide and tall as the screen at 360×720, 390×844, 454×622,
-        490×671, 718×392, 844×390, 945×555 and 1000×600. The pinch to be
-        confirmed on the Fold and an iPhone.
+        490×671, 718×392, 844×390, 945×555 and 1000×600. On the Fold the
+        pinch zooms nothing (ashon, 2026-11-13, the deployed site); an
+        iPhone still to try.
 - [ ] Playwright smoke: page loads, start overlay unlocks, keys respond (mobile emulation)
 - [x] Output waveform display (`src/ui/Scope.tsx`), asked for by ashon
       2026-11-10: AnalyserNode tap in the output path, rising-edge trigger
