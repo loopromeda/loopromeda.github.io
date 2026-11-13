@@ -1,5 +1,6 @@
-import { useRef } from 'react'
+import { useRef, useSyncExternalStore } from 'react'
 import type { Engine, OutputSource } from '../engine/engine'
+import { masterLimited } from '../state/mix'
 import {
   METER_MIN_DB,
   MeterBallistics,
@@ -17,6 +18,7 @@ import {
   unclippedLevels,
   type Levels,
 } from '../viz/master'
+import { OPTION } from './controls'
 import { outputTap, useFrames } from './frames'
 import { Scope, type ScopeStats } from './Scope'
 
@@ -51,11 +53,85 @@ const TRACK = '#1c1c23'
 const METER_TRACK = 'rgba(255, 255, 255, 0.03)'
 
 /**
- * The spectrum's range, dB as the analyser reads it: a full-scale sine
- * peaks near -14 (its window halves it and more), so -10 at the top
+ * The spectrum's top, dB as the analyser reads it: a full-scale sine
+ * peaks near -14 (its window halves it and more), so -10 at the top. The
+ * analyser reads down to -100.
  */
-const SPECTRUM_FLOOR = -100
 const SPECTRUM_TOP = -10
+
+/**
+ * How far under the top the spectrum and the spectrogram reach, dB, as
+ * this device keeps it (asked for by ashon, 2026-11-13, the spectrogram
+ * looking nearly full: "표시 대비도 조정 해 보자"): 90 shows down to
+ * the analyser's floor, as they did, every tail 70 dB under the mix; 70,
+ * the default, leaves out what is lost under a dense mix; 50 only what
+ * stands out of it
+ */
+export const SPECTRUM_RANGES = [50, 70, 90] as const
+export type SpectrumRange = (typeof SPECTRUM_RANGES)[number]
+const DEFAULT_RANGE: SpectrumRange = 70
+const RANGE_KEY = 'loopromeda.spectrumRange'
+
+function readRange(): SpectrumRange {
+  try {
+    const kept = Number(localStorage.getItem(RANGE_KEY))
+    return SPECTRUM_RANGES.find((range) => range === kept) ?? DEFAULT_RANGE
+  } catch {
+    return DEFAULT_RANGE
+  }
+}
+
+let spectrumRange: SpectrumRange = readRange()
+const rangeListeners = new Set<() => void>()
+
+export const getSpectrumRange = (): SpectrumRange => spectrumRange
+
+export function subscribeSpectrumRange(listener: () => void): () => void {
+  rangeListeners.add(listener)
+  return () => rangeListeners.delete(listener)
+}
+
+/** Every spectral view reaches range dB under its top, kept on the device */
+export function setSpectrumRange(range: SpectrumRange): void {
+  if (range === spectrumRange) return
+  spectrumRange = range
+  try {
+    localStorage.setItem(RANGE_KEY, String(range))
+  } catch {
+    // Shown all the same, for this visit
+  }
+  for (const listener of rangeListeners) listener()
+}
+
+/** The spectral views' floor now, dB: darkest there, nothing under it */
+const spectrumFloor = () => SPECTRUM_TOP - spectrumRange
+
+/**
+ * The spectral views' range, chosen: three options in a row, the one
+ * kept pressed
+ */
+export function SpectrumRangePicker() {
+  const range = useSyncExternalStore(subscribeSpectrumRange, getSpectrumRange)
+  return (
+    <div
+      role="group"
+      aria-label="How deep the spectrum shows, under its top"
+      className="flex shrink-0 items-center gap-1.5"
+    >
+      {SPECTRUM_RANGES.map((each) => (
+        <button
+          key={each}
+          type="button"
+          aria-pressed={each === range}
+          onClick={() => setSpectrumRange(each)}
+          className={`${OPTION} shrink-0`}
+        >
+          {each} dB
+        </button>
+      ))}
+    </div>
+  )
+}
 /** How fast the spectrum's peak line falls, dB a second */
 const PEAK_FALL = 18
 /** Labelled under the spectrum, and lit brighter in its grid */
@@ -211,6 +287,9 @@ export function Spectrum({
   labelled?: boolean
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  // The level lines' names follow the range; the drawing reads it live
+  const range = useSyncExternalStore(subscribeSpectrumRange, getSpectrumRange)
+  const floor = SPECTRUM_TOP - range
   useFrames(
     engine,
     canvasRef,
@@ -221,8 +300,11 @@ export function Spectrum({
       let peaks = new Float32Array(1)
       let last = 0
       let quiet = false
+      /** The floor the background's level lines were drawn for */
+      let painted = spectrumFloor()
 
       const paint = (width: number, height: number) => {
+        painted = spectrumFloor()
         background.width = width
         background.height = height
         const bg = background.getContext('2d', { alpha: false })
@@ -245,8 +327,8 @@ export function Spectrum({
         bg.strokeStyle = GRID
         bg.beginPath()
         for (const db of LEVELS) {
-          const y =
-            Math.round(dbToY(db, height, SPECTRUM_FLOOR, SPECTRUM_TOP)) + 0.5
+          if (db <= painted) continue
+          const y = Math.round(dbToY(db, height, painted, SPECTRUM_TOP)) + 0.5
           bg.moveTo(0, y)
           bg.lineTo(width, y)
         }
@@ -269,6 +351,11 @@ export function Spectrum({
           const frame = tap.read(now)
           const dt = last > 0 ? Math.min(0.1, (now - last) / 1000) : 0
           last = now
+          const floor = spectrumFloor()
+          if (floor !== painted) {
+            paint(width, height)
+            quiet = false
+          }
           if (frame) {
             const rate = engine.snapshot.sampleRate ?? 48000
             spectrumColumns(frame.spectrum, rate, columns)
@@ -278,7 +365,7 @@ export function Spectrum({
           holdPeaks(columns, peaks, PEAK_FALL * dt)
           let loud = false
           for (let c = 0; c < peaks.length; c++) {
-            if ((peaks[c] as number) > SPECTRUM_FLOOR) {
+            if ((peaks[c] as number) > floor) {
               loud = true
               break
             }
@@ -289,8 +376,7 @@ export function Spectrum({
           ctx.drawImage(background, 0, 0)
           if (!loud) return
           const step = width / columns.length
-          const y = (db: number) =>
-            dbToY(db, height, SPECTRUM_FLOOR, SPECTRUM_TOP)
+          const y = (db: number) => dbToY(db, height, floor, SPECTRUM_TOP)
           ctx.beginPath()
           ctx.moveTo(0, height)
           for (let c = 0; c < columns.length; c++) {
@@ -336,12 +422,12 @@ export function Spectrum({
               {hz < 1000 ? hz : `${hz / 1000}k`}
             </span>
           ))}
-          {LEVELS.map((db) => (
+          {LEVELS.filter((db) => db > floor).map((db) => (
             <span
               key={db}
               className="absolute left-1 mt-0.5 font-mono text-[9px] leading-none text-zinc-600"
               style={{
-                top: `${dbToY(db, 100, SPECTRUM_FLOOR, SPECTRUM_TOP)}%`,
+                top: `${dbToY(db, 100, floor, SPECTRUM_TOP)}%`,
               }}
             >
               {db}
@@ -432,9 +518,10 @@ export function Spectrogram({
           } else {
             rows.fill(-Infinity)
           }
+          const floor = spectrumFloor()
           let loud = false
           for (let i = 0; i < rows.length; i++) {
-            if ((rows[i] as number) > SPECTRUM_FLOOR) {
+            if ((rows[i] as number) > floor) {
               loud = true
               break
             }
@@ -445,7 +532,7 @@ export function Spectrogram({
           const data = column.data
           for (let y = 0; y < height; y++) {
             const db = rows[height - 1 - y] as number
-            spectrogramColour(db, SPECTRUM_FLOOR, SPECTRUM_TOP, data, y * 4)
+            spectrogramColour(db, floor, SPECTRUM_TOP, data, y * 4)
           }
           for (let k = 0; k < decades.length; k++) {
             lighten(data, (decades[k] as number) * 4, DECADE_LINE)
@@ -714,9 +801,11 @@ export function Meters({
           const frame = tap.read(now)
           const [left, right] = sides
           if (!left) return
+          // A limiter last on the master leaves no soft clip to undo
+          const clipped = tap.clipped && !masterLimited(engine.getMix())
           const measure = (samples: Float32Array | undefined, into: Levels) => {
             if (!samples) into.peak = into.rms = 0
-            else if (tap.clipped) unclippedLevels(samples, into)
+            else if (clipped) unclippedLevels(samples, into)
             else sampleLevels(samples, into)
           }
           const update = (side: Side) => {

@@ -7,7 +7,8 @@
  * every bus, each bus a full rack and the master too (chainStress.ts),
  * is the worst a session can ask of it. The effects run once a block,
  * not once a voice: a full rack of each kind is held to a tenth of the
- * budget.
+ * budget, an EQ gliding too, and the loudness, measured all the while
+ * on the output, to a twentieth.
  */
 import { expect, test } from 'vitest'
 import { ChainSynth, VOICE_COUNT } from './chainSynth'
@@ -17,13 +18,17 @@ import {
   chainStressSynth,
 } from './chainStress'
 import { LFO_SINE, LFO_SMOOTH } from './lfo'
+import { LoudnessMeter } from './loudness'
 import { LOWPASS } from './filter'
 import { SAW, SQUARE } from './oscillator'
 import {
   DEST_AMP,
   DEST_PITCH,
   FX_CHORUS,
+  FX_COMPRESSOR,
   FX_DELAY,
+  FX_EQ,
+  FX_LIMITER,
   FX_REVERB,
   INPUT_FM,
   INPUT_NOISE,
@@ -174,6 +179,9 @@ for (const [name, kind] of [
   ['choruses', FX_CHORUS],
   ['delays', FX_DELAY],
   ['reverbs', FX_REVERB],
+  ['EQs', FX_EQ],
+  ['compressors', FX_COMPRESSOR],
+  ['limiters', FX_LIMITER],
 ] as const) {
   test(`renders a full rack of ${name} well within a block`, async ({
     bench,
@@ -182,12 +190,16 @@ for (const [name, kind] of [
     const rack = chainStressRack(SAMPLE_RATE, [kind])
     const left = new Float32Array(BLOCK)
     const right = new Float32Array(BLOCK)
+    let phase = 0
     const took = await mean(
       `${rack.count} ${name}`,
       () => {
-        // A signal in, so the rack never rests
-        left.fill(0.1)
-        right.fill(0.1)
+        // A signal in, so the rack never rests: a sine, loud enough for
+        // the compressors and limiters to work on
+        for (let i = 0; i < BLOCK; i++) {
+          phase += 0.05
+          left[i] = right[i] = 0.5 * Math.sin(phase)
+        }
         rack.process(left, right, BLOCK)
       },
       bench
@@ -195,6 +207,46 @@ for (const [name, kind] of [
     expect(took).toBeLessThan(BUDGET_MS / 10)
   })
 }
+
+test('renders an EQ gliding well within a block', async ({ bench }) => {
+  // A knob turned: every band worked out again each block
+  const rack = chainStressRack(SAMPLE_RATE, [FX_EQ])
+  const left = new Float32Array(BLOCK)
+  const right = new Float32Array(BLOCK)
+  let turn = 0
+  const took = await mean(
+    `${rack.count} EQs, gliding`,
+    () => {
+      turn++
+      const gain = turn % 2 === 0 ? 6 : -6
+      for (let k = 0; k < rack.count; k++) {
+        rack.setEq(k, 40, gain, 100, -gain, 1000, gain, 8000)
+      }
+      left.fill(0.1)
+      right.fill(0.1)
+      rack.process(left, right, BLOCK)
+    },
+    bench
+  )
+  expect(took).toBeLessThan(BUDGET_MS / 10)
+})
+
+test('measures the loudness well within a block', async ({ bench }) => {
+  // The worklet measures its output all the while, watched or not
+  const meter = new LoudnessMeter(SAMPLE_RATE)
+  const left = new Float32Array(BLOCK).fill(0.1)
+  const right = new Float32Array(BLOCK).fill(-0.1)
+  const took = await mean(
+    'loudness',
+    () => {
+      meter.process(left, right, BLOCK)
+      // Read as a report reads it, ten times a second: each block here
+      void meter.integrated
+    },
+    bench
+  )
+  expect(took).toBeLessThan(BUDGET_MS / 20)
+})
 
 test(`renders ${VOICE_COUNT} voices, every slot, through the effects`, async ({
   bench,

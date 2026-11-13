@@ -112,13 +112,16 @@ part: voices → inserts → fader ─┬─ send A → Bus A: its effects → l
   the master's) is read as those buses, at the returns' knobs and
   levels.
 
-| part   | knobs                                                                                  |
-| ------ | -------------------------------------------------------------------------------------- |
-| Chorus | Rate 0.05–5 Hz (0.6), Depth (50%), Mix (50%)                                           |
-| Delay  | Time 0.01–2 s (0.35), Feedback (40%), Tone (60%), Mode: Stereo or Ping-pong, Mix (30%) |
-| Reverb | Size (60%), Decay 0.2–10 s (2), Damp (50%), Mix (30%)                                  |
-| Bus    | Level (100%), Pan (the middle): a balance                                              |
-| Master | Level (100%), after its effects and before the clip                                    |
+| part       | knobs                                                                                                                                                         |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Chorus     | Rate 0.05–5 Hz (0.6), Depth (50%), Mix (50%)                                                                                                                  |
+| Delay      | Time 0.01–2 s (0.35), Feedback (40%), Tone (60%), Mode: Stereo or Ping-pong, Mix (30%)                                                                        |
+| Reverb     | Size (60%), Decay 0.2–10 s (2), Damp (50%), Mix (30%)                                                                                                         |
+| EQ         | Low Cut 10–500 Hz (Off at 10), Low ±15 dB (0), Low Freq 30–500 Hz (100), Mid ±15 dB (0), Mid Freq 150 Hz–8 kHz (1k), High ±15 dB (0), High Freq 2–16 kHz (8k) |
+| Compressor | Threshold −60–0 dB (−18), Ratio 1–20:1 (2), Attack 0.1–100 ms (10), Release 10 ms–2 s (150 ms), Makeup 0–24 dB (0), Mix (100%)                                |
+| Limiter    | Gain 0–24 dB (0), Ceiling −12–0 dB (−1), Release 10 ms–1 s (100 ms)                                                                                           |
+| Bus        | Level (100%), Pan (the middle): a balance                                                                                                                     |
+| Master     | Level (100%), after its effects and before the clip (a guard at full scale, after a limiter last)                                                             |
 
 Mix keeps an effect's dry signal whole up to its middle and the wet
 whole past it. Every effect comes in at its kind's defaults, wherever it
@@ -151,6 +154,8 @@ kept: a delay holds a megabyte of lines, and most racks never play one.
   set for Decay to be its fall to −60 dB, each line damped by a lowpass
   (20 kHz down to 1 kHz), after four allpass diffusers; the two sides
   read the lines with opposite signs, so they are uncorrelated.
+- **EQ**, **Compressor** and **Limiter**, since 2026-11-13: the
+  mastering tools (below).
 - A rack **rests** once its input has been silent and its output under
   −120 dB for 2.5 s, and wakes with the next sound.
 
@@ -224,6 +229,72 @@ within the budget of a third of a block (0.89 ms); 24 voices just past
 it, 32 within half. The browser's JIT runs it faster than the Node bench
 does (1.04 ms for 16 voices), so the two are not compared.
 
+### Mastering
+
+Asked for by ashon, 2026-11-13, after the spectrogram looked nearly
+full and the answer was that the mix had none of what a master is
+checked with ("표시 대비도 조정 해 보자. 그리고 말처럼 마스터링 도구가
+부족한데 추가해 줘"): three effect kinds, for an insert, a bus or the
+master like the rest, and two readouts.
+
+- **EQ**: a low cut (12 dB an octave, Butterworth, Off at its lowest),
+  a low shelf, a broad bell (Q 0.7) and a high shelf, the cookbook's
+  biquads (shelves at S = 1). A knob glides over about 20 ms, the bands
+  worked out again each block while it does; a band at 0 dB and a cut
+  that is Off cost nothing, so a flat EQ passes the sound untouched.
+- **Compressor**: both sides' louder peak each sample, in dB, turned
+  down above Threshold by Ratio over a 6 dB soft knee, the turn
+  deepening over Attack and letting go over Release, then Makeup; Mix
+  blends it with what came in, as every effect's Mix does, so half and
+  half is parallel compression.
+- **Limiter**: Gain drives the sound up, then it is held 2 ms
+  (the lookahead, 95 samples at 48 kHz, which is what it delays by)
+  while the gain each sample needs to stay under Ceiling is found: the
+  least over the lookahead (a running minimum), averaged over as long
+  again, so the gain is down by the time a peak arrives, in a slope,
+  and comes back over Release. Nothing comes out past the Ceiling; a
+  last clamp keeps rounding from passing it.
+- **A limiter last on the master** takes the soft clip's place
+  (`masterLimited`, `Mixer.setLimited`): the clip would bend what the
+  limiter had already brought under its ceiling, so the output is only
+  guarded at full scale. The master's Level comes after its effects
+  and goes no higher than 100%, so it only lowers the ceiling with the
+  rest. The master's meters then read the samples as they are, not
+  through the clip's inverse. Anything after the limiter brings the
+  clip back.
+- **Gain reduction**: a compressor's or limiter's panel shows how far it
+  turns the sound down, a bar growing from the right, 24 dB full, and
+  the depth named (−3.2 dB): the audio thread keeps the deepest since it
+  last told (`takeReduction`) and tells those watched 30 times a
+  second while any turns down, once more as they let go
+  (`watchReduction`, by the effect's id and, for an insert or a kit's
+  chain, its track's).
+- **Loudness**: the worklet measures its whole output as ITU-R BS.1770
+  does (`src/dsp/loudness.ts`): both sides K-weighted (libebur128's
+  filters for any sample rate), in 100 ms steps; momentary over 400 ms,
+  short-term over 3 s, and integrated since Play or Reset, gated (blocks
+  under −70 LUFS left out, then those 10 LU under the rest; the blocks
+  are kept as a histogram of 0.1 LU, so nothing grows over a long
+  take). A 1 kHz sine at −20 dBFS on both sides reads −20.0 LUFS; 10 s
+  at −20 then 10 s at −40 reads −20 integrated (−20.06, the blocks
+  across the change counted, as the standard has them). Told ten times
+  a second while the Master's panel or the sheet shows it, under −70 a
+  dash.
+
+The spectral views' **range**, the same day: how far under their top
+(−10 dB) the spectrum and the spectrogram reach, 50, 70 or 90 dB, kept
+on the device (`loopromeda.spectrumRange`), chosen beside the views in
+the panel when one of them is shown, and in the sheet's header. 90 is
+how they were, down to the analyser's floor, where a reverb's tail and
+the window's skirts 70 dB under the mix filled the picture; 70, the
+default, leaves out what a dense mix covers anyway; 50 shows only what
+stands out.
+
+Measured (M3 Max, `pnpm bench`), a full rack of four: compressors
+0.015 ms a block, EQs 0.009 (0.009 gliding), limiters 0.009; the
+loudness 0.009, all the while. The stress rack stays the chorus and
+the reverb, still the heaviest.
+
 ### What the output looks like
 
 The engine taps the node's output (`src/engine/engine.ts`): a splitter
@@ -261,7 +332,8 @@ is still to try. The views
 canvas drawn every frame while the audio runs:
 
 - **Scope**: the waveform, as before.
-- **Spectrum**: 20 Hz to 20 kHz on a logarithmic axis, filled under its
+- **Spectrum**: 20 Hz to 20 kHz on a logarithmic axis, its levels from
+  −10 dB down by the range chosen (Mastering, above), filled under its
   line, a line of the peaks falling 18 dB a second over it. Below about
   a kilohertz a bin spans several columns, and the columns between bins
   read a monotone cubic through them (`levelAt`), round where straight
@@ -278,7 +350,7 @@ canvas drawn every frame while the audio runs:
 - **Meters**: each side's RMS and peak going into the clip, recovered
   from the clipped output (the clip's inverse), −60 to +6 dB, amber
   past 0 dB, where the clip is driven hard; the highest peak held is
-  named. A part's is one bar, since 2026-11-13, asked for by ashon
+  named. After a limiter last on the master, the output as it is. A part's is one bar, since 2026-11-13, asked for by ashon
   ("사운드의 경우 모노 악기일 수 있을텐데 볼륨 막대가 두개일 필요는
   없을 것 같아"): its peak the louder side's, its RMS the two sides'
   together, so that a mono sound reads as either side does; the
@@ -338,7 +410,8 @@ the same height, so the keys under them stay put.
   removes it; an effect's its knobs, and moves it along its row or
   removes it; "+ Bus" adds a bus after the last, dry or with a first
   effect; a
-  row's "+" an effect at its end; the Master's its level, the views,
+  row's "+" an effect at its end (more than four kinds stand three to
+  a row); the Master's its level, the loudness, the views,
   and a button that opens them all at size (#/master,
   `src/ui/MasterSheet.tsx`) over the editor, the keys left playable
   under them: the spectrum over the spectrogram and the stereo, the
@@ -363,7 +436,10 @@ rung out ten seconds after the key (`src/state/factory.test.ts`).
 ### Later
 
 A delay's time in beats once the sequencer has a tempo; more effect
-kinds (a phaser, an EQ, a compressor); a picture on an effect's tile;
+kinds (a phaser; the EQ and the compressor came, 2026-11-13); an EQ's
+curve and a compressor's on its tile; a compressor keyed by another
+sound (side-chain); true peak in the meters (the limiter holds the
+samples, not what lies between them); a picture on an effect's tile;
 dragging an effect to move it, along its row or to another, as an item
 is dragged; a bus fed by another (a delay into the reverb's bus) rather
 than in a row.

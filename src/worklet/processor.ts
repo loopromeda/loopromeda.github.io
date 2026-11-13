@@ -1,21 +1,34 @@
 import { ChainSynth, PAD_VOICES, VOICE_COUNT } from '../dsp/chainSynth'
 import { chainStressOutput, timeBlocks } from '../dsp/chainStress'
 import { EffectRack } from '../dsp/effects'
+import { LoudnessMeter } from '../dsp/loudness'
 import { Mixer, Part, Strip } from '../dsp/output'
 import { KitTarget, Lane, Sequencer, SynthTarget } from '../dsp/sequencer'
 import {
   BENCH_MAX_VOICES,
   GLIDE_REPORTS,
+  LOUDNESS_REPORTS,
   PROCESSOR_NAME,
+  REDUCTION_REPORTS,
   TRACK_OUTPUTS,
   type BenchResult,
+  type EffectAt,
   type FromWorklet,
+  type LoudnessReport,
   type ToWorklet,
   type TrackLayout,
 } from '../engine/protocol'
-import { KIT_PADS } from '../state/kit'
+import { KIT_PADS, type KitChain } from '../state/kit'
+import type { Mix } from '../state/mix'
 import { LoadMeter } from './load'
-import { SoundPlayer, applyKitChain, applyMix } from './sound'
+import {
+  SoundPlayer,
+  applyKitChain,
+  applyMix,
+  chainEffect,
+  mixEffect,
+  type EffectSlot,
+} from './sound'
 
 /** A measurement's warm-up and timing, per voice count, in milliseconds */
 const BENCH_WARMUP_MS = 50
@@ -74,7 +87,10 @@ type Playing = SynthPlaying | KitPlaying
  * clock runs here too (src/dsp/sequencer.ts): each block it queues the
  * notes of the steps that fall within it on the tracks' strips, each on
  * its own frame, ahead of the mix rendering them, and the page hears of
- * a step as it passes. Nothing is allocated in process(): each report
+ * a step as it passes. The output's loudness is measured all the while
+ * (src/dsp/loudness.ts), its integrated from each Play, and told while
+ * the page shows it, as is how far a compressor or a limiter it watches
+ * turns things down. Nothing is allocated in process(): each report
  * goes out in one message object, reused (postMessage copies it).
  */
 class SynthProcessor extends AudioWorkletProcessor {
@@ -123,6 +139,44 @@ class SynthProcessor extends AudioWorkletProcessor {
     keys: new Float64Array(VOICE_COUNT),
     amounts: new Float64Array(VOICE_COUNT),
     slides: new Float64Array(VOICE_COUNT),
+  }
+  /** The mix and each kit's chain as last sent: where an effect plays */
+  #mix: Mix | undefined
+  readonly #chains = new Map<string, KitChain>()
+  /**
+   * The compressors and limiters watched, where each plays (if it does),
+   * the frames since their reductions were last told, the report (its
+   * depths in the list's order, allocated as the list is told), and
+   * whether the last told was all at 0
+   */
+  #reductionAts: readonly EffectAt[] = []
+  #reductionSlots: (EffectSlot | undefined)[] = []
+  #sinceReduction = 0
+  readonly #reductionEvery = Math.max(
+    1,
+    Math.round(sampleRate / REDUCTION_REPORTS)
+  )
+  #reduction: { t: 'reduction'; version: number; dbs: Float64Array } = {
+    t: 'reduction',
+    version: 0,
+    dbs: new Float64Array(0),
+  }
+  #reductionQuiet = true
+  /** The output's loudness, whether the page shows it, and the frames */
+  readonly #loudness = new LoudnessMeter(sampleRate)
+  #showLoudness = false
+  #sinceLoudness = 0
+  readonly #loudnessEvery = Math.max(
+    1,
+    Math.round(sampleRate / LOUDNESS_REPORTS)
+  )
+  readonly #loud: { t: 'loudness' } & {
+    -readonly [K in keyof LoudnessReport]: LoudnessReport[K]
+  } = {
+    t: 'loudness',
+    momentary: -Infinity,
+    shortTerm: -Infinity,
+    integrated: -Infinity,
   }
 
   constructor() {
@@ -176,7 +230,39 @@ class SynthProcessor extends AudioWorkletProcessor {
     this.#sequencer.setLanes(
       Array.from(tracks.values(), (playing) => playing.lane)
     )
+    for (const id of this.#chains.keys()) {
+      if (tracks.get(id)?.kind !== 'kit') this.#chains.delete(id)
+    }
     this.#watch()
+    this.#aim()
+  }
+
+  /** Where each compressor or limiter watched plays now, if anywhere */
+  #aim(): void {
+    const ats = this.#reductionAts
+    const slots = this.#reductionSlots
+    for (let k = 0; k < ats.length; k++) {
+      const found = this.#effectAt(ats[k] as EffectAt)
+      const was = slots[k]
+      if (found?.rack !== was?.rack || found?.slot !== was?.slot) {
+        // Told afresh: what it turned down before is not this one's
+        found?.rack.takeReduction(found.slot)
+      }
+      slots[k] = found
+    }
+  }
+
+  /** The rack and slot of the effect at `at`, if it plays */
+  #effectAt(at: EffectAt): EffectSlot | undefined {
+    if (at.track === undefined) {
+      const mix = this.#mix
+      return mix ? mixEffect(this.#mixer, mix, at.id) : undefined
+    }
+    const playing = this.#tracks.get(at.track)
+    if (playing?.kind === 'synth') return playing.player.insert(at.id)
+    if (playing?.kind !== 'kit') return undefined
+    const chain = this.#chains.get(at.track)
+    return chain ? chainEffect(playing.part, chain, at.id) : undefined
   }
 
   /** The synth whose glides are reported: the watched track's, if one's */
@@ -246,6 +332,7 @@ class SynthProcessor extends AudioWorkletProcessor {
         break
       case 'sound':
         this.#playerOn(message.track, message.pad)?.load(message.sound)
+        if (message.pad === undefined) this.#aim()
         break
       case 'knobs': {
         const player = this.#playerOn(message.track, message.pad)
@@ -256,13 +343,38 @@ class SynthProcessor extends AudioWorkletProcessor {
         break
       }
       case 'mix':
+        this.#mix = message.mix
         applyMix(this.#mixer, message.mix, this.#parts)
+        this.#aim()
         break
       case 'kitChain': {
         const playing = this.#tracks.get(message.track)
-        if (playing?.kind === 'kit') applyKitChain(playing.part, message.chain)
+        if (playing?.kind !== 'kit') break
+        this.#chains.set(message.track, message.chain)
+        applyKitChain(playing.part, message.chain)
+        this.#aim()
         break
       }
+      case 'watchReduction':
+        // Allocated here, as the list is told, never as it is reported
+        this.#reductionAts = message.at
+        this.#reductionSlots = message.at.map(() => undefined)
+        this.#reduction = {
+          t: 'reduction',
+          version: message.version,
+          dbs: new Float64Array(message.at.length),
+        }
+        this.#reductionQuiet = true
+        this.#sinceReduction = 0
+        this.#aim()
+        break
+      case 'watchLoudness':
+        this.#showLoudness = message.on
+        this.#sinceLoudness = this.#loudnessEvery
+        break
+      case 'resetLoudness':
+        this.#loudness.resetIntegrated()
+        break
       case 'panic':
         this.#sequencer.clear()
         for (const part of this.#parts) part.reset()
@@ -270,8 +382,13 @@ class SynthProcessor extends AudioWorkletProcessor {
         this.#reportStep()
         break
       case 'transport':
-        if (message.playing) this.#sequencer.play()
-        else this.#sequencer.stop()
+        if (message.playing) {
+          this.#sequencer.play()
+          // A playthrough's own integrated loudness
+          this.#loudness.resetIntegrated()
+        } else {
+          this.#sequencer.stop()
+        }
         this.#reportStep()
         break
       case 'tempo':
@@ -342,6 +459,7 @@ class SynthProcessor extends AudioWorkletProcessor {
     if (this.#sequencer.process(length)) this.#reportStep()
     // One channel only (never asked for): the left, the right thrown away
     this.#mixer.render(parts, left, right ?? this.#spare, taps)
+    this.#loudness.process(left, right ?? this.#spare, length)
     if (meter.end(now())) {
       const report = this.#load
       report.load = meter.load
@@ -352,7 +470,45 @@ class SynthProcessor extends AudioWorkletProcessor {
       this.port.postMessage(report satisfies FromWorklet)
     }
     if (this.#watching) this.#reportGlides(length)
+    if (this.#reductionAts.length > 0) this.#reportReduction(length)
+    if (this.#showLoudness) this.#reportLoudness(length)
     return true
+  }
+
+  /**
+   * How far each compressor or limiter watched turned things down: while
+   * any does, and once more as the last lets go
+   */
+  #reportReduction(frames: number): void {
+    this.#sinceReduction += frames
+    if (this.#sinceReduction < this.#reductionEvery) return
+    this.#sinceReduction = 0
+    const report = this.#reduction
+    const slots = this.#reductionSlots
+    const dbs = report.dbs
+    let quiet = true
+    for (let k = 0; k < dbs.length; k++) {
+      const at = slots[k]
+      const db = at ? at.rack.takeReduction(at.slot) : 0
+      dbs[k] = db
+      if (db !== 0) quiet = false
+    }
+    if (quiet && this.#reductionQuiet) return
+    this.#reductionQuiet = quiet
+    this.port.postMessage(report satisfies FromWorklet)
+  }
+
+  /** How loud the output is, a few times a second */
+  #reportLoudness(frames: number): void {
+    this.#sinceLoudness += frames
+    if (this.#sinceLoudness < this.#loudnessEvery) return
+    this.#sinceLoudness = 0
+    const report = this.#loud
+    const meter = this.#loudness
+    report.momentary = meter.momentary
+    report.shortTerm = meter.shortTerm
+    report.integrated = meter.integrated
+    this.port.postMessage(report satisfies FromWorklet)
   }
 
   /** The step the sequencer last played, or -1 stopped, to the page */

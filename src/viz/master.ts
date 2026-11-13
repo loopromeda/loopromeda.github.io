@@ -1,10 +1,13 @@
 /**
  * Pure display maths for the master output views: the spectrum, the
- * spectrogram, the level meters and the stereo vectorscope. The data
- * comes from an AnalyserNode read elsewhere; nothing here touches the
- * DOM or Web Audio.
+ * spectrogram, the level meters and the stereo vectorscope, and the
+ * readouts of the mastering tools (a compressor's or a limiter's gain
+ * reduction, the loudness). The data comes from an AnalyserNode or the
+ * audio thread's reports, read elsewhere; nothing here touches the DOM
+ * or Web Audio.
  */
 import { unSoftClip } from '../dsp/clip'
+import { ABSOLUTE_GATE } from '../dsp/loudness'
 
 /** Lowest frequency on the spectrum's logarithmic axis, in Hz */
 export const SPECTRUM_MIN_HZ = 20
@@ -428,4 +431,28 @@ function measure(
   }
   out.peak = peak
   out.rms = samples.length > 0 ? Math.sqrt(sum / samples.length) : 0
+}
+
+/** How deep the gain reduction meter reaches, dB: past it, full */
+export const REDUCTION_RANGE = 24
+
+/** A gain reduction, dB (0 or less), as its meter names it: −3.2 dB */
+export function reductionText(db: number): string {
+  const r = Math.round(Math.min(0, db) * 10) / 10
+  return r === 0 ? '0 dB' : `−${(-r).toFixed(1)} dB`
+}
+
+/** How much of its meter a gain reduction (dB, 0 or less) fills, 0..1 */
+export function reductionFill(db: number): number {
+  return Math.min(1, Math.max(0, -db / REDUCTION_RANGE))
+}
+
+/**
+ * A loudness, LUFS, as the meters name it: −14.2, +1.5; a dash under
+ * the gate the integrated leaves out (and for silence, -Infinity)
+ */
+export function lufsText(lufs: number): string {
+  if (!(lufs > ABSOLUTE_GATE)) return '–'
+  const r = Math.round(lufs * 10) / 10
+  return `${r < 0 ? '−' : r > 0 ? '+' : ''}${Math.abs(r).toFixed(1)}`
 }

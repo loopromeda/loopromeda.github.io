@@ -57,13 +57,17 @@ src/dsp/      pure DSP (oscillators, envelopes, LFOs, filters, voices);
               in Slide for a note placed on the XY pad); slots.ts
               numbers the parts,
               sources and destinations; effects.ts the chorus, delay
-              and reverb, in stereo, in racks: a sound's inserts, the
-              kit's, a bus's, the master's; output.ts a sound's strip
+              and reverb, and the mastering tools (an EQ, a compressor,
+              a limiter), in stereo, in racks: a sound's inserts, the
+              kit's, a bus's, the master's; loudness.ts the output's
+              loudness as BS.1770 measures it (momentary, short-term,
+              integrated, in LUFS); output.ts a sound's strip
               (its synth, inserts and sends), a part (a fader over
               strips: the synth's one; the kit's sixteen, a group
               summed through the kit's chain, its inserts and sends)
               and the mixer
-              after them (up to four buses, the master, the clip); clip.ts
+              after them (up to four buses, the master, the clip, only
+              a guard at full scale after a limiter last); clip.ts
               the soft
               clip the output ends in, untouched up to -6 dBFS, and
               its inverse for the meters; chainStress.ts is the
@@ -82,8 +86,9 @@ src/worklet/  the AudioWorkletProcessor around src/dsp; own globals and
               nothing) and the kit's chain (Node-testable); the
               processor keeps a
               part and a sequencer's lane for each track, by the
-              track's id, and tells of each step as it passes;
-              load.ts the
+              track's id, and tells of each step as it passes, how far
+              the compressor or limiter watched turns the sound down,
+              and how loud the output is; load.ts the
               share of its time the synth takes, for the status line
 src/sw/       the service worker (own globals, tsconfig.sw.json): keeps
               what the build ships for offline, a new version waiting
@@ -97,7 +102,10 @@ src/engine/   AudioContext lifecycle, unlock, node wiring; the sound,
               master's and each track's own (the node's later outputs);
               the tracks, the one picked edited and played; the
               song, held here and edited, its tempo and each loop sent
-              as it changes, the transport, and the step playing;
+              as it changes, the transport, and the step playing; the
+              compressors' and limiters' reductions (reductions.ts:
+              who watches which, many at once, the list told under a
+              version) and the loudness, watched;
               protocol.ts is the message types both threads share
               (plain data only)
 src/state/    params.ts: the knob schema and the old parameters;
@@ -147,7 +155,8 @@ src/viz/      pure display math (scope trigger and decimation, envelope
               chain rows in graph.ts, the kit's pads and chain in its
               place in kitGraph.ts, the mix's strip, bus rows and
               master in mixGraph.ts, the master's views (spectrum,
-              spectrogram, stereo, meters) in master.ts, and where a
+              spectrogram, stereo, meters) and the mastering tools'
+              readouts (a reduction, a loudness) in master.ts, and where a
               tile dragged goes in
               drop.ts, hit-testing, velocity and Slide from a touch's
               position, a knob turning finer as the finger strays
@@ -163,11 +172,15 @@ src/ui/       React components; SoundEditor.tsx the sound as tiles
               the session's mix; the sound's Out and the
               mix's Master hold a view of the output (MasterViews.tsx:
               Scope.tsx's waveform, the spectrum, the spectrogram, the
-              stereo, the meters; frames.ts draws them a display frame
+              stereo, the meters, and how deep the spectral views
+              reach, kept on the device; frames.ts draws them a display frame
               at a time, the output read once a frame), its filters,
               drives and modulators their pictures (Picture.tsx, drawn
               from outline.ts); MasterSheet.tsx all the views at size
-              (#/master); PartPanel.tsx the
+              (#/master), with the loudness; Dynamics.tsx a
+              compressor's or limiter's gain reduction and the
+              loudness, drawn as the audio thread tells them;
+              PartPanel.tsx the
               picked tile's knobs, adds and moves (ConfirmDialog.tsx asks
               before a removal);
               RoutePanels.tsx routing in the panel's place: the routes into

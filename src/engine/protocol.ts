@@ -2,7 +2,9 @@
  * What the two threads say to each other over the worklet's port: intents
  * to the audio thread, and back its load twice a second, the notes still
  * gliding while the page watches them, the step the sequencer plays as
- * it passes, and the answer to a measurement asked for by hand. Shared
+ * it passes, how far a compressor or a limiter turns things down and how
+ * loud the output is while the page shows them, and the answer to a
+ * measurement asked for by hand. Shared
  * by src/engine (DOM) and
  * src/worklet (AudioWorkletGlobalScope), so it stays free of either: plain
  * data only.
@@ -38,6 +40,16 @@ export interface TrackLayout {
 interface On {
   readonly track: string
   readonly pad?: number
+}
+
+/**
+ * Where an effect stands, for how far it turns things down to be watched:
+ * with a track, a synth's insert or a kit's chain's, by its id there;
+ * without, on a bus or the master, by its id in the mix
+ */
+export interface EffectAt {
+  readonly track?: string
+  readonly id: string
 }
 
 /** A note of a loop, as the audio thread plays it (src/state/song.ts) */
@@ -82,6 +94,20 @@ export type ToWorklet =
    * or stop; none on a kit's
    */
   | { t: 'watchGlides'; on: boolean; track?: string }
+  /**
+   * Report how far each compressor or limiter of `at` turns things down
+   * (ReductionReport, by version: the reports for this list), or, with
+   * none, stop
+   */
+  | {
+      t: 'watchReduction'
+      version: number
+      at: readonly EffectAt[]
+    }
+  /** Report how loud the output is (LoudnessReport), or stop */
+  | { t: 'watchLoudness'; on: boolean }
+  /** The integrated loudness measured from now on, as a Play does */
+  | { t: 'resetLoudness' }
   /**
    * The whole sound (src/state/sound): a new one, one whose structure
    * changed, or catching a new worklet up
@@ -180,6 +206,33 @@ export interface GlideReport {
 export const GLIDE_REPORTS = 60
 
 /**
+ * The deepest each watched compressor or limiter turned things down
+ * since the last report, in dB (0 or less), in the order of the list of
+ * version (watchReduction): REDUCTION_REPORTS times a second while one
+ * of them does, and once more as they all let go
+ */
+export interface ReductionReport {
+  readonly version: number
+  readonly dbs: Float64Array
+}
+
+export const REDUCTION_REPORTS = 30
+
+/**
+ * How loud the output is, in LUFS (src/dsp/loudness.ts), LOUDNESS_REPORTS
+ * times a second while the page shows it: over the last 400 ms, the last
+ * 3 s, and everything since a Play, or a reset, gated; -Infinity for
+ * silence
+ */
+export interface LoudnessReport {
+  readonly momentary: number
+  readonly shortTerm: number
+  readonly integrated: number
+}
+
+export const LOUDNESS_REPORTS = 10
+
+/**
  * The step the sequencer last played, counted from its start (a loop's
  * own is it modulo the loop's length), each time one passes; -1 as it
  * stops
@@ -193,3 +246,5 @@ export type FromWorklet =
   | ({ t: 'load' } & LoadReport)
   | ({ t: 'glides' } & GlideReport)
   | ({ t: 'step' } & StepReport)
+  | ({ t: 'reduction' } & ReductionReport)
+  | ({ t: 'loudness' } & LoudnessReport)

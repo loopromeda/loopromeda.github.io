@@ -6,6 +6,7 @@ import {
   type ReactNode,
 } from 'react'
 import type { Engine, OutputSource } from '../engine/engine'
+import type { EffectAt } from '../engine/protocol'
 import {
   addChain,
   addEffect,
@@ -51,6 +52,7 @@ import {
   MODULATOR_KINDS,
   SEND_SPEC,
   VOICE_SPEC,
+  reduces,
   type DestSpec,
   type EffectKind,
   type InputKind,
@@ -64,6 +66,7 @@ import {
   busLetter,
   busName,
   findMixPart,
+  masterLimited,
   moveMixEffect,
   ownedBy,
   removeMixPart,
@@ -119,9 +122,14 @@ import {
   type Look,
 } from './editor'
 import { ConfirmDialog } from './ConfirmDialog'
+import { Loudness, Reduction } from './Dynamics'
 import { FadeRow } from './FadeRow'
 import { Knob, MixKnob, NEUTRAL_ARC } from './Knob'
-import { MASTER_VIEWS, type MasterViewKind } from './MasterViews'
+import {
+  MASTER_VIEWS,
+  SpectrumRangePicker,
+  type MasterViewKind,
+} from './MasterViews'
 import { Mutes } from './Mutes'
 import { knoblessDests, routesTo } from '../state/sound/knob'
 import { noteName } from '../viz/keyboard'
@@ -300,6 +308,10 @@ interface View {
   /** A modulator's routes, by where each goes; it routes from source */
   readonly targets?: { source: string; to: readonly Target[] }
   readonly note?: string
+  /** Under the knobs: how far a compressor or a limiter turns it down */
+  readonly reduction?: EffectAt
+  /** Under the knobs: how loud the output is (the master's) */
+  readonly loudness?: boolean
   readonly choices?: readonly Choice[]
   readonly choiceNote?: string
   readonly actions?: readonly Action[]
@@ -320,11 +332,16 @@ const MODULATOR_HINTS: Record<ModulatorKind, string> = {
   env: 'Attack to release',
   lfo: 'Shape and rate',
 }
+/** Each under its name on a choice, in its 88 px: 16 letters or so */
 const EFFECT_HINTS: Record<EffectKind, string> = {
-  chorus: 'A moving copy, wide',
+  chorus: 'Wide and moving',
   delay: 'Echoes, in time',
   reverb: 'A room around it',
+  eq: 'Lows to highs',
+  compressor: 'Evens the level',
+  limiter: 'Caps the peaks',
 }
+
 const KIND_GLYPHS = {
   osc: GLYPHS.saw,
   noise: GLYPHS.noise,
@@ -561,14 +578,21 @@ export function PartPanel({
         {view.body ??
           (view.choices ? (
             <>
-              <div className="flex gap-2">
+              <div
+                className={
+                  // More than a row of four stand three to a row
+                  view.choices.length > 4
+                    ? 'grid grid-cols-[repeat(3,minmax(0,108px))] gap-2'
+                    : 'flex gap-2'
+                }
+              >
                 {view.choices.map((choice) => (
                   <button
                     key={choice.label}
                     type="button"
                     disabled={!choice.add}
                     onClick={choice.add}
-                    className="flex h-[54px] max-w-[108px] flex-1 flex-col items-start justify-center gap-[3px] rounded-[7px] bg-[#1c1c23] px-2.5 text-left text-zinc-100 disabled:opacity-40"
+                    className="flex h-[54px] min-w-0 max-w-[108px] flex-1 flex-col items-start justify-center gap-[3px] rounded-[7px] bg-[#1c1c23] px-2.5 text-left text-zinc-100 disabled:opacity-40"
                     style={{
                       boxShadow: `inset 0 0 0 1.5px ${choice.look.ring}`,
                     }}
@@ -675,6 +699,14 @@ export function PartPanel({
                   </p>
                 )
               )}
+              {view.reduction && (
+                <Reduction
+                  engine={engine}
+                  at={view.reduction}
+                  color={view.color}
+                />
+              )}
+              {view.loudness && <Loudness engine={engine} />}
               {view.targets && (
                 <Targets {...view.targets} onRoute={onRoute} onMap={onMap} />
               )}
@@ -707,6 +739,13 @@ export function PartPanel({
                       </button>
                     ))}
                   </div>
+                  {(view.views.shown === 'spectrum' ||
+                    view.views.shown === 'spectrogram') && (
+                    <>
+                      <span aria-hidden className="mx-1 h-5 w-px bg-white/10" />
+                      <SpectrumRangePicker />
+                    </>
+                  )}
                 </PanRow>
               )}
             </>
@@ -1223,6 +1262,7 @@ function mixView(
           key,
         })),
         color: owner === MASTER ? NEUTRAL_ARC : look.ink,
+        reduction: reduces(effect.kind) ? { id: effect.id } : undefined,
         actions: [
           { label: 'Move left', icon: ICONS.left, run: move(-1) },
           { label: 'Move right', icon: ICONS.right, run: move(1) },
@@ -1242,10 +1282,13 @@ function mixView(
     default:
       return {
         title: 'Master',
-        kind: 'Every bus, through its effects, then the soft clip',
+        kind: masterLimited(mix)
+          ? 'Every bus, through its effects, the limiter last'
+          : 'Every bus, through its effects, then the soft clip',
         chip: { look: NEUTRAL_LOOK, glyph: GLYPHS.master },
         knobs: [],
         mixKnobs: [{ part: MASTER, key: 'level' }],
+        loudness: true,
         views,
         color: NEUTRAL_ARC,
         actions: onMaster
@@ -1402,7 +1445,7 @@ function addMixEffectView(
       add: room ? () => added((m) => addMixEffect(m, owner, kind)) : undefined,
     })),
     choiceNote: onMaster
-      ? `Every bus goes through it, before the master’s level: up to ${MAX_EFFECTS}, in the order they stand.`
+      ? `Every bus goes through it, before the master’s level: up to ${MAX_EFFECTS}, in the order they stand. A limiter last takes the soft clip’s place.`
       : `Up to ${MAX_EFFECTS}, in the order they stand. Its Mix at 100%, it is a return: the wet alone.`,
   }
 }
@@ -1587,6 +1630,9 @@ function viewOf(
         chip: { look: NEUTRAL_LOOK, glyph: EFFECT_GLYPHS[kind] },
         knobs: knobsOf(picked, EFFECT_KINDS[kind].knobs),
         color: NEUTRAL_ARC,
+        reduction: reduces(kind)
+          ? { track: engine.getTrack().id, id: picked }
+          : undefined,
         note: kit
           ? 'The kit’s, the same for every pad, kept with the kit: every pad goes through it once summed.'
           : undefined,

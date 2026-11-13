@@ -11,7 +11,15 @@ import {
   setValue,
   type Added,
 } from '../state/sound/edit'
-import { AMP, SENDS, VOICE, initSound, type Sound } from '../state/sound/sound'
+import {
+  AMP,
+  SENDS,
+  VOICE,
+  initSound,
+  partName,
+  type Sound,
+} from '../state/sound/sound'
+import { EFFECT_KINDS, type EffectKind } from '../state/sound/kinds'
 import {
   CHAIN_COLORS,
   FM_START,
@@ -22,6 +30,7 @@ import {
   addId,
   chainLook,
   destName,
+  effectLine,
   fmTargets,
   glyphOf,
   heardThrough,
@@ -35,6 +44,13 @@ import {
   tileLine,
   toggleFm,
 } from './editor'
+
+/** Every knob of an effect kind at its default */
+function effectValues(kind: EffectKind): Record<string, number> {
+  return Object.fromEntries(
+    EFFECT_KINDS[kind].knobs.map((knob) => [knob.key, knob.default])
+  )
+}
 
 /** The init sound, plus noise (i2), a second filter (x2) and an LFO */
 function busy(): Sound {
@@ -114,6 +130,36 @@ describe('tiles', () => {
     expect(tileLine(setValue(sound, 'f2', 'rate', 1.25), 'f2')).toBe('1.25 Hz')
     expect(glyphOf(sound, 'f1')).toBe(GLYPHS.chorus)
     expect(lookOf(sound, 'f2')).toBe(NEUTRAL_LOOK)
+  })
+
+  it('names a compressor’s tile short, its panel in full', () => {
+    let sound = addEffect(initSound(), 'compressor').sound
+    expect(tileLabel(sound, 'f1')).toBe('Comp')
+    sound = addEffect(sound, 'compressor').sound
+    expect(tileLabel(sound, 'f2')).toBe('Comp 2')
+    expect(partName(sound, 'f2')).toBe('Compressor 2')
+    // The rest as they are named
+    expect(tileLabel(addEffect(initSound(), 'limiter').sound, 'f1')).toBe(
+      'Limiter'
+    )
+  })
+
+  it('writes the mastering tools’ lines from their knobs', () => {
+    const eq = (values: Record<string, number>) =>
+      effectLine({ kind: 'eq', values: { ...effectValues('eq'), ...values } })
+    expect(eq({})).toBe('Flat')
+    // The band it moves most, whichever way
+    expect(eq({ low: 3 })).toBe('Low +3.0 dB')
+    expect(eq({ low: 3, high: -4.5 })).toBe('High \u22124.5 dB')
+    // No band moved, but the lows cut
+    expect(eq({ cut: 80 })).toBe('Cut 80')
+    const compressor = effectValues('compressor')
+    expect(effectLine({ kind: 'compressor', values: compressor })).toBe(
+      '\u221218 dB 2:1'
+    )
+    expect(
+      effectLine({ kind: 'limiter', values: effectValues('limiter') })
+    ).toBe('\u22121.0 dB')
   })
 
   it('shows where an input no chain takes is heard instead', () => {

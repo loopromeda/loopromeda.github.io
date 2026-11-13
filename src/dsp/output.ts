@@ -10,7 +10,9 @@
  * (each a row of effects, then a level and a balance: one with no
  * effects is a dry path); and the master (the buses summed, a row of
  * effects, a level, then a soft clip on each side, clip.ts's, untouched
- * up to -6 dBFS).
+ * up to -6 dBFS; or, its effects ending in a limiter, which holds every
+ * peak under its ceiling, only a guard at full scale, so that what the
+ * limiter lets through comes out as it is).
  * The worklet's processor and the stress measurement (chainStress.ts)
  * both render through it. Allocates nothing in render.
  */
@@ -229,6 +231,11 @@ export class Mixer {
   readonly #master = new Ramp(1)
   /** A soft clip on each side last; off, the sum as it is (for tests) */
   clip = true
+  /**
+   * The master's effects end in a limiter (setLimited): the clip only
+   * guards full scale, past which nothing the limiter lets out reaches
+   */
+  #limited = false
   #stripL = new Float32Array(BLOCK)
   #stripR = new Float32Array(BLOCK)
   /** A group's strips summed */
@@ -265,6 +272,18 @@ export class Mixer {
   /** The master's level, 0..1, after its effects and before the clip */
   setMaster(level: number): void {
     this.#master.goal = gain(level)
+  }
+
+  /**
+   * Whether the master's effects end in a limiter: the soft clip gives way
+   * to a guard at full scale, its ceiling the last word
+   */
+  setLimited(limited: boolean): void {
+    this.#limited = limited
+  }
+
+  get limited(): boolean {
+    return this.#limited
   }
 
   /** The buses and the master from silence: echoes and tails stop */
@@ -369,13 +388,22 @@ export class Mixer {
     let master = this.#master.now
     const masterStep = this.#master.step(length)
     const clip = this.clip
+    const limited = this.#limited
     // A local: in the benchmark's module runner an import read is a getter
     const bend = softClip
     for (let i = 0; i < length; i++) {
       const l = (left[i] as number) * master
       const r = (right[i] as number) * master
-      left[i] = clip ? bend(l) : l
-      right[i] = clip ? bend(r) : r
+      if (!clip) {
+        left[i] = l
+        right[i] = r
+      } else if (limited) {
+        left[i] = l > 1 ? 1 : l < -1 ? -1 : l
+        right[i] = r > 1 ? 1 : r < -1 ? -1 : r
+      } else {
+        left[i] = bend(l)
+        right[i] = bend(r)
+      }
       master += masterStep
     }
   }

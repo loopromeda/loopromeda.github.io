@@ -435,6 +435,16 @@ export function stripState(mix: Mix, k: number): StripState {
   return mix.strips.some((each) => each.solo) ? 'off' : 'on'
 }
 
+/**
+ * Whether the master's effects end in a limiter, which then takes the
+ * soft clip's place (src/dsp/output.ts): what it lets out is what is
+ * heard, its peaks under its ceiling, the meters reading them as they are
+ */
+export function masterLimited(mix: Mix): boolean {
+  const effects = mix.master.effects
+  return effects[effects.length - 1]?.kind === 'limiter'
+}
+
 /** Whether the strip at place k goes on to its sends: on, or soloed */
 export function stripHeard(mix: Mix, k: number): boolean {
   const state = stripState(mix, k)

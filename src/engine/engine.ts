@@ -43,12 +43,15 @@ import {
   PROCESSOR_NAME,
   TRACK_OUTPUTS,
   type BenchReport,
+  type EffectAt,
   type FromWorklet,
   type GlideReport,
   type LoadReport,
+  type LoudnessReport,
   type ToWorklet,
   type TrackLayout,
 } from './protocol'
+import { ReductionWatchers } from './reductions'
 
 /**
  * The context's own states (Safari adds 'interrupted', for phone calls and
@@ -224,6 +227,13 @@ export class Engine {
   #wheel = 0
   /** Who watches the notes still gliding (an XY pad), told each report */
   readonly #glideListeners = new Set<(report: GlideReport) => void>()
+  /**
+   * The compressors and limiters whose reductions are watched (their
+   * tiles, their panels), and who is told each
+   */
+  readonly #reductions = new ReductionWatchers((message) => this.#post(message))
+  /** Who shows the output's loudness, told each report */
+  readonly #loudnessListeners = new Set<(report: LoudnessReport) => void>()
   /** The session's song (src/state/song.ts): the tempo and the loops */
   #song: Song = initSong()
   readonly #songListeners = new Set<() => void>()
@@ -300,6 +310,10 @@ export class Engine {
       if (this.#wheel !== 0) this.#post({ t: 'wheel', value: this.#wheel })
       if (this.#glideListeners.size > 0) {
         this.#post({ t: 'watchGlides', on: true, track: this.#pick.track })
+      }
+      if (this.#reductions.watching) this.#post(this.#reductions.message)
+      if (this.#loudnessListeners.size > 0) {
+        this.#post({ t: 'watchLoudness', on: true })
       }
       await resumed
     } catch (error) {
@@ -482,6 +496,43 @@ export class Engine {
         this.#post({ t: 'watchGlides', on: false })
       }
     }
+  }
+
+  /**
+   * Tells listener how far the compressor or limiter at `at` turns things
+   * down, the deepest since the last report, in dB (0 or less), a few
+   * dozen times a second while it does, and 0 as it lets go: as many at
+   * once as are watched, each by as many as watch it. Returns the way to
+   * stop.
+   */
+  readonly watchReduction = (
+    at: EffectAt,
+    listener: (db: number) => void
+  ): (() => void) => this.#reductions.watch(at, listener)
+
+  /**
+   * Tells listener how loud the output is (LoudnessReport), ten times a
+   * second; the audio thread measures it all the while, and tells it
+   * only while someone watches. Returns the way to stop.
+   */
+  readonly watchLoudness = (
+    listener: (report: LoudnessReport) => void
+  ): (() => void) => {
+    this.#loudnessListeners.add(listener)
+    if (this.#loudnessListeners.size === 1) {
+      this.#post({ t: 'watchLoudness', on: true })
+    }
+    return () => {
+      if (!this.#loudnessListeners.delete(listener)) return
+      if (this.#loudnessListeners.size === 0) {
+        this.#post({ t: 'watchLoudness', on: false })
+      }
+    }
+  }
+
+  /** The integrated loudness from now on, as a Play starts it again */
+  resetLoudness(): void {
+    this.#post({ t: 'resetLoudness' })
   }
 
   /** The most voices playing at once (the synth's whole pool at most) */
@@ -915,6 +966,10 @@ export class Engine {
     } else if (message.t === 'step') {
       // One sent before a stop reached the audio thread is not shown
       if (this.#playing) this.#setStep(message.step)
+    } else if (message.t === 'reduction') {
+      this.#reductions.receive(message)
+    } else if (message.t === 'loudness') {
+      for (const listener of this.#loudnessListeners) listener(message)
     }
   }
 

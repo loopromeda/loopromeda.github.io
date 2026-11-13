@@ -13,13 +13,13 @@ import { PAD_NOTE, padName } from '../state/kit'
 import type { Library } from '../state/library'
 import { moveItem, movePart } from '../state/sound/edit'
 import {
-  EFFECT_KINDS,
   MAX_BUSES,
   MAX_CHAINS,
   MAX_EFFECTS,
   MAX_INPUTS,
   MAX_ITEMS,
   MAX_MODULATORS,
+  effectTile,
 } from '../state/sound/kinds'
 import {
   MASTER,
@@ -1615,7 +1615,7 @@ function MixGraph({
           )}
           <Tile
             engine={engine}
-            label={EFFECT_KINDS[kind].label}
+            label={effectTile(kind)}
             text={<MixLine engine={engine} part={effect} />}
             glyph={box.h >= 60 ? EFFECT_GLYPHS[kind] : undefined}
             look={look}

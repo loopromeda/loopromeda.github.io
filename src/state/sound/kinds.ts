@@ -27,6 +27,8 @@ export interface DestSpec {
 /** A kind of part: its name on screen, its knobs, what routes can move */
 export interface KindSpec {
   readonly label: string
+  /** On a tile, where label is too long for it: Comp */
+  readonly tile?: string
   readonly knobs: readonly KnobSpec[]
   readonly dests: readonly DestSpec[]
   /** Names of the inputs it reads (FM, a ring's two), each set or not */
@@ -285,10 +287,73 @@ function mix(initial: number): KnobSpec {
   }
 }
 
+/** A level or a gain in dB, from min to max, turned evenly */
+function decibels(
+  key: string,
+  label: string,
+  min: number,
+  max: number,
+  initial: number
+): KnobSpec {
+  return {
+    key,
+    label,
+    min,
+    max,
+    default: initial,
+    curve: 'linear',
+    step: 0,
+    unit: 'dB',
+  }
+}
+
+/** A corner in hertz, from min to max, each octave the same turn */
+function hertz(
+  key: string,
+  label: string,
+  min: number,
+  max: number,
+  initial: number
+): KnobSpec {
+  return {
+    key,
+    label,
+    min,
+    max,
+    default: initial,
+    curve: 'exponential',
+    step: 0,
+    unit: 'Hz',
+  }
+}
+
+/** A time in seconds, from min to max, each doubling the same turn */
+function seconds(
+  key: string,
+  label: string,
+  min: number,
+  max: number,
+  initial: number
+): KnobSpec {
+  return {
+    key,
+    label,
+    min,
+    max,
+    default: initial,
+    curve: 'exponential',
+    step: 0,
+    unit: 's',
+  }
+}
+
 /**
  * The effects a sound's inserts, a bus and the master are made of: each
  * runs on what reaches it summed, in stereo, in a row with the others
  * there. No route moves them, as a note's sources are each voice's own.
+ * The last three are the mastering tools (src/dsp/effects.ts): an EQ, a
+ * compressor and a limiter, which, last on the master, takes the soft
+ * clip's place.
  */
 export const EFFECT_KINDS = {
   chorus: {
@@ -402,6 +467,53 @@ export const EFFECT_KINDS = {
         unit: '%',
       },
       mix(0.3),
+    ],
+    dests: [],
+    refs: [],
+  },
+  eq: {
+    label: 'EQ',
+    knobs: [
+      { ...hertz('cut', 'Low Cut', 10, 500, 10), atMin: 'Off' },
+      decibels('low', 'Low', -15, 15, 0),
+      hertz('lowFreq', 'Low Freq', 30, 500, 100),
+      decibels('mid', 'Mid', -15, 15, 0),
+      hertz('midFreq', 'Mid Freq', 150, 8000, 1000),
+      decibels('high', 'High', -15, 15, 0),
+      hertz('highFreq', 'High Freq', 2000, 16000, 8000),
+    ],
+    dests: [],
+    refs: [],
+  },
+  compressor: {
+    label: 'Compressor',
+    tile: 'Comp',
+    knobs: [
+      decibels('threshold', 'Threshold', -60, 0, -18),
+      {
+        key: 'ratio',
+        label: 'Ratio',
+        min: 1,
+        max: 20,
+        default: 2,
+        curve: 'exponential',
+        step: 0,
+        unit: 'ratio',
+      },
+      seconds('attack', 'Attack', 0.0001, 0.1, 0.01),
+      seconds('release', 'Release', 0.01, 2, 0.15),
+      decibels('makeup', 'Makeup', 0, 24, 0),
+      mix(1),
+    ],
+    dests: [],
+    refs: [],
+  },
+  limiter: {
+    label: 'Limiter',
+    knobs: [
+      decibels('gain', 'Gain', 0, 24, 0),
+      decibels('ceiling', 'Ceiling', -12, 0, -1),
+      seconds('release', 'Release', 0.01, 1, 0.1),
     ],
     dests: [],
     refs: [],
@@ -642,3 +754,17 @@ export const MODULATOR_KIND_ORDER = Object.keys(
   MODULATOR_KINDS
 ) as ModulatorKind[]
 export const EFFECT_KIND_ORDER = Object.keys(EFFECT_KINDS) as EffectKind[]
+
+/**
+ * An effect kind that turns the sound down by how loud it is: its panel
+ * shows by how much (a compressor, a limiter)
+ */
+export function reduces(kind: EffectKind): boolean {
+  return kind === 'compressor' || kind === 'limiter'
+}
+
+/** An effect kind's name on a tile: its own tile name, else its label */
+export function effectTile(kind: EffectKind): string {
+  const spec: KindSpec = EFFECT_KINDS[kind]
+  return spec.tile ?? spec.label
+}

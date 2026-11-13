@@ -14,9 +14,11 @@ export type Curve = 'linear' | 'quadratic' | 'exponential' | 'bipolar'
 /**
  * How a value is rendered on screen: 's' shows milliseconds below 1 s, 'Hz'
  * kilohertz from 1 kHz, '%' signs the value when the range is two-sided,
- * and 'pan' names a side, -1..1: L 50, C, R 100
+ * 'pan' names a side, -1..1: L 50, C, R 100; 'dB' a tenth of a decibel
+ * under 10 (−1.5 dB, +12 dB), and 'ratio' a compressor's (2.5:1, 20:1)
  */
-export type Unit = '' | '%' | 'oct' | 'st' | 'ct' | 's' | 'Hz' | 'pan'
+export type Unit =
+  '' | '%' | 'oct' | 'st' | 'ct' | 's' | 'Hz' | 'pan' | 'dB' | 'ratio'
 
 /** One knob: its range, its mapping and how to display it */
 export interface ParamSpec extends ValueSpec {
@@ -37,6 +39,8 @@ export interface ValueSpec {
   readonly unit: Unit
   /** Enums: one name per integer value from min to max */
   readonly choices?: readonly string[]
+  /** Shown in the value's place at the minimum, where it does nothing: Off */
+  readonly atMin?: string
 }
 
 /** The LFO shapes, in src/dsp/lfo.ts's order */
@@ -647,6 +651,7 @@ export function formatValue(spec: ValueSpec, value: number): string {
   if (spec.choices) {
     return spec.choices[Math.round(v - spec.min)] as string
   }
+  if (spec.atMin !== undefined && v <= spec.min) return spec.atMin
   if (spec.unit === '%') {
     const r = Math.round(v * 100)
     return `${spec.min < 0 ? sign(r) : ''}${Math.abs(r)}%`
@@ -656,6 +661,8 @@ export function formatValue(spec: ValueSpec, value: number): string {
     return r < 0 ? `L ${-r}` : r > 0 ? `R ${r}` : 'C'
   }
   if (spec.unit === 's') {
+    // A tenth of a millisecond under ten: a compressor's attack, 0.5 ms
+    if (v < 0.00995) return `${Number((v * 1000).toFixed(1))} ms`
     const ms = Math.round(v * 1000)
     // Three significant figures: 1.25 s, 10 s
     return ms < 1000 ? `${ms} ms` : `${Number(v.toPrecision(3))} s`
@@ -664,6 +671,16 @@ export function formatValue(spec: ValueSpec, value: number): string {
     // Three significant figures: 0.35 Hz, 12.3 Hz, 440 Hz, 1.23 kHz
     const hz = Number(v.toPrecision(3))
     return hz < 1000 ? `${hz} Hz` : `${Number((v / 1000).toPrecision(3))} kHz`
+  }
+  if (spec.unit === 'dB') {
+    // A tenth under 10: −1.5 dB, +12 dB
+    const r = Math.abs(v) < 9.95 ? Math.round(v * 10) / 10 : Math.round(v)
+    const digits = Math.abs(r) < 10 && r !== 0 ? 1 : 0
+    return `${sign(r)}${Math.abs(r).toFixed(digits)} dB`
+  }
+  if (spec.unit === 'ratio') {
+    const r = v < 9.95 ? Math.round(v * 10) / 10 : Math.round(v)
+    return `${r}:1`
   }
   if (spec.unit) {
     const r = Math.round(v)

@@ -16,7 +16,10 @@ import {
   DEST_PAN,
   DEST_PITCH,
   FX_CHORUS,
+  FX_COMPRESSOR,
   FX_DELAY,
+  FX_EQ,
+  FX_LIMITER,
   FX_REVERB,
   INPUT_FM,
   INPUT_NOISE,
@@ -47,7 +50,7 @@ import {
   sendDest,
 } from '../dsp/slots'
 import type { KitChain } from '../state/kit'
-import { stripHeard, type Mix } from '../state/mix'
+import { masterLimited, stripHeard, type Mix } from '../state/mix'
 import {
   BUS_IDS,
   BUS_SPEC,
@@ -79,6 +82,9 @@ const EFFECT_KIND: Record<EffectKind, number> = {
   chorus: FX_CHORUS,
   delay: FX_DELAY,
   reverb: FX_REVERB,
+  eq: FX_EQ,
+  compressor: FX_COMPRESSOR,
+  limiter: FX_LIMITER,
 }
 const NOTE_SOURCE: Record<NoteSource, number> = {
   velocity: SOURCE_VELOCITY,
@@ -110,6 +116,8 @@ export class SoundPlayer {
   readonly strip: Strip | undefined
   /** By part id (and amp, voice, sends): its knobs, and their setter */
   readonly #parts = new Map<string, Held>()
+  /** Each insert's slot in the strip's rack, by its id */
+  readonly #inserts = new Map<string, number>()
 
   constructor(target: ChainSynth | Strip) {
     if (target instanceof ChainSynth) {
@@ -126,6 +134,7 @@ export class SoundPlayer {
     const synth = this.synth
     const parts = this.#parts
     parts.clear()
+    this.#inserts.clear()
     /** Keeps a part's knobs and how to hand them over, and hands them over */
     const hold = (id: string, values: Values, apply: (value: Read) => void) => {
       const read: Read = (key, missing = 0) => values[key] ?? missing
@@ -239,6 +248,7 @@ export class SoundPlayer {
       const rack = strip.inserts
       rack.count = sound.effects.length
       sound.effects.forEach((effect, f) => {
+        this.#inserts.set(effect.id, f)
         rack.setKind(f, EFFECT_KIND[effect.kind])
         hold(effect.id, { ...effect.values }, (value) =>
           setEffect(rack, f, effect.kind, value)
@@ -308,6 +318,16 @@ export class SoundPlayer {
   }
 
   /**
+   * The rack and slot of the insert id of the sound last loaded: none on a
+   * synth alone, or for no such insert
+   */
+  insert(id: string): EffectSlot | undefined {
+    const slot = this.#inserts.get(id)
+    const rack = this.strip?.inserts
+    return slot === undefined || !rack ? undefined : { rack, slot }
+  }
+
+  /**
    * Sets knob key of part (an id of the sound last loaded, amp or voice)
    * to value, in the sound's own units, as the document holds it. A part
    * or key the sound does not have, or a value that is not a number, is
@@ -357,6 +377,32 @@ function setEffect(
         value('damp'),
         value('mix')
       )
+      return
+    case 'eq':
+      rack.setEq(
+        k,
+        value('cut'),
+        value('low'),
+        value('lowFreq'),
+        value('mid'),
+        value('midFreq'),
+        value('high'),
+        value('highFreq')
+      )
+      return
+    case 'compressor':
+      rack.setCompressor(
+        k,
+        value('threshold'),
+        value('ratio'),
+        value('attack'),
+        value('release'),
+        value('makeup'),
+        value('mix')
+      )
+      return
+    case 'limiter':
+      rack.setLimiter(k, value('gain'), value('ceiling'), value('release'))
   }
 }
 
@@ -403,6 +449,47 @@ export function applyMix(
   })
   applyEffects(mixer.master, mix.master.effects)
   mixer.setMaster(reader(MASTER_SPEC.knobs, mix.master.values)('level'))
+  // A limiter last on the master: its ceiling, not the soft clip, the end
+  mixer.setLimited(masterLimited(mix))
+}
+
+/** An effect's rack and its slot there */
+export interface EffectSlot {
+  readonly rack: EffectRack
+  readonly slot: number
+}
+
+/**
+ * Where the mix's effect id plays (applyMix): its slot on the master's
+ * rack, or on its bus's; none for no such effect
+ */
+export function mixEffect(
+  mixer: Mixer,
+  mix: Mix,
+  id: string
+): EffectSlot | undefined {
+  const onMaster = mix.master.effects.findIndex((effect) => effect.id === id)
+  if (onMaster >= 0) return { rack: mixer.master, slot: onMaster }
+  for (let k = 0; k < BUS_IDS.length; k++) {
+    const bus = mix.buses.find((each) => each.id === BUS_IDS[k])
+    const slot = bus?.effects.findIndex((effect) => effect.id === id) ?? -1
+    const rack = mixer.bus(k)
+    if (slot >= 0 && rack) return { rack, slot }
+  }
+  return undefined
+}
+
+/**
+ * Where a kit's chain's effect id plays (applyKitChain): its slot on the
+ * group's inserts; none for no such effect
+ */
+export function chainEffect(
+  part: Part,
+  chain: KitChain,
+  id: string
+): EffectSlot | undefined {
+  const slot = chain.effects.findIndex((effect) => effect.id === id)
+  return slot >= 0 && part.inserts ? { rack: part.inserts, slot } : undefined
 }
 
 /**

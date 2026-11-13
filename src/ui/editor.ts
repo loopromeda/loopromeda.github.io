@@ -11,6 +11,7 @@ import {
   ITEM_KINDS,
   VOICE_SPEC,
   WAVE_NAMES,
+  effectTile,
   type EffectKind,
 } from '../state/sound/kinds'
 import {
@@ -21,6 +22,7 @@ import {
   type Mix,
   type MixOwner,
 } from '../state/mix'
+import { formatValue } from '../state/params'
 import { setRef, setValue } from '../state/sound/edit'
 import {
   AMP,
@@ -134,6 +136,12 @@ export const GLYPHS = {
   delay: 'M2 11 V2 M6.5 11 V4.5 M11 11 V7 M15.5 11 V9',
   reverb:
     'M1 11 L2.5 2 L3.5 8 L4.5 4 L5.5 9 L6.5 5.5 L7.5 9.5 L8.5 7 L9.5 10 L10.5 8 L11.5 10.5 L13 9.5 L14.5 10.5 H17',
+  // A desk's three faders, each at its own height; a level's way in to
+  // out, bending over at the threshold; a wave held under a ceiling
+  eq: 'M4 1.5 V10.5 M9 1.5 V10.5 M14 1.5 V10.5 M2.5 7.5 H5.5 M7.5 3.5 H10.5 M12.5 6 H15.5',
+  compressor: 'M1 11 L8 4 C9.5 2.6 11 2.4 17 1.5',
+  limiter:
+    'M1 1.5 H17 M1 10.5 C3 10.5 3.5 4 5.5 4 H12.5 C14.5 4 15 10.5 17 10.5',
   // Bars of a meter, the master's
   master: 'M3 11 V6 M7 11 V2 M11 11 V4 M15 11 V8',
   // A path that forks, the sound's sends to the returns
@@ -162,6 +170,9 @@ export const EFFECT_GLYPHS: Record<EffectKind, string> = {
   chorus: GLYPHS.chorus,
   delay: GLYPHS.delay,
   reverb: GLYPHS.reverb,
+  eq: GLYPHS.eq,
+  compressor: GLYPHS.compressor,
+  limiter: GLYPHS.limiter,
 }
 
 /** The pictogram of the part id names, or '' for one with none (a chain) */
@@ -204,6 +215,13 @@ export function tileLabel(sound: Sound, id: string): string {
       const same = chain.items.filter((item) => item.kind === part.kind)
       const label = ITEM_KINDS[part.kind].label
       return same.length > 1 ? `${label} ${same.indexOf(part) + 1}` : label
+    }
+    case 'effect': {
+      // As partName, by the kind's tile name where it has one: Comp 2
+      const { part } = found
+      const tile = effectTile(part.kind)
+      const same = sound.effects.filter((effect) => effect.kind === part.kind)
+      return same.length > 1 ? `${tile} ${same.indexOf(part) + 1}` : tile
     }
     default:
       return partName(sound, id)
@@ -479,7 +497,8 @@ export function tileLine(sound: Sound, id: string): string {
 
 /**
  * An effect's line, from its knobs: a chorus's rate, a delay's time, a
- * reverb's decay
+ * reverb's decay; an EQ's boldest band (Low +3.0 dB), else its low cut,
+ * else Flat; a compressor's threshold and ratio, a limiter's ceiling
  */
 export function effectLine(effect: {
   readonly kind: EffectKind
@@ -493,7 +512,46 @@ export function effectLine(effect: {
       return shortTime(values.time ?? 0)
     case 'reverb':
       return shortTime(values.decay ?? 0)
+    case 'eq':
+      return eqLine(values)
+    case 'compressor':
+      return `${shown('compressor', 'threshold', values)} ${shown('compressor', 'ratio', values)}`
+    case 'limiter':
+      return shown('limiter', 'ceiling', values)
   }
+}
+
+/** The EQ's bands, as its line names them */
+const EQ_BANDS = [
+  { key: 'low', name: 'Low' },
+  { key: 'mid', name: 'Mid' },
+  { key: 'high', name: 'High' },
+] as const
+
+/** An EQ's line: the band it moves most, else its low cut, else Flat */
+function eqLine(values: Readonly<Record<string, number>>): string {
+  let boldest: (typeof EQ_BANDS)[number] | undefined
+  for (const band of EQ_BANDS) {
+    const gain = Math.abs(values[band.key] ?? 0)
+    if (gain >= 0.05 && gain > Math.abs(values[boldest?.key ?? ''] ?? 0)) {
+      boldest = band
+    }
+  }
+  if (boldest) return `${boldest.name} ${shown('eq', boldest.key, values)}`
+  const cut = values.cut ?? 0
+  return shown('eq', 'cut', values) === 'Off' || cut <= 0
+    ? 'Flat'
+    : `Cut ${shortHz(cut)}`
+}
+
+/** Knob key of an effect of kind, shown as its knob shows it */
+function shown(
+  kind: EffectKind,
+  key: string,
+  values: Readonly<Record<string, number>>
+): string {
+  const spec = EFFECT_KINDS[kind].knobs.find((knob) => knob.key === key)
+  return spec ? formatValue(spec, values[key] ?? spec.default) : ''
 }
 
 /**

@@ -205,6 +205,67 @@ describe('formatValue', () => {
     expect(formatValue(decay, 1.254)).toBe('1.25 s')
     expect(formatValue(decay, 10)).toBe('10 s')
   })
+
+  it('renders a tenth of a millisecond under ten', () => {
+    const attack = {
+      min: 0.0001,
+      max: 0.1,
+      default: 0.01,
+      curve: 'exponential',
+      step: 0,
+      unit: 's',
+    } as const
+    expect(formatValue(attack, 0.0001)).toBe('0.1 ms')
+    expect(formatValue(attack, 0.00052)).toBe('0.5 ms')
+    expect(formatValue(attack, 0.0094)).toBe('9.4 ms')
+    expect(formatValue(attack, 0.0123)).toBe('12 ms')
+  })
+
+  it('signs decibels, a tenth under ten', () => {
+    const gain = {
+      min: -15,
+      max: 15,
+      default: 0,
+      curve: 'linear',
+      step: 0,
+      unit: 'dB',
+    } as const
+    expect(formatValue(gain, 0)).toBe('0 dB')
+    expect(formatValue(gain, 0.02)).toBe('0 dB')
+    expect(formatValue(gain, 3.04)).toBe('+3.0 dB')
+    expect(formatValue(gain, -1.56)).toBe('\u22121.6 dB')
+    expect(formatValue(gain, 12.4)).toBe('+12 dB')
+    expect(formatValue(gain, -15)).toBe('\u221215 dB')
+  })
+
+  it('renders a ratio against one', () => {
+    const ratio = {
+      min: 1,
+      max: 20,
+      default: 2,
+      curve: 'exponential',
+      step: 0,
+      unit: 'ratio',
+    } as const
+    expect(formatValue(ratio, 1)).toBe('1:1')
+    expect(formatValue(ratio, 2.54)).toBe('2.5:1')
+    expect(formatValue(ratio, 12.3)).toBe('12:1')
+  })
+
+  it('names the minimum, where a knob does nothing, when given', () => {
+    const cut = {
+      min: 10,
+      max: 500,
+      default: 10,
+      curve: 'exponential',
+      step: 0,
+      unit: 'Hz',
+      atMin: 'Off',
+    } as const
+    expect(formatValue(cut, 10)).toBe('Off')
+    expect(formatValue(cut, 2)).toBe('Off')
+    expect(formatValue(cut, 80)).toBe('80 Hz')
+  })
 })
 
 describe('the bipolar curve', () => {

@@ -1,6 +1,7 @@
 /**
  * The effects after the voices (docs/plan/effects-parts-sequencer.md): a
- * chorus, a delay and a reverb, each run once on the voices summed, in
+ * chorus, a delay and a reverb, and the mastering tools, an EQ, a
+ * compressor and a limiter, each run once on the voices summed, in
  * stereo, in place. Up to MAX_EFFECTS stand in a row (EffectRack), each
  * slot playing the kind set on it, made the first time the slot is set
  * to it (a delay holds a megabyte of lines; most racks never play one).
@@ -8,7 +9,15 @@
  * a time over a few tens of milliseconds. Allocates nothing in process.
  */
 import { sinCycles } from './fastMath'
-import { FX_CHORUS, FX_DELAY, FX_REVERB, MAX_EFFECTS } from './slots'
+import {
+  FX_CHORUS,
+  FX_COMPRESSOR,
+  FX_DELAY,
+  FX_EQ,
+  FX_LIMITER,
+  FX_REVERB,
+  MAX_EFFECTS,
+} from './slots'
 
 /** The dry signal's level at a Mix of 0..1: whole up to 1/2, then down */
 export function dryLevel(mix: number): number {
@@ -437,6 +446,536 @@ export class Reverb {
   }
 }
 
+/** dB to a gain's natural log, and back: a gain is e to the dB times this */
+const DB_TO_NEPER = Math.LN10 / 20
+const NEPER_TO_DB = 20 / Math.LN10
+
+/** A level in dB as a gain */
+export function dbToGain(db: number): number {
+  return Math.exp(db * DB_TO_NEPER)
+}
+
+/**
+ * One second-order section over both sides, in transposed direct form II,
+ * its coefficients a0 divided out: an EQ's band
+ */
+class Section {
+  b0 = 1
+  b1 = 0
+  b2 = 0
+  a1 = 0
+  a2 = 0
+  #l1 = 0
+  #l2 = 0
+  #r1 = 0
+  #r2 = 0
+
+  /** From the cookbook's six coefficients */
+  set(b0: number, b1: number, b2: number, a0: number, a1: number, a2: number) {
+    this.b0 = b0 / a0
+    this.b1 = b1 / a0
+    this.b2 = b2 / a0
+    this.a1 = a1 / a0
+    this.a2 = a2 / a0
+  }
+
+  reset(): void {
+    this.#l1 = this.#l2 = this.#r1 = this.#r2 = 0
+  }
+
+  process(left: Float32Array, right: Float32Array, length: number): void {
+    const { b0, b1, b2, a1, a2 } = this
+    let l1 = this.#l1
+    let l2 = this.#l2
+    let r1 = this.#r1
+    let r2 = this.#r2
+    for (let i = 0; i < length; i++) {
+      const xl = left[i] as number
+      const yl = b0 * xl + l1
+      l1 = b1 * xl - a1 * yl + l2
+      l2 = b2 * xl - a2 * yl
+      left[i] = yl
+      const xr = right[i] as number
+      const yr = b0 * xr + r1
+      r1 = b1 * xr - a1 * yr + r2
+      r2 = b2 * xr - a2 * yr
+      right[i] = yr
+    }
+    this.#l1 = flush(l1)
+    this.#l2 = flush(l2)
+    this.#r1 = flush(r1)
+    this.#r2 = flush(r2)
+  }
+}
+
+/** A low cut at this or lower is off: the EQ passes the lows whole */
+export const EQ_CUT_OFF = 10
+/** The mid band's bell: about two octaves wide, broad, as a master's */
+const EQ_MID_Q = 0.7
+/** The low cut's slope: 12 dB an octave, no bump at its corner */
+const EQ_CUT_Q = Math.SQRT1_2
+/** How long an EQ's knob takes to glide most of the way, in seconds */
+const EQ_GLIDE = 0.02
+/** Its bands never go past this share of the sample rate */
+const EQ_HIGHEST = 0.45
+
+/** The EQ's knobs, gains in dB and corners in hertz (the logs of them) */
+const EQ_CUT = 0
+const EQ_LOW_GAIN = 1
+const EQ_LOW_FREQ = 2
+const EQ_MID_GAIN = 3
+const EQ_MID_FREQ = 4
+const EQ_HIGH_GAIN = 5
+const EQ_HIGH_FREQ = 6
+const EQ_KNOBS = 7
+
+/**
+ * An EQ for a sound, a bus or the master: a low cut (12 dB an octave, off
+ * at EQ_CUT_OFF), a low shelf, a broad bell in the middle and a high
+ * shelf, each band's gain in dB and corner in hertz (the cookbook's
+ * filters). A knob turned glides over about 20 ms, the bands worked out
+ * again each block while it does; a band at 0 dB, or a cut that is off,
+ * costs nothing.
+ */
+export class Equalizer {
+  readonly #sampleRate: number
+  readonly #cut = new Section()
+  readonly #low = new Section()
+  readonly #mid = new Section()
+  readonly #high = new Section()
+  /** Where each knob goes and where it is: gains in dB, corners as logs */
+  readonly #goal = new Float64Array(EQ_KNOBS)
+  readonly #now = new Float64Array(EQ_KNOBS)
+  #settled = false
+  #fresh = true
+
+  constructor(sampleRate: number) {
+    this.#sampleRate = sampleRate
+    this.set(EQ_CUT_OFF, 0, 100, 0, 1000, 0, 8000)
+  }
+
+  set(
+    cut: number,
+    lowGain: number,
+    lowFreq: number,
+    midGain: number,
+    midFreq: number,
+    highGain: number,
+    highFreq: number
+  ): void {
+    const most = EQ_HIGHEST * this.#sampleRate
+    const corner = (hertz: number, fallback: number) =>
+      Math.log(
+        Number.isFinite(hertz) ? Math.min(Math.max(hertz, 1), most) : fallback
+      )
+    const gain = (db: number) => (Number.isFinite(db) ? db : 0)
+    const goal = this.#goal
+    goal[EQ_CUT] = corner(cut, EQ_CUT_OFF)
+    goal[EQ_LOW_GAIN] = gain(lowGain)
+    goal[EQ_LOW_FREQ] = corner(lowFreq, 100)
+    goal[EQ_MID_GAIN] = gain(midGain)
+    goal[EQ_MID_FREQ] = corner(midFreq, 1000)
+    goal[EQ_HIGH_GAIN] = gain(highGain)
+    goal[EQ_HIGH_FREQ] = corner(highFreq, 8000)
+    this.#settled = false
+  }
+
+  reset(): void {
+    this.#cut.reset()
+    this.#low.reset()
+    this.#mid.reset()
+    this.#high.reset()
+    this.#fresh = true
+  }
+
+  process(left: Float32Array, right: Float32Array, length: number): void {
+    const now = this.#now
+    const goal = this.#goal
+    if (this.#fresh) {
+      this.#fresh = false
+      now.set(goal)
+      this.#settled = false
+    }
+    if (!this.#settled) {
+      // Most of the way over EQ_GLIDE, landing once within a hair
+      const k = 1 - Math.exp(-length / (EQ_GLIDE * this.#sampleRate))
+      let settled = true
+      for (let j = 0; j < EQ_KNOBS; j++) {
+        const gap = (goal[j] as number) - (now[j] as number)
+        if (Math.abs(gap) < 1e-4) now[j] = goal[j] as number
+        else {
+          now[j] = (now[j] as number) + gap * k
+          settled = false
+        }
+      }
+      this.#settled = settled
+      this.#design()
+    }
+    if ((now[EQ_CUT] as number) > Math.log(EQ_CUT_OFF) + 1e-6) {
+      this.#cut.process(left, right, length)
+    }
+    if (now[EQ_LOW_GAIN] !== 0) this.#low.process(left, right, length)
+    if (now[EQ_MID_GAIN] !== 0) this.#mid.process(left, right, length)
+    if (now[EQ_HIGH_GAIN] !== 0) this.#high.process(left, right, length)
+  }
+
+  /** Each band's coefficients from where its knobs are now */
+  #design(): void {
+    const now = this.#now
+    const rate = this.#sampleRate
+    const w = (log: number) => (2 * Math.PI * Math.exp(log)) / rate
+    {
+      const w0 = w(now[EQ_CUT] as number)
+      const cos = Math.cos(w0)
+      const alpha = Math.sin(w0) / (2 * EQ_CUT_Q)
+      this.#cut.set(
+        (1 + cos) / 2,
+        -(1 + cos),
+        (1 + cos) / 2,
+        1 + alpha,
+        -2 * cos,
+        1 - alpha
+      )
+    }
+    shelf(
+      this.#low,
+      now[EQ_LOW_GAIN] as number,
+      w(now[EQ_LOW_FREQ] as number),
+      -1
+    )
+    {
+      const a = 10 ** ((now[EQ_MID_GAIN] as number) / 40)
+      const w0 = w(now[EQ_MID_FREQ] as number)
+      const cos = Math.cos(w0)
+      const alpha = Math.sin(w0) / (2 * EQ_MID_Q)
+      this.#mid.set(
+        1 + alpha * a,
+        -2 * cos,
+        1 - alpha * a,
+        1 + alpha / a,
+        -2 * cos,
+        1 - alpha / a
+      )
+    }
+    shelf(
+      this.#high,
+      now[EQ_HIGH_GAIN] as number,
+      w(now[EQ_HIGH_FREQ] as number),
+      1
+    )
+  }
+}
+
+/**
+ * A shelf of gain dB from w0 (radians a sample) on: up the spectrum
+ * (side 1, a high shelf) or down it (-1, a low shelf), its slope the
+ * cookbook's steepest without a bump (S = 1)
+ */
+function shelf(section: Section, gain: number, w0: number, side: 1 | -1) {
+  const a = 10 ** (gain / 40)
+  const cos = Math.cos(w0)
+  const alpha = (Math.sin(w0) / 2) * Math.SQRT2
+  const root = 2 * Math.sqrt(a) * alpha
+  const s = side
+  section.set(
+    a * (a + 1 + s * (a - 1) * cos + root),
+    -2 * s * a * (a - 1 + s * (a + 1) * cos),
+    a * (a + 1 + s * (a - 1) * cos - root),
+    a + 1 - s * (a - 1) * cos + root,
+    2 * s * (a - 1 - s * (a + 1) * cos),
+    a + 1 - s * (a - 1) * cos - root
+  )
+}
+
+/** The compressor's knee, dB wide: its ratio comes in softly over it */
+export const COMPRESSOR_KNEE = 6
+/** Quieter than this, dB, a sample counts as silence to the detector */
+const DETECTOR_FLOOR = -120
+
+/**
+ * How much a level of x dB is turned down, in dB (0 or less), by a
+ * compressor of threshold (dB) and ratio: nothing under the knee, which
+ * spans COMPRESSOR_KNEE about the threshold, and past it all but a ratio's
+ * share of the way over
+ */
+export function compression(x: number, threshold: number, ratio: number) {
+  const over = x - threshold
+  const less = 1 / (ratio > 1 ? ratio : 1) - 1
+  if (2 * over <= -COMPRESSOR_KNEE) return 0
+  if (2 * over < COMPRESSOR_KNEE) {
+    const into = over + COMPRESSOR_KNEE / 2
+    return (less * into * into) / (2 * COMPRESSOR_KNEE)
+  }
+  return less * over
+}
+
+/**
+ * A compressor: both sides' louder peak each sample, turned down by
+ * compression (threshold in dB, ratio, a soft knee), the turn smoothed
+ * as it goes, quickly over attack seconds as it deepens and slowly over
+ * release as it lets go, then made up by makeup dB; mix 0..1 blends the
+ * compressed with what came in (whole up to the middle, as every effect's
+ * Mix: half and half is parallel compression). The deepest it has turned
+ * things down since last asked is kept (takeReduction).
+ */
+export class Compressor {
+  readonly #sampleRate: number
+  #threshold = -18
+  #ratio = 2
+  #attack = 0
+  #release = 0
+  readonly #makeup = new Ramp(1)
+  readonly #mix = new Ramp(1)
+  /** How far it turns things down now, dB, and the deepest since asked */
+  #reduction = 0
+  #deepest = 0
+  #fresh = true
+
+  constructor(sampleRate: number) {
+    this.#sampleRate = sampleRate
+    this.set(-18, 2, 0.01, 0.15, 0, 1)
+  }
+
+  set(
+    threshold: number,
+    ratio: number,
+    attack: number,
+    release: number,
+    makeup: number,
+    mix: number
+  ): void {
+    const rate = this.#sampleRate
+    const smoothing = (seconds: number) =>
+      Math.exp(-1 / (Math.max(seconds, 1e-5) * rate))
+    if (Number.isFinite(threshold)) this.#threshold = threshold
+    if (Number.isFinite(ratio)) this.#ratio = Math.max(ratio, 1)
+    if (Number.isFinite(attack)) this.#attack = smoothing(attack)
+    if (Number.isFinite(release)) this.#release = smoothing(release)
+    if (Number.isFinite(makeup)) this.#makeup.goal = dbToGain(makeup)
+    this.#mix.goal = clamp01(mix)
+  }
+
+  reset(): void {
+    this.#reduction = 0
+    this.#deepest = 0
+    this.#fresh = true
+  }
+
+  /** The deepest it turned things down since last asked, dB (0 or less) */
+  takeReduction(): number {
+    const deepest = this.#deepest
+    this.#deepest = 0
+    return deepest
+  }
+
+  process(left: Float32Array, right: Float32Array, length: number): void {
+    if (this.#fresh) {
+      this.#fresh = false
+      this.#makeup.snap()
+      this.#mix.snap()
+    }
+    let makeup = this.#makeup.now
+    const makeupStep = this.#makeup.step(length)
+    let mix = this.#mix.now
+    const mixStep = this.#mix.step(length)
+    const threshold = this.#threshold
+    const ratio = this.#ratio
+    const attack = this.#attack
+    const release = this.#release
+    let reduction = this.#reduction
+    let deepest = this.#deepest
+    for (let i = 0; i < length; i++) {
+      const l = left[i] as number
+      const r = right[i] as number
+      const al = l > 0 ? l : -l
+      const ar = r > 0 ? r : -r
+      const peak = al > ar ? al : ar
+      const level = peak > 1e-6 ? Math.log(peak) * NEPER_TO_DB : DETECTOR_FLOOR
+      const want = compression(level, threshold, ratio)
+      // Deeper: the attack's pace; letting go: the release's
+      const pace = want < reduction ? attack : release
+      reduction = want + (reduction - want) * pace
+      if (reduction < deepest) deepest = reduction
+      const gain = Math.exp(reduction * DB_TO_NEPER) * makeup
+      const dry = dryLevel(mix)
+      const wet = wetLevel(mix) * gain
+      left[i] = l * dry + l * wet
+      right[i] = r * dry + r * wet
+      makeup += makeupStep
+      mix += mixStep
+    }
+    this.#reduction = reduction > -1e-9 ? 0 : reduction
+    this.#deepest = deepest
+  }
+}
+
+/** How far ahead the limiter looks, in seconds: what passes it is late by */
+export const LIMITER_LOOKAHEAD = 0.002
+
+/**
+ * A limiter, for the end of the master above all: nothing comes out past
+ * its ceiling (dB, 0 or less). Both sides are driven up by gain dB, then
+ * delayed by its lookahead (about 2 ms) while it looks for what would
+ * pass the ceiling there: the gain each sample needs is held at the least
+ * of the lookahead's (a running minimum) and averaged over as long again,
+ * so the gain is down by the time the peak leaves, in a smooth slope, no
+ * jump; it comes back up over release seconds. A last clamp at the
+ * ceiling keeps rounding from ever passing it. The deepest it has turned
+ * things down since last asked is kept (takeReduction).
+ */
+export class Limiter {
+  readonly #sampleRate: number
+  /** The lookahead, whole samples: the window and the average's length */
+  readonly #window: number
+  readonly #mask: number
+  /** What came in, driven, by sample (n & mask) */
+  readonly #left: Float32Array
+  readonly #right: Float32Array
+  /** The gain each sample needs to stay under the ceiling, by sample */
+  readonly #needs: Float64Array
+  /**
+   * The running minimum's queue: the samples whose need may still be the
+   * least of the window, oldest first, their needs rising
+   */
+  readonly #queue: Float64Array
+  #head = 0
+  #tail = 0
+  /** The minima over the window, the last window's of them, and their sum */
+  readonly #minima: Float64Array
+  #at = 0
+  #sum = 0
+  /** Samples taken in since reset */
+  #n = 0
+  #gain = 1
+  #lowest = 1
+  #ceiling = 1
+  #release = 0
+  readonly #drive = new Ramp(1)
+  #fresh = true
+
+  constructor(sampleRate: number) {
+    this.#sampleRate = sampleRate
+    const window = Math.max(1, Math.round(LIMITER_LOOKAHEAD * sampleRate))
+    this.#window = window
+    const size = powerOfTwo(window + 1)
+    this.#mask = size - 1
+    this.#left = new Float32Array(size)
+    this.#right = new Float32Array(size)
+    this.#needs = new Float64Array(size)
+    this.#queue = new Float64Array(size)
+    this.#minima = new Float64Array(window)
+    this.set(0, -1, 0.1)
+    this.reset()
+  }
+
+  /** The samples what passes it is late by */
+  get latency(): number {
+    return this.#window - 1
+  }
+
+  set(gain: number, ceiling: number, release: number): void {
+    if (Number.isFinite(gain)) this.#drive.goal = dbToGain(gain)
+    if (Number.isFinite(ceiling)) this.#ceiling = dbToGain(Math.min(ceiling, 0))
+    if (Number.isFinite(release)) {
+      const seconds = Math.max(release, 1e-3)
+      this.#release = 1 - Math.exp(-1 / (seconds * this.#sampleRate))
+    }
+  }
+
+  reset(): void {
+    this.#left.fill(0)
+    this.#right.fill(0)
+    this.#needs.fill(1)
+    this.#head = this.#tail = 0
+    this.#minima.fill(1)
+    this.#at = 0
+    this.#sum = this.#window
+    this.#n = 0
+    this.#gain = 1
+    this.#lowest = 1
+    this.#fresh = true
+  }
+
+  /** The deepest it turned things down since last asked, dB (0 or less) */
+  takeReduction(): number {
+    const lowest = this.#lowest
+    this.#lowest = 1
+    return lowest < 1 ? Math.log(lowest) * NEPER_TO_DB : 0
+  }
+
+  process(left: Float32Array, right: Float32Array, length: number): void {
+    if (this.#fresh) {
+      this.#fresh = false
+      this.#drive.snap()
+    }
+    let drive = this.#drive.now
+    const driveStep = this.#drive.step(length)
+    const window = this.#window
+    const mask = this.#mask
+    const inL = this.#left
+    const inR = this.#right
+    const needs = this.#needs
+    const queue = this.#queue
+    const minima = this.#minima
+    const ceiling = this.#ceiling
+    const release = this.#release
+    let head = this.#head
+    let tail = this.#tail
+    let at = this.#at
+    let sum = this.#sum
+    let n = this.#n
+    let gain = this.#gain
+    let lowest = this.#lowest
+    for (let i = 0; i < length; i++) {
+      const l = (left[i] as number) * drive
+      const r = (right[i] as number) * drive
+      inL[n & mask] = l
+      inR[n & mask] = r
+      const al = l > 0 ? l : -l
+      const ar = r > 0 ? r : -r
+      const peak = al > ar ? al : ar
+      const need = peak > ceiling ? ceiling / peak : 1
+      needs[n & mask] = need
+      // The running minimum over the window: drop those it outdoes
+      while (
+        tail > head &&
+        (needs[(queue[(tail - 1) & mask] as number) & mask] as number) >= need
+      ) {
+        tail--
+      }
+      queue[tail & mask] = n
+      tail++
+      if ((queue[head & mask] as number) <= n - window) head++
+      const least = needs[(queue[head & mask] as number) & mask] as number
+      // Averaged over the window: down in a slope, by the peak's leaving
+      sum += least - (minima[at] as number)
+      minima[at] = least
+      at = at + 1 === window ? 0 : at + 1
+      const average = sum / window
+      gain = average < gain ? average : gain + (average - gain) * release
+      if (gain < lowest) lowest = gain
+      const out = n - (window - 1)
+      let yl = (inL[out & mask] as number) * gain
+      let yr = (inR[out & mask] as number) * gain
+      yl = yl > ceiling ? ceiling : yl < -ceiling ? -ceiling : yl
+      yr = yr > ceiling ? ceiling : yr < -ceiling ? -ceiling : yr
+      left[i] = yl
+      right[i] = yr
+      n++
+      drive += driveStep
+    }
+    // The queue's counters kept small: they count within the buffer
+    const shift = head - (head & mask)
+    this.#head = head - shift
+    this.#tail = tail - shift
+    this.#at = at
+    this.#sum = sum
+    this.#n = n
+    this.#gain = gain
+    this.#lowest = lowest
+  }
+}
+
 /** No effect on a slot past the rack's count */
 const NO_EFFECT = -1
 /**
@@ -459,6 +998,9 @@ export class EffectRack {
   readonly #chorus: (Chorus | null)[] = []
   readonly #delay: (Delay | null)[] = []
   readonly #reverb: (Reverb | null)[] = []
+  readonly #eq: (Equalizer | null)[] = []
+  readonly #compressor: (Compressor | null)[] = []
+  readonly #limiter: (Limiter | null)[] = []
   readonly #slots: number
   readonly #kind: Int8Array
   #count = 0
@@ -475,6 +1017,9 @@ export class EffectRack {
       this.#chorus.push(null)
       this.#delay.push(null)
       this.#reverb.push(null)
+      this.#eq.push(null)
+      this.#compressor.push(null)
+      this.#limiter.push(null)
     }
     this.#restAfter = Math.round(REST_AFTER * sampleRate)
     this.#quiet = this.#restAfter
@@ -493,24 +1038,30 @@ export class EffectRack {
     this.#count = next
   }
 
-  /** Slot k plays kind (FX_CHORUS, FX_DELAY, FX_REVERB), from silence */
+  /** Slot k plays kind (FX_CHORUS to FX_LIMITER), from silence */
   setKind(k: number, kind: number): void {
     if (!(k >= 0 && k < this.#count) || this.#kind[k] === kind) return
-    if (kind !== FX_CHORUS && kind !== FX_DELAY && kind !== FX_REVERB) return
+    if (!(kind >= FX_CHORUS && kind <= FX_LIMITER)) return
     this.#kind[k] = kind
     const rate = this.#sampleRate
-    if (kind === FX_CHORUS) {
-      const chorus = this.#chorus[k]
-      if (chorus) chorus.reset()
-      else this.#chorus[k] = new Chorus(rate)
-    } else if (kind === FX_DELAY) {
-      const delay = this.#delay[k]
-      if (delay) delay.reset()
-      else this.#delay[k] = new Delay(rate)
-    } else {
-      const reverb = this.#reverb[k]
-      if (reverb) reverb.reset()
-      else this.#reverb[k] = new Reverb(rate)
+    switch (kind) {
+      case FX_CHORUS:
+        made(this.#chorus, k, () => new Chorus(rate))
+        return
+      case FX_DELAY:
+        made(this.#delay, k, () => new Delay(rate))
+        return
+      case FX_REVERB:
+        made(this.#reverb, k, () => new Reverb(rate))
+        return
+      case FX_EQ:
+        made(this.#eq, k, () => new Equalizer(rate))
+        return
+      case FX_COMPRESSOR:
+        made(this.#compressor, k, () => new Compressor(rate))
+        return
+      default:
+        made(this.#limiter, k, () => new Limiter(rate))
     }
   }
 
@@ -544,12 +1095,63 @@ export class EffectRack {
     this.#reverb[k]?.set(size, decay, damp, mix)
   }
 
+  setEq(
+    k: number,
+    cut: number,
+    lowGain: number,
+    lowFreq: number,
+    midGain: number,
+    midFreq: number,
+    highGain: number,
+    highFreq: number
+  ): void {
+    this.#eq[k]?.set(
+      cut,
+      lowGain,
+      lowFreq,
+      midGain,
+      midFreq,
+      highGain,
+      highFreq
+    )
+  }
+
+  setCompressor(
+    k: number,
+    threshold: number,
+    ratio: number,
+    attack: number,
+    release: number,
+    makeup: number,
+    mix: number
+  ): void {
+    this.#compressor[k]?.set(threshold, ratio, attack, release, makeup, mix)
+  }
+
+  setLimiter(k: number, gain: number, ceiling: number, release: number): void {
+    this.#limiter[k]?.set(gain, ceiling, release)
+  }
+
+  /**
+   * The deepest slot k's compressor or limiter turned things down since
+   * last asked, dB (0 or less); 0 for any other kind, and while it rests
+   */
+  takeReduction(k: number): number {
+    const kind = this.#kind[k]
+    if (kind === FX_COMPRESSOR) return this.#compressor[k]?.takeReduction() ?? 0
+    if (kind === FX_LIMITER) return this.#limiter[k]?.takeReduction() ?? 0
+    return 0
+  }
+
   /** Every slot from silence */
   reset(): void {
     for (let k = 0; k < this.#slots; k++) {
       this.#chorus[k]?.reset()
       this.#delay[k]?.reset()
       this.#reverb[k]?.reset()
+      this.#eq[k]?.reset()
+      this.#compressor[k]?.reset()
+      this.#limiter[k]?.reset()
     }
     this.#quiet = this.#restAfter
   }
@@ -573,11 +1175,24 @@ export class EffectRack {
     }
     if (input === 0 && this.#quiet >= this.#restAfter) return
     for (let k = 0; k < this.#count; k++) {
-      const kind = this.#kind[k]
-      if (kind === FX_CHORUS) this.#chorus[k]?.process(left, right, length)
-      else if (kind === FX_DELAY) this.#delay[k]?.process(left, right, length)
-      else if (kind === FX_REVERB) {
-        this.#reverb[k]?.process(left, right, length)
+      switch (this.#kind[k]) {
+        case FX_CHORUS:
+          this.#chorus[k]?.process(left, right, length)
+          break
+        case FX_DELAY:
+          this.#delay[k]?.process(left, right, length)
+          break
+        case FX_REVERB:
+          this.#reverb[k]?.process(left, right, length)
+          break
+        case FX_EQ:
+          this.#eq[k]?.process(left, right, length)
+          break
+        case FX_COMPRESSOR:
+          this.#compressor[k]?.process(left, right, length)
+          break
+        case FX_LIMITER:
+          this.#limiter[k]?.process(left, right, length)
       }
     }
     let output = 0
@@ -588,6 +1203,17 @@ export class EffectRack {
     }
     this.#quiet = input === 0 && output < SILENT ? this.#quiet + length : 0
   }
+}
+
+/** Slot k's effect of one kind from silence, made the first time */
+function made<T extends { reset(): void }>(
+  slots: (T | null)[],
+  k: number,
+  make: () => T
+): void {
+  const effect = slots[k]
+  if (effect) effect.reset()
+  else slots[k] = make()
 }
 
 function clamp01(value: number): number {

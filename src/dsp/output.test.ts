@@ -97,6 +97,33 @@ describe('Mixer', () => {
     expect(most).toBeGreaterThan(1)
   })
 
+  it('only guards full scale, no soft clip, after a limiter', () => {
+    const mixer = new Mixer(SAMPLE_RATE)
+    mixer.setLimited(true)
+    expect(mixer.limited).toBe(true)
+    const reference = saw()
+    const voices = new Float32Array(BLOCK)
+    const left = new Float32Array(BLOCK)
+    const right = new Float32Array(BLOCK)
+    const strips = parts([strip()])
+    let between = 0
+    for (let b = 0; b < 40; b++) {
+      mixer.render(strips, left, right)
+      reference.process(voices)
+      for (let i = 0; i < BLOCK; i++) {
+        const v = voices[i] as number
+        expect(left[i]).toBeCloseTo(Math.min(1, Math.max(-1, v)), 6)
+        // Past the soft clip's knee, under full scale: as it was
+        if (Math.abs(v) > 0.6 && Math.abs(v) < 1) between++
+      }
+    }
+    expect(between).toBeGreaterThan(0)
+    mixer.setLimited(false)
+    mixer.render(strips, left, right)
+    reference.process(voices)
+    expect(left[5]).toBeCloseTo(softClip(voices[5] as number), 6)
+  })
+
   it('copies each part’s own sound into its tap, unclipped, unsent', () => {
     const mixer = new Mixer(SAMPLE_RATE)
     // Sent to no bus: the master silent, the taps not

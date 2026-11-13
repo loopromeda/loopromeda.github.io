@@ -19,7 +19,10 @@ import {
   ITEM_FILTER,
   ITEM_RESONANCE,
   FX_CHORUS,
+  FX_COMPRESSOR,
   FX_DELAY,
+  FX_EQ,
+  FX_LIMITER,
   FX_REVERB,
   MAX_CHAINS,
   MAX_BUSES,
@@ -150,13 +153,15 @@ export function chainStressSynth(
 const HEAVIEST: readonly number[] = [FX_CHORUS, FX_REVERB]
 
 /**
- * A full rack: MAX_EFFECTS effects of kinds, in turn (FX_CHORUS,
- * FX_DELAY, FX_REVERB), each with a Mix of 1/2, dry and wet both whole,
- * so none skips its dry or its wet. A delay is a ping-pong one, its
- * feedback high; a reverb long. Unless asked for others, the two
- * heaviest kinds in turn, a chorus and a reverb (chainSynth.bench.ts
- * measures a full rack of each kind: on an M3, 0.038 ms, 0.031 and a
- * delay's 0.006 a block).
+ * A full rack: MAX_EFFECTS effects of kinds, in turn (FX_CHORUS to
+ * FX_LIMITER), each with a Mix of 1/2, dry and wet both whole, so none
+ * skips its dry or its wet. A delay is a ping-pong one, its feedback
+ * high; a reverb long; an EQ moves every band and cuts the lows; a
+ * compressor and a limiter work all the while. Unless asked for others,
+ * the two heaviest kinds in turn, a chorus and a reverb
+ * (chainSynth.bench.ts measures a full rack of each kind: on an M3,
+ * 0.039 ms and 0.033 a block; a compressor's 0.015, an EQ's 0.009, a
+ * limiter's 0.009 and a delay's 0.007).
  */
 export function chainStressRack(
   sampleRate: number,
@@ -175,6 +180,12 @@ function fill(rack: EffectRack, kinds = HEAVIEST): void {
     rack.setKind(k, kind)
     if (kind === FX_CHORUS) rack.setChorus(k, 0.6 + 0.3 * k, 0.5, 0.5)
     else if (kind === FX_DELAY) rack.setDelay(k, 0.35, 0.6, 0.6, true, 0.5)
+    // Every band moved and the lows cut, so none is skipped
+    else if (kind === FX_EQ) rack.setEq(k, 40, 3, 100, -2, 1000, 4, 8000)
+    // Working all the while, at an even mix
+    else if (kind === FX_COMPRESSOR) {
+      rack.setCompressor(k, -40, 4, 0.005, 0.1, 6, 0.5)
+    } else if (kind === FX_LIMITER) rack.setLimiter(k, 12, -1, 0.05)
     else rack.setReverb(k, 0.8, 4, 0.4, 0.5)
   }
 }

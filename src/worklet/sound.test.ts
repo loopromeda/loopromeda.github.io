@@ -31,7 +31,14 @@ import {
 } from '../state/mix'
 import { AMP, SENDS, VOICE, initSound, type Sound } from '../state/sound/sound'
 import { initKitChain } from '../state/kit'
-import { SoundPlayer, applyKitChain, applyMix, applySound } from './sound'
+import {
+  SoundPlayer,
+  applyKitChain,
+  applyMix,
+  applySound,
+  chainEffect,
+  mixEffect,
+} from './sound'
 
 const SAMPLE_RATE = 48000
 const BLOCK = 128
@@ -180,6 +187,55 @@ describe('the chain engine', () => {
     const later = setMixValue(moved.mix, moved.id ?? '', 'time', 0.15)
     const dry = setMixValue(later, moved.id ?? '', 'mix', 1)
     expect(echo(dry)).toBeGreaterThan(0.15)
+  })
+
+  it('drops the soft clip for a guard once the master ends in a limiter', () => {
+    const mixer = new Mixer(SAMPLE_RATE)
+    applyMix(mixer, initMix(), [])
+    expect(mixer.limited).toBe(false)
+    const limited = addMixEffect(initMix(), 'master', 'limiter').mix
+    applyMix(mixer, limited, [])
+    expect(mixer.limited).toBe(true)
+    expect(mixer.master.count).toBe(1)
+    applyMix(mixer, addMixEffect(limited, 'master', 'eq').mix, [])
+    expect(mixer.limited).toBe(false)
+  })
+
+  it('finds an effect of the mix, or of a kit’s chain, by its id', () => {
+    const mixer = new Mixer(SAMPLE_RATE)
+    const onMaster = addMixEffect(initMix(), 'master', 'compressor')
+    const onB = addMixEffect(onMaster.mix, 'b', 'limiter')
+    const mix = onB.mix
+    applyMix(mixer, mix, [])
+    expect(mixEffect(mixer, mix, onMaster.id ?? '')).toEqual({
+      rack: mixer.master,
+      slot: 0,
+    })
+    // B's second, after the delay the mix starts with there
+    const b = mix.buses.findIndex((bus) => bus.id === 'b')
+    expect(mix.buses[b]?.effects.map((effect) => effect.kind)).toEqual([
+      'delay',
+      'limiter',
+    ])
+    expect(mixEffect(mixer, mix, onB.id ?? '')).toEqual({
+      rack: mixer.bus(b),
+      slot: 1,
+    })
+    expect(mixEffect(mixer, mix, 'nothing')).toBeUndefined()
+
+    const strip = () =>
+      new Strip(new ChainSynth(SAMPLE_RATE), new EffectRack(SAMPLE_RATE))
+    const kit = new Part([strip()], new EffectRack(SAMPLE_RATE))
+    let sound = addEffect(initSound(), 'eq').sound
+    sound = addEffect(sound, 'compressor').sound
+    const chain = { effects: sound.effects, sends: sound.sends }
+    applyKitChain(kit, chain)
+    expect(chainEffect(kit, chain, sound.effects[1]?.id ?? '')).toEqual({
+      rack: kit.inserts,
+      slot: 1,
+    })
+    expect(chainEffect(kit, chain, 'nothing')).toBeUndefined()
+    expect(chainEffect(new Part([strip()]), chain, 'f1')).toBeUndefined()
   })
 
   it('sets each part’s fader by its place, the kit’s after the synth’s', () => {
@@ -474,6 +530,29 @@ describe('SoundPlayer', () => {
     player.set('r1', 'amount', Number.POSITIVE_INFINITY)
     player.set('c1', 'send.i9', 1)
     expect(maxDifference(phrase(synth), render(busy()))).toBe(0)
+  })
+
+  it('finds an insert of its strip by its id', () => {
+    const strip = new Strip(
+      new ChainSynth(SAMPLE_RATE),
+      new EffectRack(SAMPLE_RATE)
+    )
+    let sound = addEffect(initSound(), 'chorus').sound
+    sound = addEffect(sound, 'limiter').sound
+    const player = new SoundPlayer(strip)
+    player.load(sound)
+    expect(player.insert(sound.effects[1]?.id ?? '')).toEqual({
+      rack: strip.inserts,
+      slot: 1,
+    })
+    expect(player.insert('nothing')).toBeUndefined()
+    // Gone with the sound that held it
+    player.load(initSound())
+    expect(player.insert(sound.effects[1]?.id ?? '')).toBeUndefined()
+    // A pad's synth plays no inserts: none to find
+    const pad = new SoundPlayer(new ChainSynth(SAMPLE_RATE))
+    pad.load(sound)
+    expect(pad.insert(sound.effects[0]?.id ?? '')).toBeUndefined()
   })
 
   it("forgets the last sound's parts when it loads another", () => {

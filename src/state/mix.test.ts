@@ -9,6 +9,7 @@ import {
   fitStrips,
   initMix,
   loadMix,
+  masterLimited,
   mixValue,
   moveMixEffect,
   moveStrip,
@@ -369,6 +370,21 @@ describe('the mix', () => {
     expect(mix.master.values.level).toBe(0.5)
     expect(readMix(null)).toEqual(initMix())
     expect(readMix([1, 2])).toEqual(initMix())
+  })
+
+  it('tells whether the master ends in a limiter', () => {
+    expect(masterLimited(initMix())).toBe(false)
+    const limited = addMixEffect(initMix(), MASTER, 'limiter')
+    expect(masterLimited(limited.mix)).toBe(true)
+    // Something after it: the soft clip again
+    const after = addMixEffect(limited.mix, MASTER, 'eq').mix
+    expect(masterLimited(after)).toBe(false)
+    // On a bus, it is the bus's own
+    expect(masterLimited(addMixEffect(initMix(), 'a', 'limiter').mix)).toBe(
+      false
+    )
+    // Moved last again
+    expect(masterLimited(moveMixEffect(after, limited.id ?? '', 1))).toBe(true)
   })
 
   it('is kept in storage and read back', () => {

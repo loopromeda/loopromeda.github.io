@@ -3,6 +3,7 @@ import { softClip } from '../dsp/clip'
 import {
   METER_MIN_DB,
   MeterBallistics,
+  REDUCTION_RANGE,
   SPECTRUM_MAX_HZ,
   SPECTRUM_MIN_HZ,
   Ticks,
@@ -13,6 +14,9 @@ import {
   levelAt,
   levelsOf,
   lighten,
+  lufsText,
+  reductionFill,
+  reductionText,
   spectrogramColour,
   spectrogramRows,
   spectrumColumns,
@@ -513,5 +517,30 @@ describe('the spectrogram’s grid', () => {
     const half: number[] = []
     for (let k = 1; k <= 10; k++) if (ticks.next()) half.push(k)
     expect(half).toEqual([3, 5, 8, 10])
+  })
+})
+
+describe('the mastering tools’ readouts', () => {
+  it('names a gain reduction to a tenth, and fills its meter by it', () => {
+    expect(reductionText(0)).toBe('0 dB')
+    expect(reductionText(-0.04)).toBe('0 dB')
+    expect(reductionText(-3.24)).toBe('\u22123.2 dB')
+    expect(reductionText(-18)).toBe('\u221218.0 dB')
+    // Never a gain: nothing turned down
+    expect(reductionText(2)).toBe('0 dB')
+    expect(reductionFill(0)).toBe(0)
+    expect(reductionFill(-REDUCTION_RANGE / 2)).toBe(0.5)
+    expect(reductionFill(-100)).toBe(1)
+    expect(reductionFill(3)).toBe(0)
+  })
+
+  it('names a loudness to a tenth, signed, a dash under the gate', () => {
+    expect(lufsText(-14.04)).toBe('\u221214.0')
+    expect(lufsText(-9.96)).toBe('\u221210.0')
+    expect(lufsText(0.02)).toBe('0.0')
+    expect(lufsText(1.5)).toBe('+1.5')
+    expect(lufsText(-70)).toBe('–')
+    expect(lufsText(-Infinity)).toBe('–')
+    expect(lufsText(Number.NaN)).toBe('–')
   })
 })

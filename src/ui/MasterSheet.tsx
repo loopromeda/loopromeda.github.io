@@ -2,14 +2,23 @@ import { useEffect, type ReactNode } from 'react'
 import type { Engine } from '../engine/engine'
 import { CARD } from './controls'
 import { IconButton } from './IconButton'
-import { Meters, Spectrogram, Spectrum, Vectorscope } from './MasterViews'
+import { Loudness } from './Dynamics'
+import {
+  Meters,
+  Spectrogram,
+  Spectrum,
+  SpectrumRangePicker,
+  Vectorscope,
+} from './MasterViews'
 
 /**
  * The master's views at size, opened from its panel (#/master): the
  * spectrum with its decades and levels named, the spectrogram with its
  * decades named and a line down each second, the two
  * sides against each other with their correlation, and the levels going
- * into the clip with the highest peak named. The stereo stands under the
+ * into the clip with the highest peak named (or out of the limiter, one
+ * last on the master), and over them the loudness, in LUFS, and how deep
+ * the spectral views reach. The stereo stands under the
  * spectrum, or, where the views are broad (a phone or a fold on its
  * side), at their right, as tall as both. Like the presets it covers
  * the editor and leaves what is played on below it, so the output can be
@@ -43,11 +52,15 @@ export function MasterSheet({
         >
           Master
         </h2>
+        <SpectrumRangePicker />
         <IconButton
           label="Close master"
           onClick={onClose}
           path="M5 5l8 8M13 5l-8 8"
         />
+      </div>
+      <div className="shrink-0 sm:max-w-[28rem]">
+        <Loudness engine={engine} />
       </div>
       {/*
        * A size container: the grid's columns read its height (cqh) and
