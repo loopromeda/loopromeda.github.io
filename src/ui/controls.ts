@@ -49,7 +49,7 @@ export const CARD = 'rounded-xl bg-[#16161c]'
 export const RAISED =
   'glass rounded-xl shadow-[0_0_24px_rgba(0,0,0,0.6)] ring-1 ring-white/10'
 
-const BUTTON_SHAPE =
+export const BUTTON_SHAPE =
   'flex h-11 shrink-0 items-center justify-center gap-2 rounded-[10px] px-3.5 text-xs font-semibold tracking-wider whitespace-nowrap disabled:opacity-40'
 
 /** A 44 px text button; given aria-pressed, a toggle */
@@ -67,6 +67,15 @@ const OPTION_FACE =
 
 /** One of a row of 44 px options, the chosen one aria-pressed */
 export const OPTION = `${BUTTON_SHAPE} ${OPTION_FACE}`
+
+/**
+ * A track's Mute and Solo, toggles (aria-pressed) dim as an option until
+ * on: amber for what is silenced, emerald for what alone is heard
+ */
+export const MUTE_FACE =
+  'bg-white/5 text-zinc-400 aria-pressed:bg-amber-400/20 aria-pressed:text-amber-200'
+export const SOLO_FACE =
+  'bg-white/5 text-zinc-400 aria-pressed:bg-emerald-400/20 aria-pressed:text-emerald-200'
 
 /**
  * An option as wide as its cell in a grid of them, all of one size: its

@@ -122,6 +122,7 @@ import { ConfirmDialog } from './ConfirmDialog'
 import { FadeRow } from './FadeRow'
 import { Knob, MixKnob, NEUTRAL_ARC } from './Knob'
 import { MASTER_VIEWS, type MasterViewKind } from './MasterViews'
+import { Mutes } from './Mutes'
 import { knoblessDests, routesTo } from '../state/sound/knob'
 import { noteName } from '../viz/keyboard'
 
@@ -283,6 +284,8 @@ interface View {
     readonly shown: MasterViewKind
     readonly choose: (view: MasterViewKind) => void
   }
+  /** Before the views, in their row: a track's Mute and Solo (Mutes) */
+  readonly mutes?: ReactNode
   /** The knobs' arc: a chain's colour on its own parts, else neutral */
   readonly color: string
   readonly refs?: ReactNode
@@ -403,7 +406,12 @@ export function PartPanel({
           views(output),
           output,
           engine.getPart(),
-          inMix ? trackStrip(engine, (id) => setNamed(id)) : undefined
+          inMix ? trackStrip(engine, (id) => setNamed(id)) : undefined,
+          <Mutes
+            engine={engine}
+            place={output}
+            name={trackName(engine.getTrack(), output)}
+          />
         )
       : isMixId(picked)
         ? mixView(engine, library, picked, views('master'), onMaster, pick)
@@ -671,18 +679,34 @@ export function PartPanel({
                 <Targets {...view.targets} onRoute={onRoute} onMap={onMap} />
               )}
               {view.views && (
-                <PanRow role="group" aria-label="The output shows">
-                  {MASTER_VIEWS.map(({ view: kind, label }) => (
-                    <button
-                      key={kind}
-                      type="button"
-                      aria-pressed={view.views?.shown === kind}
-                      onClick={() => view.views?.choose(kind)}
-                      className={`${OPTION} shrink-0`}
+                <PanRow>
+                  {view.mutes && (
+                    <div
+                      role="group"
+                      aria-label="Heard"
+                      className="flex shrink-0 items-center gap-1.5"
                     >
-                      {label}
-                    </button>
-                  ))}
+                      {view.mutes}
+                      <span aria-hidden className="mx-1 h-5 w-px bg-white/10" />
+                    </div>
+                  )}
+                  <div
+                    role="group"
+                    aria-label="The output shows"
+                    className="flex shrink-0 items-center gap-1.5"
+                  >
+                    {MASTER_VIEWS.map(({ view: kind, label }) => (
+                      <button
+                        key={kind}
+                        type="button"
+                        aria-pressed={view.views?.shown === kind}
+                        onClick={() => view.views?.choose(kind)}
+                        className={`${OPTION} shrink-0`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
                 </PanRow>
               )}
             </>
@@ -1056,15 +1080,16 @@ function trackStrip(engine: Engine, onName: (id: string) => void): TrackStrip {
  * balance, the session's (a preset loaded plays at them, as a desk's
  * channel would), then how much it sends to each of the session's buses
  * (the synth's, its sound's own, kept with its preset; the kit's, its
- * chain's, kept with the kit, the same for every pad), and the view of
- * its part's own output that both show
+ * chain's, kept with the kit, the same for every pad), then its track's
+ * Mute and Solo and the view of its part's own output that both show
  */
 function sendsView(
   mix: Mix,
   views: NonNullable<View['views']>,
   place: number,
   part: PartKind,
-  track: TrackStrip | undefined
+  track: TrackStrip | undefined,
+  mutes: ReactNode
 ): View {
   const strip = stripId(place)
   const kit = part === 'kit'
@@ -1087,6 +1112,7 @@ function sendsView(
     ],
     mixFirst: true,
     views,
+    mutes,
     color: NEUTRAL_ARC,
     note:
       mix.buses.length === 0

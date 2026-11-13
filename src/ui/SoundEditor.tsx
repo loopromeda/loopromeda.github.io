@@ -3,6 +3,7 @@ import {
   useRef,
   useState,
   useSyncExternalStore,
+  type ComponentProps,
   type CSSProperties,
   type ReactNode,
   type RefObject,
@@ -88,6 +89,7 @@ import {
   type MasterViewKind,
 } from './MasterViews'
 import { outlineKind } from './outline'
+import { STATE_WORDS, useStripState } from './Mutes'
 import { PartPanel } from './PartPanel'
 import { Picture } from './Picture'
 import { RoutesFrom, RoutesInto, type RouteTarget } from './RoutePanels'
@@ -1648,14 +1650,14 @@ function MixGraph({
         const track = tracks[k]
         if (!track) return null
         const played = k === output
-        const id = stripId(k)
         const name = trackName(track, k)
         return (
-          <Tile
+          <StripTile
             key={track.id}
+            place={k}
             engine={engine}
             label={name}
-            text={<MixLine engine={engine} part={id} />}
+            text={<StripLine engine={engine} place={k} />}
             inline
             look={NEUTRAL_LOOK}
             picked={played && strip}
@@ -1874,6 +1876,36 @@ function Line({ engine, id }: { engine: Engine; id: string }) {
 function MixLine({ engine, part }: { engine: Engine; part: string }) {
   return useSyncExternalStore(engine.subscribeMix, () =>
     mixLine(engine.getMix(), part)
+  )
+}
+
+/**
+ * A track's strip under its name: Mute or Solo where it is one, in the
+ * toggle's colour (src/ui/Mutes.tsx), else its level
+ */
+function StripLine({ engine, place }: { engine: Engine; place: number }) {
+  const state = useStripState(engine, place)
+  if (state === 'mute') return <span className="text-amber-200">Mute</span>
+  if (state === 'solo') return <span className="text-emerald-200">Solo</span>
+  return <MixLine engine={engine} part={stripId(place)} />
+}
+
+/**
+ * A track's strip in the mix: a tile, dim while the track is not heard
+ * (muted, or silent while another is soloed), and saying so
+ */
+function StripTile({
+  place,
+  ...tile
+}: { place: number } & ComponentProps<typeof Tile>) {
+  const state = useStripState(tile.engine, place)
+  const words = STATE_WORDS[state]
+  return (
+    <Tile
+      {...tile}
+      aria={words ? `${tile.aria}; ${words}` : tile.aria}
+      className={state === 'mute' || state === 'off' ? 'opacity-55' : ''}
+    />
   )
 }
 

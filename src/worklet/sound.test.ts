@@ -21,9 +21,12 @@ import * as kinds from '../state/sound/kinds'
 import { Mixer, Part, Strip } from '../dsp/output'
 import {
   addMixEffect,
+  fitStrips,
   initMix,
   removeMixPart,
   setMixValue,
+  setStripMute,
+  setStripSolo,
   type Mix,
 } from '../state/mix'
 import { AMP, SENDS, VOICE, initSound, type Sound } from '../state/sound/sound'
@@ -193,6 +196,28 @@ describe('the chain engine', () => {
     kit.level.snap()
     expect(synth.level.now).toBe(1)
     expect(kit.level.now).toBe(0.25)
+  })
+
+  it('takes the fader down of a part muted, or silent for a solo', () => {
+    const strip = () =>
+      new Strip(new ChainSynth(SAMPLE_RATE), new EffectRack(SAMPLE_RATE))
+    const parts = [new Part([strip()]), new Part([strip()])]
+    const levels = (mix: Mix): number[] => {
+      applyMix(new Mixer(SAMPLE_RATE), mix, parts)
+      return parts.map((part) => {
+        part.level.snap()
+        return part.level.now
+      })
+    }
+    const mix = setMixValue(fitStrips(initMix(), 2), 'p2', 'level', 0.25)
+    expect(levels(mix)).toEqual([1, 0.25])
+    expect(levels(setStripMute(mix, 1, true))).toEqual([1, 0])
+    expect(levels(setStripSolo(mix, 1, true))).toEqual([0, 0.25])
+    const both = setStripSolo(setStripSolo(mix, 0, true), 1, true)
+    expect(levels(both)).toEqual([1, 0.25])
+    expect(levels(setStripMute(both, 0, true))).toEqual([0, 0.25])
+    // Back as it was: the fader where it stood
+    expect(levels(mix)).toEqual([1, 0.25])
   })
 
   it('gives the kit, a group, its chain: its inserts and its sends', () => {

@@ -233,3 +233,34 @@ set of instruments, saved. Built 2026-11-13.
   untrusted, as the session's keys are.
 - Not built: a project's own presets (so it opens the same whatever
   became of them), a copy of a project, an undo for Delete.
+
+## Mute and solo
+
+Asked for by ashon, 2026-11-13 ("트랙을 뮤트하는 기능도 있으면 좋겠네.
+솔로나."). Built 2026-11-13.
+
+- **Two flags on a track's strip in the mix** (`src/state/mix.ts`:
+  `mute`, `solo`, set only when on). A strip muted is silent; while any
+  strip is soloed, only those soloed are heard; one both is muted
+  (`stripState`: on, mute, solo, or off for another's solo). They are
+  the mix's, so they are kept with it, saved with a project, and a
+  toggle marks the project edited.
+- **Silent is the fader at 0** (`applyMix` in `src/worklet/sound.ts`):
+  the track's level goes to nothing, smoothed as any fader's move, so
+  nothing of it reaches its sends or its meter, while its sequence and
+  its voices play on in time and it comes back mid-phrase. What it
+  sent to a bus before rings out there. Nothing in `src/dsp` changed.
+- **Where**: Mute and Solo stand in the strip's panel in the Mix and in
+  the Out tile's panel in the Sound view (`src/ui/Mutes.tsx`), and as a
+  small M and S on each row of the tracks' popover, which stays open.
+  In the Mix a strip's tile reads Mute or Solo in its level's place
+  and is dim while not heard, and the track's button carries a dot
+  (emerald soloed, amber muted or silent for another's solo) and says
+  so to a screen reader.
+- **What follows from it**: a track added while another is soloed is
+  silent until it is soloed too or the solo lifted; a muted track's
+  keys and pads make no sound either (the dot on its button is the
+  sign).
+- Not built: M and S on the Mix's strip tile itself (it is one 84 px
+  button), a solo that clears the others, mutes for a kit's pads or
+  for the buses. Not tried at 390 px or on a phone.

@@ -47,7 +47,7 @@ import {
   sendDest,
 } from '../dsp/slots'
 import type { KitChain } from '../state/kit'
-import type { Mix } from '../state/mix'
+import { stripHeard, type Mix } from '../state/mix'
 import {
   BUS_IDS,
   BUS_SPEC,
@@ -389,7 +389,10 @@ export function applyMix(
 ): void {
   parts.forEach((part, k) => {
     const value = reader(STRIP_SPEC.knobs, mix.strips[k]?.values)
-    part.setFader(value('level'), value('pan'))
+    // Muted, or silent for another's solo: its fader down, so nothing of
+    // it goes on to its sends, while it plays on in time
+    const level = stripHeard(mix, k) ? value('level') : 0
+    part.setFader(level, value('pan'))
   })
   BUS_IDS.forEach((id, k) => {
     const bus = mix.buses.find((each) => each.id === id)

@@ -18,7 +18,11 @@ import {
   removeStrip,
   saveMix,
   setMixValue,
+  setStripMute,
+  setStripSolo,
+  stripHeard,
   stripId,
+  stripState,
   type Mix,
   type MixStorage,
 } from './mix'
@@ -162,6 +166,78 @@ describe('the mix', () => {
     expect(removeStrip(fewer, 7)).toBe(fewer)
     // Kept with as many strips as there were tracks
     expect(readMix(JSON.parse(JSON.stringify(more))).strips).toHaveLength(4)
+  })
+
+  it('mutes a strip, and solos one: the rest silent', () => {
+    const mix = fitStrips(initMix(), 3)
+    const states = (of: Mix) => of.strips.map((_strip, k) => stripState(of, k))
+    const heard = (of: Mix) => of.strips.map((_strip, k) => stripHeard(of, k))
+    expect(states(mix)).toEqual(['on', 'on', 'on'])
+    const muted = setStripMute(mix, 1, true)
+    expect(states(muted)).toEqual(['on', 'mute', 'on'])
+    expect(heard(muted)).toEqual([true, false, true])
+    expect(muted.strips[0]).toBe(mix.strips[0])
+    const soloed = setStripSolo(mix, 2, true)
+    expect(states(soloed)).toEqual(['off', 'off', 'solo'])
+    expect(heard(soloed)).toEqual([false, false, true])
+    // Two soloed are both heard
+    const both = setStripSolo(soloed, 0, true)
+    expect(states(both)).toEqual(['solo', 'off', 'solo'])
+    // A strip muted is muted, soloed or not; the rest stay silent for it
+    const mutedSolo = setStripMute(soloed, 2, true)
+    expect(states(mutedSolo)).toEqual(['off', 'off', 'mute'])
+    expect(heard(mutedSolo)).toEqual([false, false, false])
+    // No strip there: heard, and nothing to set
+    expect(stripState(soloed, 7)).toBe('on')
+    expect(stripHeard(soloed, 7)).toBe(true)
+    expect(setStripMute(mix, 7, true)).toBe(mix)
+    expect(setStripSolo(mix, -1, true)).toBe(mix)
+  })
+
+  it('is the same mix where a strip is muted or soloed so already', () => {
+    const mix = fitStrips(initMix(), 2)
+    expect(setStripMute(mix, 0, false)).toBe(mix)
+    expect(setStripSolo(mix, 0, false)).toBe(mix)
+    const muted = setStripMute(mix, 0, true)
+    expect(setStripMute(muted, 0, true)).toBe(muted)
+    // Off again leaves no trace: the strip as it was, key for key
+    const back = setStripMute(setStripSolo(muted, 0, true), 0, false)
+    expect(back.strips[0]).toEqual({ ...mix.strips[0], solo: true })
+    expect(setStripSolo(back, 0, false)).toEqual(mix)
+    expect(Object.keys(setStripSolo(back, 0, false).strips[0] ?? {})).toEqual([
+      'values',
+    ])
+  })
+
+  it('keeps a strip muted or soloed as its fader moves and it does', () => {
+    let mix = setStripMute(fitStrips(initMix(), 3), 1, true)
+    mix = setStripSolo(mix, 2, true)
+    const faded = setMixValue(mix, 'p2', 'level', 0.3)
+    expect(faded.strips[1]).toEqual({
+      values: { level: 0.3, pan: 0 },
+      mute: true,
+    })
+    const moved = moveStrip(faded, 1, 0)
+    expect(moved.strips.map((_strip, k) => stripState(moved, k))).toEqual([
+      'mute',
+      'off',
+      'solo',
+    ])
+    // The soloed track removed, the others are heard again
+    const fewer = removeStrip(moved, 2)
+    expect(stripState(fewer, 1)).toBe('on')
+    expect(fitStrips(fewer, 4).strips[0]).toBe(moved.strips[0])
+    // Kept, and read back; anything but true is not a flag
+    expect(readMix(JSON.parse(JSON.stringify(moved)))).toEqual(moved)
+    const odd = readMix({
+      ...moved,
+      strips: [{ mute: 1, solo: 'yes' }, { mute: false }, { solo: true }],
+    })
+    expect(odd.strips).toEqual([
+      { values: { level: 1, pan: 0 } },
+      { values: { level: 1, pan: 0 } },
+      { values: { level: 1, pan: 0 }, solo: true },
+    ])
   })
 
   it('sets a knob clamped, and is the same mix when nothing changes', () => {

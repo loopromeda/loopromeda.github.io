@@ -29,11 +29,21 @@ import { MAX_TRACKS } from './tracks'
 
 /**
  * A part's strip, its fader: how loud it goes on to its sends, where it
- * stands between the sides
+ * stands between the sides, and whether it is heard at all (stripState)
  */
 export interface Strip {
   /** STRIP_SPEC's knobs */
   readonly values: Values
+  /**
+   * Muted: nothing of it goes on to its sends, though it plays on, its
+   * loop keeping its place. Unset, never false.
+   */
+  readonly mute?: true
+  /**
+   * Soloed: while any strip is, only those soloed are heard. Unset, never
+   * false.
+   */
+  readonly solo?: true
 }
 
 /**
@@ -249,7 +259,10 @@ export function setMixValue(
   switch (found?.type) {
     case 'strip': {
       const strips = [...mix.strips]
-      strips[found.index] = { values: { ...found.strip.values, [key]: next } }
+      strips[found.index] = {
+        ...found.strip,
+        values: { ...found.strip.values, [key]: next },
+      }
       return { ...mix, strips }
     }
     case 'bus': {
@@ -406,6 +419,54 @@ function effectIds(mix: Mix): Set<string> {
   return ids
 }
 
+/**
+ * What a strip is in the mix: heard as it is (on), muted, soloed (heard,
+ * the strips not soloed silent), or silent for another's solo (off). A
+ * strip muted is muted, soloed or not.
+ */
+export type StripState = 'on' | 'mute' | 'solo' | 'off'
+
+/** The state of the strip at place k; on where there is none */
+export function stripState(mix: Mix, k: number): StripState {
+  const strip = mix.strips[k]
+  if (!strip) return 'on'
+  if (strip.mute) return 'mute'
+  if (strip.solo) return 'solo'
+  return mix.strips.some((each) => each.solo) ? 'off' : 'on'
+}
+
+/** Whether the strip at place k goes on to its sends: on, or soloed */
+export function stripHeard(mix: Mix, k: number): boolean {
+  const state = stripState(mix, k)
+  return state === 'on' || state === 'solo'
+}
+
+/**
+ * The mix with the strip at place k muted or not, soloed or not: the
+ * very same where it is so already, or there is no such strip
+ */
+export function setStripMute(mix: Mix, k: number, on: boolean): Mix {
+  return flagged(mix, k, 'mute', on)
+}
+
+export function setStripSolo(mix: Mix, k: number, on: boolean): Mix {
+  return flagged(mix, k, 'solo', on)
+}
+
+function flagged(mix: Mix, k: number, flag: 'mute' | 'solo', on: boolean): Mix {
+  const strip = mix.strips[k]
+  if (!strip || (strip[flag] === true) === on) return mix
+  const { mute, solo, ...rest } = strip
+  const flags = { mute, solo, [flag]: on ? true : undefined }
+  const strips = [...mix.strips]
+  strips[k] = {
+    ...rest,
+    ...(flags.mute && { mute: true }),
+    ...(flags.solo && { solo: true }),
+  }
+  return { ...mix, strips }
+}
+
 /** The first e<n> the mix does not hold */
 function nextEffectId(mix: Mix, taken = effectIds(mix)): string {
   for (let n = 1; ; n++) {
@@ -472,9 +533,7 @@ export function readMix(value: unknown): Mix {
       ? given.strips.slice(0, MAX_TRACKS)
       : Array.from({ length: START_STRIPS }, () => ({}))
   const read: Mix = {
-    strips: strips.map((strip) => ({
-      values: valuesFor(STRIP_SPEC.knobs, record(record(strip).values)),
-    })),
+    strips: strips.map(readStrip),
     buses: lettered(buses),
     master: {
       effects: effects(master.effects),
@@ -482,6 +541,16 @@ export function readMix(value: unknown): Mix {
     },
   }
   return withIds(read, taken)
+}
+
+/** A strip from what storage held: its knobs, and muted or soloed if so */
+function readStrip(value: unknown): Strip {
+  const given = record(value)
+  return {
+    values: valuesFor(STRIP_SPEC.knobs, record(given.values)),
+    ...(given.mute === true && { mute: true as const }),
+    ...(given.solo === true && { solo: true as const }),
+  }
 }
 
 /** Each effect read without a good id of its own given the next free */

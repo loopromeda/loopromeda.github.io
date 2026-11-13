@@ -75,8 +75,10 @@ src/dsp/      pure DSP (oscillators, envelopes, LFOs, filters, voices);
 src/worklet/  the AudioWorkletProcessor around src/dsp; own globals and
               tsconfig (tsconfig.worklet.json), loaded via ?worker&url;
               sound.ts loads a sound document onto the ChainSynth and
-              its effects, and sets its knobs one by one, the mix and
-              the kit's chain (Node-testable); the processor keeps a
+              its effects, and sets its knobs one by one, the mix (a
+              track muted, or silent for another's solo, its fader at
+              nothing) and the kit's chain (Node-testable); the
+              processor keeps a
               part and a sequencer's lane for each track, by the
               track's id, and tells of each step as it passes;
               load.ts the
@@ -126,7 +128,8 @@ src/state/    params.ts: the knob schema and the old parameters;
               Delete, Export and Import;
               settings.ts: the device's settings (voices, latency,
               velocity, what the screen shows); mix.ts: the session's
-              mix (each track's fader, a level and a balance, by the
+              mix (each track's fader, a level and a balance, and
+              whether it is muted or soloed, by the
               track's place; the buses every track sends to, lettered by
               their place, each a row of effects, a level and a balance,
               and the master's effects and level), kept in
@@ -171,7 +174,9 @@ src/ui/       React components; SoundEditor.tsx the sound as tiles
               finer with the finger off to the side; TrackPicker.tsx
               picks the track played, a popover on its button, and adds
               one (a track is renamed, moved and removed on its strip in
-              the Mix); PlaySurface.tsx plays
+              the Mix); Mutes.tsx a track's Mute and Solo, in its
+              strip's panel, the Out tile's and the tracks' popover,
+              and what the strip is for them; PlaySurface.tsx plays
               notes on Keys.tsx, Pads.tsx or XyPad.tsx, or the kit on
               KitPads.tsx (hands.ts: who
               holds which note, and bends it), or with Seq shows

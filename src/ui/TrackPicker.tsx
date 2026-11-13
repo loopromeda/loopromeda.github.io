@@ -14,15 +14,17 @@ import { MAX_TRACKS, kindLabel, trackName, type Track } from '../state/tracks'
 import { OPTION, RAISED } from './controls'
 import { NEUTRAL_LOOK } from './editor'
 import { SmallIconButton } from './IconButton'
+import { Mutes, STATE_WORDS, useStripState } from './Mutes'
 import { usePlacement } from './placement'
 
 /**
  * At the left of the keyboard's header, before the patch: the track
  * played and edited (docs/plan/tracks-and-song.md, B), by its name, cut
  * short if long. It stands one width whatever the name, narrower in a
- * header under 26rem (a phone held upright). A tap opens the tracks, a
- * popover standing on it (TrackPicker, which ref places), and closes
- * them again.
+ * header under 26rem (a phone held upright). A dot before the name tells
+ * of a track not heard as it is (amber: muted, or silent while another is
+ * soloed) or soloed (emerald). A tap opens the tracks, a popover standing
+ * on it (TrackPicker, which ref places), and closes them again.
  */
 export function TrackButton({
   ref,
@@ -39,16 +41,25 @@ export function TrackButton({
   const name = useSyncExternalStore(engine.subscribeSound, () =>
     trackName(engine.getTrack(), engine.getPlace())
   )
+  const place = useSyncExternalStore(engine.subscribeSound, engine.getPlace)
+  const state = useStripState(engine, place)
+  const words = STATE_WORDS[state]
   return (
     <button
       ref={ref}
       type="button"
       aria-expanded={open}
       aria-controls="tracks"
-      aria-label={`Track: ${name}`}
+      aria-label={words ? `Track: ${name}, ${words}` : `Track: ${name}`}
       onClick={onToggle}
-      className="flex h-11 w-24 shrink-0 items-center justify-center rounded-[10px] bg-white/5 px-2.5 text-xs font-semibold text-zinc-200 aria-expanded:bg-white/10 @max-[26rem]:w-16 @max-[26rem]:px-1.5"
+      className="flex h-11 w-24 shrink-0 items-center justify-center gap-1.5 rounded-[10px] bg-white/5 px-2.5 text-xs font-semibold text-zinc-200 aria-expanded:bg-white/10 @max-[26rem]:w-16 @max-[26rem]:gap-1 @max-[26rem]:px-1.5"
     >
+      {state !== 'on' && (
+        <span
+          aria-hidden
+          className={`size-1.5 shrink-0 rounded-full ${state === 'solo' ? 'bg-emerald-400' : 'bg-amber-400'}`}
+        />
+      )}
       <span className="truncate">{name}</span>
     </button>
   )
@@ -74,10 +85,11 @@ function playing(track: Track): string {
  * the presets are from the patch's and the surface's choices from its
  * own, on the same glass: a chip and a name over the tracks, each a row
  * 44 px for the finger with its number, its name and what it plays (a
- * synth's preset; Kit), the one played lit; under them the two adds, side
- * by side, until there are the most. Picking one, or adding one (which is
- * picked), closes it. A track is renamed, moved and removed in the Mix,
- * on its strip.
+ * synth's preset; Kit), the one played lit, and at the row's end its Mute
+ * and Solo (M and S: Mutes), which leave the popover open; under them the
+ * two adds, side by side, until there are the most. Picking one, or
+ * adding one (which is picked), closes it. A track is renamed, moved and
+ * removed in the Mix, on its strip.
  */
 export function TrackPicker({
   engine,
@@ -175,7 +187,7 @@ export function TrackPicker({
             {tracks.map((track, k) => {
               const chosen = track.id === pick.track
               return (
-                <li key={track.id}>
+                <li key={track.id} className="flex items-center">
                   <button
                     type="button"
                     aria-current={chosen ? 'true' : undefined}
@@ -184,7 +196,7 @@ export function TrackPicker({
                       engine.pickTrack(track.id)
                       onClose()
                     }}
-                    className="flex h-11 w-full items-center gap-2.5 rounded-lg px-2.5 text-left text-[13px] text-zinc-300 aria-[current]:bg-white/10 aria-[current]:text-white"
+                    className="flex h-11 min-w-0 flex-1 items-center gap-2.5 rounded-lg px-2.5 text-left text-[13px] text-zinc-300 aria-[current]:bg-white/10 aria-[current]:text-white"
                   >
                     <span className="w-3 shrink-0 text-center font-mono text-[11px] text-zinc-500">
                       {k + 1}
@@ -196,6 +208,12 @@ export function TrackPicker({
                       {playing(track)}
                     </span>
                   </button>
+                  <Mutes
+                    engine={engine}
+                    place={k}
+                    name={trackName(track, k)}
+                    small
+                  />
                 </li>
               )
             })}
