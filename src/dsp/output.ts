@@ -23,10 +23,21 @@ import { MAX_BUSES } from './slots'
 const BLOCK = 128
 
 /**
+ * The notes a strip can be told to start or end within one block
+ * (queueOn, queueOff): a step's worth of a sequence, with room to spare
+ */
+const EVENTS = 128
+
+/**
  * One sound's channel: its voices in stereo (synth.clip off, for the
  * inserts to hear them unclipped), its inserts, and how much of it goes
  * to each bus, 0..1, each set as a knob turns and glided over the next
- * block: all of it to the first bus and none to the others, until set
+ * block: all of it to the first bus and none to the others, until set.
+ *
+ * It keeps the notes to start and end within the next block, each on
+ * its frame (the sequencer's, sequencer.ts: a note played by hand
+ * starts with the block): render plays the voices up to each, then
+ * starts or ends it, so a step lands on its own sample.
  */
 export class Strip {
   readonly synth: ChainSynth
@@ -35,6 +46,13 @@ export class Strip {
     { length: MAX_BUSES },
     (_, k) => new Ramp(k === 0 ? 1 : 0)
   )
+  /** The notes queued, in the order of their frames */
+  readonly #at = new Uint16Array(EVENTS)
+  readonly #key = new Float64Array(EVENTS)
+  readonly #note = new Float32Array(EVENTS)
+  /** How hard a note starts, 0..1; below 0, it ends */
+  readonly #velocity = new Float32Array(EVENTS)
+  #count = 0
 
   constructor(synth: ChainSynth, inserts: EffectRack) {
     this.synth = synth
@@ -42,8 +60,89 @@ export class Strip {
     synth.clip = false
   }
 
-  /** Its voices released and its inserts from silence */
+  /** The notes queued for the next block, to start or to end */
+  get pending(): number {
+    return this.#count
+  }
+
+  /**
+   * Key starts note at velocity on frame offset of the next block, after
+   * what is queued already (never before it): whether there was room.
+   * A note with none is not played.
+   */
+  queueOn(
+    offset: number,
+    key: number,
+    note: number,
+    velocity: number
+  ): boolean {
+    const k = this.#count
+    if (k === EVENTS) return false
+    this.#at[k] = this.#after(offset)
+    this.#key[k] = key
+    this.#note[k] = note
+    this.#velocity[k] = velocity > 0 ? velocity : 0
+    this.#count = k + 1
+    return true
+  }
+
+  /**
+   * Key lets go on frame offset of the next block, after what is queued
+   * already; with no room left, now, early rather than never
+   */
+  queueOff(offset: number, key: number): void {
+    const k = this.#count
+    if (k === EVENTS) {
+      this.synth.noteOff(key)
+      return
+    }
+    this.#at[k] = this.#after(offset)
+    this.#key[k] = key
+    this.#velocity[k] = -1
+    this.#count = k + 1
+  }
+
+  /** Offset as a frame, no earlier than the last queued */
+  #after(offset: number): number {
+    const last = this.#count > 0 ? (this.#at[this.#count - 1] as number) : 0
+    const frame = offset > 0 ? Math.floor(offset) : 0
+    return frame > last ? frame : last
+  }
+
+  /**
+   * Its voices' next block into left and right, the notes queued started
+   * and ended on their frames (one past the block's end, at its end), and
+   * the queue emptied
+   */
+  render(left: Float32Array, right: Float32Array): void {
+    const synth = this.synth
+    const length = left.length
+    const count = this.#count
+    if (count === 0) {
+      synth.process(left, right)
+      return
+    }
+    let from = 0
+    for (let k = 0; k < count; k++) {
+      const frame = this.#at[k] as number
+      const at = frame < length ? frame : length
+      if (at > from) {
+        synth.process(left, right, from, at)
+        from = at
+      }
+      const key = this.#key[k] as number
+      const velocity = this.#velocity[k] as number
+      if (velocity < 0) synth.noteOff(key)
+      else synth.noteOn(key, this.#note[k] as number, velocity)
+    }
+    this.#count = 0
+    // Nothing left of the block: the synth still takes a new structure
+    synth.process(left, right, from, length)
+  }
+
+  /** Its voices released, its queue emptied, its inserts from silence */
   reset(): void {
+    this.#count = 0
     this.synth.releaseAll()
     this.inserts.reset()
   }
@@ -226,10 +325,12 @@ export class Mixer {
       }
       for (let s = 0; s < part.strips.length; s++) {
         const strip = part.strips[s] as Strip
-        const synth = strip.synth
-        const sounding = synth.activeVoices > 0 || !strip.inserts.resting
+        const sounding =
+          strip.synth.activeVoices > 0 ||
+          strip.pending > 0 ||
+          !strip.inserts.resting
         // Its LFOs run on in silence, and a new structure lands
-        synth.process(stripL, stripR)
+        strip.render(stripL, stripR)
         if (!sounding) continue
         strip.inserts.process(stripL, stripR, length)
         if (group) {

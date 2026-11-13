@@ -516,26 +516,34 @@ export class ChainSynth {
   /**
    * Renders the next block into out; given right (as long, another
    * buffer), in stereo, out the left side, each voice where its pan puts
-   * it. Without, in mono, the pan unheard.
+   * it. Without, in mono, the pan unheard. Given from and to, only that
+   * stretch of the block, the rest left as it is: a block rendered in
+   * stretches, in order, a note starting between them, is the block
+   * with the note starting on that frame (Strip, output.ts).
    */
-  process(out: Float32Array, right?: Float32Array): void {
+  process(
+    out: Float32Array,
+    right?: Float32Array,
+    from = 0,
+    to = out.length
+  ): void {
     if (this.#restructured) {
       this.#restructured = false
       this.#order()
       this.#snap()
     }
-    out.fill(0)
-    right?.fill(0)
+    out.fill(0, from, to)
+    right?.fill(0, from, to)
     if (this.activeVoices > 0) {
-      for (let start = 0; start < out.length; start += CHUNK) {
-        const end = Math.min(start + CHUNK, out.length)
+      for (let start = from; start < to; start += CHUNK) {
+        const end = Math.min(start + CHUNK, to)
         this.#prepare(end - start)
         for (let i = 0; i < this.#voices.length; i++) {
           ;(this.#voices[i] as ChainVoice).render(out, start, end, right)
         }
       }
-      this.#level(out)
-      if (right) this.#level(right)
+      this.#level(out, from, to)
+      if (right) this.#level(right, from, to)
     }
     // Free-running LFOs run on in silence too
     const settings = this.#settings
@@ -543,24 +551,24 @@ export class ChainSynth {
       if (settings.modulatorKind[m] !== MOD_LFO) continue
       const phase =
         (settings.lfoPhase[m] as number) +
-        ((settings.lfoRate[m] as number) * out.length) / this.#sampleRate
+        ((settings.lfoRate[m] as number) * (to - from)) / this.#sampleRate
       settings.lfoPhase[m] = phase - Math.floor(phase)
     }
   }
 
   /**
-   * The voices' sum at VOICE_LEVEL, and with clip on the output's clip
-   * (clip.ts): untouched up to -6 dBFS, and never past ±1 however many
-   * voices pile up
+   * The voices' sum over [from, to) at VOICE_LEVEL, and with clip on the
+   * output's clip (clip.ts): untouched up to -6 dBFS, and never past ±1
+   * however many voices pile up
    */
-  #level(out: Float32Array): void {
+  #level(out: Float32Array, from: number, to: number): void {
     if (this.clip) {
       const bend = softClip
-      for (let i = 0; i < out.length; i++) {
+      for (let i = from; i < to; i++) {
         out[i] = bend((out[i] as number) * VOICE_LEVEL)
       }
     } else {
-      for (let i = 0; i < out.length; i++) {
+      for (let i = from; i < to; i++) {
         out[i] = (out[i] as number) * VOICE_LEVEL
       }
     }

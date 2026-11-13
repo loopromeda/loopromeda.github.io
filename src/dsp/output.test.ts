@@ -9,8 +9,8 @@ import { SAW } from './oscillator'
 const SAMPLE_RATE = 48000
 const BLOCK = 128
 
-/** A saw voice held, as loud as send, unclipped */
-function saw(send = 8, note = 48): ChainSynth {
+/** A saw, as loud as send, unclipped, no note played */
+function still(send = 8): ChainSynth {
   const synth = new ChainSynth(SAMPLE_RATE)
   synth.clip = false
   synth.inputCount = 1
@@ -18,6 +18,12 @@ function saw(send = 8, note = 48): ChainSynth {
   synth.setOsc(0, SAW, 0, 0.5, 0)
   synth.chainCount = 1
   synth.setSend(0, 0, send)
+  return synth
+}
+
+/** A saw voice held, as loud as send, unclipped */
+function saw(send = 8, note = 48): ChainSynth {
+  const synth = still(send)
   synth.noteOn(1, note, 1)
   return synth
 }
@@ -519,5 +525,114 @@ describe('Mixer', () => {
     mixer.render(parts([strip()]), left, right)
     expect(loudest(left)).toBeGreaterThan(0)
     expect(right).toEqual(left)
+  })
+})
+
+describe('Strip', () => {
+  /** The left side of blocks frames long, in turn, end to end */
+  function voices(synth: ChainSynth, frames: readonly number[]) {
+    const total = frames.reduce((sum, each) => sum + each, 0)
+    const out = new Float32Array(total)
+    let at = 0
+    for (const length of frames) {
+      const l = new Float32Array(length)
+      synth.process(l, new Float32Array(length))
+      out.set(l, at)
+      at += length
+    }
+    return out
+  }
+
+  it('starts a note queued on its own frame, silent before it', () => {
+    const queued = new Strip(still(), new EffectRack(SAMPLE_RATE))
+    expect(queued.queueOn(37, 1, 48, 1)).toBe(true)
+    expect(queued.pending).toBe(1)
+    const left = new Float32Array(BLOCK * 2)
+    for (let b = 0; b < 2; b++) {
+      const l = new Float32Array(BLOCK)
+      queued.render(l, new Float32Array(BLOCK))
+      left.set(l, b * BLOCK)
+    }
+    expect(queued.pending).toBe(0)
+    expect(loudest(left, 0, 37)).toBe(0)
+    // As a note started with a block, 37 frames later
+    const reference = voices(saw(), [BLOCK - 37, BLOCK])
+    expect(loudest(reference)).toBeGreaterThan(0)
+    for (let i = 0; i < reference.length; i++) {
+      expect(left[37 + i]).toBeCloseTo(reference[i] as number, 5)
+    }
+  })
+
+  it('lets a note go on the frame queued', () => {
+    const queued = new Strip(saw(), new EffectRack(SAMPLE_RATE))
+    queued.queueOff(64, 1)
+    const left = new Float32Array(BLOCK * 40)
+    for (let b = 0; b < 40; b++) {
+      const l = new Float32Array(BLOCK)
+      queued.render(l, new Float32Array(BLOCK))
+      left.set(l, b * BLOCK)
+    }
+    const reference = saw()
+    const before = voices(reference, [64])
+    reference.noteOff(1)
+    const after = voices(reference, [64, ...Array<number>(39).fill(BLOCK)])
+    for (let i = 0; i < 64; i++) {
+      expect(left[i]).toBeCloseTo(before[i] as number, 5)
+    }
+    for (let i = 0; i < after.length; i++) {
+      expect(left[64 + i]).toBeCloseTo(after[i] as number, 5)
+    }
+    // Let go, it dies away
+    expect(loudest(left, BLOCK * 39)).toBeLessThan(loudest(left, 0, BLOCK))
+  })
+
+  it('plays what is queued in order, never one before the last', () => {
+    const queued = new Strip(saw(), new EffectRack(SAMPLE_RATE))
+    queued.queueOff(80, 1)
+    // Asked for before it: on the same frame, after it
+    expect(queued.queueOn(20, 2, 60, 1)).toBe(true)
+    const left = new Float32Array(BLOCK)
+    queued.render(left, new Float32Array(BLOCK))
+    const reference = saw()
+    const before = voices(reference, [80])
+    reference.noteOff(1)
+    reference.noteOn(2, 60, 1)
+    const after = voices(reference, [BLOCK - 80])
+    for (let i = 0; i < 80; i++) {
+      expect(left[i]).toBeCloseTo(before[i] as number, 5)
+    }
+    for (let i = 0; i < after.length; i++) {
+      expect(left[80 + i]).toBeCloseTo(after[i] as number, 5)
+    }
+  })
+
+  it('takes a block’s worth of notes and no more', () => {
+    const full = new Strip(still(), new EffectRack(SAMPLE_RATE))
+    let taken = 0
+    while (taken < 1000 && full.queueOn(0, taken, 48, 1)) taken++
+    expect(taken).toBe(128)
+    expect(full.pending).toBe(128)
+    // With no room, a note ends at once rather than never
+    full.synth.noteOn(5000, 60, 1)
+    const before = full.synth.activeVoices
+    full.queueOff(100, 5000)
+    expect(full.pending).toBe(128)
+    full.reset()
+    expect(full.pending).toBe(0)
+    expect(before).toBe(1)
+  })
+
+  it('is heard through the mixer from the frame its note starts', () => {
+    const mixer = new Mixer(SAMPLE_RATE)
+    const queued = new Strip(still(), new EffectRack(SAMPLE_RATE))
+    const all = parts([queued])
+    const left = new Float32Array(BLOCK)
+    const right = new Float32Array(BLOCK)
+    mixer.render(all, left, right)
+    expect(loudest(left)).toBe(0)
+    queued.queueOn(100, 1, 48, 1)
+    mixer.render(all, left, right)
+    expect(loudest(left, 0, 100)).toBe(0)
+    expect(loudest(left, 100)).toBeGreaterThan(0)
   })
 })
