@@ -53,7 +53,9 @@ Before calling a change done: `pnpm typecheck && pnpm lint && pnpm format:check 
 src/dsp/      pure DSP (oscillators, envelopes, LFOs, filters, voices);
               chainSynth.ts is the whole instrument, a sound built from
               parts: voice pool, allocator, mono/legato, routes, mix;
-              chainVoice.ts one voice of it; slots.ts numbers the parts,
+              chainVoice.ts one voice of it (its glide, in pitch, and
+              in Slide for a note placed on the XY pad); slots.ts
+              numbers the parts,
               sources and destinations; effects.ts the chorus, delay
               and reverb, in stereo, in racks: a sound's inserts, the
               kit's, a bus's, the master's; output.ts a sound's strip
@@ -151,7 +153,8 @@ src/viz/      pure display math (scope trigger and decimation, envelope
               position, a knob turning finer as the finger strays
               sideways in fine.ts, the mod wheel's turn, double tap and
               ridges in wheel.ts, the XY pad's pitch, Slide, lines and
-              a glide's dot in xy.ts, where a popover stands by its
+              a glide's dot (where the note sounds, across and up) in
+              xy.ts, where a popover stands by its
               button in popover.ts, the step grid's cells, a note's
               box and what a drag from a note makes of it in steps.ts)
 src/ui/       React components; SoundEditor.tsx the sound as tiles
@@ -179,7 +182,8 @@ src/ui/       React components; SoundEditor.tsx the sound as tiles
               and what the strip is for them; PlaySurface.tsx plays
               notes on Keys.tsx, Pads.tsx or XyPad.tsx, or the kit on
               KitPads.tsx (hands.ts: who
-              holds which note, and bends it), or with Seq shows
+              holds which note, bends it, and on the XY pad places it,
+              its Slide from the start), or with Seq shows
               StepGrid.tsx, the picked track's loop a bar at a time
               (a tap puts a note or takes it away, a drag from one
               sets how hard and how long), with Transport.tsx's Play,

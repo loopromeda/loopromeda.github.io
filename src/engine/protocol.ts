@@ -57,8 +57,18 @@ export type ToWorklet =
    * kept as they play. Ahead of anything naming a new track.
    */
   | { t: 'layout'; tracks: readonly TrackLayout[] }
-  /** A touch (`id`: its pointerId) starts a note; velocity in [0, 1] */
-  | ({ t: 'noteOn'; id: number; note: number; velocity: number } & On)
+  /**
+   * A touch (`id`: its pointerId) starts a note; velocity in [0, 1]. With
+   * slide (-1..1), its finger is placed there (the XY pad): the note
+   * starts with that Slide, which glides there as its pitch does.
+   */
+  | ({
+      t: 'noteOn'
+      id: number
+      note: number
+      velocity: number
+      slide?: number
+    } & On)
   /** That touch ends, on the track and the pad it started on */
   | ({ t: 'noteOff'; id: number } & On)
   /** That touch's finger slid up its key (or down, below 0), -1..1 */
@@ -155,13 +165,15 @@ export interface LoadReport {
 /**
  * The notes held still gliding (ChainSynth.glides), GLIDE_REPORTS times a
  * second while the page watches them, and once more as the last lands:
- * the first count of keys (touch ids), and how far each one's note has
- * still to glide, in semitones, its bend left out
+ * the first count of keys (touch ids), how far each one's note has still
+ * to glide, in semitones, its bend left out, and how far its Slide has
+ * (the finger's less the one sounding; 0 where it does not glide)
  */
 export interface GlideReport {
   readonly count: number
   readonly keys: Float64Array
   readonly amounts: Float64Array
+  readonly slides: Float64Array
 }
 
 /** How often the glides are reported: about a display's frame rate */

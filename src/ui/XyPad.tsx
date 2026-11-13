@@ -1,7 +1,14 @@
 import { useEffect, useRef, type PointerEvent } from 'react'
 import type { GlideReport } from '../engine/protocol'
 import { noteName } from '../viz/keyboard'
-import { xyGlide, xyLines, xyNote, xySlide, xyTuning } from '../viz/xy'
+import {
+  xyGlide,
+  xyLines,
+  xyNote,
+  xySlide,
+  xyTuning,
+  type XyFinger,
+} from '../viz/xy'
 import type { Hands } from './hands'
 
 /** The ring under a finger, and the line down the pad at its pitch */
@@ -11,11 +18,11 @@ const STEM =
   'pointer-events-none absolute inset-y-0 left-0 w-px bg-emerald-400/50'
 const TUNING =
   'pointer-events-none absolute top-0 left-0 rounded bg-black/60 px-1 font-mono text-[11px] whitespace-nowrap text-emerald-100'
-/** Where a gliding note sounds, and its way left to the finger */
+/** Where a gliding note sounds, and its way left to the finger, turned */
 const SOUND =
   'pointer-events-none absolute top-0 left-0 hidden size-3 -translate-1/2 rounded-full bg-emerald-300 shadow-[0_0_8px_#34d399]'
 const TRAIL =
-  'pointer-events-none absolute top-0 left-0 hidden h-0.5 -translate-y-1/2 rounded-full bg-emerald-300/45'
+  'pointer-events-none absolute top-0 left-0 hidden h-0.5 origin-left -translate-y-1/2 rounded-full bg-emerald-300/45'
 /** The ring's radius, CSS px (size-11): the trail stops at its edge */
 const RING = 22
 /** The pitch stands over the ring, or under it this near the pad's top */
@@ -25,20 +32,19 @@ const TUNING_FLIP = 52
  * What stands for a finger on the pad: its ring, its line, its pitch, and
  * while its note glides, where that sounds and the way left
  */
-interface Mark {
+interface Mark extends XyFinger {
   readonly ring: HTMLDivElement
   readonly stem: HTMLDivElement
   readonly tuning: HTMLDivElement
   readonly sound: HTMLDivElement
   readonly trail: HTMLDivElement
-  /** Where the finger is on the pad, CSS px */
   left: number
   top: number
-  /** The pad's width, and a semitone's across it, CSS px */
   width: number
+  height: number
   semitone: number
-  /** How far its note has still to glide, semitones; 0 once landed */
   glide: number
+  slide: number
 }
 
 /**
@@ -47,9 +53,11 @@ interface Mark {
  * the black keys' fainter), up its Slide, 0 at the bottom to 1 at the
  * top. A finger moving bends its note (Hands.bend) rather than playing
  * another, and its Slide follows; it keeps its note off the pad's edges.
- * Every note plays at full velocity. A note gliding to its finger (the
- * sound's glide) shows where it sounds, a dot on the finger's row that
- * runs to the ring as the audio thread reports it (watchGlides). The
+ * Every note plays at full velocity, and starts with its finger's Slide.
+ * A note gliding to its finger (the sound's glide) shows where it sounds,
+ * a dot that runs to the ring as the audio thread reports it
+ * (watchGlides): from the last note's pitch, and from its Slide too in a
+ * sound that reads the Slide, so straight from where that finger was. The
  * rings under the fingers, their lines, pitches and glides are drawn
  * straight onto the page, as the keys are lit, so a touch never
  * re-renders React.
@@ -79,11 +87,15 @@ export function XyPad({
       watchGlides((report) => {
         for (const [id, mark] of marks.current) {
           let glide = 0
+          let slide = 0
           for (let i = 0; i < report.count; i++) {
-            if (report.keys[i] === id) glide = report.amounts[i] ?? 0
+            if (report.keys[i] !== id) continue
+            glide = report.amounts[i] ?? 0
+            slide = report.slides[i] ?? 0
           }
-          if (glide === mark.glide) continue
+          if (glide === mark.glide && slide === mark.slide) continue
           mark.glide = glide
+          mark.slide = slide
           drawGlide(mark)
         }
       }),
@@ -124,8 +136,10 @@ export function XyPad({
         left: 0,
         top: 0,
         width: 0,
+        height: 0,
         semitone: 0,
         glide: 0,
+        slide: 0,
       }
       marks.current.set(id, mark)
     }
@@ -136,6 +150,7 @@ export function XyPad({
     mark.left = left
     mark.top = top
     mark.width = box.width
+    mark.height = box.height
     mark.semitone = box.width / (12 * octaves)
     drawGlide(mark)
     mark.stem.style.transform = `translateX(${left}px)`
@@ -161,8 +176,8 @@ export function XyPad({
     boxRef.current = event.currentTarget.getBoundingClientRect()
     const { x, y } = pointAt(event)
     const note = xyNote(x, lowest, octaves)
-    hands.press(event.pointerId, note, 1, y)
-    hands.move(event.pointerId, xySlide(y))
+    // The note starts with the finger's Slide, and glides to it
+    hands.press(event.pointerId, note, 1, y, xySlide(y))
     place(event.pointerId, x, y, note)
   }
 
@@ -235,25 +250,26 @@ function add(layer: HTMLElement, className: string): HTMLDivElement {
 }
 
 /**
- * Shows where mark's note sounds while it glides, on the finger's row, and
- * the way left to the ring's edge; nothing once it lands
+ * Shows where mark's note sounds while it glides, and the way left to the
+ * ring's edge, turned towards the finger; nothing once it lands
  */
 function drawGlide(mark: Mark): void {
   const { sound, trail } = mark
-  const glide = xyGlide(mark.left, mark.glide, mark.semitone, mark.width, RING)
+  const glide = xyGlide(mark, RING)
   if (!glide) {
     sound.style.display = ''
     trail.style.display = ''
     return
   }
   sound.style.display = 'block'
-  sound.style.left = `${glide.at}px`
-  sound.style.top = `${mark.top}px`
+  sound.style.left = `${glide.x}px`
+  sound.style.top = `${glide.y}px`
   if (glide.length > 0) {
     trail.style.display = 'block'
-    trail.style.left = `${glide.from}px`
-    trail.style.top = `${mark.top}px`
+    trail.style.left = `${glide.x}px`
+    trail.style.top = `${glide.y}px`
     trail.style.width = `${glide.length}px`
+    trail.style.rotate = `${glide.angle}rad`
   } else {
     trail.style.display = ''
   }

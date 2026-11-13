@@ -68,36 +68,59 @@ export function xyTuning(note: number): { note: number; cents: number } {
   return { note: nearest, cents: Math.round((note - nearest) * 100) }
 }
 
+/** A finger on the pad, and how far its note is from sounding under it */
+export interface XyFinger {
+  /** Where the finger is on the pad, CSS px across and down */
+  readonly left: number
+  readonly top: number
+  /** The pad's width and height, and a semitone's across it, CSS px */
+  readonly width: number
+  readonly height: number
+  readonly semitone: number
+  /** How far its note has still to glide, semitones; 0 once landed */
+  readonly glide: number
+  /** How far its Slide has (the finger's less the one sounding), 0..1 */
+  readonly slide: number
+}
+
 /** Where a gliding note sounds on the pad, and the way left to its finger */
 export interface XyGlide {
-  /** Where it sounds across the pad, CSS px */
-  readonly at: number
-  /** The trail from there to the ring's edge: where it starts, how long */
-  readonly from: number
+  /** Where it sounds on the pad, CSS px across and down */
+  readonly x: number
+  readonly y: number
+  /**
+   * The trail from there towards the finger, up to its ring's edge: how
+   * long, and which way it points, in radians as CSS turns (0 rightwards,
+   * a quarter turn downwards)
+   */
   readonly length: number
+  readonly angle: number
 }
 
 /**
- * Where a note gliding to a finger at left (CSS px across a pad width
- * wide) sounds, glide semitones short of it at semitone px each, held on
- * the pad, and the trail from there to the edge of the finger's ring, ring
- * px out; none while it sounds under the finger, less than a pixel off
+ * Where a note gliding to finger sounds: glide semitones short of it
+ * across the pad, slide of the pad's height below it (the Slide is 1 at
+ * the top), held on the pad, and the trail from there to the edge of the
+ * finger's ring, ring px out; none while it sounds under the finger, less
+ * than a pixel off
  */
-export function xyGlide(
-  left: number,
-  glide: number,
-  semitone: number,
-  width: number,
-  ring: number
-): XyGlide | undefined {
-  const at = Math.min(Math.max(left - glide * semitone, 0), width)
-  const gap = Math.abs(at - left)
+export function xyGlide(finger: XyFinger, ring: number): XyGlide | undefined {
+  const { left, top, width, height } = finger
+  const x = hold(left - finger.glide * finger.semitone, width)
+  const y = hold(top + finger.slide * height, height)
+  const gap = Math.hypot(left - x, top - y)
   if (!(gap >= 1)) return undefined
   return {
-    at,
-    from: at < left ? at : left + ring,
+    x,
+    y,
     length: Math.max(gap - ring, 0),
+    angle: Math.atan2(top - y, left - x),
   }
+}
+
+/** value held within 0..most */
+function hold(value: number, most: number): number {
+  return Math.min(Math.max(value, 0), most)
 }
 
 /** value held within 0..1; NaN at 0 */

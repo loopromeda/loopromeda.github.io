@@ -3,12 +3,15 @@
  * each computer key holds one. Lights the key or pad elements directly, so
  * a press never re-renders React. A touch also keeps the velocity it
  * pressed with and where it pressed, from which its surface works out the
- * finger's Slide as it moves; on the XY pad, it bends its note as well.
+ * finger's Slide as it moves; on the XY pad, it bends its note as well,
+ * and presses with its Slide: a place on the pad, which the note starts
+ * with.
  */
 
 /** The part of the engine that plays notes */
 export interface Player {
-  noteOn(id: number, note: number, velocity: number): void
+  /** With slide, the note starts with that Slide: the finger is there */
+  noteOn(id: number, note: number, velocity: number, slide?: number): void
   noteOff(id: number): void
   slide(id: number, value: number): void
   bend(id: number, note: number): void
@@ -54,21 +57,25 @@ export class Hands {
    * already holding another note moves to it. True if the note changed.
    */
   play(id: number, note: number): boolean {
-    const was = this.#notes.get(id)
-    if (was === note) return false
-    if (was !== undefined) this.#light(was, -1)
-    this.#notes.set(id, note)
-    this.#light(note, 1)
-    this.#player.noteOn(id, note, this.#velocities.get(id) ?? 1)
-    return true
+    return this.#play(id, note, undefined)
   }
 
-  /** A touch presses note at velocity, at start (its surface's measure) */
-  press(id: number, note: number, velocity: number, start: number): void {
+  /**
+   * A touch presses note at velocity, at start (its surface's measure).
+   * With slide, its finger is placed there (the XY pad): the note starts
+   * with that Slide, where one without starts at 0.
+   */
+  press(
+    id: number,
+    note: number,
+    velocity: number,
+    start: number,
+    slide?: number
+  ): void {
     this.#velocities.set(id, velocity)
     this.#starts.set(id, start)
-    this.#slides.set(id, 0)
-    this.play(id, note)
+    this.#slides.set(id, slide ?? 0)
+    this.#play(id, note, slide)
   }
 
   /** A touch's finger moved: its Slide is now slide, and it is over note */
@@ -128,6 +135,18 @@ export class Hands {
     }
     this.#elements.set(note, element)
     this.#show(note)
+  }
+
+  #play(id: number, note: number, slide: number | undefined): boolean {
+    const was = this.#notes.get(id)
+    if (was === note) return false
+    if (was !== undefined) this.#light(was, -1)
+    this.#notes.set(id, note)
+    this.#light(note, 1)
+    const velocity = this.#velocities.get(id) ?? 1
+    if (slide === undefined) this.#player.noteOn(id, note, velocity)
+    else this.#player.noteOn(id, note, velocity, slide)
+    return true
   }
 
   #light(note: number, by: number): void {

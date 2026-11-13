@@ -327,8 +327,10 @@ export class Engine {
   /**
    * Touch id plays note on the track picked, a synth's; one holding a
    * note elsewhere (a pad, another track) lets it go. Nothing on a kit.
+   * With slide, the finger is placed there (the XY pad): the note starts
+   * with that Slide, and glides to it as its pitch does.
    */
-  noteOn(id: number, note: number, velocity = 1): void {
+  noteOn(id: number, note: number, velocity = 1, slide?: number): void {
     const track = this.getTrack()
     if (track.kind !== 'synth') return
     const held = this.#held.get(id)
@@ -336,7 +338,11 @@ export class Engine {
       this.noteOff(id)
     }
     this.#held.set(id, { track: track.id })
-    this.#post({ t: 'noteOn', id, note, velocity, track: track.id })
+    if (slide === undefined) {
+      this.#post({ t: 'noteOn', id, note, velocity, track: track.id })
+    } else {
+      this.#post({ t: 'noteOn', id, note, velocity, slide, track: track.id })
+    }
   }
 
   /**

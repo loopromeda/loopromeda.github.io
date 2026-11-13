@@ -70,31 +70,61 @@ describe('xyTuning', () => {
 })
 
 describe('xyGlide', () => {
+  /** A finger on a pad 600 by 400, 30 px a semitone, a ring of 22 */
+  const glide = (left: number, top: number, pitch: number, slide = 0) =>
+    xyGlide(
+      { left, top, width: 600, height: 400, semitone: 30, glide: pitch, slide },
+      22
+    )
+
   it('sounds a glide short of the finger, the trail to its ring', () => {
-    // From two semitones under a finger at 300, 30 px a semitone
-    expect(xyGlide(300, 2, 30, 600, 22)).toEqual({
-      at: 240,
-      from: 240,
-      length: 38,
-    })
+    // From two semitones under a finger at 300
+    expect(glide(300, 100, 2)).toEqual({ x: 240, y: 100, length: 38, angle: 0 })
     // From above it, gliding down
-    expect(xyGlide(300, -1, 30, 600, 22)).toEqual({
-      at: 330,
-      from: 322,
+    expect(glide(300, 100, -1)).toEqual({
+      x: 330,
+      y: 100,
       length: 8,
+      angle: Math.PI,
     })
+  })
+
+  it('sounds a Slide short of the finger under it, or over', () => {
+    // A quarter of the pad's Slide still to rise: the trail points up
+    expect(glide(300, 100, 0, 0.25)).toEqual({
+      x: 300,
+      y: 200,
+      length: 78,
+      angle: -Math.PI / 2,
+    })
+    expect(glide(300, 100, 0, -0.125)).toEqual({
+      x: 300,
+      y: 50,
+      length: 28,
+      angle: Math.PI / 2,
+    })
+  })
+
+  it('runs straight from where the last note was, both at once', () => {
+    const both = glide(300, 100, 2, 0.2)
+    expect(both?.x).toBe(240)
+    expect(both?.y).toBe(180)
+    expect(both?.length).toBeCloseTo(78)
+    expect(both?.angle).toBeCloseTo(Math.atan2(-80, 60))
   })
 
   it('holds it on the pad, and leaves the trail out inside the ring', () => {
-    expect(xyGlide(100, 12, 30, 600, 22)?.at).toBe(0)
-    expect(xyGlide(500, -12, 30, 600, 22)?.at).toBe(600)
-    expect(xyGlide(300, 0.5, 30, 600, 22)?.length).toBe(0)
+    expect(glide(100, 100, 12)?.x).toBe(0)
+    expect(glide(500, 100, -12)?.x).toBe(600)
+    expect(glide(300, 300, 0, 0.5)?.y).toBe(400)
+    expect(glide(300, 100, 0, -0.5)?.y).toBe(0)
+    expect(glide(300, 100, 0.5)?.length).toBe(0)
   })
 
   it('shows none once it sounds under the finger', () => {
-    expect(xyGlide(300, 0, 30, 600, 22)).toBeUndefined()
-    expect(xyGlide(300, 0.01, 30, 600, 22)).toBeUndefined()
-    expect(xyGlide(300, Number.NaN, 30, 600, 22)).toBeUndefined()
-    expect(xyGlide(0, 3, 30, 600, 22)).toBeUndefined()
+    expect(glide(300, 100, 0)).toBeUndefined()
+    expect(glide(300, 100, 0.01, 0.001)).toBeUndefined()
+    expect(glide(300, 100, Number.NaN)).toBeUndefined()
+    expect(glide(0, 100, 3)).toBeUndefined()
   })
 })

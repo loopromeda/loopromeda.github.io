@@ -116,11 +116,13 @@ class SynthProcessor extends AudioWorkletProcessor {
     count: number
     keys: Float64Array
     amounts: Float64Array
+    slides: Float64Array
   } = {
     t: 'glides',
     count: 0,
     keys: new Float64Array(VOICE_COUNT),
     amounts: new Float64Array(VOICE_COUNT),
+    slides: new Float64Array(VOICE_COUNT),
   }
 
   constructor() {
@@ -213,7 +215,8 @@ class SynthProcessor extends AudioWorkletProcessor {
         this.#synthOn(message.track, message.pad)?.noteOn(
           message.id,
           message.note,
-          message.velocity
+          message.velocity,
+          message.slide
         )
         break
       case 'noteOff':
@@ -366,7 +369,9 @@ class SynthProcessor extends AudioWorkletProcessor {
     this.#sinceGlides = 0
     const report = this.#glides
     const synth = this.#watched
-    const count = synth ? synth.glides(report.keys, report.amounts) : 0
+    const count = synth
+      ? synth.glides(report.keys, report.amounts, report.slides)
+      : 0
     // Once with none as the last lands, then quiet
     if (count === 0 && report.count === 0) return
     report.count = count

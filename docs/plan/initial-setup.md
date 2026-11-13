@@ -379,6 +379,30 @@ right, benchmark within budget.
         the glide's curve says (186 px at 0.2 s, 397 at 0.8 s, the finger
         at 542), kept on through a 2 px move, and moved with the finger
         on a 64 px one.
+        2026-11-13, asked for by ashon ("xy 패드에서 slide가 있는 경우도
+        y축에 대해서도 glide가 들어가면 좋겠는데 가능할까?"): the glide
+        runs up the pad too. A note that starts with a Slide given (a
+        `noteOn` with `slide`: the XY pad's, placed where the finger
+        is) glides its Slide from the last note's, where that finger
+        went since, at the pitch glide's own pace, so the two keep step
+        and the note travels a straight line across the pad
+        (`ChainVoice`: the Slide's way left, added over the 5 ms
+        smoothing that follows the finger; `ChainSynth.noteOn`). Notes
+        with no Slide given (the keys, the pads, the kit, the
+        sequencer) start as they did, and nothing changes with the
+        glide at 0 or with no note before. The report tells each
+        note's Slide left as well (`GlideReport.slides`; 0 in a sound
+        with no route reading the Slide, where nothing would be
+        heard), and the dot stands at both, its line turned towards
+        the ring (`xyGlide`). Checked in a 500 px window (the pad 436
+        by 132) with a 2 s glide and the Slide routed to a filter's
+        cutoff: after a note at the bottom left, one held at the top
+        right showed the dot starting at the first note's place and
+        running straight to the finger (38% of the way at 0.33 s, 91%
+        at 1.6 s, there by 4 s, as the glide's curve says), the line's
+        angle the same throughout, and the same the other way; with
+        the route taken out the dot kept to the finger's row. Not
+        tried on a phone.
         2026-11-12, asked for by ashon: the keys stand with C4 in their
         middle, from a C for an even number of octaves (C3–C5) and from an
         F for an odd one (F3–F4 on a phone, F2–F5 on the Fold open), and

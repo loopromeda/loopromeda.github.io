@@ -108,6 +108,9 @@ export class ChainSynth {
   #mode = POLY
   /** The last note played, where a glide starts; NaN before the first */
   #lastNote = Number.NaN
+  /** The key that note is of, and its Slide: where a Slide's glide starts */
+  #lastKey = Number.NaN
+  #lastSlide = 0
   /** Glide time in seconds, 0 for none */
   #glideTime = 0
   /** Mono play's held keys, oldest first, with their notes, and bent */
@@ -116,6 +119,8 @@ export class ChainSynth {
   readonly #bent = new Float64Array(STACK)
   readonly #velocities = new Float64Array(STACK)
   readonly #slides = new Float64Array(STACK)
+  /** 1 for a key whose note started with a Slide given (noteOn's slide) */
+  readonly #given = new Uint8Array(STACK)
   #held = 0
 
   constructor(sampleRate: number, voices = VOICE_COUNT) {
@@ -381,7 +386,8 @@ export class ChainSynth {
 
   /**
    * Seconds a note's pitch takes to glide from the last note's (95% of the
-   * way); 0 jumps
+   * way), and its Slide from the last note's where it starts with one; 0
+   * jumps
    */
   set glide(seconds: number) {
     this.#glideTime = seconds > 0 ? seconds : 0
@@ -391,22 +397,33 @@ export class ChainSynth {
 
   // Playing
 
-  /** key (a touch) starts a note; a key already playing lets go first */
-  noteOn(key: number, note: number, velocity: number): void {
+  /**
+   * key (a touch) starts a note; a key already playing lets go first.
+   * Given slide (-1..1: the finger is placed there, as on the XY pad,
+   * where the Slide is a place on the pad), the note starts with that
+   * Slide, which glides there from the last note's as its pitch does;
+   * without, its Slide starts at 0 (a key's, counted from where the
+   * finger pressed) and glides from nowhere.
+   */
+  noteOn(key: number, note: number, velocity: number, slide?: number): void {
     // A setting changed while silent is not a change to glide through
     if (this.activeVoices === 0) this.#snap()
-    const from =
-      this.#glideTime > 0 && Number.isFinite(this.#lastNote)
-        ? this.#lastNote
-        : note
+    const gliding = this.#glideTime > 0 && Number.isFinite(this.#lastNote)
+    const from = gliding ? this.#lastNote : note
+    const placed = slide === undefined ? undefined : unit(slide)
+    const slideFrom =
+      gliding && placed !== undefined ? this.#lastSlide : Number.NaN
     if (this.#mode === POLY) {
       this.noteOff(key)
       const index = this.#allocator.noteOn(key)
-      ;(this.#voices[index] as ChainVoice).start(note, velocity, from)
+      const voice = this.#voices[index] as ChainVoice
+      voice.start(note, velocity, from, placed ?? 0, slideFrom)
     } else {
-      this.#monoOn(key, note, velocity, from)
+      this.#monoOn(key, note, velocity, from, placed, slideFrom)
     }
     this.#lastNote = note
+    this.#lastKey = key
+    this.#lastSlide = placed ?? 0
   }
 
   /** key lets go of its note */
@@ -424,31 +441,37 @@ export class ChainSynth {
    * source of the note it plays
    */
   slide(key: number, value: number): void {
-    const amount = value > -1 ? (value < 1 ? value : 1) : value <= -1 ? -1 : 0
+    const amount = unit(value)
     if (this.#mode === POLY) {
       const index = this.#allocator.voiceOf(key)
-      if (index >= 0) (this.#voices[index] as ChainVoice).slide = amount
-      return
+      if (index < 0) return
+      ;(this.#voices[index] as ChainVoice).slide = amount
+    } else {
+      const at = this.#find(key)
+      if (at < 0) return
+      this.#slides[at] = amount
+      if (at === this.#held - 1) (this.#voices[0] as ChainVoice).slide = amount
     }
-    const at = this.#find(key)
-    if (at < 0) return
-    this.#slides[at] = amount
-    if (at === this.#held - 1) (this.#voices[0] as ChainVoice).slide = amount
+    // A note played next glides from there
+    if (key === this.#lastKey) this.#lastSlide = amount
   }
 
   /**
    * key's finger moved its note to note (a MIDI number, between semitones
    * too: the XY pad), which it bends to, a glide under way carrying on
    * beneath; a key not held bends nothing. A note played next glides from
-   * there.
+   * there, and from its finger's Slide.
    */
   bend(key: number, note: number): void {
     if (!Number.isFinite(note)) return
     if (this.#mode === POLY) {
       const index = this.#allocator.voiceOf(key)
       if (index < 0) return
-      ;(this.#voices[index] as ChainVoice).bend(note)
+      const voice = this.#voices[index] as ChainVoice
+      voice.bend(note)
       this.#lastNote = note
+      this.#lastKey = key
+      this.#lastSlide = voice.slide
       return
     }
     const at = this.#find(key)
@@ -457,30 +480,43 @@ export class ChainSynth {
     if (at !== this.#held - 1) return
     ;(this.#voices[0] as ChainVoice).bend(note)
     this.#lastNote = note
+    this.#lastKey = key
+    this.#lastSlide = this.#slides[at] as number
   }
 
   /**
-   * The notes held still gliding, into keys and amounts (as many as they
-   * have room for): each one's key, and how far its note has still to
-   * glide, in semitones, its bend left out. Returns how many.
+   * The notes held still gliding, into keys, amounts and slides (as many
+   * as they have room for): each one's key, how far its note has still to
+   * glide, in semitones, its bend left out, and how far its Slide has (0
+   * for a note whose Slide does not glide). Returns how many.
    */
-  glides(keys: Float64Array, amounts: Float64Array): number {
-    const room = Math.min(keys.length, amounts.length)
+  glides(
+    keys: Float64Array,
+    amounts: Float64Array,
+    slides: Float64Array
+  ): number {
+    const room = Math.min(keys.length, amounts.length, slides.length)
     if (this.#mode !== POLY) {
       if (this.#held === 0 || room === 0) return 0
-      const amount = (this.#voices[0] as ChainVoice).gliding
-      if (amount === 0) return 0
+      const voice = this.#voices[0] as ChainVoice
+      const amount = voice.gliding
+      const slide = voice.sliding
+      if (amount === 0 && slide === 0) return 0
       keys[0] = this.#keys[this.#held - 1] as number
       amounts[0] = amount
+      slides[0] = slide
       return 1
     }
     let count = 0
     for (let i = 0; i < this.#voices.length && count < room; i++) {
       if (!this.#allocator.held(i)) continue
-      const amount = (this.#voices[i] as ChainVoice).gliding
-      if (amount === 0) continue
+      const voice = this.#voices[i] as ChainVoice
+      const amount = voice.gliding
+      const slide = voice.sliding
+      if (amount === 0 && slide === 0) continue
       keys[count] = this.#allocator.keyOf(i)
       amounts[count] = amount
+      slides[count] = slide
       count++
     }
     return count
@@ -754,8 +790,18 @@ export class ChainSynth {
     }
   }
 
-  /** Mono play: key holds note, on the one voice */
-  #monoOn(key: number, note: number, velocity: number, from: number): void {
+  /**
+   * Mono play: key holds note, on the one voice; with slide, its finger
+   * is placed there (noteOn)
+   */
+  #monoOn(
+    key: number,
+    note: number,
+    velocity: number,
+    from: number,
+    slide: number | undefined,
+    slideFrom: number
+  ): void {
     const at = this.#find(key)
     if (at >= 0) this.#removeAt(at)
     const held = this.#held > 0
@@ -765,14 +811,15 @@ export class ChainSynth {
     this.#notes[top] = note
     this.#bent[top] = note
     this.#velocities[top] = velocity
-    this.#slides[top] = 0
+    this.#slides[top] = slide ?? 0
+    this.#given[top] = slide === undefined ? 0 : 1
     const voice = this.#voices[0] as ChainVoice
     if (voice.active) {
       // Legato plays on while another key is held
-      voice.move(note, velocity, this.#mode === MONO || !held)
-      voice.slide = 0
+      voice.move(note, velocity, this.#mode === MONO || !held, slide)
+      if (slide === undefined) voice.slide = 0
     } else {
-      voice.start(note, velocity, from)
+      voice.start(note, velocity, from, slide ?? 0, slideFrom)
     }
   }
 
@@ -791,10 +838,20 @@ export class ChainSynth {
     const top = this.#held - 1
     const note = this.#notes[top] as number
     const bent = this.#bent[top] as number
-    voice.move(note, this.#velocities[top] as number, this.#mode === MONO)
+    const slide = this.#slides[top] as number
+    // A finger placed on the pad is glided back to, pitch and Slide
+    const given = this.#given[top] === 1
+    voice.move(
+      note,
+      this.#velocities[top] as number,
+      this.#mode === MONO,
+      given ? slide : undefined
+    )
     if (bent !== note) voice.bend(bent)
-    voice.slide = this.#slides[top] as number
+    if (!given) voice.slide = slide
     this.#lastNote = bent
+    this.#lastKey = this.#keys[top] as number
+    this.#lastSlide = slide
   }
 
   /** Where key sits in the mono stack, or -1 */
@@ -811,8 +868,14 @@ export class ChainSynth {
     this.#bent.copyWithin(at, at + 1, this.#held)
     this.#velocities.copyWithin(at, at + 1, this.#held)
     this.#slides.copyWithin(at, at + 1, this.#held)
+    this.#given.copyWithin(at, at + 1, this.#held)
     this.#held--
   }
+}
+
+/** value within -1..1 (NaN reads as 0) */
+function unit(value: number): number {
+  return value > -1 ? (value < 1 ? value : 1) : value <= -1 ? -1 : 0
 }
 
 /** False only while a level sits at 0, there to stay */

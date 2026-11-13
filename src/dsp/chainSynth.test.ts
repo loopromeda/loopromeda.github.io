@@ -14,6 +14,7 @@ import {
   NO_INPUT,
   SOURCE_KEY,
   SOURCE_OFF,
+  SOURCE_SLIDE,
   SOURCE_VELOCITY,
   SOURCE_WHEEL,
   itemDest,
@@ -72,6 +73,33 @@ function wheeled(cutoff: number, octaves: number, wheel: number): ChainSynth {
   synth.wheel = wheel
   return synth
 }
+
+/**
+ * A saw through a resonant filter at 500 Hz, which the Slide opens three
+ * octaves; of voices voices
+ */
+function slid(voices?: number): ChainSynth {
+  const synth = new ChainSynth(SAMPLE_RATE, voices)
+  synth.inputCount = 1
+  synth.setInputKind(0, INPUT_OSC)
+  synth.setOsc(0, SAW, 0, 0.5, 0)
+  synth.chainCount = 1
+  synth.setSend(0, 0, 1)
+  synth.setItemCount(0, 1)
+  synth.setItemKind(0, 0, ITEM_FILTER)
+  synth.setFilter(0, 0, LOWPASS, 500, 0.3, 0)
+  synth.routeCount = 1
+  const cutoff = itemDest(0, 0, ITEM_CUTOFF)
+  synth.setRoute(0, SOURCE_SLIDE, cutoff, 3, SOURCE_OFF)
+  return synth
+}
+
+/** One block of synth's output: 128 frames */
+const BLOCK = 128 / SAMPLE_RATE
+
+/** The share of a glide of seconds left after one block */
+const afterBlock = (seconds: number) =>
+  Math.exp((-3 * 128) / (seconds * SAMPLE_RATE))
 
 /** The largest difference between two renders, sample by sample */
 function furthest(a: Float32Array, b: Float32Array): number {
@@ -288,20 +316,21 @@ describe('ChainSynth', () => {
     synth.glide = 0.2
     const keys = new Float64Array(4)
     const amounts = new Float64Array(4)
+    const slides = new Float64Array(4)
     synth.noteOn(1, 60, 1)
     render(synth, 0.05)
     // The first note has nothing to glide from
-    expect(synth.glides(keys, amounts)).toBe(0)
+    expect(synth.glides(keys, amounts, slides)).toBe(0)
     synth.noteOn(2, 72, 1)
     synth.bend(2, 73)
     render(synth, 0.05)
-    expect(synth.glides(keys, amounts)).toBe(1)
+    expect(synth.glides(keys, amounts, slides)).toBe(1)
     expect(keys[0]).toBe(2)
     // The glide's own way left, from 60 up to 72: the bend is not in it
     expect(amounts[0]).toBeGreaterThan(0)
     expect(amounts[0]).toBeLessThan(12)
     render(synth, 2)
-    expect(synth.glides(keys, amounts)).toBe(0)
+    expect(synth.glides(keys, amounts, slides)).toBe(0)
   })
 
   it('in mono tells the glide of the key it plays', () => {
@@ -310,16 +339,181 @@ describe('ChainSynth', () => {
     synth.glide = 0.2
     const keys = new Float64Array(4)
     const amounts = new Float64Array(4)
+    const slides = new Float64Array(4)
     synth.noteOn(1, 60, 1)
     synth.noteOn(2, 67, 1)
     render(synth, 0.02)
-    expect(synth.glides(keys, amounts)).toBe(1)
+    expect(synth.glides(keys, amounts, slides)).toBe(1)
     expect(keys[0]).toBe(2)
     synth.noteOff(2)
     render(synth, 0.02)
-    expect(synth.glides(keys, amounts)).toBe(1)
+    expect(synth.glides(keys, amounts, slides)).toBe(1)
     expect(keys[0]).toBe(1)
     expect(amounts[0]).toBeLessThan(0)
+    // Keys' Slides, counted from where each pressed, do not glide
+    expect(slides[0]).toBe(0)
+  })
+
+  describe('a note that starts with its Slide (the XY pad)', () => {
+    const keys = new Float64Array(4)
+    const amounts = new Float64Array(4)
+    const slides = new Float64Array(4)
+
+    it("glides its Slide from the last note's, as its pitch", () => {
+      const synth = slid()
+      synth.glide = 0.2
+      synth.noteOn(1, 60, 1, 0.25)
+      render(synth, 0.05)
+      // The first note has nowhere to glide from
+      expect(synth.glides(keys, amounts, slides)).toBe(0)
+      synth.noteOn(2, 72, 1, 0.75)
+      render(synth, BLOCK)
+      expect(synth.glides(keys, amounts, slides)).toBe(1)
+      expect(keys[0]).toBe(2)
+      expect(slides[0]).toBeCloseTo(0.5 * afterBlock(0.2), 5)
+      // Both arrive together: the way left keeps its direction
+      expect((slides[0] as number) / (amounts[0] as number)).toBeCloseTo(
+        0.5 / 12,
+        6
+      )
+      render(synth, 0.05)
+      expect(synth.glides(keys, amounts, slides)).toBe(1)
+      expect((slides[0] as number) / (amounts[0] as number)).toBeCloseTo(
+        0.5 / 12,
+        6
+      )
+      render(synth, 2)
+      expect(synth.glides(keys, amounts, slides)).toBe(0)
+    })
+
+    it('glides its Slide alone at one pitch, and down as well', () => {
+      const synth = slid()
+      synth.glide = 0.2
+      synth.noteOn(1, 60, 1, 0.75)
+      synth.noteOn(2, 60, 1, 0.25)
+      render(synth, BLOCK)
+      expect(synth.glides(keys, amounts, slides)).toBe(1)
+      expect(amounts[0]).toBe(0)
+      expect(slides[0]).toBeCloseTo(-0.5 * afterBlock(0.2), 5)
+    })
+
+    it('glides from where the last finger went since', () => {
+      const synth = slid()
+      synth.glide = 0.2
+      synth.noteOn(1, 60, 1, 0.25)
+      synth.slide(1, 0.5)
+      synth.noteOn(2, 60, 1, 0.75)
+      render(synth, BLOCK)
+      synth.glides(keys, amounts, slides)
+      expect(slides[0]).toBeCloseTo(0.25 * afterBlock(0.2), 5)
+      // A bend makes its finger the last, with its Slide
+      synth.slide(1, 0)
+      synth.bend(1, 61)
+      synth.noteOn(3, 61, 1, 1)
+      render(synth, BLOCK)
+      expect(synth.glides(keys, amounts, slides)).toBe(2)
+      expect(keys[1]).toBe(3)
+      expect(slides[1]).toBeCloseTo(afterBlock(0.2), 5)
+    })
+
+    it('is heard gliding: the filter opens slowly, not at once', () => {
+      const [gliding, jumping] = [slid(), slid()]
+      for (const each of [gliding, jumping]) {
+        each.glide = 0.5
+        each.noteOn(1, 60, 1, 0)
+        render(each, 0.05)
+      }
+      gliding.noteOn(2, 60, 1, 1)
+      // A key's Slide, sent after its note, is there within a moment
+      jumping.noteOn(2, 60, 1)
+      jumping.slide(2, 1)
+      const apart = furthest(render(gliding, 0.1), render(jumping, 0.1))
+      expect(apart).toBeGreaterThan(0.01)
+    })
+
+    it('starts there with no glide, or no note before it', () => {
+      const [placed, sent] = [slid(), slid()]
+      placed.noteOn(1, 60, 1, 1)
+      sent.noteOn(1, 60, 1)
+      sent.slide(1, 1)
+      // The same once the Slide sent has caught up
+      render(placed, 0.2)
+      render(sent, 0.2)
+      expect(furthest(render(placed, 0.1), render(sent, 0.1))).toBeLessThan(
+        1e-3
+      )
+      placed.noteOn(2, 60, 1, 0)
+      render(placed, BLOCK)
+      expect(placed.glides(keys, amounts, slides)).toBe(0)
+    })
+
+    it('leaves a note without one as it was, glide or none', () => {
+      const [synth, reference] = [slid(), slid()]
+      synth.glide = 0.2
+      reference.glide = 0.2
+      synth.noteOn(1, 60, 1, 0.75)
+      // The reference never heard of a Slide given
+      reference.noteOn(1, 60, 1)
+      reference.slide(1, 0.75)
+      render(synth, 0.2)
+      render(reference, 0.2)
+      for (const each of [synth, reference]) {
+        each.noteOn(2, 60, 1)
+        each.slide(2, 0.25)
+      }
+      const a = render(synth, 0.1)
+      expect(synth.glides(keys, amounts, slides)).toBe(0)
+      // Past the first note's own start, which the Slide sent trails
+      expect(
+        furthest(a.subarray(2400), render(reference, 0.1).subarray(2400))
+      ).toBeLessThan(1e-3)
+    })
+
+    it('reports no Slide gliding in a sound that reads none', () => {
+      const synth = sine()
+      synth.glide = 0.2
+      synth.noteOn(1, 60, 1, 0.25)
+      synth.noteOn(2, 60, 1, 0.75)
+      render(synth, BLOCK)
+      expect(synth.glides(keys, amounts, slides)).toBe(0)
+    })
+
+    it('keeps a Slide sent while its voice waits for another to end', () => {
+      const [synth, reference] = [slid(1), slid(1)]
+      for (const each of [synth, reference]) {
+        each.noteOn(1, 60, 1)
+        render(each, 0.05)
+        // The one voice is taken: the note waits for it to fall silent
+        each.noteOn(2, 60, 1)
+      }
+      synth.slide(2, 1)
+      render(synth, 0.1)
+      render(reference, 0.1)
+      const apart = furthest(render(synth, 0.1), render(reference, 0.1))
+      expect(apart).toBeGreaterThan(0.01)
+    })
+
+    it('in mono glides to the key played, and back to the one held', () => {
+      const synth = slid()
+      synth.mode = MONO
+      synth.glide = 0.2
+      synth.noteOn(1, 60, 1, 0.25)
+      render(synth, 0.05)
+      synth.noteOn(2, 60, 1, 0.75)
+      render(synth, BLOCK)
+      expect(synth.glides(keys, amounts, slides)).toBe(1)
+      expect(keys[0]).toBe(2)
+      expect(slides[0]).toBeCloseTo(0.5 * afterBlock(0.2), 5)
+      synth.noteOff(2)
+      render(synth, BLOCK)
+      expect(synth.glides(keys, amounts, slides)).toBe(1)
+      expect(keys[0]).toBe(1)
+      // From where it sounded, most of the way to 0.75, down to 0.25
+      const left = 0.5 * afterBlock(0.2)
+      expect(slides[0]).toBeCloseTo(-(0.5 - left) * afterBlock(0.2), 5)
+      render(synth, 2)
+      expect(synth.glides(keys, amounts, slides)).toBe(0)
+    })
   })
 
   it('plays nothing while no note is held', () => {

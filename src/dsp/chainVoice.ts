@@ -56,6 +56,8 @@ export const DRIVE_GAIN = 10
 const GLIDE_LAND = 1e-4
 /** Velocity and slide changes glide over about 5 × this many seconds */
 const SMOOTHING = 0.005
+/** A gliding Slide lands once closer than this (a pad's height is 1) */
+const SLIDE_LAND = 1e-5
 /**
  * A moving pitch's phase step is worked out exactly every this many
  * samples, linear in between (pitchesToSteps): as a filter's cutoff
@@ -243,7 +245,8 @@ export class ChainSettings {
  * sum into the amp envelope. Its own modulators (envelopes, LFOs,
  * velocity, key, slide and a random number), and the wheel all voices
  * share, drive the destinations the settings' routes name, per sample.
- * Its pitch glides from the note it starts from.
+ * Its pitch glides from the note it starts from, and its Slide with it
+ * where it starts from one (a finger placed on the XY pad).
  *
  * A voice asked for a new note while it still sounds (stolen, or taken again
  * mid-release) chokes first: a linear fall to silence over CHOKE_TIME. The new
@@ -262,7 +265,14 @@ export class ChainVoice {
   readonly #amp: Adsr
   /** The velocity's share of the loudness, gliding (a mono retrigger) */
   readonly #gain: Smoother
+  /**
+   * The finger's Slide, followed within a moment, and how far from it the
+   * Slide source still is: the way left of a glide from the last note's
+   * Slide, which shrinks at the glide's pace, as the pitch's does, so the
+   * two arrive together
+   */
   readonly #slide: Smoother
+  #slideLeft = 0
   /** Each LFO modulator's rate change in octaves, from the last chunk */
   readonly #lfoOctaves = new Float64Array(MAX_MODULATORS)
   /** Each oscillator's last two samples, which feedback FM reads */
@@ -294,6 +304,9 @@ export class ChainVoice {
   #nextFrom = 0
   /** The bend of the note waiting, from its note, semitones */
   #nextBend = 0
+  /** Its Slide, and the Slide that glides from (NaN: from nowhere) */
+  #nextSlide = 0
+  #nextSlideFrom = Number.NaN
 
   /**
    * seed tells this voice's noise and random numbers from the others' (same
@@ -341,25 +354,59 @@ export class ChainVoice {
     return this.#amp.active ? this.#note - this.#base : 0
   }
 
-  /** The finger's slide on its key, -1..1: the Slide source glides to it */
+  /**
+   * How far the Slide source has still to glide to the finger's: the
+   * finger's Slide less the one sounding, as gliding is of the pitch; 0
+   * once it has landed, in a sound no route reads the Slide in, and for a
+   * voice silent
+   */
+  get sliding(): number {
+    if (this.#settings.sourceUsed[SOURCE_SLIDE] !== 1) return 0
+    if (this.#waiting) {
+      const left = this.#nextSlide - this.#nextSlideFrom
+      return Number.isFinite(left) ? left : 0
+    }
+    return this.#amp.active && this.#slideLeft !== 0 ? -this.#slideLeft : 0
+  }
+
+  /**
+   * The finger's slide on its key, -1..1: the Slide source follows it
+   * within a moment, a glide under way carrying on beneath. A note
+   * waiting to start starts with it.
+   */
+  get slide(): number {
+    return this.#waiting ? this.#nextSlide : this.#slide.target
+  }
+
   set slide(value: number) {
-    this.#slide.target = value
+    if (this.#waiting) this.#nextSlide = value
+    else this.#slide.target = value
   }
 
   /**
    * Starts a note (MIDI number, velocity in [0, 1]), its pitch gliding from
-   * `from` (a MIDI number; the note itself: no glide)
+   * `from` (a MIDI number; the note itself: no glide), its Slide at slide,
+   * gliding there from slideFrom at the same pace (NaN: from nowhere, it
+   * starts there)
    */
-  start(note: number, velocity: number, from = note): void {
+  start(
+    note: number,
+    velocity: number,
+    from = note,
+    slide = 0,
+    slideFrom = Number.NaN
+  ): void {
     if (this.#amp.active) {
       this.#waiting = true
       this.#nextNote = note
       this.#nextVelocity = velocity
       this.#nextFrom = from
       this.#nextBend = 0
+      this.#nextSlide = slide
+      this.#nextSlideFrom = slideFrom
       this.#amp.choke()
     } else {
-      this.#begin(note, velocity, from)
+      this.#begin(note, velocity, from, slide, slideFrom)
     }
   }
 
@@ -382,17 +429,25 @@ export class ChainVoice {
    * pitch glides from where it is, a bend going at its own pace.
    * retrigger restarts the envelopes and LFOs from their
    * current levels, with the new velocity; otherwise everything carries on
-   * (legato). A silent voice starts the note instead.
+   * (legato). A silent voice starts the note instead. Given slide (the
+   * note's finger is placed there, on the XY pad), the Slide glides to it
+   * from where it sounds, as the pitch does; without, it is left alone.
    */
-  move(note: number, velocity: number, retrigger: boolean): void {
+  move(
+    note: number,
+    velocity: number,
+    retrigger: boolean,
+    slide?: number
+  ): void {
     if (this.#waiting) {
       this.#nextNote = note
       this.#nextVelocity = velocity
       this.#nextBend = 0
+      if (slide !== undefined) this.#nextSlide = slide
       return
     }
     if (!this.#amp.active) {
-      this.#begin(note, velocity, this.#pitch)
+      this.#begin(note, velocity, this.#pitch, slide ?? 0, Number.NaN)
       return
     }
     // The glide starts from the pitch sounding, bend and all
@@ -400,6 +455,16 @@ export class ChainVoice {
     this.#bend = 0
     this.#bendTarget = 0
     this.#note = note
+    if (slide !== undefined) {
+      if (this.#settings.glideCoef < 1) {
+        // And from the Slide sounding
+        this.#slideLeft += this.#slide.value - slide
+        this.#slide.target = slide
+        this.#slide.snap()
+      } else {
+        this.#slide.target = slide
+      }
+    }
     if (!retrigger) return
     this.#velocity = velocity
     this.#randomValue = this.#random.next()
@@ -438,7 +503,13 @@ export class ChainVoice {
   ): void {
     if (this.#waiting && !this.#amp.active) {
       this.#waiting = false
-      this.#begin(this.#nextNote, this.#nextVelocity, this.#nextFrom)
+      this.#begin(
+        this.#nextNote,
+        this.#nextVelocity,
+        this.#nextFrom,
+        this.#nextSlide,
+        this.#nextSlideFrom
+      )
       this.#bendTarget = this.#nextBend
     }
     if (!this.#amp.active) return
@@ -506,9 +577,22 @@ export class ChainVoice {
       ;(sources[SOURCE_KEY] as Float32Array).fill(key, 0, length)
     }
     if (used[SOURCE_SLIDE] === 1) {
-      this.#slide.fill(sources[SOURCE_SLIDE] as Float32Array, 0, length)
+      const slide = sources[SOURCE_SLIDE] as Float32Array
+      this.#slide.fill(slide, 0, length)
+      let left = this.#slideLeft
+      if (left !== 0) {
+        // The way left of its glide shrinks as the pitch's does
+        const keep = 1 - settings.glideCoef
+        for (let i = 0; i < length; i++) {
+          left *= keep
+          if (Math.abs(left) < SLIDE_LAND) left = 0
+          slide[i] = (slide[i] as number) + left
+        }
+        this.#slideLeft = left
+      }
     } else {
       this.#slide.snap()
+      this.#slideLeft = 0
     }
     if (used[SOURCE_RANDOM] === 1) {
       const random = sources[SOURCE_RANDOM] as Float32Array
@@ -853,7 +937,13 @@ export class ChainVoice {
     }
   }
 
-  #begin(note: number, velocity: number, from: number): void {
+  #begin(
+    note: number,
+    velocity: number,
+    from: number,
+    slide: number,
+    slideFrom: number
+  ): void {
     this.#note = note
     this.#base = Number.isFinite(from) ? from : note
     this.#bend = 0
@@ -862,8 +952,9 @@ export class ChainVoice {
     this.#velocity = velocity
     this.#gain.target = 1 - this.#settings.ampVelocity * (1 - velocity) || 0
     this.#gain.snap()
-    this.#slide.target = 0
+    this.#slide.target = slide
     this.#slide.snap()
+    this.#slideLeft = Number.isFinite(slideFrom) ? slideFrom - slide : 0
     this.#randomValue = this.#random.next()
     this.#lfoOctaves.fill(0)
     this.#feedback.fill(0)

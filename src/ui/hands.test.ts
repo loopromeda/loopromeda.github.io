@@ -5,8 +5,9 @@ import { COMPUTER_ID, Hands, type Player } from './hands'
 class FakePlayer implements Player {
   readonly calls: string[] = []
 
-  noteOn(id: number, note: number, velocity: number): void {
-    this.calls.push(`on ${id} ${note} ${velocity}`)
+  noteOn(id: number, note: number, velocity: number, slide?: number): void {
+    const placed = slide === undefined ? '' : ` at ${slide}`
+    this.calls.push(`on ${id} ${note} ${velocity}${placed}`)
   }
 
   noteOff(id: number): void {
@@ -81,6 +82,17 @@ describe('Hands', () => {
     expect(player.calls).toEqual(['on 1 60 0.5', 'on 1 62 0.5', 'slide 1 0'])
     expect(lit(key(60))).toBe(false)
     expect(lit(key(62))).toBe(true)
+  })
+
+  it('presses with the Slide its finger is placed at, and sends none', () => {
+    const { player, hands } = setup()
+    hands.press(1, 60.5, 1, 0.25, 0.75)
+    expect(player.calls).toEqual(['on 1 60.5 1 at 0.75'])
+    // The note has it already
+    hands.move(1, 0.75)
+    expect(player.calls).toHaveLength(1)
+    hands.move(1, 0.5)
+    expect(player.calls[1]).toBe('slide 1 0.5')
   })
 
   it('sends Slide only when it changes by enough to hear', () => {
