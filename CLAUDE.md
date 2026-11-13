@@ -178,8 +178,9 @@ src/ui/       React components; SoundEditor.tsx the sound as tiles
               drives and modulators their pictures (Picture.tsx, drawn
               from outline.ts); MasterSheet.tsx all the views at size
               (#/master), with the loudness; Dynamics.tsx a
-              compressor's or limiter's gain reduction and the
-              loudness, drawn as the audio thread tells them;
+              compressor's or limiter's gain reduction (in its panel,
+              and rising over its tile) and the loudness, drawn as the
+              audio thread tells them;
               PartPanel.tsx the
               picked tile's knobs, adds and moves (ConfirmDialog.tsx asks
               before a removal);

@@ -269,6 +269,17 @@ master like the rest, and two readouts.
   second while any turns down, once more as they let go
   (`watchReduction`, by the effect's id and, for an insert or a kit's
   chain, its track's).
+- **On the tile**, asked for the same day ("컴프나 리미터 등이 걸릴
+  때에 리덕션을 블럭에서도 볼 수 있게"), then as the whole tile
+  filling ("전체 블록이 차오르는 느낌으로"): every compressor's and
+  limiter's tile on screen, on an insert, the kit's chain, a bus or the
+  master, has its ink rise over its face from the foot as it turns the
+  sound down, to the top at 24 dB, a line in full ink on its surface,
+  behind the label as a picture stands. Many are watched at once, one
+  by its tile and its panel together: the page keeps who watches which
+  (`src/engine/reductions.ts`) and tells the audio thread the list
+  under a version; a report for a list since changed is dropped, so a
+  tile added or gone never shows another's depth.
 - **Loudness**: the worklet measures its whole output as ITU-R BS.1770
   does (`src/dsp/loudness.ts`): both sides K-weighted (libebur128's
   filters for any sample rate), in 100 ms steps; momentary over 400 ms,

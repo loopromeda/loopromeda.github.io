@@ -94,6 +94,64 @@ export function Reduction({
   )
 }
 
+/**
+ * The same, across the compressor's or limiter's whole tile: its ink
+ * rising over the face from the foot while it turns the sound down, to
+ * the top at REDUCTION_RANGE dB, a line in full ink on its surface, and
+ * nothing while it does not. Behind the label and inside the ring, as a
+ * tile's picture stands; its panel names the depth (Reduction).
+ */
+export function TileReduction({
+  engine,
+  at,
+  color,
+}: {
+  engine: Engine
+  at: EffectAt
+  color: string
+}) {
+  const levelRef = useRef<HTMLDivElement>(null)
+  const { track, id } = at
+
+  useEffect(() => {
+    let shown = -1
+    const show = (db: number) => {
+      // A two-hundredth of the tile is no change to see
+      const fill = Math.round(reductionFill(db) * 200) / 200
+      if (fill === shown) return
+      shown = fill
+      const level = levelRef.current
+      if (level) level.style.transform = `translateY(${(1 - fill) * 100}%)`
+    }
+    show(0)
+    return engine.watchReduction(
+      track === undefined ? { id } : { track, id },
+      show
+    )
+  }, [engine, track, id])
+
+  return (
+    <div
+      aria-hidden
+      className="pointer-events-none absolute top-[3px] left-[3px] -z-10 size-[calc(100%-6px)] overflow-hidden rounded-[4px]"
+    >
+      {/*
+       * Its surface a line in full ink; at 0 the whole of it below the
+       * face, out of sight. Eased over the reports' 33 ms apart.
+       */}
+      <div
+        ref={levelRef}
+        className="absolute inset-0 border-t-[1.5px] transition-transform duration-75 ease-linear"
+        style={{
+          background: `color-mix(in oklab, ${color} 24%, transparent)`,
+          borderColor: color,
+          transform: 'translateY(100%)',
+        }}
+      />
+    </div>
+  )
+}
+
 /** The loudness's three windows, as the reports name them */
 const WINDOWS = [
   { key: 'momentary', label: 'Momentary' },

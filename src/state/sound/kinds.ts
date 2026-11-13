@@ -756,8 +756,8 @@ export const MODULATOR_KIND_ORDER = Object.keys(
 export const EFFECT_KIND_ORDER = Object.keys(EFFECT_KINDS) as EffectKind[]
 
 /**
- * An effect kind that turns the sound down by how loud it is: its panel
- * shows by how much (a compressor, a limiter)
+ * An effect kind that turns the sound down by how loud it is: its tile
+ * and its panel show by how much (a compressor, a limiter)
  */
 export function reduces(kind: EffectKind): boolean {
   return kind === 'compressor' || kind === 'limiter'

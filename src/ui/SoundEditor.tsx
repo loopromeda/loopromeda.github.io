@@ -9,6 +9,7 @@ import {
   type RefObject,
 } from 'react'
 import type { Engine, OutputSource } from '../engine/engine'
+import type { EffectAt } from '../engine/protocol'
 import { PAD_NOTE, padName } from '../state/kit'
 import type { Library } from '../state/library'
 import { moveItem, movePart } from '../state/sound/edit'
@@ -20,6 +21,7 @@ import {
   MAX_ITEMS,
   MAX_MODULATORS,
   effectTile,
+  reduces,
 } from '../state/sound/kinds'
 import {
   MASTER,
@@ -81,6 +83,7 @@ import {
   type Look,
 } from './editor'
 import { CARD, CARD_FACE, RAISED } from './controls'
+import { TileReduction } from './Dynamics'
 import {
   MasterView,
   Meters,
@@ -998,6 +1001,8 @@ function Graph({
   )
   const showView = scope !== undefined && geometry.out.w >= GRAPH.outW
   const routed = modulated(sound)
+  /** The track played, whose inserts these are */
+  const track = engine.getTrack().id
   /** The chain each item stands in, for its look and its neighbours */
   const chainOf = new Map<string, number>()
   sound.chains.forEach((chain, c) => {
@@ -1265,6 +1270,7 @@ function Graph({
               aria={`${partName(sound, effect)}, ${tileLine(sound, effect)}, after the amp`}
               onClick={() => pick(effect)}
               style={place(box)}
+              reduction={insertReduction(sound, track, effect)}
             />
           </div>
         )
@@ -1382,6 +1388,19 @@ function Graph({
  * rest as the sound's does, the mix's at least, and pans what it cannot
  * show.
  */
+/**
+ * Where an insert of sound (or the kit's chain) plays, for its tile to
+ * show how far it turns down: only a compressor's or a limiter's
+ */
+function insertReduction(
+  sound: Sound,
+  track: string,
+  id: string
+): EffectAt | undefined {
+  const kind = sound.effects.find((effect) => effect.id === id)?.kind
+  return kind && reduces(kind) ? { track, id } : undefined
+}
+
 function KitGraph({
   engine,
   library,
@@ -1415,6 +1434,8 @@ function KitGraph({
   )
   const showView = scope !== undefined && geometry.out.w >= GRAPH.outW
   const middle = geometry.block.y + geometry.block.h / 2
+  /** The kit played, whose chain this is */
+  const track = engine.getTrack().id
   const last = sound.effects[sound.effects.length - 1]?.id ?? PAD_TILE
   return (
     <Frame
@@ -1490,6 +1511,7 @@ function KitGraph({
               aria={`Kit ${partName(sound, effect)}, ${tileLine(sound, effect)}, after every pad`}
               onClick={() => pick(effect)}
               style={place(box)}
+              reduction={insertReduction(sound, track, effect)}
             />
           </div>
         )
@@ -1623,6 +1645,7 @@ function MixGraph({
             aria={`${mixPartName(mix, effect)}, ${where}`}
             onClick={() => pick(id)}
             style={place(box)}
+            reduction={reduces(kind) ? { id: effect } : undefined}
           />
         </div>
       )
@@ -2257,6 +2280,7 @@ function Tile({
   stacked = false,
   inline = false,
   text,
+  reduction,
 }: {
   engine: Engine
   drag?: DragProps
@@ -2297,6 +2321,8 @@ function Tile({
   inline?: boolean
   /** A line under the label of its own, live: the mix's, the sends */
   text?: ReactNode
+  /** A compressor's or limiter's: how far it turns down, rising over it */
+  reduction?: EffectAt
 }) {
   const height = typeof style?.height === 'number' ? style.height : 26
   const width = typeof style?.width === 'number' ? style.width : Infinity
@@ -2450,6 +2476,10 @@ function Tile({
             : `justify-center ${column ? 'flex-col gap-1 px-1' : 'gap-[7px] px-1.5'}`
       } ${picked ? 'z-[2]' : 'z-[1]'} ${className}`}
     >
+      {reduction && (
+        // Under its picture, as it rises: on the face, inside the ring
+        <TileReduction engine={engine} at={reduction} color={look.ink} />
+      )}
       {picture !== undefined && !under && (
         // Behind the label: on the face, inside the ring, under the content
         <Picture
