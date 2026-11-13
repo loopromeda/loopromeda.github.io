@@ -18,7 +18,7 @@ import {
   type Added,
 } from '../state/sound/edit'
 import * as kinds from '../state/sound/kinds'
-import { Mixer, Strip } from '../dsp/output'
+import { Mixer, Part, Strip } from '../dsp/output'
 import {
   addMixEffect,
   initMix,
@@ -27,7 +27,8 @@ import {
   type Mix,
 } from '../state/mix'
 import { AMP, SENDS, VOICE, initSound, type Sound } from '../state/sound/sound'
-import { SoundPlayer, applyMix, applySound } from './sound'
+import { initKitChain } from '../state/kit'
+import { SoundPlayer, applyKitChain, applyMix, applySound } from './sound'
 
 const SAMPLE_RATE = 48000
 const BLOCK = 128
@@ -131,10 +132,11 @@ describe('the chain engine', () => {
         new ChainSynth(SAMPLE_RATE),
         new EffectRack(SAMPLE_RATE)
       )
-      applyMix(mixer, mix, [strip])
+      const part = new Part([strip])
+      applyMix(mixer, mix, [part])
       // Its fader where the mix has it before the note, not gliding there
-      strip.level.snap()
-      strip.pan.snap()
+      part.level.snap()
+      part.pan.snap()
       // A short release, so what sounds later is the echo
       const short = setValue(initSound(), AMP, 'release', 0)
       new SoundPlayer(strip).load(setValue(short, SENDS, 'b', 1))
@@ -145,7 +147,7 @@ describe('the chain engine', () => {
       const right = new Float32Array(BLOCK)
       for (let at = 0; at < left.length; at += BLOCK) {
         if (at >= 0.02 * SAMPLE_RATE) strip.synth.releaseAll()
-        mixer.render([strip], block, right)
+        mixer.render([part], block, right)
         left.set(block, at)
       }
       const from = Math.round(0.08 * SAMPLE_RATE)
@@ -175,6 +177,52 @@ describe('the chain engine', () => {
     const later = setMixValue(moved.mix, moved.id ?? '', 'time', 0.15)
     const dry = setMixValue(later, moved.id ?? '', 'mix', 1)
     expect(echo(dry)).toBeGreaterThan(0.15)
+  })
+
+  it('sets each part’s fader by its place, the kit’s after the synth’s', () => {
+    const strip = () =>
+      new Strip(new ChainSynth(SAMPLE_RATE), new EffectRack(SAMPLE_RATE))
+    const synth = new Part([strip()])
+    const kit = new Part([strip(), strip()])
+    applyMix(
+      new Mixer(SAMPLE_RATE),
+      setMixValue(initMix(), 'p2', 'level', 0.25),
+      [synth, kit]
+    )
+    synth.level.snap()
+    kit.level.snap()
+    expect(synth.level.now).toBe(1)
+    expect(kit.level.now).toBe(0.25)
+  })
+
+  it('gives the kit, a group, its chain: its inserts and its sends', () => {
+    const strip = () =>
+      new Strip(new ChainSynth(SAMPLE_RATE), new EffectRack(SAMPLE_RATE))
+    const kit = new Part([strip(), strip()], new EffectRack(SAMPLE_RATE))
+    const { sound } = addEffect(
+      setValue(setValue(initSound(), SENDS, 'a', 0.5), SENDS, 'c', 0.25),
+      'chorus'
+    )
+    applyKitChain(kit, { effects: sound.effects, sends: sound.sends })
+    for (const send of kit.sends) send.snap()
+    expect(kit.sends.map((send) => send.now)).toEqual([0.5, 0, 0.25, 0])
+    expect(kit.inserts?.count).toBe(1)
+    // A part that is no group is let be
+    const synth = new Part([strip()])
+    applyKitChain(synth, initKitChain())
+    expect(synth.inserts).toBeUndefined()
+  })
+
+  it('plays a pad’s synth alone: its sound’s inserts unheard', () => {
+    const pad = new Strip(
+      new ChainSynth(SAMPLE_RATE),
+      new EffectRack(SAMPLE_RATE)
+    )
+    const { sound } = addEffect(initSound(), 'reverb')
+    const player = new SoundPlayer(pad.synth)
+    player.load(sound)
+    player.set(sound.effects[0]?.id ?? '', 'mix', 1)
+    expect(pad.inserts.count).toBe(0)
   })
 
   it("routes the wheel, which plays where the synth's wheel stands", () => {
@@ -208,9 +256,10 @@ describe('the chain engine', () => {
       strip.synth.noteOn(1, 60, 1)
       const left = new Float32Array(BLOCK)
       const right = new Float32Array(BLOCK)
+      const parts = [new Part([strip])]
       for (let b = 0; b < 100; b++) {
         if (b === 10) turn?.(player)
-        mixer.render([strip], left, right)
+        mixer.render(parts, left, right)
       }
       return [peak(left), peak(right)]
     }

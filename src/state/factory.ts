@@ -774,6 +774,173 @@ export const FACTORY_PRESETS: readonly Preset[] = [
     },
   }),
 
+  preset('Low Tom', 'Drums', {
+    inputs: {
+      head: { kind: 'osc', wave: 'Sine', semi: -5 },
+      noise: { kind: 'noise' },
+    },
+    chains: {
+      main: {
+        sends: { head: 1, noise: 0.15 },
+        items: { filter: { kind: 'filter', cutoff: 2500 } },
+      },
+    },
+    modulators: { drop: { kind: 'env', attack: 0.001, decay: 0.14 } },
+    routes: [{ from: 'drop', to: 'voice.pitch', by: 9 }],
+    amp: {
+      attack: 0.001,
+      decay: 0.45,
+      sustain: 0,
+      release: 0.35,
+      velocity: 0.6,
+    },
+  }),
+  preset('High Tom', 'Drums', {
+    inputs: {
+      head: { kind: 'osc', wave: 'Sine', semi: 5 },
+      noise: { kind: 'noise' },
+    },
+    chains: {
+      main: {
+        sends: { head: 1, noise: 0.15 },
+        items: { filter: { kind: 'filter', cutoff: 3500 } },
+      },
+    },
+    modulators: { drop: { kind: 'env', attack: 0.001, decay: 0.1 } },
+    routes: [{ from: 'drop', to: 'voice.pitch', by: 9 }],
+    amp: {
+      attack: 0.001,
+      decay: 0.28,
+      sustain: 0,
+      release: 0.25,
+      velocity: 0.6,
+    },
+  }),
+  preset('Rim', 'Drums', {
+    // A high click and a burst of noise in a band: the stick on the rim
+    inputs: {
+      click: { kind: 'osc', wave: 'Triangle', octave: 1, semi: 5 },
+      noise: { kind: 'noise' },
+    },
+    chains: {
+      main: {
+        sends: { click: 0.8, noise: 0.6 },
+        items: {
+          band: { kind: 'filter', type: 'BP', cutoff: 1800, resonance: 0.3 },
+        },
+      },
+    },
+    amp: {
+      attack: 0.001,
+      decay: 0.04,
+      sustain: 0,
+      release: 0.03,
+      velocity: 0.6,
+    },
+  }),
+  preset('Shaker', 'Drums', {
+    // Noise up high, swelling in for a moment, as the beads hit together
+    inputs: { noise: { kind: 'noise' } },
+    chains: {
+      main: {
+        sends: { noise: 0.7 },
+        items: {
+          filter: { kind: 'filter', type: 'HP', cutoff: 5000, resonance: 0.1 },
+        },
+      },
+    },
+    amp: {
+      attack: 0.012,
+      decay: 0.09,
+      sustain: 0,
+      release: 0.06,
+      velocity: 0.6,
+    },
+  }),
+  preset('Crash', 'Drums', {
+    // The hats' metal and noise, a little lower, ringing long
+    inputs: {
+      square: { kind: 'osc', wave: 'Square', octave: 2 },
+      square2: { kind: 'osc', wave: 'Square', octave: 2, semi: 3, fine: 20 },
+      noise: { kind: 'noise' },
+      metal: { kind: 'ring', a: 'square', b: 'square2' },
+    },
+    chains: {
+      main: {
+        sends: { noise: 0.7, metal: 0.4 },
+        items: {
+          filter: { kind: 'filter', type: 'HP', cutoff: 4500, resonance: 0.1 },
+        },
+      },
+    },
+    amp: {
+      attack: 0.001,
+      decay: 1.6,
+      sustain: 0,
+      release: 1.2,
+      velocity: 0.6,
+    },
+    sends: { c: 0.3 },
+  }),
+  preset('Boom', 'Drums', {
+    // The Kick's sine, falling only an octave and ringing on, a little
+    // driven: a long, low kick
+    inputs: { sine: { kind: 'osc', wave: 'Sine', octave: -1 } },
+    chains: {
+      main: {
+        sends: { sine: 1 },
+        items: { drive: { kind: 'drive', drive: 0.2 } },
+      },
+    },
+    modulators: { drop: { kind: 'env', attack: 0.001, decay: 0.05 } },
+    routes: [{ from: 'drop', to: 'voice.pitch', by: 12 }],
+    amp: {
+      attack: 0.001,
+      decay: 1.2,
+      sustain: 0,
+      release: 0.8,
+      velocity: 0.5,
+    },
+  }),
+  preset('Conga', 'Drums', {
+    inputs: {
+      head: { kind: 'osc', wave: 'Sine', semi: 7 },
+      slap: { kind: 'noise' },
+    },
+    chains: {
+      main: {
+        sends: { head: 1, slap: 0.1 },
+        items: { filter: { kind: 'filter', cutoff: 4000 } },
+      },
+    },
+    modulators: { drop: { kind: 'env', attack: 0.001, decay: 0.03 } },
+    routes: [{ from: 'drop', to: 'voice.pitch', by: 5 }],
+    amp: {
+      attack: 0.001,
+      decay: 0.22,
+      sustain: 0,
+      release: 0.18,
+      velocity: 0.6,
+    },
+  }),
+  preset('Clave', 'Drums', {
+    // A triangle high up, gone at once: two sticks of hard wood
+    inputs: { wood: { kind: 'osc', wave: 'Triangle', octave: 1, semi: 7 } },
+    chains: {
+      main: {
+        sends: { wood: 0.9 },
+        items: { filter: { kind: 'filter', cutoff: 6000 } },
+      },
+    },
+    amp: {
+      attack: 0.001,
+      decay: 0.05,
+      sustain: 0,
+      release: 0.04,
+      velocity: 0.6,
+    },
+  }),
+
   preset('Blips', 'FX', {
     inputs: { square: { kind: 'osc', wave: 'Square' } },
     chains: {
@@ -874,4 +1041,30 @@ export const FACTORY_PRESETS: readonly Preset[] = [
     amp: { attack: 0.02, sustain: 1, release: 0.3 },
     voice: { mode: 'Mono' },
   }),
+]
+
+/**
+ * The factory kit (src/state/kit.ts): its sixteen pads, the presets above
+ * by name, from the bottom left of the kit's pads along each row and on
+ * up (the first row of eight on a phone held upright, of four on a wider
+ * one): the kick, the snare and the hats, the toms and the clap, then
+ * percussion, a crash, a long low kick and a zap
+ */
+export const FACTORY_KIT: readonly string[] = [
+  'Kick',
+  'Snare',
+  'Closed Hat',
+  'Open Hat',
+  'Low Tom',
+  'Tom',
+  'High Tom',
+  'Clap',
+  'Rim',
+  'Cowbell',
+  'Shaker',
+  'Crash',
+  'Boom',
+  'Conga',
+  'Clave',
+  'Zap',
 ]

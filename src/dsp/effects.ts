@@ -554,6 +554,14 @@ export class EffectRack {
     this.#quiet = this.#restAfter
   }
 
+  /**
+   * True while it has nothing to play: no effects, or its tails long
+   * silent and nothing heard since. Given silence it gives silence back.
+   */
+  get resting(): boolean {
+    return this.#count === 0 || this.#quiet >= this.#restAfter
+  }
+
   /** Runs the effects over left and right [0, length), in place */
   process(left: Float32Array, right: Float32Array, length: number): void {
     if (this.#count === 0) return

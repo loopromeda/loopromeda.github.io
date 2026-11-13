@@ -1,14 +1,15 @@
 /**
- * The session's mix (docs/plan/effects-parts-sequencer.md): each part's
- * strip, a level and a pan before its sends, the buses every part sends
- * to, each a row of effects and a level, and the master after them, a
- * row of its own, a level, then the soft clip. A bus with
- * no effects is a dry path. The buses are lettered by their place, A
- * first: one removed, those after it move up a letter, as a desk's aux
- * sends are numbered. Kept with the session in storage, never with a
- * preset: a preset holds how much its sound sends to each bus, by the
- * bus's letter (Sound.sends), the session what each bus is. Plain data,
- * as the worklet is sent it.
+ * The session's mix (docs/plan/effects-parts-sequencer.md): each track's
+ * strip (src/state/tracks.ts), by its place, a level and a balance
+ * before its sends, the buses every track sends to, each a row of effects and a
+ * level, and the master after them, a row of its own, a level, then the
+ * soft clip. A bus with no effects is a dry path. The buses are lettered
+ * by their place, A first: one removed, those after it move up a letter,
+ * as a desk's aux sends are numbered. Kept with the session in storage,
+ * never with a preset: a preset holds how much its sound sends to each
+ * bus, by the bus's letter (Sound.sends; the kit's, its chain's, kept
+ * with the kit: src/state/kit.ts), the session what each bus is. Plain
+ * data, as the worklet is sent it.
  */
 import { clampValue } from './params'
 import {
@@ -24,6 +25,7 @@ import {
   type KnobSpec,
 } from './sound/kinds'
 import { defaults, valuesFor, type Effect, type Values } from './sound/sound'
+import { MAX_TRACKS } from './tracks'
 
 /**
  * A part's strip, its fader: how loud it goes on to its sends, where it
@@ -34,10 +36,13 @@ export interface Strip {
   readonly values: Values
 }
 
-/** The parts a mix has a strip for: the sound, the only one so far */
-export const PARTS = 1
+/**
+ * The strips a mix starts with: a session's first tracks, a synth and a
+ * kit (src/state/library.ts)
+ */
+const START_STRIPS = 2
 
-/** Part k's strip, as a mix part's id: p1 for the first */
+/** The strip of the track at place k, as a mix part's id: p1 the first */
 export function stripId(k: number): string {
   return `p${k + 1}`
 }
@@ -60,7 +65,7 @@ export interface Master {
 }
 
 export interface Mix {
-  /** By part, one for each of PARTS */
+  /** One for each track, by its place */
   readonly strips: readonly Strip[]
   /** In their letters' order, each letter once at most */
   readonly buses: readonly Bus[]
@@ -99,11 +104,38 @@ function wetOnly(id: string, kind: EffectKind): Effect {
   return { id, kind, values: { ...defaults(EFFECT_KINDS[kind].knobs), mix: 1 } }
 }
 
-/** Each part's strip at full, in the middle */
-function initStrips(): Strip[] {
-  return Array.from({ length: PARTS }, () => ({
-    values: defaults(STRIP_SPEC.knobs),
-  }))
+/** A strip at full, in the middle: a new track's */
+function initStrip(): Strip {
+  return { values: defaults(STRIP_SPEC.knobs) }
+}
+
+/**
+ * The mix with a strip for each of count tracks: those past them
+ * dropped, a new one (at full, in the middle) for each missing; the very
+ * same when it has as many
+ */
+export function fitStrips(mix: Mix, count: number): Mix {
+  const now = mix.strips.length
+  if (now === count) return mix
+  const strips =
+    now > count
+      ? mix.strips.slice(0, count)
+      : [...mix.strips, ...Array.from({ length: count - now }, initStrip)]
+  return { ...mix, strips }
+}
+
+/** The mix without the strip at place k, those after it a place up */
+export function removeStrip(mix: Mix, k: number): Mix {
+  if (!(k >= 0 && k < mix.strips.length)) return mix
+  return { ...mix, strips: mix.strips.filter((_, at) => at !== k) }
+}
+
+/** The mix with the strip at place from at place to, as its track moves */
+export function moveStrip(mix: Mix, from: number, to: number): Mix {
+  const strip = mix.strips[from]
+  if (!strip || from === to || !(to >= 0 && to < mix.strips.length)) return mix
+  const rest = mix.strips.filter((_, at) => at !== from)
+  return { ...mix, strips: [...rest.slice(0, to), strip, ...rest.slice(to)] }
 }
 
 /**
@@ -115,7 +147,7 @@ function initStrips(): Strip[] {
 export function initMix(): Mix {
   const level = defaults(BUS_SPEC.knobs)
   return {
-    strips: initStrips(),
+    strips: Array.from({ length: START_STRIPS }, initStrip),
     buses: [
       { id: 'a', effects: [], values: level },
       { id: 'b', effects: [wetOnly('e1', 'delay')], values: level },
@@ -285,7 +317,9 @@ export function addMixEffect(
 
 /**
  * The mix without part: a bus and its effects, or one effect; a strip
- * and the master stay, and so does anything the mix does not have
+ * and the master stay, and so does anything the mix does not have. The
+ * sends to a bus removed, a sound's and the kit's, are moved up a letter
+ * apart (sendsWithout, kitChainWithout).
  */
 export function removeMixPart(mix: Mix, part: string): Mix {
   const found = findMixPart(mix, part)
@@ -335,8 +369,14 @@ function effectsOf(mix: Mix, owner: MixOwner): readonly Effect[] {
   return ownedBy(mix, owner) ?? []
 }
 
-/** The effects of owner, or undefined when no such bus is in the mix */
-function ownedBy(mix: Mix, owner: MixOwner): readonly Effect[] | undefined {
+/**
+ * The row of effects owner holds (a bus or the master), or undefined
+ * when the mix has no such row
+ */
+export function ownedBy(
+  mix: Mix,
+  owner: string
+): readonly Effect[] | undefined {
   if (owner === MASTER) return mix.master.effects
   return mix.buses.find((bus) => bus.id === owner)?.effects
 }
@@ -375,8 +415,9 @@ function nextEffectId(mix: Mix, taken = effectIds(mix)): string {
 }
 
 /**
- * A mix from what storage held: a strip for each part, by its place (at
- * full, in the middle, where none was kept: a mix kept before strips);
+ * A mix from what storage held: the strips it kept, by their place, up
+ * to MAX_TRACKS (the starting mix's where none was kept: a mix kept
+ * before strips; the engine fits them to its tracks);
  * its buses, in their letters' order, each letter once, up to
  * MAX_EFFECTS known effects each, every knob clamped and a default for
  * one missing; the master the same. A mix kept before buses (version 1:
@@ -426,12 +467,13 @@ export function readMix(value: unknown): Mix {
   }
   buses.sort((x, y) => BUS_IDS.indexOf(x.id) - BUS_IDS.indexOf(y.id))
   const master = record(given.master)
-  const strips: readonly unknown[] = Array.isArray(given.strips)
-    ? given.strips
-    : []
+  const strips: readonly unknown[] =
+    Array.isArray(given.strips) && given.strips.length > 0
+      ? given.strips.slice(0, MAX_TRACKS)
+      : Array.from({ length: START_STRIPS }, () => ({}))
   const read: Mix = {
-    strips: initStrips().map((_, k) => ({
-      values: valuesFor(STRIP_SPEC.knobs, record(record(strips[k]).values)),
+    strips: strips.map((strip) => ({
+      values: valuesFor(STRIP_SPEC.knobs, record(record(strip).values)),
     })),
     buses: lettered(buses),
     master: {

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { ChainSynth } from './chainSynth'
 import { softClip } from './clip'
 import { EffectRack } from './effects'
-import { Mixer, Strip, sideGain } from './output'
+import { Mixer, Part, Strip, sideGain } from './output'
 import { FX_CHORUS, FX_DELAY, FX_REVERB, INPUT_OSC } from './slots'
 import { SAW } from './oscillator'
 
@@ -37,18 +37,24 @@ function strip(send = 8, note = 48): Strip {
   return new Strip(saw(send, note), new EffectRack(SAMPLE_RATE))
 }
 
-/** The output's two sides over blocks, one after the other */
+/** Each strip a part of its own, as the synth's is */
+function parts(strips: readonly Strip[]): Part[] {
+  return strips.map((each) => new Part([each]))
+}
+
+/** The output's two sides over blocks, in turn, each strip a part */
 function render(
   mixer: Mixer,
   strips: readonly Strip[],
   blocks: number
 ): { left: Float32Array; right: Float32Array } {
+  const all = parts(strips)
   const left = new Float32Array(BLOCK * blocks)
   const right = new Float32Array(BLOCK * blocks)
   const l = new Float32Array(BLOCK)
   const r = new Float32Array(BLOCK)
   for (let b = 0; b < blocks; b++) {
-    mixer.render(strips, l, r)
+    mixer.render(all, l, r)
     left.set(l, b * BLOCK)
     right.set(r, b * BLOCK)
   }
@@ -70,7 +76,7 @@ describe('Mixer', () => {
     const voices = new Float32Array(BLOCK)
     const left = new Float32Array(BLOCK)
     const right = new Float32Array(BLOCK)
-    const strips = [strip()]
+    const strips = parts([strip()])
     let most = 0
     for (let b = 0; b < 40; b++) {
       mixer.render(strips, left, right)
@@ -85,7 +91,7 @@ describe('Mixer', () => {
     expect(most).toBeGreaterThan(1)
   })
 
-  it('copies each strip’s own sound into its tap, unclipped, unsent', () => {
+  it('copies each part’s own sound into its tap, unclipped, unsent', () => {
     const mixer = new Mixer(SAMPLE_RATE)
     // Sent to no bus: the master silent, the taps not
     const quiet = [strip(8, 48), strip(8, 55)]
@@ -105,7 +111,7 @@ describe('Mixer', () => {
     ])
     let most = 0
     for (let b = 0; b < 20; b++) {
-      mixer.render(quiet, left, right, taps)
+      mixer.render(parts(quiet), left, right, taps)
       expect(loudest(left)).toBe(0)
       reference.forEach((synth, k) => {
         synth.process(voices)
@@ -116,9 +122,9 @@ describe('Mixer', () => {
     }
     // Past full scale: nothing clipped it
     expect(most).toBeGreaterThan(1)
-    // A strip with no tap given (or a tap of one channel) is left be
+    // A part with no tap given (or a tap of one channel) is left be
     const one = [new Float32Array(BLOCK)]
-    expect(() => mixer.render(quiet, left, right, [one])).not.toThrow()
+    expect(() => mixer.render(parts(quiet), left, right, [one])).not.toThrow()
   })
 
   it('sums the strips', () => {
@@ -182,7 +188,7 @@ describe('Mixer', () => {
     ])
   })
 
-  it('turns a strip by its fader, before its sends, its tap too', () => {
+  it('turns a part by its fader, before its sends, its tap too', () => {
     const plain = render(new Mixer(SAMPLE_RATE), [strip(0.2)], 20)
     const faded = (level: number, pan = 0) => {
       const mixer = new Mixer(SAMPLE_RATE)
@@ -194,13 +200,14 @@ describe('Mixer', () => {
       if (!send) throw new Error('no send')
       send.goal = 1
       send.snap()
-      each.setFader(level, pan)
+      const part = new Part([each])
+      part.setFader(level, pan)
       const left = new Float32Array(BLOCK)
       const right = new Float32Array(BLOCK)
       const tap = [new Float32Array(BLOCK), new Float32Array(BLOCK)]
       const out = { left: [] as number[], right: [] as number[], tap: 0 }
       for (let b = 0; b < 20; b++) {
-        mixer.render([each], left, right, [tap])
+        mixer.render([part], left, right, [tap])
         // The first block glides to it from full, its echo landing in the
         // next: past them, at rest
         if (b < 2) continue
@@ -233,7 +240,7 @@ describe('Mixer', () => {
     // Glided, not jumped: the first block's steps no bigger than the saw's
     const mixer = new Mixer(SAMPLE_RATE)
     mixer.clip = false
-    const moving = strip(0.2)
+    const moving = new Part([strip(0.2)])
     const left = new Float32Array(BLOCK)
     const right = new Float32Array(BLOCK)
     for (let b = 0; b < 4; b++) mixer.render([moving], left, right)
@@ -245,6 +252,118 @@ describe('Mixer', () => {
     }
     expect(Math.abs(left[0] as number)).toBeGreaterThan(0)
     mixer.render([moving], left, right)
+    expect(loudest(left)).toBe(0)
+  })
+
+  it('sums a part’s strips under its one fader, its tap the sum', () => {
+    const left = new Float32Array(BLOCK)
+    const right = new Float32Array(BLOCK)
+    const sum = (level: number) => {
+      const mixer = new Mixer(SAMPLE_RATE)
+      mixer.clip = false
+      const kit = new Part([strip(0.2, 48), strip(0.2, 55)])
+      kit.setFader(level)
+      kit.level.snap()
+      const tap = [new Float32Array(BLOCK), new Float32Array(BLOCK)]
+      const out = new Float32Array(BLOCK * 10)
+      const tapped = new Float32Array(BLOCK * 10)
+      for (let b = 0; b < 10; b++) {
+        mixer.render([kit], left, right, [tap])
+        out.set(left, b * BLOCK)
+        tapped.set(tap[0] as Float32Array, b * BLOCK)
+      }
+      return { out, tapped }
+    }
+    const apart = render(new Mixer(SAMPLE_RATE), [strip(0.2, 48)], 10).left
+    const other = render(new Mixer(SAMPLE_RATE), [strip(0.2, 55)], 10).left
+    const whole = sum(1)
+    const half = sum(0.5)
+    for (let i = 0; i < whole.out.length; i += 7) {
+      const both = (apart[i] as number) + (other[i] as number)
+      expect(whole.out[i]).toBeCloseTo(both, 6)
+      expect(whole.tapped[i]).toBeCloseTo(both, 6)
+      expect(half.out[i]).toBeCloseTo(both / 2, 6)
+      expect(half.tapped[i]).toBeCloseTo(both / 2, 6)
+    }
+  })
+
+  it('passes over a strip that is silent, its inserts at rest', () => {
+    const left = new Float32Array(BLOCK)
+    const right = new Float32Array(BLOCK)
+    const mixer = new Mixer(SAMPLE_RATE)
+    // Fifteen pads not played, as a kit's mostly are
+    const quiet = Array.from(
+      { length: 15 },
+      () => new Strip(new ChainSynth(SAMPLE_RATE), new EffectRack(SAMPLE_RATE))
+    )
+    const kit = new Part([...quiet, strip(0.2, 55)])
+    const alone = new Part([strip(0.2, 55)])
+    const reference = new Mixer(SAMPLE_RATE)
+    const l = new Float32Array(BLOCK)
+    const r = new Float32Array(BLOCK)
+    for (let b = 0; b < 40; b++) {
+      mixer.render([kit], left, right)
+      reference.render([alone], l, r)
+      expect(left).toEqual(l)
+    }
+    expect(kit.activeVoices).toBe(1)
+  })
+
+  it('sends a group by its own sends, its strips’ unheard', () => {
+    const left = new Float32Array(BLOCK)
+    const right = new Float32Array(BLOCK)
+    const play = (dry: number) => {
+      const mixer = new Mixer(SAMPLE_RATE)
+      mixer.clip = false
+      // Each pad sends all of itself to A, as a sound does until set
+      const kit = new Part(
+        [strip(0.2, 48), strip(0.2, 55)],
+        new EffectRack(SAMPLE_RATE)
+      )
+      const send = kit.sends[0]
+      if (!send) throw new Error('no send to A')
+      send.goal = dry
+      send.snap()
+      const out = new Float32Array(BLOCK * 10)
+      for (let b = 0; b < 10; b++) {
+        mixer.render([kit], left, right)
+        out.set(left, b * BLOCK)
+      }
+      return out
+    }
+    expect(loudest(play(0))).toBe(0)
+    const apart = render(new Mixer(SAMPLE_RATE), [strip(0.2, 48)], 10).left
+    const other = render(new Mixer(SAMPLE_RATE), [strip(0.2, 55)], 10).left
+    const half = play(0.5)
+    for (let i = 0; i < half.length; i += 7) {
+      const both = (apart[i] as number) + (other[i] as number)
+      expect(half[i]).toBeCloseTo(both / 2, 6)
+    }
+  })
+
+  it('runs a group’s pads summed through its inserts, its tail too', () => {
+    const left = new Float32Array(BLOCK)
+    const right = new Float32Array(BLOCK)
+    const mixer = new Mixer(SAMPLE_RATE)
+    const rack = new EffectRack(SAMPLE_RATE)
+    rack.count = 1
+    rack.setKind(0, FX_DELAY)
+    rack.setDelay(0, 0.1, 0.5, 1, false, 1)
+    const pads = [strip(0.2, 48), strip(0.2, 55)]
+    const kit = new Part(pads, rack)
+    for (let b = 0; b < 40; b++) mixer.render([kit], left, right)
+    expect(loudest(left)).toBeGreaterThan(0.01)
+    // The pads let go and silent, the echoes ring on, then rest
+    for (const pad of pads) pad.reset()
+    for (let b = 0; b < 4000; b++) {
+      mixer.render([kit], left, right)
+      if (kit.activeVoices === 0 && loudest(left) > 0.001) break
+    }
+    expect(kit.activeVoices).toBe(0)
+    expect(loudest(left)).toBeGreaterThan(0.001)
+    kit.reset()
+    expect(rack.resting).toBe(true)
+    mixer.render([kit], left, right)
     expect(loudest(left)).toBe(0)
   })
 
@@ -276,7 +395,7 @@ describe('Mixer', () => {
       const r = new Float32Array(BLOCK)
       for (let b = 0; b < blocks; b++) {
         if (b * BLOCK >= 0.05 * SAMPLE_RATE) sending.synth.releaseAll()
-        mixer.render([sending], l, r)
+        mixer.render(parts([sending]), l, r)
         out.set(l, b * BLOCK)
       }
       const from = Math.round(0.11 * SAMPLE_RATE)
@@ -302,7 +421,8 @@ describe('Mixer', () => {
     if (ramp) ramp.goal = 1
     const l = new Float32Array(BLOCK)
     const r = new Float32Array(BLOCK)
-    for (let b = 0; b < 40; b++) mixer.render([sending], l, r)
+    const all = parts([sending])
+    for (let b = 0; b < 40; b++) mixer.render(all, l, r)
     sending.synth.releaseAll()
     // Past the release, the tail still sounds, and differs side to side
     const { left, right } = render(mixer, [sending], 300)
@@ -396,7 +516,7 @@ describe('Mixer', () => {
     const mixer = new Mixer(SAMPLE_RATE)
     const left = new Float32Array(64)
     const right = new Float32Array(64)
-    mixer.render([strip()], left, right)
+    mixer.render(parts([strip()]), left, right)
     expect(loudest(left)).toBeGreaterThan(0)
     expect(right).toEqual(left)
   })

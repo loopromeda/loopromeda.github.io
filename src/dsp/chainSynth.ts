@@ -31,6 +31,14 @@ import {
  * voiceLimit).
  */
 export const VOICE_COUNT = 16
+/**
+ * Voices in a kit's pad (docs/plan/effects-parts-sequencer.md, 2): a
+ * hit rarely overlaps more than a few of its own, and a fifth steals the
+ * oldest. Sixteen pads of the factory drums, every voice sounding, cost
+ * a quarter of the synth's heaviest sound at sixteen voices
+ * (src/state/kit.bench.ts).
+ */
+export const PAD_VOICES = 4
 /** Voice modes: every note its own voice */
 export const POLY = 0
 /** One voice; each new note restarts the envelopes */

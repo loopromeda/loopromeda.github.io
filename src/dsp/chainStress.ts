@@ -1,7 +1,7 @@
 import { ChainSynth } from './chainSynth'
 import { EffectRack } from './effects'
 import { BANDPASS, HIGHPASS, LOWPASS } from './filter'
-import { Mixer, Strip } from './output'
+import { Mixer, Part, Strip } from './output'
 import { LFO_SAMPLE_HOLD, LFO_SINE, LFO_SMOOTH, LFO_TRIANGLE } from './lfo'
 import { SAW, SINE, SQUARE, TRIANGLE } from './oscillator'
 import {
@@ -206,14 +206,14 @@ export function chainStressOutput(
     if (rack) fill(rack)
   }
   fill(mixer.master)
-  const strips = [strip]
+  const parts = [new Part([strip])]
   let right = new Float32Array(0)
   return {
     strip,
     mixer,
     process(out) {
       if (right.length !== out.length) right = new Float32Array(out.length)
-      mixer.render(strips, out, right)
+      mixer.render(parts, out, right)
     },
   }
 }

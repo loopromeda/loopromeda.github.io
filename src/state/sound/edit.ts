@@ -274,18 +274,25 @@ export function setSend(
  * last letter sends nothing, and what went to `bus` goes
  */
 export function sendsWithout(sound: Sound, bus: BusId): Sound {
+  const sends = shiftSends(sound.sends, bus)
+  return sends === sound.sends ? sound : { ...sound, sends }
+}
+
+/**
+ * Sends by bus letter once `bus` is removed, as sendsWithout moves a
+ * sound's (the kit's chain's too): the very same when nothing moves
+ */
+export function shiftSends(given: Values, bus: BusId): Values {
   const from = BUS_IDS.indexOf(bus)
-  if (from < 0) return sound
-  const sends: Record<string, number> = { ...sound.sends }
+  if (from < 0) return given
+  const sends: Record<string, number> = { ...given }
   BUS_IDS.forEach((id, k) => {
     if (k < from) return
     const next = BUS_IDS[k + 1]
-    sends[id] = next === undefined ? 0 : (sound.sends[next] ?? 0)
+    sends[id] = next === undefined ? 0 : (given[next] ?? 0)
   })
-  const same = BUS_IDS.every(
-    (id) => (sends[id] ?? 0) === (sound.sends[id] ?? 0)
-  )
-  return same ? sound : { ...sound, sends }
+  const same = BUS_IDS.every((id) => (sends[id] ?? 0) === (given[id] ?? 0))
+  return same ? given : sends
 }
 
 /**

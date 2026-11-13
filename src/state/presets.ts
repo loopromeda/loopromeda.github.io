@@ -41,6 +41,23 @@ export interface Preset {
   readonly sound: Sound
 }
 
+/** Where a preset lives: shipped with the app, or the user's own */
+export type PresetSource = 'factory' | 'user'
+
+/** A preset by where it lives and its name, unique within its source */
+export interface PresetRef {
+  readonly source: PresetSource
+  readonly name: string
+}
+
+/** Parsed JSON as a preset's ref, if it is a well-formed one */
+export function readPresetRef(data: unknown): PresetRef | undefined {
+  if (!isPlainObject(data)) return undefined
+  const { source, name } = data
+  if (source !== 'factory' && source !== 'user') return undefined
+  return typeof name === 'string' ? { source, name } : undefined
+}
+
 /** The format tag a preset file carries */
 export const PRESET_FILE_FORMAT = 'loopromeda-presets'
 

@@ -1,11 +1,14 @@
 /**
  * The worklet's output, a block at a time, as a mixing desk has it
- * (docs/plan/effects-parts-sequencer.md): each part a strip (its voices
- * summed unclipped into two channels, each where its pan puts it, then
- * its inserts, its fader (a level and a balance), then sent to each bus
- * at its own level, so its echoes follow its fader), the session's
- * buses (each a row of effects, then a level and a balance: one with no
- * effects is a dry path), and the master (the buses summed, a row of
+ * (docs/plan/effects-parts-sequencer.md): each part (the synth, the kit)
+ * its sounds' strips, each a sound's voices summed unclipped into two
+ * channels, each where its pan puts it, then its inserts, then the
+ * part's fader (a level and a balance), then sent to each bus at the
+ * sound's own level, so its echoes follow the fader; or, for a group
+ * (the kit), its strips summed after their inserts, then the group's
+ * own inserts, its fader and its own sends; the session's buses
+ * (each a row of effects, then a level and a balance: one with no
+ * effects is a dry path); and the master (the buses summed, a row of
  * effects, a level, then a soft clip on each side, clip.ts's, untouched
  * up to -6 dBFS).
  * The worklet's processor and the stress measurement (chainStress.ts)
@@ -20,18 +23,14 @@ import { MAX_BUSES } from './slots'
 const BLOCK = 128
 
 /**
- * One part's channel: its voices in stereo (synth.clip off, for the
- * inserts to hear them unclipped), its inserts, its fader, and how much
- * of it goes to each bus, 0..1, each set as a knob turns and glided over
- * the next block: at full in the middle, all of it to the first bus and
- * none to the others, until set
+ * One sound's channel: its voices in stereo (synth.clip off, for the
+ * inserts to hear them unclipped), its inserts, and how much of it goes
+ * to each bus, 0..1, each set as a knob turns and glided over the next
+ * block: all of it to the first bus and none to the others, until set
  */
 export class Strip {
   readonly synth: ChainSynth
   readonly inserts: EffectRack
-  /** Its fader, after the inserts: a gain, 0..1, and a balance, -1..1 */
-  readonly level = new Ramp(1)
-  readonly pan = new Ramp(0)
   readonly sends: readonly Ramp[] = Array.from(
     { length: MAX_BUSES },
     (_, k) => new Ramp(k === 0 ? 1 : 0)
@@ -43,6 +42,39 @@ export class Strip {
     synth.clip = false
   }
 
+  /** Its voices released and its inserts from silence */
+  reset(): void {
+    this.synth.releaseAll()
+    this.inserts.reset()
+  }
+}
+
+/**
+ * A part of the mix: its sounds' strips (the synth's one, the kit's one
+ * a pad) through its fader, at full in the middle until set, each strip
+ * to the buses by its own sends. Given inserts, a group: its strips
+ * summed after their own inserts, through the group's, then its fader,
+ * then to the buses by the group's sends (sends), its strips' unheard.
+ * A strip silent, its inserts at rest, costs next to nothing.
+ */
+export class Part {
+  readonly strips: readonly Strip[]
+  /** A group's inserts, after its strips summed; none, not a group */
+  readonly inserts: EffectRack | undefined
+  /** A group's sends, as a strip's are: all to the first bus until set */
+  readonly sends: readonly Ramp[] = Array.from(
+    { length: MAX_BUSES },
+    (_, k) => new Ramp(k === 0 ? 1 : 0)
+  )
+  /** Its fader, after the inserts: a gain, 0..1, and a balance, -1..1 */
+  readonly level = new Ramp(1)
+  readonly pan = new Ramp(0)
+
+  constructor(strips: readonly Strip[], inserts?: EffectRack) {
+    this.strips = strips
+    this.inserts = inserts
+  }
+
   /**
    * Its fader: how loud it goes on, 0..1, and where it stands, -1 (left)
    * to 1 (right), a balance (sideGain)
@@ -52,10 +84,17 @@ export class Strip {
     this.pan.goal = balance(pan)
   }
 
+  /** Voices sounding now, held or releasing, in all its strips */
+  get activeVoices(): number {
+    let count = 0
+    for (const strip of this.strips) count += strip.synth.activeVoices
+    return count
+  }
+
   /** Its voices released and its inserts from silence */
   reset(): void {
-    this.synth.releaseAll()
-    this.inserts.reset()
+    for (const strip of this.strips) strip.reset()
+    this.inserts?.reset()
   }
 }
 
@@ -93,6 +132,9 @@ export class Mixer {
   clip = true
   #stripL = new Float32Array(BLOCK)
   #stripR = new Float32Array(BLOCK)
+  /** A group's strips summed */
+  #groupL = new Float32Array(BLOCK)
+  #groupR = new Float32Array(BLOCK)
 
   constructor(sampleRate: number) {
     this.#buses = Array.from(
@@ -133,13 +175,13 @@ export class Mixer {
   }
 
   /**
-   * Renders strips into left and right, one block, all of them. Given
-   * taps, strip k's own sound, after its inserts and its fader and before
-   * its sends (what it gives the mix), is copied into taps[k]'s two
-   * channels too, where it has them.
+   * Renders parts into left and right, one block, all of them. Given
+   * taps, part k's own sound, its strips after their inserts (and a
+   * group's) and its fader and before the sends (what it gives the mix),
+   * is copied into taps[k]'s two channels too, where it has them.
    */
   render(
-    strips: readonly Strip[],
+    parts: readonly Part[],
     left: Float32Array,
     right: Float32Array,
     taps?: readonly (readonly Float32Array[] | undefined)[]
@@ -157,37 +199,63 @@ export class Mixer {
       bus.right.fill(0)
     }
 
-    for (let s = 0; s < strips.length; s++) {
-      const strip = strips[s] as Strip
-      strip.synth.process(stripL, stripR)
-      strip.inserts.process(stripL, stripR, length)
-      fade(stripL, stripR, strip.level, strip.pan, length)
-      const tap = taps?.[s]
-      if (tap) {
-        tap[0]?.set(stripL)
-        tap[1]?.set(stripR)
+    for (let p = 0; p < parts.length; p++) {
+      const part = parts[p] as Part
+      // The fader's glide over this block, the same for every strip
+      const level = part.level
+      const pan = part.pan
+      const l = level.now * sideGain(-pan.now)
+      const r = level.now * sideGain(pan.now)
+      level.step(length)
+      pan.step(length)
+      const lTo = level.now * sideGain(-pan.now)
+      const rTo = level.now * sideGain(pan.now)
+      const whole = l === 1 && r === 1 && lTo === 1 && rTo === 1
+      const tap = taps?.[p]
+      const tapL = tap?.[0]
+      const tapR = tap?.[1]
+      tapL?.fill(0)
+      tapR?.fill(0)
+      const group = part.inserts
+      const groupL = this.#groupL
+      const groupR = this.#groupR
+      let heard = false
+      if (group) {
+        groupL.fill(0)
+        groupR.fill(0)
       }
-      for (let k = 0; k < buses.length; k++) {
-        const bus = buses[k] as Bus
-        const ramp = strip.sends[k]
-        if (!bus.on || !ramp) continue
-        let send = ramp.now
-        const step = ramp.step(length)
-        if (send === 0 && step === 0) continue
-        const busL = bus.left
-        const busR = bus.right
-        for (let i = 0; i < length; i++) {
-          busL[i] = (busL[i] as number) + (stripL[i] as number) * send
-          busR[i] = (busR[i] as number) + (stripR[i] as number) * send
-          send += step
+      for (let s = 0; s < part.strips.length; s++) {
+        const strip = part.strips[s] as Strip
+        const synth = strip.synth
+        const sounding = synth.activeVoices > 0 || !strip.inserts.resting
+        // Its LFOs run on in silence, and a new structure lands
+        synth.process(stripL, stripR)
+        if (!sounding) continue
+        strip.inserts.process(stripL, stripR, length)
+        if (group) {
+          add(groupL, stripL, length)
+          add(groupR, stripR, length)
+          heard = true
+          continue
         }
+        if (!whole) fade(stripL, stripR, l, r, lTo, rTo, length)
+        if (tapL) add(tapL, stripL, length)
+        if (tapR) add(tapR, stripR, length)
+        this.#send(strip.sends, stripL, stripR, length)
       }
+      // A group in silence, its inserts at rest too, is passed over
+      if (!group || (!heard && group.resting)) continue
+      group.process(groupL, groupR, length)
+      if (!whole) fade(groupL, groupR, l, r, lTo, rTo, length)
+      if (tapL) add(tapL, groupL, length)
+      if (tapR) add(tapR, groupR, length)
+      this.#send(part.sends, groupL, groupR, length)
     }
 
     for (const bus of buses) {
       if (!bus.on) continue
       bus.effects.process(bus.left, bus.right, length)
-      fade(bus.left, bus.right, bus.level, bus.pan, length)
+      fadeBy(bus.left, bus.right, bus.level, bus.pan, length)
       const busL = bus.left
       const busR = bus.right
       for (let i = 0; i < length; i++) {
@@ -211,6 +279,31 @@ export class Mixer {
     }
   }
 
+  /** Adds a block into each bus that is on, at its send's glide */
+  #send(
+    sends: readonly Ramp[],
+    left: Float32Array,
+    right: Float32Array,
+    length: number
+  ): void {
+    const buses = this.#buses
+    for (let k = 0; k < buses.length; k++) {
+      const bus = buses[k] as Bus
+      const ramp = sends[k]
+      if (!bus.on || !ramp) continue
+      let send = ramp.now
+      const step = ramp.step(length)
+      if (send === 0 && step === 0) continue
+      const busL = bus.left
+      const busR = bus.right
+      for (let i = 0; i < length; i++) {
+        busL[i] = (busL[i] as number) + (left[i] as number) * send
+        busR[i] = (busR[i] as number) + (right[i] as number) * send
+        send += step
+      }
+    }
+  }
+
   /**
    * Buffers a block long, for a block that is not a render quantum: never
    * in practice (a worklet's blocks are 128 frames), but ChainSynth fills
@@ -219,6 +312,8 @@ export class Mixer {
   #resize(length: number): void {
     this.#stripL = new Float32Array(length)
     this.#stripR = new Float32Array(length)
+    this.#groupL = new Float32Array(length)
+    this.#groupR = new Float32Array(length)
     for (const bus of this.#buses) {
       bus.left = new Float32Array(length)
       bus.right = new Float32Array(length)
@@ -238,26 +333,20 @@ export function sideGain(pan: number): number {
 }
 
 /**
- * Each side of a block at its gain, a level and a balance, glided from
- * where they were to where they are going over the block; at full in the
- * middle, as it is, untouched
+ * Each side of a block at its gain, l and r glided to lTo and rTo over
+ * the block
  */
 function fade(
   left: Float32Array,
   right: Float32Array,
-  level: Ramp,
-  pan: Ramp,
+  from: number,
+  fromR: number,
+  lTo: number,
+  rTo: number,
   length: number
 ): void {
-  const from = level.now
-  const at = pan.now
-  level.step(length)
-  pan.step(length)
-  let l = from * sideGain(-at)
-  let r = from * sideGain(at)
-  const lTo = level.now * sideGain(-pan.now)
-  const rTo = level.now * sideGain(pan.now)
-  if (l === 1 && r === 1 && lTo === 1 && rTo === 1) return
+  let l = from
+  let r = fromR
   const lStep = (lTo - l) / length
   const rStep = (rTo - r) / length
   for (let i = 0; i < length; i++) {
@@ -265,6 +354,35 @@ function fade(
     right[i] = (right[i] as number) * r
     l += lStep
     r += rStep
+  }
+}
+
+/**
+ * Each side of a block at its gain, a level and a balance, glided from
+ * where they were to where they are going over the block; at full in the
+ * middle, as it is, untouched
+ */
+function fadeBy(
+  left: Float32Array,
+  right: Float32Array,
+  level: Ramp,
+  pan: Ramp,
+  length: number
+): void {
+  const l = level.now * sideGain(-pan.now)
+  const r = level.now * sideGain(pan.now)
+  level.step(length)
+  pan.step(length)
+  const lTo = level.now * sideGain(-pan.now)
+  const rTo = level.now * sideGain(pan.now)
+  if (l === 1 && r === 1 && lTo === 1 && rTo === 1) return
+  fade(left, right, l, r, lTo, rTo, length)
+}
+
+/** into += from, over [0, length) */
+function add(into: Float32Array, from: Float32Array, length: number): void {
+  for (let i = 0; i < length; i++) {
+    into[i] = (into[i] as number) + (from[i] as number)
   }
 }
 

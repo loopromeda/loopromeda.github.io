@@ -4,13 +4,13 @@
  * references and routes as slot numbers, and each knob in the synth's
  * units (an oscillator's semitones from its octave, semi and fine; a
  * route's amount times its destination's scale). The worklet's processor
- * loads each sound it is sent and sets each knob it is sent, and the
- * session's mix (applyMix); tests run them to hear what a sound does. No
- * AudioWorklet globals.
+ * loads each sound it is sent and sets each knob it is sent, the
+ * session's mix (applyMix) and the kit's chain (applyKitChain); tests run
+ * them to hear what a sound does. No AudioWorklet globals.
  */
 import { ChainSynth } from '../dsp/chainSynth'
 import type { EffectRack } from '../dsp/effects'
-import type { Mixer, Strip } from '../dsp/output'
+import type { Mixer, Part, Strip } from '../dsp/output'
 import {
   DEST_AMP,
   DEST_PAN,
@@ -46,12 +46,14 @@ import {
   rateDest,
   sendDest,
 } from '../dsp/slots'
+import type { KitChain } from '../state/kit'
 import type { Mix } from '../state/mix'
 import {
   BUS_IDS,
   BUS_SPEC,
   EFFECT_KINDS,
   MASTER_SPEC,
+  SENDS_SPEC,
   STRIP_SPEC,
   type EffectKind,
   type KnobSpec,
@@ -375,19 +377,19 @@ function applyEffects(rack: EffectRack, effects: readonly Effect[]): void {
 }
 
 /**
- * Gives the mixer and the strips the session's mix (src/state/mix.ts):
- * each strip's fader by its part's place, each bus on or off by its
- * letter, its effects and level, and the master's. A knob missing is its
- * default, a strip missing at full in the middle.
+ * Gives the mixer and the parts the session's mix (src/state/mix.ts):
+ * each part's fader by its place, each bus on or off by its letter, its
+ * effects and level, and the master's. A knob missing is its default, a
+ * part's strip missing at full in the middle.
  */
 export function applyMix(
   mixer: Mixer,
   mix: Mix,
-  strips: readonly Strip[] = []
+  parts: readonly Part[] = []
 ): void {
-  strips.forEach((strip, k) => {
+  parts.forEach((part, k) => {
     const value = reader(STRIP_SPEC.knobs, mix.strips[k]?.values)
-    strip.setFader(value('level'), value('pan'))
+    part.setFader(value('level'), value('pan'))
   })
   BUS_IDS.forEach((id, k) => {
     const bus = mix.buses.find((each) => each.id === id)
@@ -398,4 +400,19 @@ export function applyMix(
   })
   applyEffects(mixer.master, mix.master.effects)
   mixer.setMaster(reader(MASTER_SPEC.knobs, mix.master.values)('level'))
+}
+
+/**
+ * Gives a group (the kit's part) the kit's chain (src/state/kit.ts): its
+ * inserts, after its pads summed, and its sends, by bus letter; a send
+ * missing at its default. A part that is no group is let be.
+ */
+export function applyKitChain(part: Part, chain: KitChain): void {
+  if (!part.inserts) return
+  applyEffects(part.inserts, chain.effects)
+  const send = reader(SENDS_SPEC.knobs, chain.sends)
+  BUS_IDS.forEach((id, b) => {
+    const ramp = part.sends[b]
+    if (ramp) ramp.goal = send(id)
+  })
 }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { ChainSynth, POLY } from '../dsp/chainSynth'
 import { EffectRack } from '../dsp/effects'
-import { Mixer, Strip } from '../dsp/output'
+import { Mixer, Part, Strip } from '../dsp/output'
 import { SoundPlayer, applyMix, applySound } from '../worklet/sound'
 import { FACTORY_PRESETS } from './factory'
 import { initMix } from './mix'
@@ -140,14 +140,14 @@ describe('FACTORY_PRESETS', () => {
       const mixer = new Mixer(SAMPLE_RATE)
       mixer.clip = false
       applyMix(mixer, initMix())
-      const strips = [strip]
+      const parts = [new Part([strip])]
       const left = new Float32Array(BLOCK)
       const right = new Float32Array(BLOCK)
       /** The loudest of either side, over seconds */
       const play = (seconds: number) => {
         let loudest = 0
         for (let b = 0; b < (seconds * SAMPLE_RATE) / BLOCK; b++) {
-          mixer.render(strips, left, right)
+          mixer.render(parts, left, right)
           loudest = Math.max(loudest, peak(left), peak(right))
         }
         return loudest

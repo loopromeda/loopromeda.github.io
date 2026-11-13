@@ -6,12 +6,16 @@ import {
   addMixEffect,
   busName,
   findMixPart,
+  fitStrips,
   initMix,
   loadMix,
   mixValue,
   moveMixEffect,
+  moveStrip,
+  ownedBy,
   readMix,
   removeMixPart,
+  removeStrip,
   saveMix,
   setMixValue,
   stripId,
@@ -87,10 +91,15 @@ describe('the mix', () => {
 
   it('has a strip for each part, at full in the middle, kept', () => {
     const mix = initMix()
-    expect(mix.strips).toEqual([{ values: { level: 1, pan: 0 } }])
+    const whole = { values: { level: 1, pan: 0 } }
+    // The synth's and the kit's, faders alone: the kit's chain is the
+    // kit's own (src/state/kit.ts)
+    expect(mix.strips).toEqual([whole, whole])
     expect(stripId(0)).toBe('p1')
+    expect(stripId(1)).toBe('p2')
     expect(findMixPart(mix, 'p1')).toMatchObject({ type: 'strip', index: 0 })
-    expect(findMixPart(mix, 'p2')).toBeUndefined()
+    expect(findMixPart(mix, 'p2')).toMatchObject({ type: 'strip', index: 1 })
+    expect(findMixPart(mix, 'p3')).toBeUndefined()
     const quieter = setMixValue(mix, 'p1', 'level', 0.5)
     expect(mixValue(quieter, 'p1', 'level')).toBe(0.5)
     expect(quieter.buses).toBe(mix.buses)
@@ -106,9 +115,53 @@ describe('the mix', () => {
       buses: [],
       strips: [{ values: { level: 4, pan: 'left' } }, { values: {} }],
     })
-    expect(odd.strips).toEqual([{ values: { level: 1, pan: 0 } }])
+    expect(odd.strips).toEqual([whole, whole])
     expect(readMix({ buses: [] }).strips).toEqual(initMix().strips)
     expect(readMix({ version: 1 }).strips).toEqual(initMix().strips)
+  })
+
+  it('has no effects but on the buses and the master', () => {
+    const mix = initMix()
+    // A strip has no row of its own, nor sends
+    expect(ownedBy(mix, 'p2')).toBeUndefined()
+    expect(setMixValue(mix, 'p2', 'c', 0.4)).toBe(mix)
+    // A kit strip kept with inserts and sends (as one briefly was) reads
+    // as its fader alone
+    const kept = readMix({
+      ...mix,
+      strips: [
+        {},
+        {
+          values: { level: 0.5, a: 0.2 },
+          effects: [{ id: 'e7', kind: 'chorus' }],
+        },
+      ],
+    })
+    expect(kept.strips[1]).toEqual({ values: { level: 0.5, pan: 0 } })
+    expect(findMixPart(kept, 'e7')).toBeUndefined()
+  })
+
+  it('keeps a strip for each track, by place', () => {
+    const mix = setMixValue(initMix(), 'p2', 'level', 0.5)
+    expect(fitStrips(mix, 2)).toBe(mix)
+    const more = fitStrips(mix, 4)
+    expect(more.strips).toHaveLength(4)
+    expect(more.strips[1]).toBe(mix.strips[1])
+    expect(mixValue(more, 'p4', 'level')).toBe(1)
+    expect(fitStrips(more, 1).strips).toEqual([mix.strips[0]])
+    // A track moved takes its strip along; one removed, its strip with it
+    const moved = moveStrip(more, 1, 3)
+    expect(moved.strips.map((strip) => strip.values.level)).toEqual([
+      1, 1, 1, 0.5,
+    ])
+    expect(moveStrip(more, 1, 1)).toBe(more)
+    expect(moveStrip(more, 9, 0)).toBe(more)
+    const fewer = removeStrip(moved, 0)
+    expect(fewer.strips).toHaveLength(3)
+    expect(mixValue(fewer, 'p3', 'level')).toBe(0.5)
+    expect(removeStrip(fewer, 7)).toBe(fewer)
+    // Kept with as many strips as there were tracks
+    expect(readMix(JSON.parse(JSON.stringify(more))).strips).toHaveLength(4)
   })
 
   it('sets a knob clamped, and is the same mix when nothing changes', () => {

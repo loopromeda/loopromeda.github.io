@@ -1,15 +1,44 @@
-import { initMix, setMixValue, type Mix } from '../state/mix'
+import {
+  KIT_PADS,
+  clampPadNote,
+  kitChainOf,
+  withKitChain,
+  type KitChain,
+  type KitPad,
+  type PartKind,
+} from '../state/kit'
+import {
+  fitStrips,
+  initMix,
+  moveStrip,
+  removeStrip,
+  setMixValue,
+  type Mix,
+} from '../state/mix'
 import { knobChanges } from '../state/sound/diff'
 import { initSound, type Sound } from '../state/sound/sound'
+import {
+  addTrack,
+  editPad,
+  editTrack,
+  fitPick,
+  moveTrack,
+  removeTrack,
+  renameTrack,
+  type NewTrack,
+  type Track,
+  type TrackPick,
+} from '../state/tracks'
 import processorUrl from '../worklet/processor.ts?worker&url'
 import {
-  PART_OUTPUTS,
   PROCESSOR_NAME,
+  TRACK_OUTPUTS,
   type BenchReport,
   type FromWorklet,
   type GlideReport,
   type LoadReport,
   type ToWorklet,
+  type TrackLayout,
 } from './protocol'
 
 /**
@@ -63,8 +92,8 @@ const SPECTRUM_SMOOTHING = 0.7
 
 /**
  * Which output a view shows: the master (everything, after the soft
- * clip), or part k's own sound (after its inserts, before its sends,
- * unclipped)
+ * clip), or the own sound of the track at place k (after its inserts,
+ * before its sends, unclipped)
  */
 export type OutputSource = 'master' | number
 
@@ -96,30 +125,72 @@ interface Taps {
   readonly spectrum: AnalyserNode
 }
 
+/** What the worklet was last sent for a track, to tell what changed */
+interface Sent {
+  readonly kind: PartKind
+  /** A synth track's sound */
+  sound?: Sound
+  /** A kit's pads' sounds, and its chain */
+  pads: (Sound | undefined)[]
+  chain?: KitChain
+}
+
+/** Where a touch holds its note: a track, and of a kit the pad */
+interface Held {
+  readonly track: string
+  readonly pad?: number
+}
+
+/** A pad a kit has not: nothing to show */
+const EMPTY = initSound()
+
+/** A synth track's pads' notes: it has none */
+const NO_NOTES: readonly number[] = []
+
 /**
  * The page's audio: one AudioContext and one AudioWorkletNode, which runs
  * all of the DSP (src/worklet). The main thread only sends it intents.
  * Subscribe-and-snapshot, for useSyncExternalStore.
  *
- * It also holds the sound (src/state/sound), the one copy the editor and
- * the presets change, so it can be set before the audio starts and a new
- * worklet gets all of it. The audio thread hears each change as the knobs
- * that moved, or the whole sound when its structure changed.
+ * It also holds the session's tracks (src/state/tracks.ts), each a synth
+ * (its sound) or a kit (its pads' sounds and notes, and its chain after
+ * them), with their names and the presets they came from: the one copy
+ * the editor and the presets change, a document never changed in place,
+ * so it can be set before the audio starts and a new worklet gets all of
+ * it. One track is picked (TrackPick), played and shown (getSound): a
+ * synth's sound, or in a kit the pad picked, shown with the kit's chain
+ * in place of its own inserts and sends. The editor edits a synth's
+ * sound, and of a kit only its chain: a pad plays its preset as it is.
+ * The audio thread hears of the tracks there are (a layout), then each
+ * change to a sound as the knobs that moved, or the whole sound when its
+ * structure changed; a kit's chain whole. The mix keeps a strip for each
+ * track, by its place.
  */
 export class Engine {
   #context: AudioContext | undefined
   #node: AudioWorkletNode | undefined
   /** Tap the output for displays; pass the signal through unchanged */
   #taps: Taps | undefined
-  /** Each part's own output, tapped as the master's, heard nowhere */
-  #partTaps: readonly Taps[] = []
+  /** Each track's own output by its place, tapped once it is read */
+  #trackTaps: (Taps | undefined)[] = []
+  /** The tracks' taps' way to the destination, silenced */
+  #hush: GainNode | undefined
   #snapshot: EngineSnapshot = { state: 'idle' }
-  /** The sound, as the main thread has it */
-  #sound: Sound = initSound()
-  /** The sound the worklet plays, as last sent; none before it exists */
-  #sent: Sound | undefined
-  /** The session's mix (src/state/mix.ts): the buses and the master */
-  #mix: Mix = initMix()
+  /** The tracks, as the main thread has them: one synth until set */
+  #tracks: readonly Track[] = [{ id: 't1', kind: 'synth', sound: initSound() }]
+  /** What is played and edited: a track, and the pad picked in a kit */
+  #pick: TrackPick = { track: 't1', pad: 0 }
+  /** The pad picked as getSound last showed it, with its kit's chain */
+  #shown: { pad: Sound; chain: KitChain; sound: Sound } | undefined
+  /** The kit picked's pads' notes as getPadNotes last gave them */
+  #notes: { pads: readonly KitPad[]; notes: readonly number[] } | undefined
+  /** The tracks the worklet has (none before it exists), and their sounds */
+  #laid: readonly TrackLayout[] | undefined
+  readonly #sent = new Map<string, Sent>()
+  /** Where each touch holds its note */
+  readonly #held = new Map<number, Held>()
+  /** The session's mix (src/state/mix.ts): a strip for each track */
+  #mix: Mix = fitStrips(initMix(), 1)
   readonly #mixListeners = new Set<() => void>()
   readonly #listeners = new Set<() => void>()
   readonly #soundListeners = new Set<() => void>()
@@ -177,27 +248,21 @@ export class Engine {
 
     try {
       await context.audioWorklet.addModule(processorUrl)
-      const outputs = 1 + PART_OUTPUTS
+      const outputs = 1 + TRACK_OUTPUTS
       const node = new AudioWorkletNode(context, PROCESSOR_NAME, {
         numberOfInputs: 0,
-        // The master, then each part's own: stereo, as the effects spread
-        // the voices (src/dsp/effects.ts)
+        // The master, then each track's own: stereo, as the effects
+        // spread the voices (src/dsp/effects.ts)
         numberOfOutputs: outputs,
         outputChannelCount: Array.from({ length: outputs }, () => 2),
       })
       node.port.onmessage = (event: MessageEvent<FromWorklet>) =>
         this.#receive(event.data)
       this.#taps = tap(context, node, 0, context.destination)
-      // The parts' reach the destination silenced, so that every browser
-      // renders their analysers and none is heard twice
-      const hush = new GainNode(context, { gain: 0 })
-      hush.connect(context.destination)
-      this.#partTaps = Array.from({ length: PART_OUTPUTS }, (_, k) =>
-        tap(context, node, k + 1, hush)
-      )
       this.#node = node
-      // The worklet starts with no sound: catch it up, ahead of any note
-      this.#sent = undefined
+      // The worklet starts with no tracks: catch it up, ahead of any note
+      this.#unsent()
+      this.#lay()
       this.#sync()
       this.#post({ t: 'mix', mix: this.#mix })
       if (this.#voices !== undefined) {
@@ -205,7 +270,7 @@ export class Engine {
       }
       if (this.#wheel !== 0) this.#post({ t: 'wheel', value: this.#wheel })
       if (this.#glideListeners.size > 0) {
-        this.#post({ t: 'watchGlides', on: true })
+        this.#post({ t: 'watchGlides', on: true, track: this.#pick.track })
       }
       await resumed
     } catch (error) {
@@ -230,22 +295,57 @@ export class Engine {
     this.refresh()
   }
 
+  /**
+   * Touch id plays note on the track picked, a synth's; one holding a
+   * note elsewhere (a pad, another track) lets it go. Nothing on a kit.
+   */
   noteOn(id: number, note: number, velocity = 1): void {
-    this.#post({ t: 'noteOn', id, note, velocity })
+    const track = this.getTrack()
+    if (track.kind !== 'synth') return
+    const held = this.#held.get(id)
+    if (held && (held.track !== track.id || held.pad !== undefined)) {
+      this.noteOff(id)
+    }
+    this.#held.set(id, { track: track.id })
+    this.#post({ t: 'noteOn', id, note, velocity, track: track.id })
   }
 
+  /**
+   * Touch id strikes pad of the kit picked (at the pad's note), held as a
+   * key is; one holding another note lets it go. Nothing on a synth.
+   */
+  hit(id: number, pad: number, velocity = 1): void {
+    const track = this.getTrack()
+    const struck = track.kind === 'kit' ? track.pads[pad] : undefined
+    if (!struck) return
+    const held = this.#held.get(id)
+    if (held && (held.track !== track.id || held.pad !== pad)) {
+      this.noteOff(id)
+    }
+    this.#held.set(id, { track: track.id, pad })
+    const note = struck.note
+    this.#post({ t: 'noteOn', id, note, velocity, track: track.id, pad })
+  }
+
+  /** Touch id lets go, on the track and the pad it holds */
   noteOff(id: number): void {
-    this.#post({ t: 'noteOff', id })
+    const held = this.#held.get(id)
+    if (!held) return
+    this.#held.delete(id)
+    this.#post({ t: 'noteOff', id, ...held })
   }
 
   /** Touch id's finger slid up its key (or down, below 0), -1..1 */
   slide(id: number, value: number): void {
-    this.#post({ t: 'slide', id, value })
+    const held = this.#held.get(id)
+    if (held) this.#post({ t: 'slide', id, value, ...held })
   }
 
   /** Touch id's finger bent its note to note (the XY pad: between keys) */
   bend(id: number, note: number): void {
-    this.#post({ t: 'bend', id, note })
+    const held = this.#held.get(id)
+    if (!held || held.pad !== undefined) return
+    this.#post({ t: 'bend', id, note, track: held.track })
   }
 
   /** The mod wheel beside the keys, 0..1: the Wheel source of every note */
@@ -262,6 +362,7 @@ export class Engine {
   }
 
   panic(): void {
+    this.#held.clear()
     this.#post({ t: 'panic' })
   }
 
@@ -275,7 +376,7 @@ export class Engine {
   ): (() => void) => {
     this.#glideListeners.add(listener)
     if (this.#glideListeners.size === 1) {
-      this.#post({ t: 'watchGlides', on: true })
+      this.#post({ t: 'watchGlides', on: true, track: this.#pick.track })
     }
     return () => {
       if (!this.#glideListeners.delete(listener)) return
@@ -311,8 +412,10 @@ export class Engine {
     this.#context = undefined
     this.#node = undefined
     this.#taps = undefined
-    this.#partTaps = []
-    this.#sent = undefined
+    this.#trackTaps = []
+    this.#hush = undefined
+    this.#unsent()
+    this.#held.clear()
     // A measurement under way on the old worklet will not answer
     for (const resolve of this.#benchWaiting.splice(0)) resolve(undefined)
     this.#setLoad(undefined)
@@ -352,31 +455,205 @@ export class Engine {
     return () => this.#loadListeners.delete(listener)
   }
 
-  /** The sound playing: a document never changed in place */
-  readonly getSound = (): Sound => this.#sound
+  /** The session's tracks, in the mix's order: never changed in place */
+  readonly getTracks = (): readonly Track[] => this.#tracks
+
+  /** The track played and edited, and the pad picked in a kit */
+  readonly getPick = (): TrackPick => this.#pick
+
+  /** The track played and edited */
+  readonly getTrack = (): Track =>
+    this.#tracks.find((track) => track.id === this.#pick.track) ??
+    (this.#tracks[0] as Track)
+
+  /** Its place among the tracks: its strip's in the mix, its output's */
+  readonly getPlace = (): number =>
+    Math.max(
+      0,
+      this.#tracks.findIndex((track) => track.id === this.#pick.track)
+    )
+
+  /** What plays the track picked: a synth, or a kit */
+  readonly getPart = (): PartKind => this.getTrack().kind
+
+  /** The pad picked in a kit: its preset mapped, with a kit's track */
+  readonly getPad = (): number => this.#pick.pad
 
   /**
-   * Plays sound instead: built by the edits (src/state/sound/edit.ts) or
-   * read from storage (read.ts), never one changed in place. The audio
-   * thread gets what changed in one message, so it all applies before the
-   * next block; listeners hear of it after.
+   * Plays and edits track id, and in a kit picks pad (kept as it is
+   * unless given): the sound's listeners hear of it, as of a new sound.
+   * Notes held play on where they started.
+   */
+  pickTrack(id: string, pad = this.#pick.pad): void {
+    if (!this.#tracks.some((track) => track.id === id)) return
+    this.#change(this.#tracks, this.#mix, { track: id, pad })
+  }
+
+  /**
+   * Plays tracks instead (src/state/tracks.ts: built by its edits, never
+   * changed in place; never none): the audio thread hears of the tracks
+   * that came or went, then of each sound that changed, in one go, so it
+   * all applies before the next block; the mix keeps a strip for each
+   * place (those past them dropped, new ones at full); the sound's
+   * listeners hear of it after. A track added, removed or moved by
+   * addTrack, removeTrack and moveTrack takes its strip with it.
+   */
+  setTracks(tracks: readonly Track[]): void {
+    this.#change(tracks, this.#mix)
+  }
+
+  /**
+   * Adds track last, under a new id, with a strip at full, and picks it:
+   * its id, or undefined when the session is full (MAX_TRACKS)
+   */
+  addTrack(track: NewTrack): string | undefined {
+    const next = addTrack(this.#tracks, track)
+    const added = next[next.length - 1]
+    if (next === this.#tracks || !added) return undefined
+    this.#change(next, this.#mix, { track: added.id, pad: 0 })
+    return added.id
+  }
+
+  /**
+   * Removes track id and its strip, its notes with it; the one after it
+   * is picked if it was (the last, if it was last). The only track stays.
+   */
+  removeTrack(id: string): void {
+    const k = this.#tracks.findIndex((track) => track.id === id)
+    const next = removeTrack(this.#tracks, id)
+    if (next === this.#tracks) return
+    const beside = next[Math.min(k, next.length - 1)]
+    const pick =
+      this.#pick.track === id && beside
+        ? { track: beside.id, pad: this.#pick.pad }
+        : this.#pick
+    this.#change(next, removeStrip(this.#mix, k), pick)
+  }
+
+  /** Moves track id to place to, its strip with it */
+  moveTrack(id: string, to: number): void {
+    const from = this.#tracks.findIndex((track) => track.id === id)
+    const next = moveTrack(this.#tracks, id, to)
+    if (next === this.#tracks) return
+    const place = next.findIndex((track) => track.id === id)
+    this.#change(next, moveStrip(this.#mix, from, place))
+  }
+
+  /** Names track id; blank, it goes by its kind and its place again */
+  renameTrack(id: string, name: string): void {
+    this.setTracks(renameTrack(this.#tracks, id, name))
+  }
+
+  /**
+   * The sound played and shown, a document never changed in place: a
+   * synth track's, or of a kit the pad picked's with the kit's chain in
+   * place of its own inserts and sends (withKitChain), the same document
+   * until either changes
+   */
+  readonly getSound = (): Sound => {
+    const track = this.getTrack()
+    if (track.kind === 'synth') return track.sound
+    const pad = track.pads[this.#pick.pad]?.sound ?? EMPTY
+    const chain = track.chain
+    const shown = this.#shown
+    if (shown?.pad === pad && shown.chain === chain) return shown.sound
+    const sound = withKitChain(pad, chain)
+    this.#shown = { pad, chain, sound }
+    return sound
+  }
+
+  /**
+   * Plays sound instead on the track picked, as getSound shows it: built
+   * by the edits (src/state/sound/edit.ts), never one changed in place. A
+   * synth's keeps the preset it came from (the library tells whether it
+   * still is that). Of a kit only its chain is taken, the sound's inserts
+   * and sends (kitChainOf): a pad plays its preset as it is.
    */
   setSound(sound: Sound): void {
-    if (sound === this.#sound) return
-    this.#sound = sound
-    this.#sync()
-    for (const listener of this.#soundListeners) listener()
+    if (sound === this.getSound()) return
+    const { id } = this.getTrack()
+    this.setTracks(
+      editTrack(this.#tracks, id, (track) => {
+        if (track.kind === 'synth') return { ...track, sound }
+        const chain = kitChainOf(sound, track.chain)
+        return chain === track.chain ? track : { ...track, chain }
+      })
+    )
   }
 
   /** Plays what edit makes of the sound: setSound(edit(getSound())) */
   edit(edit: (sound: Sound) => Sound): void {
-    this.setSound(edit(this.#sound))
+    this.setSound(edit(this.getSound()))
   }
 
   /**
-   * Calls listener after each change to the sound, a knob's or the whole
-   * of it: for useSyncExternalStore, and for displays that redraw outside
-   * React (a knob turned by a preset). Returns the unsubscribe function.
+   * The note each pad of the kit picked plays its sound at, in the kit's
+   * order, the same list until its pads change; none with a synth picked
+   */
+  readonly getPadNotes = (): readonly number[] => {
+    const track = this.getTrack()
+    if (track.kind !== 'kit') return NO_NOTES
+    const notes = this.#notes
+    if (notes?.pads === track.pads) return notes.notes
+    const next = track.pads.map((pad) => pad.note)
+    this.#notes = { pads: track.pads, notes: next }
+    return next
+  }
+
+  /**
+   * Pad of the kit picked plays its sound at note from its next hit on
+   * (notes sounding stay as they were struck)
+   */
+  setPadNote(pad: number, note: number): void {
+    const { id } = this.getTrack()
+    const next = clampPadNote(note)
+    this.setTracks(
+      editTrack(this.#tracks, id, (track) =>
+        track.kind === 'kit'
+          ? editPad(track, pad, (was) =>
+              was.note === next ? was : { ...was, note: next }
+            )
+          : track
+      )
+    )
+  }
+
+  /**
+   * The one way the tracks, the mix and the pick change: the mix fitted
+   * to the tracks and the pick to what they have, the audio thread told
+   * (its tracks first, then their sounds, then the mix where it or they
+   * changed), then the listeners
+   */
+  #change(tracks: readonly Track[], mix: Mix, pick = this.#pick): void {
+    if (tracks.length === 0) return
+    const fitted = fitStrips(mix, tracks.length)
+    const picked = fitPick(tracks, pick)
+    const tracksChanged = tracks !== this.#tracks
+    const mixChanged = fitted !== this.#mix
+    const pickChanged =
+      picked.track !== this.#pick.track || picked.pad !== this.#pick.pad
+    if (!tracksChanged && !mixChanged && !pickChanged) return
+    this.#tracks = tracks
+    this.#mix = fitted
+    if (pickChanged) this.#pick = picked
+    const laid = tracksChanged && this.#lay()
+    if (tracksChanged) this.#sync()
+    if (mixChanged || laid) this.#post({ t: 'mix', mix: fitted })
+    if (pickChanged && this.#glideListeners.size > 0) {
+      this.#post({ t: 'watchGlides', on: true, track: picked.track })
+    }
+    if (tracksChanged || pickChanged) {
+      for (const listener of this.#soundListeners) listener()
+    }
+    if (mixChanged) for (const listener of this.#mixListeners) listener()
+  }
+
+  /**
+   * Calls listener after each change to the tracks (a sound's knob or the
+   * whole of it, a kit's chain or a pad's note, a track added, removed,
+   * moved or named) or to which is played (pickTrack): for
+   * useSyncExternalStore, and for displays that redraw outside React (a
+   * knob turned by a preset). Returns the unsubscribe function.
    */
   readonly subscribeSound = (listener: () => void): (() => void) => {
     this.#soundListeners.add(listener)
@@ -387,14 +664,12 @@ export class Engine {
   readonly getMix = (): Mix => this.#mix
 
   /**
-   * Plays mix instead (setMixValue's, or read from storage): the audio
-   * thread gets it whole; listeners hear of it after
+   * Plays mix instead (setMixValue's, or read from storage), with a strip
+   * for each track (fitStrips): the audio thread gets it whole; listeners
+   * hear of it after
    */
   setMix(mix: Mix): void {
-    if (mix === this.#mix) return
-    this.#mix = mix
-    this.#post({ t: 'mix', mix })
-    for (const listener of this.#mixListeners) listener()
+    this.#change(this.#tracks, mix)
   }
 
   /** Sets one knob of the mix (a bus's, an effect's, the master's) */
@@ -408,9 +683,30 @@ export class Engine {
     return () => this.#mixListeners.delete(listener)
   }
 
-  /** An output's taps; none before the audio starts, nor past the parts */
+  /**
+   * An output's taps: none before the audio starts, nor past the tracks
+   * there can be. A track's are made the first time it is read, in its
+   * output's way to the destination, silenced (so that every browser
+   * renders its analysers and none is heard twice): a session of one
+   * track runs no analysers for the others.
+   */
   #tapsOf(source: OutputSource): Taps | undefined {
-    return source === 'master' ? this.#taps : this.#partTaps[source]
+    if (source === 'master') return this.#taps
+    const context = this.#context
+    const node = this.#node
+    if (!context || !node) return undefined
+    if (!(Number.isInteger(source) && source >= 0 && source < TRACK_OUTPUTS)) {
+      return undefined
+    }
+    const made = this.#trackTaps[source]
+    if (made) return made
+    if (!this.#hush) {
+      this.#hush = new GainNode(context, { gain: 0 })
+      this.#hush.connect(context.destination)
+    }
+    const taps = tap(context, node, source + 1, this.#hush)
+    this.#trackTaps[source] = taps
+    return taps
   }
 
   /**
@@ -483,19 +779,87 @@ export class Engine {
     for (const listener of this.#loadListeners) listener()
   }
 
+  /** Forgets what the worklet was sent: a new one has none of it */
+  #unsent(): void {
+    this.#laid = undefined
+    this.#sent.clear()
+  }
+
   /**
-   * Brings the worklet's sound up to date: the knobs that moved since the
-   * sound last sent, in one message, or the whole sound if its structure
-   * changed (a part added or removed, a route connected). Nothing before
-   * the worklet exists; start() catches it up.
+   * Tells the worklet its tracks if they are not those it last heard of
+   * (their ids and kinds, in order), and forgets what was sent to those
+   * gone; whether it did. Nothing before the worklet exists.
+   */
+  #lay(): boolean {
+    if (!this.#node) return false
+    const tracks = this.#tracks
+    const laid = this.#laid
+    if (
+      laid?.length === tracks.length &&
+      laid.every(
+        (was, k) => was.id === tracks[k]?.id && was.kind === tracks[k].kind
+      )
+    ) {
+      return false
+    }
+    const layout = tracks.map(({ id, kind }) => ({ id, kind }))
+    for (const [id, sent] of this.#sent) {
+      const now = layout.find((track) => track.id === id)
+      if (now?.kind !== sent.kind) this.#sent.delete(id)
+    }
+    for (const [touch, held] of this.#held) {
+      if (!this.#sent.has(held.track)) this.#held.delete(touch)
+    }
+    this.#laid = layout
+    this.#post({ t: 'layout', tracks: layout })
+    return true
+  }
+
+  /**
+   * Brings the worklet's sounds up to date, every track's: each sound
+   * that is not the one last sent there as the knobs that moved since, in
+   * one message, or whole if its structure changed (a part added or
+   * removed, a route connected) or none was sent; a kit's chain whole.
+   * Nothing before the worklet exists; start() catches it up.
    */
   #sync(): void {
     if (!this.#node) return
-    const sound = this.#sound
-    const changes = this.#sent ? knobChanges(this.#sent, sound) : null
-    if (changes === null) this.#post({ t: 'sound', sound })
-    else if (changes.length > 0) this.#post({ t: 'knobs', changes })
-    this.#sent = sound
+    for (const track of this.#tracks) {
+      let sent = this.#sent.get(track.id)
+      if (!sent) {
+        sent = { kind: track.kind, pads: [] }
+        this.#sent.set(track.id, sent)
+      }
+      if (track.kind === 'synth') {
+        this.#send(track.id, undefined, sent.sound, track.sound)
+        sent.sound = track.sound
+        continue
+      }
+      for (let k = 0; k < KIT_PADS; k++) {
+        const sound = track.pads[k]?.sound
+        if (!sound) continue
+        this.#send(track.id, k, sent.pads[k], sound)
+        sent.pads[k] = sound
+      }
+      if (sent.chain !== track.chain) {
+        this.#post({ t: 'kitChain', track: track.id, chain: track.chain })
+        sent.chain = track.chain
+      }
+    }
+  }
+
+  /** Sound to a track, or to its pad, after the one last sent there */
+  #send(
+    track: string,
+    pad: number | undefined,
+    sent: Sound | undefined,
+    sound: Sound
+  ): void {
+    if (sent === sound) return
+    const changes = sent ? knobChanges(sent, sound) : null
+    const on = pad === undefined ? { track } : { track, pad }
+    if (changes === null) this.#post({ t: 'sound', sound, ...on })
+    else if (changes.length > 0) this.#post({ t: 'knobs', changes, ...on })
   }
 
   #post(message: ToWorklet): void {
