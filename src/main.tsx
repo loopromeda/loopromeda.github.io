@@ -11,6 +11,7 @@ import { FACTORY_KIT, FACTORY_PRESETS } from './state/factory'
 import { Library } from './state/library'
 import { loadMix, saveMix } from './state/mix'
 import { readSettings } from './state/settings'
+import { loadSong, saveSong } from './state/song'
 import { readPick, writePick } from './state/tracks'
 import { touchHeld } from './ui/held'
 import type { ScopeStats } from './ui/Scope'
@@ -115,11 +116,26 @@ engine.subscribeMix(() => {
   clearTimeout(mixTimer)
   mixTimer = setTimeout(keepMix, 500)
 })
-// The sound and the mix are kept a moment after each change; a page going
-// away (a tab closed, a phone switching apps) keeps them at once
+// The session's song (the tempo, each track's loop), after the tracks it
+// is for: loops of tracks there are not are left out
+engine.setSong(loadSong(storage))
+let songTimer: ReturnType<typeof setTimeout> | undefined
+const keepSong = () => {
+  if (songTimer === undefined) return
+  clearTimeout(songTimer)
+  songTimer = undefined
+  saveSong(storage, engine.getSong())
+}
+engine.subscribeSong(() => {
+  clearTimeout(songTimer)
+  songTimer = setTimeout(keepSong, 500)
+})
+// The sound, the mix and the song are kept a moment after each change; a
+// page going away (a tab closed, a phone switching apps) keeps them at once
 const keep = () => {
   library.flush()
   keepMix()
+  keepSong()
 }
 window.addEventListener('pagehide', keep)
 document.addEventListener('visibilitychange', () => {

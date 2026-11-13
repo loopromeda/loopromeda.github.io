@@ -1,8 +1,9 @@
 /**
  * What the two threads say to each other over the worklet's port: intents
  * to the audio thread, and back its load twice a second, the notes still
- * gliding while the page watches them, and the answer to a measurement
- * asked for by hand. Shared by src/engine (DOM) and
+ * gliding while the page watches them, the step the sequencer plays as
+ * it passes, and the answer to a measurement asked for by hand. Shared
+ * by src/engine (DOM) and
  * src/worklet (AudioWorkletGlobalScope), so it stays free of either: plain
  * data only.
  */
@@ -37,6 +38,16 @@ export interface TrackLayout {
 interface On {
   readonly track: string
   readonly pad?: number
+}
+
+/** A note of a loop, as the audio thread plays it (src/state/song.ts) */
+export interface LoopNote {
+  readonly step: number
+  /** A synth's note, or a kit's pad */
+  readonly key: number
+  /** Steps it sounds for */
+  readonly length: number
+  readonly velocity: number
 }
 
 export type ToWorklet =
@@ -81,8 +92,26 @@ export type ToWorklet =
    * sends, after its pads summed, on a change and to catch a new one up
    */
   | { t: 'kitChain'; track: string; chain: KitChain }
-  /** Everything stops: all notes released */
+  /** Everything stops: all notes released, the sequencer with them */
   | { t: 'panic' }
+  /**
+   * The sequencer plays from its first step, at the next block, or stops
+   * (its notes let go). The clock is the audio thread's (src/dsp/
+   * sequencer.ts); the page hears of each step as it passes.
+   */
+  | { t: 'transport'; playing: boolean }
+  /** Beats a minute, and the share of a pair of sixteenths the first takes */
+  | { t: 'tempo'; tempo: number; swing: number }
+  /**
+   * The loop a track plays round (src/state/song.ts), whole: its length
+   * in steps and the notes within it; from the next step on
+   */
+  | { t: 'loop'; track: string; steps: number; notes: readonly LoopNote[] }
+  /**
+   * The note each pad of a kit track plays its sound at, in the kit's
+   * order: what a sequenced hit plays (a touch's brings its own)
+   */
+  | { t: 'padNotes'; track: string; notes: readonly number[] }
   /**
    * The most voices a synth track plays at once: the player's setting
    * for their device, not part of a sound (a pad keeps its own few)
@@ -138,7 +167,17 @@ export interface GlideReport {
 /** How often the glides are reported: about a display's frame rate */
 export const GLIDE_REPORTS = 60
 
+/**
+ * The step the sequencer last played, counted from its start (a loop's
+ * own is it modulo the loop's length), each time one passes; -1 as it
+ * stops
+ */
+export interface StepReport {
+  readonly step: number
+}
+
 export type FromWorklet =
   | ({ t: 'bench' } & BenchReport)
   | ({ t: 'load' } & LoadReport)
   | ({ t: 'glides' } & GlideReport)
+  | ({ t: 'step' } & StepReport)

@@ -1,8 +1,9 @@
 /**
  * The playing surface's settings: whether the keyboard area plays piano
  * keys, a grid of pads or an XY pad, the key the pads play in (a root and
- * a scale), whether the mod wheel stands beside them, and whether the
- * sound's controls above it are put away to give it room.
+ * a scale), whether the track's steps stand there instead (the
+ * sequencer's grid), whether the mod wheel stands beside them, and
+ * whether the sound's controls above it are put away to give it room.
  * These belong to the player rather than to a preset, so they are kept
  * apart from the sound.
  */
@@ -105,6 +106,11 @@ export interface SurfaceSettings {
   readonly root: number
   readonly scale: ScaleId
   /**
+   * The picked track's steps stand in the surface's place (StepGrid.tsx),
+   * a synth's or a kit's: what it plays on is kept for when they go
+   */
+  readonly seq: boolean
+  /**
    * The tabs and panels of knobs hidden, the waveform left: the surface
    * takes their height (a phone folded shut has little to spare)
    */
@@ -121,6 +127,7 @@ export const DEFAULT_SURFACE: SurfaceSettings = {
   kind: 'keys',
   root: 0,
   scale: 'minor',
+  seq: false,
   hideControls: false,
   wheel: true,
 }
@@ -155,10 +162,11 @@ export function readSurface(storage?: SurfaceStorage): SurfaceSettings {
     return { ...DEFAULT_SURFACE }
   }
 
-  const { kind, root, scale, hideControls, wheel } = saved as {
+  const { kind, root, scale, seq, hideControls, wheel } = saved as {
     kind: unknown
     root: unknown
     scale: unknown
+    seq: unknown
     hideControls: unknown
     wheel: unknown
   }
@@ -166,6 +174,7 @@ export function readSurface(storage?: SurfaceStorage): SurfaceSettings {
     kind: isKind(kind) ? kind : DEFAULT_SURFACE.kind,
     root: isRoot(root) ? root : DEFAULT_SURFACE.root,
     scale: isScaleId(scale) ? scale : DEFAULT_SURFACE.scale,
+    seq: typeof seq === 'boolean' ? seq : DEFAULT_SURFACE.seq,
     hideControls:
       typeof hideControls === 'boolean'
         ? hideControls
@@ -191,6 +200,7 @@ export function writeSurface(
         kind: settings.kind,
         root: settings.root,
         scale: settings.scale,
+        seq: settings.seq,
         hideControls: settings.hideControls,
         wheel: settings.wheel,
       })

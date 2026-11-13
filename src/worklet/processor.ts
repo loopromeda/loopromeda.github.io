@@ -2,6 +2,7 @@ import { ChainSynth, PAD_VOICES, VOICE_COUNT } from '../dsp/chainSynth'
 import { chainStressOutput, timeBlocks } from '../dsp/chainStress'
 import { EffectRack } from '../dsp/effects'
 import { Mixer, Part, Strip } from '../dsp/output'
+import { KitTarget, Lane, Sequencer, SynthTarget } from '../dsp/sequencer'
 import {
   BENCH_MAX_VOICES,
   GLIDE_REPORTS,
@@ -27,20 +28,29 @@ const BENCH_MS = 300
 const clock = (globalThis as { performance?: { now(): number } }).performance
 const now = clock ? () => clock.now() : () => Date.now()
 
-/** A synth track as it plays: its part, its one synth and its player */
+/**
+ * A synth track as it plays: its part, its one synth and its player, and
+ * the lane the sequencer plays its loop on
+ */
 interface SynthPlaying {
   readonly kind: 'synth'
   readonly part: Part
   readonly synth: ChainSynth
   readonly player: SoundPlayer
+  readonly lane: Lane
 }
 
-/** A kit track as it plays: a group, each pad a synth and its player */
+/**
+ * A kit track as it plays: a group, each pad a synth and its player, and
+ * the lane its loop plays on, into the pads at the notes mapped to them
+ */
 interface KitPlaying {
   readonly kind: 'kit'
   readonly part: Part
   readonly pads: readonly Strip[]
   readonly players: readonly SoundPlayer[]
+  readonly target: KitTarget
+  readonly lane: Lane
 }
 
 type Playing = SynthPlaying | KitPlaying
@@ -60,9 +70,12 @@ type Playing = SynthPlaying | KitPlaying
  * the pads' sounds never mix. A SoundPlayer for each sound keeps its
  * knobs and hands each change to its synth, and a synth track's to its
  * inserts and its sends, in their own terms; a pad's player has its
- * synth alone, its sound's inserts and sends unheard. Nothing is
- * allocated in process(): each report goes out in one message object,
- * reused (postMessage copies it).
+ * synth alone, its sound's inserts and sends unheard. The sequencer's
+ * clock runs here too (src/dsp/sequencer.ts): each block it queues the
+ * notes of the steps that fall within it on the tracks' strips, each on
+ * its own frame, ahead of the mix rendering them, and the page hears of
+ * a step as it passes. Nothing is allocated in process(): each report
+ * goes out in one message object, reused (postMessage copies it).
  */
 class SynthProcessor extends AudioWorkletProcessor {
   /** The tracks as they play, by id */
@@ -70,6 +83,9 @@ class SynthProcessor extends AudioWorkletProcessor {
   /** Their parts in the mix's order: what process renders */
   #parts: readonly Part[] = []
   readonly #mixer = new Mixer(sampleRate)
+  /** The clock, and each track's loop on its lane */
+  readonly #sequencer = new Sequencer(sampleRate)
+  readonly #step: { t: 'step'; step: number } = { t: 'step', step: -1 }
   /** The most voices a synth track plays, and the wheel: a new track's */
   #voices: number | undefined
   #wheel = 0
@@ -121,18 +137,22 @@ class SynthProcessor extends AudioWorkletProcessor {
       synth.wheel = this.#wheel
       const strip = new Strip(synth, new EffectRack(sampleRate))
       const player = new SoundPlayer(strip)
-      return { kind, part: new Part([strip]), synth, player }
+      const lane = new Lane(new SynthTarget(strip))
+      return { kind, part: new Part([strip]), synth, player, lane }
     }
     const pads = Array.from({ length: KIT_PADS }, () => {
       const synth = new ChainSynth(sampleRate, PAD_VOICES)
       synth.wheel = this.#wheel
       return new Strip(synth, new EffectRack(sampleRate))
     })
+    const target = new KitTarget(pads)
     return {
       kind,
       part: new Part(pads, new EffectRack(sampleRate)),
       pads,
       players: pads.map((pad) => new SoundPlayer(pad.synth)),
+      target,
+      lane: new Lane(target),
     }
   }
 
@@ -151,6 +171,9 @@ class SynthProcessor extends AudioWorkletProcessor {
     }
     this.#tracks = tracks
     this.#parts = Array.from(tracks.values(), (playing) => playing.part)
+    this.#sequencer.setLanes(
+      Array.from(tracks.values(), (playing) => playing.lane)
+    )
     this.#watch()
   }
 
@@ -238,9 +261,34 @@ class SynthProcessor extends AudioWorkletProcessor {
         break
       }
       case 'panic':
+        this.#sequencer.clear()
         for (const part of this.#parts) part.reset()
         this.#mixer.reset()
+        this.#reportStep()
         break
+      case 'transport':
+        if (message.playing) this.#sequencer.play()
+        else this.#sequencer.stop()
+        this.#reportStep()
+        break
+      case 'tempo':
+        this.#sequencer.setTempo(message.tempo, message.swing)
+        break
+      case 'loop':
+        this.#tracks
+          .get(message.track)
+          ?.lane.setLoop(message.steps, message.notes)
+        break
+      case 'padNotes': {
+        const playing = this.#tracks.get(message.track)
+        if (playing?.kind !== 'kit') break
+        const notes = playing.target.notes
+        for (let k = 0; k < notes.length; k++) {
+          const note = message.notes[k]
+          if (typeof note === 'number' && Number.isFinite(note)) notes[k] = note
+        }
+        break
+      }
       case 'voices':
         this.#voices = message.count
         for (const playing of this.#tracks.values()) {
@@ -287,6 +335,8 @@ class SynthProcessor extends AudioWorkletProcessor {
     const parts = this.#parts
     const taps = this.#taps
     for (let k = 0; k < taps.length; k++) taps[k] = outputs[k + 1]
+    // The steps that fall within this block, each note on its own frame
+    if (this.#sequencer.process(length)) this.#reportStep()
     // One channel only (never asked for): the left, the right thrown away
     this.#mixer.render(parts, left, right ?? this.#spare, taps)
     if (meter.end(now())) {
@@ -300,6 +350,13 @@ class SynthProcessor extends AudioWorkletProcessor {
     }
     if (this.#watching) this.#reportGlides(length)
     return true
+  }
+
+  /** The step the sequencer last played, or -1 stopped, to the page */
+  #reportStep(): void {
+    const report = this.#step
+    report.step = this.#sequencer.position
+    this.port.postMessage(report satisfies FromWorklet)
   }
 
   /** The notes held still gliding, every so often, while there are some */

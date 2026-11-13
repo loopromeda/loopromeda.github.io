@@ -15,6 +15,15 @@ import {
   setMixValue,
   type Mix,
 } from '../state/mix'
+import {
+  editLoop,
+  fitSong,
+  initSong,
+  loopOf,
+  playedNotes,
+  type Loop,
+  type Song,
+} from '../state/song'
 import { knobChanges } from '../state/sound/diff'
 import { initSound, type Sound } from '../state/sound/sound'
 import {
@@ -133,6 +142,8 @@ interface Sent {
   /** A kit's pads' sounds, and its chain */
   pads: (Sound | undefined)[]
   chain?: KitChain
+  /** A kit's pads as their notes were last sent */
+  notes?: readonly KitPad[]
 }
 
 /** Where a touch holds its note: a track, and of a kit the pad */
@@ -165,6 +176,12 @@ const NO_NOTES: readonly number[] = []
  * change to a sound as the knobs that moved, or the whole sound when its
  * structure changed; a kit's chain whole. The mix keeps a strip for each
  * track, by its place.
+ *
+ * And the session's song (src/state/song.ts): the tempo, the swing and
+ * each track's loop, by the track's id, a track removed taking its own
+ * away. The audio thread has the clock (src/dsp/sequencer.ts): it is
+ * sent each loop whole as it changes, told to play and to stop, and
+ * tells back each step as it passes.
  */
 export class Engine {
   #context: AudioContext | undefined
@@ -207,6 +224,17 @@ export class Engine {
   #wheel = 0
   /** Who watches the notes still gliding (an XY pad), told each report */
   readonly #glideListeners = new Set<(report: GlideReport) => void>()
+  /** The session's song (src/state/song.ts): the tempo and the loops */
+  #song: Song = initSong()
+  readonly #songListeners = new Set<() => void>()
+  /** The tempo and swing, and each track's loop, as the worklet has them */
+  #sentTempo: { tempo: number; swing: number } | undefined
+  readonly #sentLoops = new Map<string, Loop>()
+  /** Whether the sequencer plays, and the step it last told of */
+  #playing = false
+  readonly #transportListeners = new Set<() => void>()
+  #step = -1
+  readonly #stepListeners = new Set<(step: number) => void>()
 
   get snapshot(): EngineSnapshot {
     return this.#snapshot
@@ -264,6 +292,7 @@ export class Engine {
       this.#unsent()
       this.#lay()
       this.#sync()
+      this.#syncSong()
       this.#post({ t: 'mix', mix: this.#mix })
       if (this.#voices !== undefined) {
         this.#post({ t: 'voices', count: this.#voices })
@@ -361,9 +390,72 @@ export class Engine {
     this.#post({ t: 'wheel', value: next })
   }
 
+  /** Every note stops at once, the sequencer with them */
   panic(): void {
     this.#held.clear()
     this.#post({ t: 'panic' })
+    this.#stopped()
+  }
+
+  /** Whether the sequencer plays */
+  readonly getPlaying = (): boolean => this.#playing
+
+  /**
+   * The sequencer plays every track's loop from the first step, the
+   * clock the audio thread's. Nothing before the audio has started.
+   */
+  play(): void {
+    if (!this.#node) return
+    this.#post({ t: 'transport', playing: true })
+    if (this.#playing) return
+    this.#playing = true
+    for (const listener of this.#transportListeners) listener()
+  }
+
+  /** The sequencer stops, its notes let go */
+  stop(): void {
+    if (!this.#playing) return
+    this.#post({ t: 'transport', playing: false })
+    this.#stopped()
+  }
+
+  /** Calls listener as the sequencer starts and stops: the way to end it */
+  readonly subscribeTransport = (listener: () => void): (() => void) => {
+    this.#transportListeners.add(listener)
+    return () => this.#transportListeners.delete(listener)
+  }
+
+  /**
+   * The step the sequencer last played, counted from its start (a loop's
+   * own is it modulo the loop's length); -1 stopped. It leads what is
+   * heard by the output's latency.
+   */
+  get step(): number {
+    return this.#step
+  }
+
+  /**
+   * Tells listener each step as it passes, and -1 as the sequencer
+   * stops, outside React (a display that lights its own column).
+   * Returns the way to stop.
+   */
+  readonly watchSteps = (listener: (step: number) => void): (() => void) => {
+    this.#stepListeners.add(listener)
+    return () => this.#stepListeners.delete(listener)
+  }
+
+  /** The sequencer is not playing (any more): its listeners hear of it */
+  #stopped(): void {
+    this.#setStep(-1)
+    if (!this.#playing) return
+    this.#playing = false
+    for (const listener of this.#transportListeners) listener()
+  }
+
+  #setStep(step: number): void {
+    if (step === this.#step) return
+    this.#step = step
+    for (const listener of this.#stepListeners) listener(step)
   }
 
   /**
@@ -416,6 +508,7 @@ export class Engine {
     this.#hush = undefined
     this.#unsent()
     this.#held.clear()
+    this.#stopped()
     // A measurement under way on the old worklet will not answer
     for (const resolve of this.#benchWaiting.splice(0)) resolve(undefined)
     this.#setLoad(undefined)
@@ -636,8 +729,13 @@ export class Engine {
     this.#tracks = tracks
     this.#mix = fitted
     if (pickChanged) this.#pick = picked
+    // A track gone takes its loops with it
+    const song = tracksChanged ? fitSong(this.#song, ids(tracks)) : this.#song
+    const songChanged = song !== this.#song
+    this.#song = song
     const laid = tracksChanged && this.#lay()
     if (tracksChanged) this.#sync()
+    if (laid) this.#syncSong()
     if (mixChanged || laid) this.#post({ t: 'mix', mix: fitted })
     if (pickChanged && this.#glideListeners.size > 0) {
       this.#post({ t: 'watchGlides', on: true, track: picked.track })
@@ -646,6 +744,43 @@ export class Engine {
       for (const listener of this.#soundListeners) listener()
     }
     if (mixChanged) for (const listener of this.#mixListeners) listener()
+    if (songChanged) for (const listener of this.#songListeners) listener()
+  }
+
+  /** The session's song: a document never changed in place */
+  readonly getSong = (): Song => this.#song
+
+  /**
+   * Plays song instead (src/state/song.ts's edits, or read from
+   * storage), with the loops of the tracks there are: the audio thread
+   * gets the tempo and each loop that changed, whole, played from its
+   * next step on; listeners hear of it after
+   */
+  setSong(song: Song): void {
+    const fitted = fitSong(song, ids(this.#tracks))
+    if (fitted === this.#song) return
+    this.#song = fitted
+    this.#syncSong()
+    for (const listener of this.#songListeners) listener()
+  }
+
+  /** Plays what edit makes of the song: setSong(edit(getSong())) */
+  editSong(edit: (song: Song) => Song): void {
+    this.setSong(edit(this.#song))
+  }
+
+  /** The loop the track picked plays, the same one until it changes */
+  readonly getLoop = (): Loop => loopOf(this.#song, this.getTrack().id)
+
+  /** Plays what edit makes of the loop of the track picked */
+  editLoop(edit: (loop: Loop) => Loop): void {
+    this.setSong(editLoop(this.#song, this.getTrack().id, edit))
+  }
+
+  /** Calls listener after each change to the song; returns the way to stop */
+  readonly subscribeSong = (listener: () => void): (() => void) => {
+    this.#songListeners.add(listener)
+    return () => this.#songListeners.delete(listener)
   }
 
   /**
@@ -771,6 +906,9 @@ export class Engine {
       this.#setLoad({ load, voices })
     } else if (message.t === 'glides') {
       for (const listener of this.#glideListeners) listener(message)
+    } else if (message.t === 'step') {
+      // One sent before a stop reached the audio thread is not shown
+      if (this.#playing) this.#setStep(message.step)
     }
   }
 
@@ -783,6 +921,8 @@ export class Engine {
   #unsent(): void {
     this.#laid = undefined
     this.#sent.clear()
+    this.#sentTempo = undefined
+    this.#sentLoops.clear()
   }
 
   /**
@@ -805,7 +945,10 @@ export class Engine {
     const layout = tracks.map(({ id, kind }) => ({ id, kind }))
     for (const [id, sent] of this.#sent) {
       const now = layout.find((track) => track.id === id)
-      if (now?.kind !== sent.kind) this.#sent.delete(id)
+      if (now?.kind !== sent.kind) {
+        this.#sent.delete(id)
+        this.#sentLoops.delete(id)
+      }
     }
     for (const [touch, held] of this.#held) {
       if (!this.#sent.has(held.track)) this.#held.delete(touch)
@@ -845,6 +988,34 @@ export class Engine {
         this.#post({ t: 'kitChain', track: track.id, chain: track.chain })
         sent.chain = track.chain
       }
+      if (sent.notes !== track.pads) {
+        const notes = track.pads.map((pad) => pad.note)
+        this.#post({ t: 'padNotes', track: track.id, notes })
+        sent.notes = track.pads
+      }
+    }
+  }
+
+  /**
+   * Brings the worklet's song up to date: the tempo and the swing if
+   * they moved, and each track's loop that is not the one last sent
+   * there, whole (the notes within its length). Nothing before the
+   * worklet exists; start() catches it up.
+   */
+  #syncSong(): void {
+    if (!this.#node) return
+    const { tempo, swing } = this.#song
+    const sent = this.#sentTempo
+    if (sent?.tempo !== tempo || sent.swing !== swing) {
+      this.#post({ t: 'tempo', tempo, swing })
+      this.#sentTempo = { tempo, swing }
+    }
+    for (const { id } of this.#tracks) {
+      const loop = loopOf(this.#song, id)
+      if (this.#sentLoops.get(id) === loop) continue
+      const notes = playedNotes(loop)
+      this.#post({ t: 'loop', track: id, steps: loop.steps, notes })
+      this.#sentLoops.set(id, loop)
     }
   }
 
@@ -888,6 +1059,11 @@ export class Engine {
     this.#snapshot = next
     for (const listener of this.#listeners) listener()
   }
+}
+
+/** The tracks' ids, in their order */
+function ids(tracks: readonly Track[]): string[] {
+  return tracks.map((track) => track.id)
 }
 
 /**
