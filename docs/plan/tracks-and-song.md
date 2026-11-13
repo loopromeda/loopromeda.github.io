@@ -128,27 +128,65 @@ two beside the first.
 
 ### D. A sequence for each track
 
-- **The clock on the audio thread**, as planned: the worklet steps at
-  the tempo, with swing, and plays each track's steps itself,
-  sample-accurate; the main thread sends patterns and the transport.
-- **A pattern is a track's**: a kit track's sixteen lanes, a step on or
-  off with a velocity; a synth track's notes, each a step, a note, a
-  length and a velocity (more than one at a step: a chord). 16 to 64
-  steps, each track's own length.
-- **The Seq surface**, beside Keys, Pads and XY, shows the picked
-  track's pattern; the transport and the tempo stand in the header,
-  whichever surface is up. The step playing is lit as it passes.
+Built 2026-11-13.
+
+- **The clock on the audio thread** (`src/dsp/sequencer.ts`): counted
+  in frames, sixteenths at the tempo (40 to 240), each pair split by
+  the swing (even to 75%). Each track has a lane, its loop played
+  round at the loop's own length. A note starts on the frame its step
+  falls on and is let go on the frame of the step it ends at: a strip
+  keeps a queue of what is to start and stop within the next block
+  (`src/dsp/output.ts`) and renders up to each in turn. The main thread
+  sends the transport, the tempo and each loop whole as it changes; the
+  worklet tells of each step as it passes (`step`, -1 as it stops).
+- **The song** (`src/state/song.ts`, kept as `loopromeda.song`): the
+  tempo, the swing and each track's loops, by the track's id, apart
+  from the track's sound, so a preset loaded leaves the loop alone and
+  a track removed takes its own. A track holds a list of loops, of
+  which this stage plays and edits the first (E adds the rest). A loop
+  is one to four bars of sixteenths and its notes, each a step, a key,
+  a length and a velocity: a synth's key is the note, a kit's the pad.
+  More than one note at a step is a chord. A loop made shorter keeps
+  the notes past its end, unplayed.
+- **A kit's note** plays its pad at the pad's own note and is held for
+  its step's length. Up to 32 notes of a lane sound at once.
+- **Seq is a setting beside the surface's kind** (`surface.seq`), not a
+  fourth kind: Keys, Pads or XY is kept under it and comes back. One
+  setting for every track; a kit's surface button offers Pads and Seq.
+- **The step grid** (`src/ui/StepGrid.tsx`, its geometry in
+  `src/viz/steps.ts`): a bar of sixteen columns, a row for each key,
+  as many as stand 20 px each (a synth's chromatic from C3, a kit's
+  sixteen pads), moved up and down by the rows shown. A tap puts a
+  note and, stopped, sounds it; a tap on a note takes it away; a drag
+  up or down from a note sets how hard it plays, sideways (a synth's)
+  how long. Bars are picked by number, added and taken at the end;
+  Clear asks first. The column playing and the bar's number are lit
+  outside React.
+- **The transport** (Play and the tempo, `src/ui/Transport.tsx`) stands
+  in the play surface's header whichever surface is up, in a header 600
+  px wide or more; in a narrower one (a phone upright) in a row of its
+  own under it, with sixteen lights for the bar, since the track, the
+  patch, the surface and Hide leave it no room. The tempo's button
+  opens the tempo and the swing, a popover.
+- The column lit leads what is heard by the output's latency.
+- Not built: a voice budget shared by all tracks (B, Cost), a hat's
+  choke, recording what is played into a loop.
 
 ### E. A song
 
-To be chosen by ashon. Three shapes, the first the least:
+Chosen by ashon, 2026-11-13, asked whether loops, scenes or a timeline:
+all three ("전부 가능하면 좋을 것 같아. 루프를 만들고 씬을 돌리면서
+타임라인으로 레코딩 하기도 해야하거든"). Read as layers, each built on
+the last:
 
-- **Loops**: each track has one pattern, all loop together, tracks
-  muted and unmuted by hand. No song is kept, only played.
-- **Scenes** (recommended): a track holds several patterns (A to D); a
-  scene names one pattern (or none) for each track; scenes are played
-  by hand or chained in a row with repeats, which is the song. Fits a
-  phone: a grid of tracks by scenes, a tap starting one.
-- **A timeline**: patterns laid along bars for each track, as an
-  arranger's. The most free and the most to build and to work on a
-  small screen.
+1. **Loops**: a track holds several loops (D keeps the list already)
+   and plays one of them, or none.
+2. **Scenes**: a scene names a loop, or none, for each track. A scene,
+   or one track's loop, is started by hand and comes in on the bar.
+3. **A timeline, recorded**: with recording on, what is started is
+   written along the song's bars as it is played: which loop each track
+   plays from which bar. The timeline plays that back, and is edited
+   afterwards.
+
+What is recorded is the starting of loops and scenes, not sound: to be
+confirmed with ashon. To be built in that order, each usable by itself.

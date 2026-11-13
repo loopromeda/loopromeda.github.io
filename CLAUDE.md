@@ -6,7 +6,7 @@ played by touch, installable as a PWA. The plan and the decisions behind it:
 modulators: `docs/plan/sound-chains.md`; effects, then parts and a drum
 kit, then a step sequencer, under way:
 `docs/plan/effects-parts-sequencer.md`; tracks (a synth or a kit each,
-as many as are added), then a sequence for each and a song, under way:
+as many as are added), a sequence for each, then a song, under way:
 `docs/plan/tracks-and-song.md`. What real devices did:
 `docs/platform-notes.md`.
 
@@ -66,13 +66,18 @@ src/dsp/      pure DSP (oscillators, envelopes, LFOs, filters, voices);
               its inverse for the meters; chainStress.ts is the
               heaviest sound it can hold, and the effects after it,
               for measuring; fastMath.ts the
-              cheaper tanh and sine the voices call per sample
+              cheaper tanh and sine the voices call per sample;
+              sequencer.ts the step sequencer's clock, counted in
+              frames, and a lane for each track playing its loop into
+              the track's strips, each note on its own frame (a
+              strip's queue of what starts and stops within a block)
 src/worklet/  the AudioWorkletProcessor around src/dsp; own globals and
               tsconfig (tsconfig.worklet.json), loaded via ?worker&url;
               sound.ts loads a sound document onto the ChainSynth and
               its effects, and sets its knobs one by one, the mix and
               the kit's chain (Node-testable); the processor keeps a
-              part for each track, by the track's id;
+              part and a sequencer's lane for each track, by the
+              track's id, and tells of each step as it passes;
               load.ts the
               share of its time the synth takes, for the status line
 src/sw/       the service worker (own globals, tsconfig.sw.json): keeps
@@ -85,7 +90,9 @@ src/engine/   AudioContext lifecycle, unlock, node wiring; the sound,
               moved; the session's mix, sent whole; the analysers on the
               output (each side, the waveform, the spectrum), the
               master's and each track's own (the node's later outputs);
-              the tracks, the one picked edited and played;
+              the tracks, the one picked edited and played; the
+              song, held here and edited, its tempo and each loop sent
+              as it changes, the transport, and the step playing;
               protocol.ts is the message types both threads share
               (plain data only)
 src/state/    params.ts: the knob schema and the old parameters;
@@ -93,7 +100,9 @@ src/state/    params.ts: the knob schema and the old parameters;
               sounds); factory.ts: the shipped presets and the factory
               kit, written by name (sound/write.ts); library.ts: user
               presets and the session's tracks, kept in localStorage;
-              surface.ts: keys or pads, the pads' key (root and scale);
+              surface.ts: keys, pads or XY, the pads' key (root and
+              scale), and whether the sequencer's steps stand in their
+              place (Seq);
               kit.ts: a kit's 16 pads, each a preset mapped onto
               it and played as it is at the pad's note, and its
               chain (the inserts and sends after them, every
@@ -103,6 +112,11 @@ src/state/    params.ts: the knob schema and the old parameters;
               sound) or a kit (its pads and chain), up to eight,
               named, added, moved and removed, and the track played
               and the pad picked;
+              song.ts: the session's song (the tempo, the swing and
+              each track's loops, by the track's id; a loop one to
+              four bars of sixteenths and its notes, each a step, a
+              key (a synth's note, a kit's pad), a length and a
+              velocity), its edits, kept in localStorage;
               settings.ts: the device's settings (voices, latency,
               velocity, what the screen shows); mix.ts: the session's
               mix (each track's fader, a level and a balance, by the
@@ -128,7 +142,8 @@ src/viz/      pure display math (scope trigger and decimation, envelope
               sideways in fine.ts, the mod wheel's turn, double tap and
               ridges in wheel.ts, the XY pad's pitch, Slide, lines and
               a glide's dot in xy.ts, where a popover stands by its
-              button in popover.ts)
+              button in popover.ts, the step grid's cells, a note's
+              box and what a drag from a note makes of it in steps.ts)
 src/ui/       React components; SoundEditor.tsx the sound as tiles
               (editor.ts: their names, lines, pictograms and colours),
               with the kit its pads and its chain, or, switched to Mix,
@@ -152,12 +167,19 @@ src/ui/       React components; SoundEditor.tsx the sound as tiles
               the Mix); PlaySurface.tsx plays
               notes on Keys.tsx, Pads.tsx or XyPad.tsx, or the kit on
               KitPads.tsx (hands.ts: who
-              holds which note, and bends it), KeysNavigator.tsx moves the keys a white key at a
+              holds which note, and bends it), or with Seq shows
+              StepGrid.tsx, the picked track's loop a bar at a time
+              (a tap puts a note or takes it away, a drag from one
+              sets how hard and how long), with Transport.tsx's Play,
+              tempo (and swing, a popover) and lights for the bar's
+              steps in its header, or in a row under a narrow one;
+              KeysNavigator.tsx moves the keys a white key at a
               time over C−1 to G9 (all of MIDI's notes), ModWheel.tsx the mod wheel at their
               left (the Wheel source) and its Route, PresetBrowser.tsx
               loads, saves and moves presets, a popover on the patch's
               button (placement.ts places it), SurfacePicker.tsx one on
-              the surface's (keys, pads or XY, the pads' key),
+              the surface's (keys, pads, XY or Seq, the pads' key; a
+              kit's pads or Seq),
               SettingsDialog.tsx, a modal dialog, holds the settings,
               Measure CPU and the browser's checks; pages.ts gives each
               sheet an address (#/presets), so a reload keeps it and Back

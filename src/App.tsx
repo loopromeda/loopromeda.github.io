@@ -35,6 +35,7 @@ import { StatusBar } from './ui/StatusBar'
 import { SurfaceButton } from './ui/SurfaceButton'
 import { SurfacePicker } from './ui/SurfacePicker'
 import { TrackButton, TrackPicker } from './ui/TrackPicker'
+import { PlayButton, TempoButton, TempoPicker } from './ui/Transport'
 import { UpdateButton } from './ui/UpdateButton'
 import type { ScreenAwake } from './wakeLock'
 
@@ -59,7 +60,8 @@ const page =
  * editor grows, its tiles with it (graph.ts), and what they cannot fill
  * is left an empty canvas. It needs the same with its panel shown or
  * hidden (the panel stands over its graph: SoundEditor.tsx), so neither
- * moves the keys.
+ * moves the keys. The step sequencer in the keys' place stands taller, at
+ * most 18rem and half the screen: a dozen rows of notes a finger finds.
  */
 const EDITOR_SIZE = 'upright:grow side:flex-1'
 // Written out whole, for Tailwind to find
@@ -67,6 +69,11 @@ const KEYS_SIZE = [
   'flex-1 upright:grow-[999]',
   'upright:max-h-[calc(var(--play-head,3.25rem)_+_min(10rem,45dvh))]',
   'side:flex-[0_0_calc(var(--play-head,3.25rem)_+_clamp(7rem,100dvh_-_20rem,10rem))]',
+].join(' ')
+const SEQ_SIZE = [
+  'flex-1 upright:grow-[999]',
+  'upright:max-h-[calc(var(--play-head,3.25rem)_+_min(18rem,50dvh))]',
+  'side:flex-[0_0_calc(var(--play-head,3.25rem)_+_clamp(7rem,100dvh_-_20rem,18rem))]',
 ].join(' ')
 
 /**
@@ -76,8 +83,11 @@ const KEYS_SIZE = [
  * not need: KEYS_SIZE), and a status line under it. The patch at the left
  * of the keyboard's header opens the presets, a popover on it over the
  * page as it is (a tap in the editor puts them away), and the first
- * button at its right end the choice of keys or pads, a popover on it
- * the same way: what is played on stays there to try them on. The
+ * button at its right end the choice of keys or pads (or the step
+ * sequencer in their place), a popover on it the same way: what is
+ * played on stays there to try them on. Play and the tempo stand by the
+ * patch (under it on a phone held upright: PlaySurface), the tempo's
+ * button opening the tempo and the swing, a popover too. The
  * master's views at size open over the controls (its panel opens them),
  * what is played on left there too. The last puts the controls away, for
  * a screen too short to play on under them. The mod
@@ -201,10 +211,14 @@ export function App({
   // the settings a dialog over everything
   const covered = sheet === 'master'
   const popover =
-    sheet === 'tracks' || sheet === 'presets' || sheet === 'surface'
+    sheet === 'tracks' ||
+    sheet === 'presets' ||
+    sheet === 'surface' ||
+    sheet === 'tempo'
   const trackRef = useRef<HTMLButtonElement>(null)
   const patchRef = useRef<HTMLButtonElement>(null)
   const surfaceRef = useRef<HTMLButtonElement>(null)
+  const tempoRef = useRef<HTMLButtonElement>(null)
   // Put away, the controls still come back under a sheet: it needs room
   const controls = !surface.hideControls || covered
   // Until the audio has run, the cover asks for the tap that starts it;
@@ -271,7 +285,7 @@ export function App({
       </div>
       <PlaySurface
         engine={engine}
-        className={controls ? KEYS_SIZE : 'flex-1'}
+        className={controls ? (surface.seq ? SEQ_SIZE : KEYS_SIZE) : 'flex-1'}
         settings={surface}
         fullVelocity={settings.velocity === 'full'}
         kit={part === 'kit' ? names : undefined}
@@ -301,16 +315,26 @@ export function App({
             />
           </>
         }
+        transport={
+          <>
+            <PlayButton engine={engine} />
+            <TempoButton
+              ref={tempoRef}
+              engine={engine}
+              open={sheet === 'tempo'}
+              onToggle={() => toggle('tempo')}
+            />
+          </>
+        }
         end={
           <>
-            {part === 'synth' && (
-              <SurfaceButton
-                ref={surfaceRef}
-                settings={surface}
-                open={sheet === 'surface'}
-                onToggle={() => toggle('surface')}
-              />
-            )}
+            <SurfaceButton
+              ref={surfaceRef}
+              settings={surface}
+              kit={part === 'kit'}
+              open={sheet === 'surface'}
+              onToggle={() => toggle('surface')}
+            />
             <IconButton
               label="Hide controls"
               pressed={surface.hideControls}
@@ -346,14 +370,17 @@ export function App({
           onClose={closeSheet}
         />
       )}
-      {/* The surface's choices are a synth's */}
-      {sheet === 'surface' && part === 'synth' && (
+      {sheet === 'surface' && (
         <SurfacePicker
           settings={surface}
+          kit={part === 'kit'}
           anchor={surfaceRef}
           onChange={changeSurface}
           onClose={closeSheet}
         />
+      )}
+      {sheet === 'tempo' && (
+        <TempoPicker engine={engine} anchor={tempoRef} onClose={closeSheet} />
       )}
       <StatusBar
         engine={engine}

@@ -8,6 +8,7 @@ export const SHEETS = [
   'tracks',
   'presets',
   'surface',
+  'tempo',
   'master',
   'settings',
 ] as const

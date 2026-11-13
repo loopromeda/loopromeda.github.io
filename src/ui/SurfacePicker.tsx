@@ -25,6 +25,13 @@ const KINDS: readonly { kind: SurfaceKind; label: string }[] = [
   { kind: 'xy', label: 'XY' },
 ]
 
+/**
+ * A surface's option, four to a row: as wide as its cell, its picture and
+ * its name close together
+ */
+const SURFACE =
+  'flex h-11 min-w-0 items-center justify-center gap-1.5 rounded-[10px] bg-white/5 px-1 text-xs font-semibold tracking-wider whitespace-nowrap text-zinc-400 aria-pressed:bg-white/10 aria-pressed:text-white'
+
 /** C to B, as semitones above C */
 const ROOTS = Array.from({ length: 12 }, (_, semitone) => semitone)
 
@@ -37,26 +44,33 @@ const WANT_W = 24
 const AROUND = 28 + 8 + 2 * 10
 
 /**
- * What notes are played on, keys, pads or the XY pad, whether the mod
- * wheel stands beside them, and the key the pads play in: a root and a
- * scale. A popover from the surface's button (anchor), as the presets
- * are from the patch's (PresetBrowser): above it (below it, the controls
- * put away), the page left as it is around it, so a key can be tried on
- * the pads while it is chosen. It looks as the presets do, on the same
- * glass: a chip and a name over its choices, 10 px in from its edges,
- * the choices 44 px for the finger, on one grid: three to a row, each as
- * wide as the next (the roots six, two to one of the others' columns),
- * the mod wheel the whole row. It stands as tall as they are (the
- * pads' key takes more than the keys' line of help), up to the room the
- * page has, past which they scroll.
+ * What notes are played on, keys, pads or the XY pad, or put in on the
+ * step sequencer (Seq, which keeps the surface it took the place of for
+ * when it is left again), whether the mod wheel stands beside them (not
+ * asked on Seq, which has none), and the key the pads play in: a root
+ * and a scale. Given kit, the track picked is a kit: its pads or the
+ * sequencer, and no more. A popover
+ * from the surface's button (anchor), as the presets are from the
+ * patch's (PresetBrowser): above it (below it, the controls put away),
+ * the page left as it is around it, so a key can be tried on the pads
+ * while it is chosen. It looks as the presets do, on the same glass: a
+ * chip and a name over its choices, 10 px in from its edges, the choices
+ * 44 px for the finger: the surfaces in one row, each as wide as the
+ * next, the mod wheel the whole row, the scales three to a row (the
+ * roots six, two to one of their columns). It stands as tall as they are
+ * (the pads' key takes more than the keys' line of help), up to the room
+ * the page has, past which they scroll.
  */
 export function SurfacePicker({
   settings,
+  kit,
   anchor,
   onChange,
   onClose,
 }: {
   settings: SurfaceSettings
+  /** The track picked is a kit: its pads, or the sequencer */
+  kit: boolean
   /** The button it opens from, which places it */
   anchor: RefObject<HTMLElement | null>
   onChange: (settings: SurfaceSettings) => void
@@ -91,13 +105,18 @@ export function SurfacePicker({
     return () => window.removeEventListener('keydown', key)
   }, [onClose])
 
-  const { kind, root, scale, wheel } = settings
-  const playing =
-    kind === 'pads'
-      ? `Pads in ${pitchName(root)} ${scaleName(scale)}`
-      : kind === 'xy'
-        ? 'The XY pad'
-        : 'Every note'
+  const { kind, root, scale, wheel, seq } = settings
+  /** The surface a finger plays, the sequencer aside: a kit's is its pads */
+  const played = kit ? 'pads' : kind
+  const playing = seq
+    ? 'Steps of the loop'
+    : kit
+      ? 'The kit’s pads'
+      : kind === 'pads'
+        ? `Pads in ${pitchName(root)} ${scaleName(scale)}`
+        : kind === 'xy'
+          ? 'The XY pad'
+          : 'Every note'
 
   return (
     <section
@@ -125,7 +144,7 @@ export function SurfacePicker({
             boxShadow: `inset 0 0 0 1.5px ${NEUTRAL_LOOK.ring}`,
           }}
         >
-          <SurfaceIcon kind={kind} size={14} />
+          <SurfaceIcon kind={seq ? 'seq' : played} size={14} />
         </span>
         <h2
           id="surface-heading"
@@ -150,58 +169,88 @@ export function SurfacePicker({
             <div
               role="group"
               aria-label="Surface"
-              className="grid grid-cols-3 gap-1.5"
+              className={`grid gap-1.5 ${kit ? 'grid-cols-2' : 'grid-cols-4'}`}
             >
-              {KINDS.map((each) => (
+              {kit ? (
                 <button
-                  key={each.kind}
                   type="button"
-                  aria-pressed={kind === each.kind}
-                  onClick={() => set({ kind: each.kind })}
-                  className={OPTION}
+                  aria-pressed={!seq}
+                  onClick={() => set({ seq: false })}
+                  className={SURFACE}
                 >
-                  <SurfaceIcon kind={each.kind} />
-                  {each.label}
+                  <SurfaceIcon kind="pads" />
+                  Pads
                 </button>
-              ))}
-            </div>
-            <button
-              type="button"
-              aria-pressed={wheel}
-              onClick={() => set({ wheel: !wheel })}
-              className={OPTION}
-            >
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 18 18"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.6"
-                aria-hidden
-                className="shrink-0"
+              ) : (
+                KINDS.map((each) => (
+                  <button
+                    key={each.kind}
+                    type="button"
+                    aria-pressed={!seq && kind === each.kind}
+                    onClick={() => set({ kind: each.kind, seq: false })}
+                    className={SURFACE}
+                  >
+                    <SurfaceIcon kind={each.kind} />
+                    {each.label}
+                  </button>
+                ))
+              )}
+              <button
+                type="button"
+                aria-pressed={seq}
+                onClick={() => set({ seq: true })}
+                className={SURFACE}
               >
-                <rect x="6" y="2" width="6" height="14" rx="2" />
-                <path d="M6 10.5h6" strokeWidth="2" />
-              </svg>
-              Mod wheel at the left
-            </button>
+                <SurfaceIcon kind="seq" />
+                Seq
+              </button>
+            </div>
+            {!seq && (
+              <button
+                type="button"
+                aria-pressed={wheel}
+                onClick={() => set({ wheel: !wheel })}
+                className={OPTION}
+              >
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 18 18"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  aria-hidden
+                  className="shrink-0"
+                >
+                  <rect x="6" y="2" width="6" height="14" rx="2" />
+                  <path d="M6 10.5h6" strokeWidth="2" />
+                </svg>
+                Mod wheel at the left
+              </button>
+            )}
           </div>
 
-          {kind === 'keys' && (
+          {seq && (
+            <p className="px-1 text-[13px] leading-snug text-zinc-500">
+              Seq puts notes on the steps of this track’s loop: tap a step for a
+              note, tap a note to take it away. Drag up or down from a note for
+              how hard it plays{kit ? '' : ', sideways for how long'}.
+            </p>
+          )}
+          {!seq && !kit && kind === 'keys' && (
             <p className="px-1 text-[13px] leading-snug text-zinc-500">
               Keys play every note. Pads play the notes of one key: choose Pads,
               then its root and scale.
             </p>
           )}
-          {kind === 'xy' && (
+          {!seq && !kit && kind === 'xy' && (
             <p className="px-1 text-[13px] leading-snug text-zinc-500">
               XY plays a note under each finger: across, its pitch, gliding with
               no steps between the lines; up, its Slide, for what a route from
               Slide moves.
             </p>
           )}
-          {kind === 'pads' && (
+          {!seq && !kit && kind === 'pads' && (
             <>
               <Choices id="surface-root" label="Root">
                 <div className="grid grid-cols-6 gap-1.5">

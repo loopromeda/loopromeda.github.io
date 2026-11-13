@@ -38,6 +38,8 @@ import { Keys } from './Keys'
 import { KeysNavigator } from './KeysNavigator'
 import { KitPads } from './KitPads'
 import { Pads } from './Pads'
+import { StepGrid } from './StepGrid'
+import { StepLights } from './Transport'
 import { XyPad } from './XyPad'
 
 /**
@@ -66,11 +68,11 @@ const OCTAVE: Readonly<Record<SurfaceKind, number>> = {
   xy: 1,
 }
 /**
- * From this width of the header (CSS px) the keys' navigator stands in it,
- * between the patch and the arrows: room for it at its least (10rem), the
- * arrows, the buttons at the end and the patch's name, cut short. Under
- * it, in a strip of its own below, which a phone on its side has no
- * height for.
+ * From this width of the header (CSS px) the transport and the keys'
+ * navigator stand in it, between the patch and the arrows: room for the
+ * navigator at its least (8rem), Play and the tempo, the arrows, the
+ * buttons at the end and the patch's name, cut short. Under it, in a row
+ * of their own below, which a phone on its side has no height for.
  */
 const NAVIGATOR_IN_HEADER = 600
 
@@ -148,6 +150,15 @@ interface Fit {
 const sameGrid = (a: PadGrid, b: PadGrid) =>
   a.columns === b.columns && a.rows === b.rows
 
+/**
+ * The octaves' range, between their arrows: read out, not shown, in a
+ * header too narrow for it (a wide one holds the transport too)
+ */
+const RANGE =
+  'font-mono text-[13px] whitespace-nowrap text-zinc-400 @max-[26rem]:sr-only'
+const WIDE_RANGE =
+  'font-mono text-[13px] whitespace-nowrap text-zinc-400 @max-[52rem]:sr-only'
+
 const sameFit = (a: Fit, b: Fit) =>
   a.octaves === b.octaves &&
   a.xy === b.xy &&
@@ -158,7 +169,10 @@ const sameFit = (a: Fit, b: Fit) =>
 /**
  * Where notes are played, on piano keys, on pads or on the XY pad
  * (settings.kind), or given kit (the kit's pads' names: the kit is the
- * part played), on the kit's pads (KitPads), a tap picking the pad too.
+ * part played), on the kit's pads (KitPads), a tap picking the pad too;
+ * or, with settings.seq, where the picked track's loop is written, a
+ * step at a time (StepGrid), in their place: no octaves then, no mod
+ * wheel, and the computer's keys play nothing.
  * Sized by className in the page's column: App gives it
  * the rest, at most the keys' length (the pads stand as tall), under what
  * stands above them, which the section holds as --play-head.
@@ -174,10 +188,12 @@ const sameFit = (a: Fit, b: Fit) =>
  * Touches go straight to the engine; React renders only the keys or pads,
  * again when they move, the key or the size changes. The header row holds
  * `start` (the patch) at its left, and at its right the octave controls
- * and after them `end` (the surface, putting the controls away); the
- * navigator stands between in a header wide enough (a phone on its side
- * too) and in a strip under it in a narrower one, where `start` takes the
- * room the rest leaves. `beside`
+ * and after them `end` (the surface, putting the controls away). A header
+ * wide enough (a phone on its side too) holds `transport` (Play and the
+ * tempo) after `start`, and between it and the octaves the keys'
+ * navigator, or where there is none the bar's sixteenths as lights
+ * (StepLights); a narrower one has them in a row of their own under it,
+ * and `start` takes the room the rest leaves. `beside`
  * (the mod wheel) stands at the surface's left, outside what the keys,
  * pads and XY pad are fitted to. Given fullVelocity, every note plays at full
  * velocity, wherever a finger lands.
@@ -186,6 +202,7 @@ export function PlaySurface({
   engine,
   settings,
   start,
+  transport,
   end,
   beside,
   fullVelocity = false,
@@ -201,6 +218,8 @@ export function PlaySurface({
   kit?: readonly string[]
   /** At the header's left */
   start?: ReactNode
+  /** Play and the tempo: after start, or in the row under a narrow header */
+  transport: ReactNode
   /** At the header's right, after the octave controls */
   end?: ReactNode
   /** At the surface's left, as tall */
@@ -245,7 +264,7 @@ export function PlaySurface({
   })
   const surfaceRef = useRef<HTMLDivElement>(null)
   const headerRef = useRef<HTMLDivElement>(null)
-  const { kind, root, scale } = settings
+  const { kind, root, scale, seq } = settings
   const pads = kind === 'pads'
   const xy = kind === 'xy'
   const { grid } = fit
@@ -272,9 +291,7 @@ export function PlaySurface({
   const range = `${noteName(lowestNote)} – ${noteName(highestNote)}`
   // The navigator, for keys that do not reach C−1 to G9 at once
   const whites = whiteCount(fit.octaves)
-  const navigator = !kit && kind === 'keys' && whites < REACH_WHITES
-  const inHeader = navigator && fit.wide
-  const inStrip = navigator && !fit.wide
+  const navigator = !kit && !seq && kind === 'keys' && whites < REACH_WHITES
   const notes = useMemo(
     () =>
       pads
@@ -326,8 +343,9 @@ export function PlaySurface({
   )
 
   // Computer keys, for a desktop: they play, Z and X shift the octave; on
-  // the kit, the pads' keys strike and pick them
+  // the kit, the pads' keys strike and pick them. None over the steps
   useEffect(() => {
+    if (seq) return
     if (kit) {
       const padOf = (code: string) => {
         const pad = PAD_CODES.indexOf(code)
@@ -391,6 +409,7 @@ export function PlaySurface({
   }, [
     hands,
     kitHands,
+    seq,
     kit,
     pick,
     pads,
@@ -402,22 +421,27 @@ export function PlaySurface({
     shift,
   ])
 
-  const keysNavigator = (className: string) => (
-    <KeysNavigator
-      position={position}
-      whites={whites}
-      range={range}
-      onMove={navigate}
-      className={className}
-    />
-  )
+  // By the transport: the keys' navigator, or the bar's lights
+  const between = (className: string) =>
+    navigator ? (
+      <KeysNavigator
+        position={position}
+        whites={whites}
+        range={range}
+        onMove={navigate}
+        className={className}
+      />
+    ) : (
+      <StepLights engine={engine} className={className} />
+    )
 
   // Its header and the surface's least height are its minimum: on a short
   // screen the controls above give way (their graph pans), not the keys.
   // What stands above the keys, for App to size them by: the header and its
-  // gap (2.75rem and 0.5rem), and the navigator's strip and its gap
+  // gap (2.75rem and 0.5rem), and under a narrow one the transport's row
+  // and its gap, the same again
   const style = {
-    '--play-head': inStrip ? '5.25rem' : '3.25rem',
+    '--play-head': fit.wide ? '3.25rem' : '6.5rem',
   } as CSSProperties
   return (
     <section
@@ -426,7 +450,8 @@ export function PlaySurface({
       style={style}
     >
       {/* A narrow header (a phone's, under 26rem) keeps the patch's name
-          and every button, and drops the range */}
+          and every button, and drops the range; so does a wide one with
+          the transport in it, under 52rem */}
       <div
         ref={headerRef}
         className="@container flex h-11 shrink-0 items-center gap-3"
@@ -434,14 +459,23 @@ export function PlaySurface({
         {/* Held upright, the patch (start's last) takes the room the
             buttons leave */}
         <div
-          className={`flex min-w-0 items-center gap-2 ${inHeader ? '' : 'flex-1 *:last:flex-1'}`}
+          className={`flex min-w-0 items-center gap-2 ${fit.wide ? '' : 'flex-1 *:last:flex-1'}`}
         >
           {start}
         </div>
-        {inHeader && keysNavigator('ml-auto h-7 max-w-md min-w-40 flex-1')}
+        {fit.wide && (
+          <>
+            <div className="flex shrink-0 items-center gap-2">{transport}</div>
+            {between(
+              navigator
+                ? 'ml-auto h-7 max-w-md min-w-32 flex-1'
+                : 'ml-auto h-7 max-w-md min-w-24 flex-1'
+            )}
+          </>
+        )}
         <div
-          hidden={kit !== undefined}
-          className={`flex shrink-0 items-center gap-2 ${inHeader ? '' : 'ml-auto'}`}
+          hidden={kit !== undefined || seq}
+          className="flex shrink-0 items-center gap-2"
         >
           <IconButton
             label="Octave down"
@@ -449,9 +483,7 @@ export function PlaySurface({
             onClick={() => shift(-1)}
             path="M11 4l-5 5 5 5"
           />
-          <span className="font-mono text-[13px] whitespace-nowrap text-zinc-400 @max-[26rem]:sr-only">
-            {range}
-          </span>
+          <span className={fit.wide ? WIDE_RANGE : RANGE}>{range}</span>
           <IconButton
             label="Octave up"
             disabled={first >= highest}
@@ -461,11 +493,20 @@ export function PlaySurface({
         </div>
         {end && <div className="flex shrink-0 items-center gap-2">{end}</div>}
       </div>
-      {inStrip && keysNavigator('h-6 shrink-0')}
+      {!fit.wide && (
+        <div className="flex h-11 shrink-0 items-center gap-2">
+          {transport}
+          {between(
+            navigator ? 'h-7 min-w-0 flex-1' : 'mx-2 h-7 min-w-0 flex-1'
+          )}
+        </div>
+      )}
       <div className="flex min-h-28 flex-1 gap-2">
-        {beside}
+        {!seq && beside}
         <div ref={surfaceRef} className="relative min-w-0 flex-1">
-          {kit ? (
+          {seq ? (
+            <StepGrid engine={engine} kit={kit} />
+          ) : kit ? (
             <KitPads
               hands={kitHands}
               grid={fit.kit}
