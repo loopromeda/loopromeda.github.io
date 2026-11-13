@@ -856,5 +856,89 @@ describe('Library', () => {
       // Written again, as it was read
       expect(keptTracks(storage)).toHaveLength(2)
     })
+
+    it('gives the tracks a first visit starts with', () => {
+      const storage = new FakeStorage()
+      const { host, library } = open(storage)
+      expect(library.freshTracks()).toEqual(host.tracks)
+      // Whatever plays now, and whatever was kept before tracks
+      storage.setItem(
+        SESSION_KEY,
+        JSON.stringify({ version: 2, sound: FACTORY[2]?.sound })
+      )
+      library.load({ source: 'factory', name: 'Lead' })
+      library.addTrack('kit')
+      const fresh = library.freshTracks()
+      expect(fresh.map((track) => [track.id, track.kind])).toEqual([
+        ['t1', 'synth'],
+        ['t2', 'kit'],
+      ])
+      const [synth, kit] = fresh as [SynthTrack, KitTrack]
+      expect(synth.sound).toBe(FACTORY[0]?.sound)
+      expect(synth.current).toEqual({ source: 'factory', name: 'Init' })
+      expect(kit.pads[0]?.sound).toBe(FACTORY[1]?.sound)
+      expect(kit.chain).toEqual(initKitChain())
+    })
+
+    it('plays tracks in the session’s place, and keeps them at once', () => {
+      const storage = new FakeStorage()
+      const { host, library } = open(storage)
+      host.pick('t2', 3)
+      const sound = setValue(initSound(), 'x1', 'cutoff', 700)
+      const tracks: Track[] = [
+        { id: 't4', kind: 'synth', name: 'Keys', sound },
+        { id: 't1', kind: 'synth', sound: initSound() },
+      ]
+      storage.written.length = 0
+      library.play(tracks)
+      expect(host.tracks).toEqual(tracks)
+      // The pick falls to the first of them: the one picked is gone
+      expect(host.picked.track).toBe('t4')
+      expect(library.snapshot.current).toBeUndefined()
+      expect(library.snapshot.pads).toEqual([])
+      expect(storage.written).toEqual([TRACKS_KEY])
+      expect(keptTracks(storage).map((track) => track.id)).toEqual(['t4', 't1'])
+      // Nothing is left to write a moment later
+      vi.advanceTimersByTime(1000)
+      expect(storage.written).toEqual([TRACKS_KEY])
+    })
+
+    it('plays each pad of tracks played as its preset is now', () => {
+      const { host, library } = open()
+      const was = setValue(initSound(), 'x1', 'cutoff', 300)
+      const pads: KitPad[] = Array.from({ length: KIT_PADS }, () => ({
+        sound: initSound(),
+        note: PAD_NOTE,
+      }))
+      pads[0] = {
+        sound: was,
+        current: { source: 'factory', name: 'Bass' },
+        note: 41,
+      }
+      pads[1] = {
+        sound: was,
+        current: { source: 'user', name: 'Gone' },
+        note: 50,
+      }
+      library.play([
+        {
+          id: 't1',
+          kind: 'synth',
+          sound: was,
+          current: { source: 'user', name: 'Gone' },
+        },
+        { id: 't2', kind: 'kit', pads, chain: initKitChain() },
+      ])
+      // A preset there is plays as it is now, at the pad's note
+      expect(host.kit.pads[0]).toEqual({
+        sound: FACTORY[1]?.sound,
+        current: { source: 'factory', name: 'Bass' },
+        note: 41,
+      })
+      // One that is gone leaves the sound kept, from no preset
+      expect(host.kit.pads[1]).toEqual({ sound: was, note: 50 })
+      expect(host.synthTrack).toEqual({ id: 't1', kind: 'synth', sound: was })
+      expect(library.snapshot.current).toBeUndefined()
+    })
   })
 })

@@ -6,7 +6,8 @@ played by touch, installable as a PWA. The plan and the decisions behind it:
 modulators: `docs/plan/sound-chains.md`; effects, then parts and a drum
 kit, then a step sequencer, under way:
 `docs/plan/effects-parts-sequencer.md`; tracks (a synth or a kit each,
-as many as are added), a sequence for each, then a song, under way:
+as many as are added), a sequence for each, then a song, under way,
+and projects (a session saved under a name):
 `docs/plan/tracks-and-song.md`. What real devices did:
 `docs/platform-notes.md`.
 
@@ -117,6 +118,12 @@ src/state/    params.ts: the knob schema and the old parameters;
               four bars of sixteenths and its notes, each a step, a
               key (a synth's note, a kit's pad), a length and a
               velocity), its edits, kept in localStorage;
+              project.ts: a project, the session (the tracks, the mix,
+              the song) kept under a name, the list of them and a
+              project's file; projects.ts: the projects kept in
+              localStorage, the one the session came from, whether it
+              was edited since, and Save, Save as, Open, New, Rename,
+              Delete, Export and Import;
               settings.ts: the device's settings (voices, latency,
               velocity, what the screen shows); mix.ts: the session's
               mix (each track's fader, a level and a balance, by the
@@ -179,7 +186,10 @@ src/ui/       React components; SoundEditor.tsx the sound as tiles
               loads, saves and moves presets, a popover on the patch's
               button (placement.ts places it), SurfacePicker.tsx one on
               the surface's (keys, pads, XY or Seq, the pads' key; a
-              kit's pads or Seq),
+              kit's pads or Seq), ProjectBrowser.tsx one on the status
+              line's project button, left of Settings (the projects
+              kept, the session saved under a name, one opened in its
+              place, a project's file out and in; #/project),
               SettingsDialog.tsx, a modal dialog, holds the settings,
               Measure CPU and the browser's checks; pages.ts gives each
               sheet an address (#/presets), so a reload keeps it and Back

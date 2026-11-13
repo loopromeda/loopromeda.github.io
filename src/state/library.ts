@@ -102,7 +102,10 @@ const NO_PADS: readonly (PresetRef | undefined)[] = []
  * mapped onto, in every kit; a reload maps each again, as its preset is
  * then; a pad whose preset is deleted keeps the sound it had. A new
  * track starts from the factory: a synth on the first preset, a kit as
- * the factory kit. Subscribe-and-snapshot, for useSyncExternalStore.
+ * the factory kit. A project opened (src/state/projects.ts) plays its
+ * tracks in the session's place, each pad as its preset is now; a new
+ * one the tracks a first visit starts with. Subscribe-and-snapshot, for
+ * useSyncExternalStore.
  * Storage that fails (a private window, a full disk) leaves the presets
  * working for this visit and says so in `problem`.
  */
@@ -317,6 +320,34 @@ export class Library {
     this.#refresh()
     this.#writeSession()
     return id
+  }
+
+  /**
+   * Plays tracks in the session's place (a project's, opened): each as
+   * the presets have it now, as a reload would, and kept at once
+   */
+  play(tracks: readonly Track[]): void {
+    const mapped = tracks.map((track) => this.#mapped(track))
+    this.#quietly(() => this.#host.setTracks(mapped))
+    this.#refresh()
+    this.#writeSession()
+  }
+
+  /**
+   * The tracks a first visit starts with, and a new project: a synth on
+   * the first factory preset, then the factory kit, through no inserts
+   * to A
+   */
+  freshTracks(): readonly Track[] {
+    return [
+      { id: 't1', kind: 'synth', ...this.#factorySynth() },
+      {
+        id: 't2',
+        kind: 'kit',
+        pads: this.#factoryPads(),
+        chain: initKitChain(),
+      },
+    ]
   }
 
   /** The user's presets as a file, to keep elsewhere or move to a device */

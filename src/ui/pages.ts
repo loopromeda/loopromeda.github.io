@@ -9,6 +9,7 @@ export const SHEETS = [
   'presets',
   'surface',
   'tempo',
+  'project',
   'master',
   'settings',
 ] as const

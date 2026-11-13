@@ -190,3 +190,46 @@ the last:
 
 What is recorded is the starting of loops and scenes, not sound: to be
 confirmed with ashon. To be built in that order, each usable by itself.
+
+## Projects
+
+Asked for by ashon, 2026-11-13 ("시퀀스와 현재 악기 구성을 전부 저장할
+수 있는 기능도 있으면 좋겠는데 가능할까?"): the sequences and the whole
+set of instruments, saved. Built 2026-11-13.
+
+- **A project is a session kept under a name** (`src/state/project.ts`):
+  the tracks (each synth's sound, each kit's pads and chain), the mix
+  and the song (the tempo, the swing, each track's loops). The user's
+  presets are not part of it: a synth's track holds its own sound, and
+  a kit's pad the sound it last played, which it plays again where its
+  preset is gone; where the preset is still there the pad follows it,
+  as a kit does (so a project opened plays as the presets are now).
+- **Kept on the device** (`src/state/projects.ts`): every project under
+  one key (`loopromeda.projects`), and the name of the one the session
+  came from under another (`loopromeda.project`). The session itself is
+  kept as before, so a reload brings back what was playing, saved or
+  not. A synth and a kit make about 12 KB; storage that is full, or
+  refuses, says so in the popover and leaves the projects working for
+  the visit.
+- **Edited** is told by whether the tracks, the mix and the song are
+  still the objects that were saved or opened, not by comparing what
+  they hold on every change: an edit taken back by hand still reads as
+  edited until the project is opened again or the page reloaded (which
+  compare closely). Picking a track or a pad is no edit.
+- **The projects' button** stands on the status line, left of Settings,
+  with the current project's name and a dot once it is edited; it opens
+  a popover (`src/ui/ProjectBrowser.tsx`, `#/project`): Save over the
+  current project, Save as… under a new name (a name taken gets a
+  number, so none is written over), and under More: New (a first
+  visit's session), Rename, Delete, Export and Import. A tap on a
+  project opens it in the session's place, stopping the transport;
+  with edits unsaved it asks first, and a tap on the current one offers
+  to go back to it as saved. Deleting the current project leaves what
+  plays playing, in no project.
+- **A file holds one project** (`format: 'loopromeda-project'`,
+  version 1), shared where the device shares files and downloaded
+  elsewhere, to keep off the device or move to another. A file
+  imported is added to the list, not opened; what it holds is read as
+  untrusted, as the session's keys are.
+- Not built: a project's own presets (so it opens the same whatever
+  became of them), a copy of a project, an undo for Delete.

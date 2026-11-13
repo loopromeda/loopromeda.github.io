@@ -9,9 +9,10 @@ import { Offline } from './offline'
 import { readPlatform, sendReport } from './platform'
 import { FACTORY_KIT, FACTORY_PRESETS } from './state/factory'
 import { Library } from './state/library'
-import { loadMix, saveMix } from './state/mix'
+import { initMix, loadMix, saveMix } from './state/mix'
+import { Projects } from './state/projects'
 import { readSettings } from './state/settings'
-import { loadSong, saveSong } from './state/song'
+import { initSong, loadSong, saveSong } from './state/song'
 import { readPick, writePick } from './state/tracks'
 import { touchHeld } from './ui/held'
 import type { ScopeStats } from './ui/Scope'
@@ -130,6 +131,41 @@ engine.subscribeSong(() => {
   clearTimeout(songTimer)
   songTimer = setTimeout(keepSong, 500)
 })
+// The projects: sessions kept under a name, to come back to. What plays
+// is the engine's; a project's tracks go through the library, which maps
+// each pad's preset, and it starts stopped, its first track picked
+const projects = new Projects(
+  {
+    getSession: () => ({
+      tracks: engine.getTracks(),
+      mix: engine.getMix(),
+      song: engine.getSong(),
+    }),
+    setSession: ({ tracks, mix, song }) => {
+      engine.stop()
+      library.play(tracks)
+      engine.setMix(mix)
+      engine.setSong(song)
+      const first = engine.getTracks()[0]
+      if (first) engine.pickTrack(first.id, 0)
+    },
+    subscribe: (listener) => {
+      const offs = [
+        engine.subscribeSound(listener),
+        engine.subscribeMix(listener),
+        engine.subscribeSong(listener),
+      ]
+      return () => offs.forEach((off) => off())
+    },
+    fresh: () => ({
+      tracks: library.freshTracks(),
+      mix: initMix(),
+      song: initSong(),
+    }),
+  },
+  storage
+)
+projects.restore()
 // The sound, the mix and the song are kept a moment after each change; a
 // page going away (a tab closed, a phone switching apps) keeps them at once
 const keep = () => {
@@ -184,6 +220,7 @@ createRoot(root).render(
       platform={platform}
       engine={engine}
       library={library}
+      projects={projects}
       storage={storage}
       offline={offline}
       awake={awake}

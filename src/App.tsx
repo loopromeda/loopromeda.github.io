@@ -12,6 +12,7 @@ import type { Offline } from './offline'
 import type { PlatformReport } from './platform'
 import { padName } from './state/kit'
 import type { Library } from './state/library'
+import type { Projects } from './state/projects'
 import { readSettings, writeSettings, type AppSettings } from './state/settings'
 import {
   readSurface,
@@ -26,6 +27,7 @@ import { PatchButton } from './ui/PatchButton'
 import { PlatformChecks } from './ui/PlatformChecks'
 import { PlaySurface } from './ui/PlaySurface'
 import { PresetBrowser } from './ui/PresetBrowser'
+import { ProjectBrowser, ProjectButton } from './ui/ProjectBrowser'
 import type { ScopeStats } from './ui/Scope'
 import { SettingsButton } from './ui/SettingsButton'
 import { SettingsDialog } from './ui/SettingsDialog'
@@ -96,7 +98,10 @@ const SEQ_SIZE = [
  * back for them. The
  * settings (this device's: voices, latency, what the screen shows, and
  * what the browser offers) open from the status line's right end, in the
- * same place.
+ * same place. Left of them the line names the project the session came
+ * from: its button opens the projects, a popover above it, where what
+ * plays (the tracks, the mix, the song) is saved under a name and a
+ * project kept is opened in its place.
  *
  * A reload comes back to the same view: each sheet has an address
  * (pages.ts), the sound and the device's choices are kept, and the editor
@@ -114,6 +119,7 @@ export function App({
   platform,
   engine,
   library,
+  projects,
   storage,
   offline,
   awake,
@@ -123,6 +129,8 @@ export function App({
   platform: PlatformReport
   engine: Engine
   library: Library
+  /** The sessions kept under a name, and which of them plays */
+  projects: Projects
   /** Where the choice of keys or pads, and the settings, are kept */
   storage?: SurfaceStorage
   /** The site's offline copy, and its updates */
@@ -214,11 +222,13 @@ export function App({
     sheet === 'tracks' ||
     sheet === 'presets' ||
     sheet === 'surface' ||
-    sheet === 'tempo'
+    sheet === 'tempo' ||
+    sheet === 'project'
   const trackRef = useRef<HTMLButtonElement>(null)
   const patchRef = useRef<HTMLButtonElement>(null)
   const surfaceRef = useRef<HTMLButtonElement>(null)
   const tempoRef = useRef<HTMLButtonElement>(null)
+  const projectRef = useRef<HTMLButtonElement>(null)
   // Put away, the controls still come back under a sheet: it needs room
   const controls = !surface.hideControls || covered
   // Until the audio has run, the cover asks for the tap that starts it;
@@ -382,6 +392,13 @@ export function App({
       {sheet === 'tempo' && (
         <TempoPicker engine={engine} anchor={tempoRef} onClose={closeSheet} />
       )}
+      {sheet === 'project' && (
+        <ProjectBrowser
+          projects={projects}
+          anchor={projectRef}
+          onClose={closeSheet}
+        />
+      )}
       <StatusBar
         engine={engine}
         snapshot={snapshot}
@@ -390,6 +407,12 @@ export function App({
         {offlineState === 'update' && (
           <UpdateButton onUpdate={offline.update} />
         )}
+        <ProjectButton
+          ref={projectRef}
+          projects={projects}
+          open={sheet === 'project'}
+          onToggle={() => toggle('project')}
+        />
         <SettingsButton onOpen={() => showSheet('settings')} />
       </StatusBar>
       {/* Not over the cover: the page opened at #/settings shows them once
