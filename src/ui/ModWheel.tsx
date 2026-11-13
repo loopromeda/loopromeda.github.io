@@ -71,15 +71,16 @@ interface Turn {
  * leaves it where it lets go; a double tap sets it back to 0 (viz/wheel.ts).
  * Its fill is sky once a route reads it, grey before. The button over it
  * opens its routes in the editor's panel (onRoute), as a modulator's
- * Route does. Turning goes straight to the engine and to the fill, not
- * through React state.
+ * Route does; without onRoute (the kit played, whose pads' routes are
+ * their presets') it stands dimmed. Turning goes straight to the engine
+ * and to the fill, not through React state.
  */
 export function ModWheel({
   engine,
   onRoute,
 }: {
   engine: Engine
-  onRoute: () => void
+  onRoute?: () => void
 }) {
   const routed = useSyncExternalStore(engine.subscribeSound, () =>
     readsWheel(engine.getSound())
@@ -168,12 +169,13 @@ export function ModWheel({
       <button
         type="button"
         aria-label="Route the wheel"
+        disabled={!onRoute}
         onClick={onRoute}
         style={{
           background: MOD_LOOK.tint,
           boxShadow: `inset 0 0 0 1.5px ${routed ? MOD_COLOR : MOD_LOOK.ring}`,
         }}
-        className="flex h-8 shrink-0 items-center justify-center rounded-[10px]"
+        className="flex h-8 shrink-0 items-center justify-center rounded-[10px] disabled:opacity-40"
       >
         <svg viewBox="0 0 18 12" width={18} height={12} aria-hidden>
           <path

@@ -8,6 +8,8 @@ import {
   type RefObject,
 } from 'react'
 import type { Engine, OutputSource } from '../engine/engine'
+import { PAD_NOTE, padName } from '../state/kit'
+import type { Library } from '../state/library'
 import { moveItem, movePart } from '../state/sound/edit'
 import {
   EFFECT_KINDS,
@@ -26,6 +28,7 @@ import {
   mixValue,
   stripId,
 } from '../state/mix'
+import { MAX_TRACKS, trackName, tracksKey } from '../state/tracks'
 import {
   AMP,
   SENDS,
@@ -44,10 +47,13 @@ import {
   type GraphGeometry,
   type Room,
 } from '../viz/graph'
+import { noteName } from '../viz/keyboard'
+import { kitGeometry } from '../viz/kitGraph'
 import { mixGeometry, type EffectBox, type MixPeg } from '../viz/mixGraph'
 import {
   MOD_LOOK,
   NEUTRAL_LOOK,
+  PAD_TILE,
   VOICE_LOOK,
   addId,
   busLook,
@@ -66,6 +72,7 @@ import {
   pickedName,
   reachOf,
   shapeKey,
+  stillKitPicked,
   stillMixPicked,
   stillPicked,
   tileLabel,
@@ -76,7 +83,6 @@ import { CARD, CARD_FACE, RAISED } from './controls'
 import {
   MasterView,
   Meters,
-  SOUND_OUTPUT,
   keepView,
   readView,
   type MasterViewKind,
@@ -135,8 +141,9 @@ type Place = Spot & { readonly to: number; readonly chain?: string }
 
 /** The tile picked, kept for the tab: a reload picks it again */
 const PICKED_KEY = 'loopromeda.picked'
-/** The mix's tile picked, kept the same way */
+/** The mix's tile picked, kept the same way, and the kit's */
 const MIX_PICKED_KEY = 'loopromeda.mixPicked'
+const KIT_PICKED_KEY = 'loopromeda.kitPicked'
 /** Kept for the tab too: '0' while the panel is hidden */
 const PANEL_KEY = 'loopromeda.panel'
 /** And which of the two the editor shows */
@@ -194,6 +201,11 @@ export interface RoutesAsked {
 interface Picking {
   readonly engine: Engine
   readonly sound: Sound
+  /**
+   * The part played's own output, its place in the mix: the synth's, or
+   * the kit's, whose pad picked is the sound
+   */
+  readonly output: number
   readonly picked: string
   /**
    * Picks id, showing the panel if hidden; a chain's peg picks the chain
@@ -244,24 +256,45 @@ interface Picking {
  * or into another, a chain's head (its row with it) up or down, a
  * modulator along the rack. Inputs stand beside the chains they feed, so
  * only the panel moves them.
+ *
+ * With the kit played, the sound's place holds the kit (KitGraph): its
+ * pads, each its preset's name, and its chain after them, its effects
+ * and its out; the panel maps a preset onto the pad picked, or turns the
+ * chain's knobs. Nothing of a pad's sound is edited there: it is made in
+ * the synth and saved as a preset, which the pad plays as it is.
  */
 export function SoundEditor({
   engine,
+  library,
   scope,
   asked,
   onMaster,
+  onPresets,
 }: {
   engine: Engine
+  /** The presets: the names of the pads, and a pad's mapped onto it */
+  library: Library
   scope?: OutputViews
   asked?: RoutesAsked
   /** Opens the master's views, large (#/master) */
   onMaster?: () => void
+  /** Opens the presets' popover (#/presets), for a pad to map one */
+  onPresets?: () => void
 }) {
   useSyncExternalStore(engine.subscribeSound, () => shapeKey(engine.getSound()))
   useSyncExternalStore(engine.subscribeMix, () => mixShapeKey(engine.getMix()))
+  const part = useSyncExternalStore(engine.subscribeSound, engine.getPart)
+  // The pad picked: its preset in the kit's view, whatever its shape
+  useSyncExternalStore(engine.subscribeSound, engine.getPad)
+  // The tracks: which there are, in their order, and what they are called
+  useSyncExternalStore(engine.subscribeSound, () =>
+    tracksKey(engine.getTracks())
+  )
+  const output = useSyncExternalStore(engine.subscribeSound, engine.getPlace)
   const sound = engine.getSound()
   const [chosen, setChosen] = useState(() => readKept(PICKED_KEY))
   const [mixChosen, setMixChosen] = useState(() => readKept(MIX_PICKED_KEY))
+  const [kitChosen, setKitChosen] = useState(() => readKept(KIT_PICKED_KEY))
   const [pane, setPane] = useState<Pane>(() =>
     readKept(PANE_KEY) === 'mix' ? 'mix' : 'sound'
   )
@@ -270,13 +303,18 @@ export function SoundEditor({
   const [routing, setRouting] = useState<RouteTarget | null>(null)
   const [views, setViews] = useState(() => ({
     master: readView('master'),
-    sound: readView(SOUND_OUTPUT),
+    parts: Array.from({ length: MAX_TRACKS }, (_, k) => readView(k)),
   }))
   const viewOf = (source: OutputSource) =>
-    source === 'master' ? views.master : views.sound
+    source === 'master' ? views.master : (views.parts[source] ?? views.master)
   const chooseView = (source: OutputSource, next: MasterViewKind) => {
     setViews((now) =>
-      source === 'master' ? { ...now, master: next } : { ...now, sound: next }
+      source === 'master'
+        ? { ...now, master: next }
+        : {
+            ...now,
+            parts: now.parts.map((view, k) => (k === source ? next : view)),
+          }
     )
     keepView(source, next)
   }
@@ -333,10 +371,30 @@ export function SoundEditor({
     setRouting(null)
     setMapping(null)
   }
-  const shownPicked = pane === 'mix' ? mixed : picked
+  // The kit played: its pads and its chain in the sound's place
+  const kitView = part === 'kit' && pane === 'sound'
+  const kitPicked = stillKitPicked(sound, kitChosen)
+  const pickKit = (id: string) => {
+    setKitChosen(id)
+    keep(KIT_PICKED_KEY, id)
+    if (!panel) show(true)
+  }
+  const shownName =
+    pane === 'mix'
+      ? mixed === SENDS
+        ? trackName(engine.getTrack(), output)
+        : pickedName(sound, mix, mixed)
+      : !kitView
+        ? pickedName(sound, mix, picked)
+        : kitPicked === PAD_TILE
+          ? padName(library.snapshot.pads[engine.getPad()], engine.getPad())
+          : kitPicked === addId('effect')
+            ? 'Add to the kit'
+            : `Kit ${pickedName(sound, mix, kitPicked)}`
   const picking: Picking = {
     engine,
     sound,
+    output,
     picked,
     pick,
     hold,
@@ -394,14 +452,32 @@ export function SoundEditor({
     <div className="relative isolate flex min-h-0 flex-1 flex-col [--dock:calc(7.5rem_+_var(--knob)_+_0.5rem)] [--knob:clamp(3rem,calc((100vw_-_4.5rem)/8.5),4.5rem)] side:[--dock:0px] side:[--knob:3rem] wide:[--knob:4.5rem]">
       <section
         aria-label={
-          pane === 'sound'
-            ? 'The sound, flowing left to right'
-            : 'The mix: the sound, the buses and the master'
+          pane === 'mix'
+            ? 'The mix: the sound, the buses and the master'
+            : kitView
+              ? 'The kit: its pads, then its chain'
+              : 'The sound, flowing left to right'
         }
         className={`flex min-h-[8rem] min-w-0 flex-1 flex-col overflow-hidden side:flex-row ${CARD}`}
       >
-        <Rack {...picking} source={from} pane={pane} onPane={choosePane} />
-        {pane === 'sound' ? (
+        <Rack
+          {...picking}
+          source={from}
+          pane={pane}
+          kit={kitView}
+          onPane={choosePane}
+        />
+        {kitView ? (
+          <KitGraph
+            {...picking}
+            library={library}
+            picked={kitPicked}
+            pick={pickKit}
+            scope={scope}
+            dock={dock}
+            docked={panel}
+          />
+        ) : pane === 'sound' ? (
           <Graph
             {...picking}
             focus={picked === chosen ? focus : undefined}
@@ -427,7 +503,7 @@ export function SoundEditor({
         {!panel && (
           <button
             type="button"
-            aria-label={`Show the knobs: ${pickedName(sound, mix, shownPicked)}`}
+            aria-label={`Show the knobs: ${shownName}`}
             onClick={() => show(true)}
             className={`pointer-events-auto absolute inset-x-0 bottom-0 flex h-9 items-center gap-2 px-3 text-left side:inset-x-auto side:inset-y-0 side:right-0 side:h-auto side:w-11 side:justify-center side:px-0 wide:inset-x-0 wide:top-auto wide:h-9 wide:w-auto wide:justify-start wide:px-3 ${DOCKED}`}
           >
@@ -455,7 +531,7 @@ export function SoundEditor({
               aria-hidden
               className="min-w-0 truncate text-[11px] text-zinc-400 side:hidden wide:inline"
             >
-              {pickedName(sound, mix, shownPicked)}
+              {shownName}
             </span>
           </button>
         )}
@@ -463,6 +539,7 @@ export function SoundEditor({
           (pane === 'mix' ? (
             <PartPanel
               {...picking}
+              library={library}
               picked={mixed}
               pick={pickMix}
               focus={undefined}
@@ -471,6 +548,20 @@ export function SoundEditor({
               onHide={() => show(false)}
               onMaster={onMaster}
               inMix
+            />
+          ) : kitView ? (
+            // No routes: nothing of a pad's sound is edited in the kit
+            <PartPanel
+              {...picking}
+              library={library}
+              picked={kitPicked}
+              pick={pickKit}
+              focus={undefined}
+              onRoute={() => undefined}
+              onMap={() => undefined}
+              onHide={() => show(false)}
+              onMaster={onMaster}
+              onPresets={onPresets}
             />
           ) : into ? (
             <RoutesInto
@@ -491,6 +582,7 @@ export function SoundEditor({
           ) : (
             <PartPanel
               {...picking}
+              library={library}
               focus={picked === chosen ? focus : undefined}
               onRoute={route}
               onMap={map}
@@ -573,10 +665,13 @@ function Rack({
   reach,
   source,
   pane,
+  kit,
   onPane,
 }: Picking & {
   source: string | null
   pane: Pane
+  /** The kit's view: no voice, no modulators, its sounds its presets' */
+  kit: boolean
   onPane: (pane: Pane) => void
 }) {
   const routed = modulated(sound)
@@ -628,13 +723,15 @@ function Rack({
       className="h-8 w-px shrink-0 bg-white/10 side:h-px side:w-10"
     />
   )
-  if (pane === 'mix') {
+  if (pane === 'mix' || kit) {
     return (
       <div className={RACK}>
         <PaneSwitch pane={pane} onPane={onPane} />
         {divider}
         <p className="line-clamp-2 min-w-0 pr-1.5 text-[11px] leading-snug text-zinc-500 side:hidden">
-          The session’s mix: a preset keeps only its sound’s sends.
+          {kit
+            ? 'Each pad plays a preset as it is: make sounds in a synth.'
+            : 'The session’s mix: a preset keeps only its sound’s sends.'}
         </p>
       </div>
     )
@@ -868,6 +965,7 @@ function OutputAside({
 function Graph({
   engine,
   sound,
+  output,
   picked,
   pick,
   hold,
@@ -1192,8 +1290,8 @@ function Graph({
           showView && (
             <OutputAside
               engine={engine}
-              view={viewOf(SOUND_OUTPUT)}
-              source={SOUND_OUTPUT}
+              view={viewOf(output)}
+              source={output}
               scope={scope}
               meter="w-2.5"
             />
@@ -1274,16 +1372,186 @@ function Graph({
 }
 
 /**
- * The session's mix, laid out by mixGeometry: the sound's strip, its
- * sends pegs on the seam to the buses, as long as each; each bus a row,
+ * The kit played, in the sound's place, laid out by kitGeometry: its 16
+ * pads in a block, each its preset's name, the pad picked ringed (picking
+ * one picks the kit's pad, PAD_TILE in the panel); after them the kit's
+ * chain, its effects, its "+" and its out, holding the kit's output and
+ * meters as the sound's out holds the sound's. The frame asks as much at
+ * rest as the sound's does, the mix's at least, and pans what it cannot
+ * show.
+ */
+function KitGraph({
+  engine,
+  library,
+  sound,
+  output,
+  picked,
+  pick,
+  viewOf,
+  scope,
+  dock,
+  docked,
+}: Picking & {
+  library: Library
+  scope: OutputViews | undefined
+  dock: HTMLElement | null
+  docked: boolean
+}) {
+  const frameRef = useRef<HTMLDivElement>(null)
+  const room = useRoom(frameRef, dock)
+  const { pads } = useSyncExternalStore(library.subscribe, library.getSnapshot)
+  const padNotes = useSyncExternalStore(
+    engine.subscribeSound,
+    engine.getPadNotes
+  )
+  const pad = engine.getPad()
+  const geometry = kitGeometry(
+    sound.effects,
+    MAX_EFFECTS,
+    room.w || undefined,
+    room.h || undefined
+  )
+  const showView = scope !== undefined && geometry.out.w >= GRAPH.outW
+  const middle = geometry.block.y + geometry.block.h / 2
+  const last = sound.effects[sound.effects.length - 1]?.id ?? PAD_TILE
+  return (
+    <Frame
+      frameRef={frameRef}
+      rest={Math.max(geometry.rest, mixRest(engine))}
+      room={room}
+      docked={docked}
+      width={geometry.width}
+      height={geometry.height}
+    >
+      {geometry.pads.map((box, k) => {
+        const name = padName(pads[k], k)
+        const lit = picked === PAD_TILE && k === pad
+        // The note it plays at, said where it is not the one all start at
+        const note = padNotes[k] ?? PAD_NOTE
+        const at = note === PAD_NOTE ? undefined : noteName(note)
+        return (
+          <button
+            key={k}
+            type="button"
+            aria-label={`Pad ${k + 1}: ${name}${at ? `, at ${at}` : ''}`}
+            aria-pressed={lit}
+            aria-current={k === pad ? 'true' : undefined}
+            onClick={() => {
+              engine.pickTrack(engine.getPick().track, k)
+              pick(PAD_TILE)
+            }}
+            style={{
+              ...place(box),
+              background: lit
+                ? `linear-gradient(${NEUTRAL_LOOK.tint}, ${NEUTRAL_LOOK.tint}), ${FACE}`
+                : FACE,
+              boxShadow: lit
+                ? `inset 0 0 0 2px ${NEUTRAL_LOOK.ink}, 0 0 0 3px ${NEUTRAL_LOOK.tint}`
+                : `inset 0 0 0 1.5px ${k === pad ? NEUTRAL_LOOK.ink : NEUTRAL_LOOK.ring}`,
+              color: pads[k] ? TEXT : ADD_TEXT,
+            }}
+            className={`flex flex-col items-center justify-center overflow-hidden rounded-[7px] px-1 text-center text-[11px] leading-tight font-semibold ${lit ? 'z-[2]' : 'z-[1]'}`}
+          >
+            <span
+              className={
+                at ? 'line-clamp-1 break-all' : 'line-clamp-2 break-words'
+              }
+            >
+              {name}
+            </span>
+            {at && (
+              <span className="text-[9px] leading-none font-medium text-zinc-400 tabular-nums">
+                {at}
+              </span>
+            )}
+          </button>
+        )
+      })}
+      {geometry.effects.map(({ effect, box }, k) => {
+        const before = k === 0 ? PAD_TILE : sound.effects[k - 1]?.id
+        return (
+          <div key={effect} className="contents">
+            <Joint
+              x={geometry.fxJoints[k] ?? box.x}
+              y={middle}
+              height={18}
+              look={NEUTRAL_LOOK}
+              lit={picked === effect || picked === before}
+            />
+            <Tile
+              engine={engine}
+              label={tileLabel(sound, effect)}
+              line={effect}
+              glyph={box.h >= 60 ? glyphOf(sound, effect) : undefined}
+              look={NEUTRAL_LOOK}
+              picked={picked === effect}
+              aria={`Kit ${partName(sound, effect)}, ${tileLine(sound, effect)}, after every pad`}
+              onClick={() => pick(effect)}
+              style={place(box)}
+            />
+          </div>
+        )
+      })}
+      {geometry.add && (
+        <Tile
+          engine={engine}
+          label="+ FX"
+          look={NEUTRAL_LOOK}
+          picked={picked === addId('effect')}
+          dashed="add"
+          aria="Add an effect to the kit, after every pad"
+          onClick={() => pick(addId('effect'))}
+          style={place(geometry.add)}
+        />
+      )}
+      <Joint
+        x={geometry.outJoint}
+        y={middle}
+        height={18}
+        look={NEUTRAL_LOOK}
+        lit={picked === SENDS || picked === last}
+      />
+      <Tile
+        engine={engine}
+        label="Kit Out"
+        text={<SendsLine engine={engine} across={geometry.out.h >= 60} />}
+        look={NEUTRAL_LOOK}
+        picked={picked === SENDS}
+        aria="Kit Out: the kit’s level and balance in the mix, and what it sends to each bus"
+        onClick={() => pick(SENDS)}
+        style={place(geometry.out)}
+        aside={
+          showView && (
+            <OutputAside
+              engine={engine}
+              view={viewOf(output)}
+              source={output}
+              scope={scope}
+              meter="w-2.5"
+            />
+          )
+        }
+      />
+    </Frame>
+  )
+}
+
+/**
+ * The session's mix, laid out by mixGeometry: the tracks' strips, down
+ * one column as a sound's inputs are, each its track's name and level on
+ * a line over its own output's view and meter, and under them a "+" for
+ * another track (more tracks than the frame is tall for pan down); the
+ * track played's sends pegs on the seam to the buses, as long as each
+ * (its sends' bars are the Out's: the view has the strip); each bus a row,
  * its letter's head, its effects and its "+"; each bus's level a peg on
  * the bus down the seam into the master's effects and the master, which
- * holds the output's view and its meters, wider. The strip picks the
- * sound's sends, a send's peg its bus.
+ * holds the output's view and its meters, wider. A strip makes its track
+ * the one played and picks its sends, a send's peg its bus.
  */
 function MixGraph({
   engine,
   sound,
+  output,
   picked,
   pick,
   viewOf,
@@ -1297,8 +1565,9 @@ function MixGraph({
 }) {
   const frameRef = useRef<HTMLDivElement>(null)
   const room = useRoom(frameRef, dock)
-  // The editor redraws on the mix's shape (mixShapeKey)
+  // The editor redraws on the mix's shape (mixShapeKey) and the tracks'
   const mix = engine.getMix()
+  const tracks = engine.getTracks()
   const geometry = mixGeometry(
     mix,
     MIX_LIMITS,
@@ -1373,32 +1642,59 @@ function MixGraph({
           width: 2,
           height: geometry.bus.h,
         })}
-      <Tile
-        engine={engine}
-        label="Synth"
-        text={
-          <>
-            <MixLine engine={engine} part={stripId(0)} />
-            <SendsLine engine={engine} />
-          </>
-        }
-        look={NEUTRAL_LOOK}
-        picked={strip}
-        aria="Synth: the sound at its level and balance, sent to each bus"
-        onClick={() => pick(SENDS)}
-        style={place(geometry.strip)}
-        aside={
-          scope !== undefined && (
-            <OutputAside
-              engine={engine}
-              view={viewOf(SOUND_OUTPUT)}
-              source={SOUND_OUTPUT}
-              scope={undefined}
-              meter="w-2.5"
-            />
-          )
-        }
-      />
+      {geometry.strips.map((box, k) => {
+        // The track played's strip carries its sends; another's, tapped,
+        // makes its track the one played
+        const track = tracks[k]
+        if (!track) return null
+        const played = k === output
+        const id = stripId(k)
+        const name = trackName(track, k)
+        return (
+          <Tile
+            key={track.id}
+            engine={engine}
+            label={name}
+            text={<MixLine engine={engine} part={id} />}
+            inline
+            look={NEUTRAL_LOOK}
+            picked={played && strip}
+            aria={
+              track.kind === 'kit'
+                ? `${name}, a kit: its pads summed through its chain, at its level and balance, sent to each bus`
+                : `${name}, a synth: the sound at its level and balance, sent to each bus`
+            }
+            onClick={() => {
+              if (!played) engine.pickTrack(track.id)
+              pick(SENDS)
+            }}
+            style={place(box)}
+            aside={
+              scope !== undefined && (
+                <OutputAside
+                  engine={engine}
+                  view={viewOf(k)}
+                  source={k}
+                  scope={undefined}
+                  meter="w-2.5"
+                />
+              )
+            }
+          />
+        )
+      })}
+      {geometry.addTrack && (
+        <Tile
+          engine={engine}
+          label="+ Track"
+          look={NEUTRAL_LOOK}
+          picked={picked === mixAddId('track')}
+          dashed="add"
+          aria="Add a track"
+          onClick={() => pick(mixAddId('track'))}
+          style={place(geometry.addTrack)}
+        />
+      )}
       {geometry.buses.map((row) => {
         const bus = mix.buses.find((each) => each.id === row.bus)
         if (!bus) return null
@@ -1523,7 +1819,11 @@ function MixGraph({
 }
 
 /** The mix's limits, as mixGeometry reads them */
-const MIX_LIMITS = { buses: MAX_BUSES, effects: MAX_EFFECTS }
+const MIX_LIMITS = {
+  buses: MAX_BUSES,
+  effects: MAX_EFFECTS,
+  tracks: MAX_TRACKS,
+}
 
 /** The mix's height at rest, which either pane asks of its frame */
 function mixRest(engine: Engine): number {
@@ -1586,9 +1886,10 @@ function useLiveMix(engine: Engine, part: string, key: string): number {
 }
 
 /**
- * The sound's sends under a tile's name: a short bar for each bus of the
- * mix, by its letter, as long as the send to it; one under another, or
- * across, over a view (two to a line, for four)
+ * The part played's sends under a tile's name (the synth's sound's, or
+ * the kit's): a short bar for each bus of the mix, by its letter, as
+ * long as the send to it; one under another, or across, over a view
+ * (two to a line, for four)
  */
 function SendsLine({
   engine,
@@ -1603,6 +1904,7 @@ function SendsLine({
       .buses.map((bus) => bus.id)
       .join('')
   )
+  // The part played's: the synth's sound's own, or the kit's chain's
   const sends = useLive(engine, (sound) =>
     [...letters].map((id) => sound.sends[id] ?? 0).join(' ')
   )
@@ -1775,7 +2077,10 @@ function LevelJoint({
   )
 }
 
-/** A send to a bus, its peg: as long as the send; a tap picks the bus */
+/**
+ * The part played's send to a bus, its peg: as long as the send; a tap
+ * picks the bus
+ */
 function MixSendPeg({
   engine,
   peg,
@@ -1791,7 +2096,7 @@ function MixSendPeg({
   return (
     <button
       type="button"
-      aria-label={`The sound into bus ${peg.bus.toUpperCase()}, ${Math.round(level * 100)}%. Tap to set it.`}
+      aria-label={`The part played into bus ${peg.bus.toUpperCase()}, ${Math.round(level * 100)}%. Tap to set it.`}
       onClick={onClick}
       className="absolute z-[3] flex h-11 w-5 items-center justify-center"
       style={{ left: peg.x - 10, top: peg.y - 22 }}
@@ -1918,6 +2223,7 @@ function Tile({
   aside: view,
   picture,
   stacked = false,
+  inline = false,
   text,
 }: {
   engine: Engine
@@ -1944,14 +2250,19 @@ function Tile({
   small?: boolean
   /**
    * The output's view, filling the rest of the tile 3 px inside its edges,
-   * as a picture does (round it at 4 px): under the label in a tall tile,
-   * beside it in a short one
+   * as a picture does (round it at 4 px): under the label in a tall tile
+   * (or inline), beside it in a short one
    */
   aside?: ReactNode
   /** The part whose picture fills the tile: a filter's response, a drive's */
   picture?: string
   /** Its picture under its label however tall it is: a modulator's block */
   stacked?: boolean
+  /**
+   * Its text beside its label, one line over its view however tall it
+   * is, for the view to have the most of it: a part's strip in the mix
+   */
+  inline?: boolean
   /** A line under the label of its own, live: the mix's, the sends */
   text?: ReactNode
 }) {
@@ -1959,8 +2270,8 @@ function Tile({
   const width = typeof style?.width === 'number' ? style.width : Infinity
   const tall = !dashed && !small && height >= 60
   const under = picture !== undefined && (tall || stacked)
-  const aside = Boolean(view) && !tall
-  const viewUnder = Boolean(view) && tall
+  const viewUnder = Boolean(view) && (tall || inline)
+  const aside = Boolean(view) && !viewUnder
   // A picture stands in for the pictogram
   const pictogram = picture === undefined ? glyph : undefined
   // A short tile stacks a line under its label only without a pictogram;
@@ -2051,15 +2362,20 @@ function Tile({
           </svg>
         )}
         <span
-          className={`flex min-w-0 flex-col ${column ? 'items-center' : 'items-start'}`}
+          className={`flex min-w-0 ${
+            inline
+              ? 'max-w-full items-baseline gap-1.5'
+              : `flex-col ${column ? 'items-center' : 'items-start'}`
+          }`}
         >
           <span
-            className={`${small ? 'text-[11px]' : 'text-xs'} leading-tight font-semibold whitespace-nowrap`}
+            // A name too long for its line (a track's own) is cut short
+            className={`${small ? 'text-[11px]' : 'text-xs'} leading-tight font-semibold whitespace-nowrap ${inline ? 'min-w-0 truncate' : ''}`}
           >
             {label}
           </span>
           {(line !== undefined || text !== undefined) && (
-            <span className="font-mono text-[10px] leading-tight whitespace-nowrap text-zinc-400">
+            <span className="shrink-0 font-mono text-[10px] leading-tight whitespace-nowrap text-zinc-400">
               {text ??
                 (line !== undefined && <Line engine={engine} id={line} />)}
             </span>
@@ -2096,7 +2412,7 @@ function Tile({
         aside
           ? 'justify-start gap-2 py-[3px] pr-[3px] pl-2'
           : under || viewUnder
-            ? tall
+            ? tall && !inline
               ? 'flex-col justify-start gap-1 px-[3px] pt-2.5 pb-[3px]'
               : 'flex-col justify-start gap-[3px] px-[3px] pt-1.5 pb-[3px]'
             : `justify-center ${column ? 'flex-col gap-1 px-1' : 'gap-[7px] px-1.5'}`

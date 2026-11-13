@@ -60,7 +60,10 @@ export function useFrames(
       canvas.width = width
       canvas.height = height
       scale = next
-      sized = true
+      // Squeezed to nothing for a moment (a tile laid out again): nothing
+      // to size the view's buffers to, nor to draw, until it has room
+      sized = width > 0 && height > 0
+      if (!sized) return
       frames.resize(width, height, next)
       // The resized canvas is blank: a frame now if no loop will draw one
       if (!raf) frames.draw(performance.now())

@@ -7,10 +7,11 @@ import type { BenchReport } from './engine/protocol'
 import './index.css'
 import { Offline } from './offline'
 import { readPlatform, sendReport } from './platform'
-import { FACTORY_PRESETS } from './state/factory'
+import { FACTORY_KIT, FACTORY_PRESETS } from './state/factory'
 import { Library } from './state/library'
 import { loadMix, saveMix } from './state/mix'
 import { readSettings } from './state/settings'
+import { readPick, writePick } from './state/tracks'
 import { touchHeld } from './ui/held'
 import type { ScopeStats } from './ui/Scope'
 import { ScreenAwake } from './wakeLock'
@@ -87,10 +88,19 @@ const storage = localStore()
 const settings = readSettings(storage)
 engine.setVoices(settings.voices)
 engine.setLatency(settings.latency)
-// The last session's sound (or the first preset) is set before audio
-// starts; the engine hands every value to the worklet as it loads
-const library = new Library(engine, FACTORY_PRESETS, storage)
+// The last session's tracks (or a synth on the first preset and the
+// factory kit), then the one played and its pad picked, are set before
+// audio starts; the engine hands every value to the worklet as it loads
+const library = new Library(engine, FACTORY_PRESETS, storage, FACTORY_KIT)
 library.restore()
+let pick = readPick(storage, engine.getTracks())
+engine.pickTrack(pick.track, pick.pad)
+engine.subscribeSound(() => {
+  const now = engine.getPick()
+  if (now.track === pick.track && now.pad === pick.pad) return
+  pick = now
+  writePick(storage, now)
+})
 // The session's mix (the returns, the master), kept apart from the sound:
 // a preset brings its own sends, never the room they send to
 engine.setMix(loadMix(storage))

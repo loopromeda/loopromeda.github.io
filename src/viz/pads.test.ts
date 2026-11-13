@@ -4,6 +4,7 @@ import {
   MAX_COLUMNS,
   MAX_PADS,
   MAX_ROWS,
+  kitGrid,
   padAt,
   padGrid,
   padNote,
@@ -56,6 +57,24 @@ describe('padGrid', () => {
     expect(padGrid(Number.NaN, 300).columns).toBe(1)
     expect(padGrid(-10, 300).columns).toBe(1)
     expect(padGrid(Number.POSITIVE_INFINITY, 300).columns).toBe(1)
+  })
+})
+
+describe('kitGrid', () => {
+  it('lays sixteen pads out nearest square, whatever the room', () => {
+    // A phone held upright: a short, wide surface
+    expect(kitGrid(360, 150)).toEqual({ columns: 8, rows: 2 })
+    // A tall one: a tablet, a Fold open
+    expect(kitGrid(500, 400)).toEqual({ columns: 4, rows: 4 })
+    // A strip: one row
+    expect(kitGrid(900, 50)).toEqual({ columns: 16, rows: 1 })
+    // Too small for a pad its least size: still all sixteen
+    const tiny = kitGrid(100, 40)
+    expect(tiny.columns * tiny.rows).toBe(16)
+  })
+
+  it('never stands more rows than MAX_ROWS', () => {
+    expect(kitGrid(100, 1000).rows).toBeLessThanOrEqual(MAX_ROWS)
   })
 })
 

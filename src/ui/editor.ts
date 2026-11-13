@@ -17,6 +17,7 @@ import {
   MASTER,
   busLetter,
   findMixPart,
+  ownedBy,
   type Mix,
   type MixOwner,
 } from '../state/mix'
@@ -138,6 +139,8 @@ export const GLYPHS = {
   // A path that forks, the sound's sends to the returns
   sends: 'M1 6 H7 L11 2 H17 M7 6 L11 10 H17',
   plus: 'M9 2 V10 M5 6 H13',
+  // Four pads of a kit's sixteen
+  pads: 'M3.5 1.5 H8 V5 H3.5 Z M10 1.5 H14.5 V5 H10 Z M3.5 7 H8 V10.5 H3.5 Z M10 7 H14.5 V10.5 H10 Z',
   // A wave that runs on into an arrow's shaft: a source moving something
   route:
     'M1 6 C1.8 3.6 2.8 3 4 3 C6 3 6.4 9 8.2 9 C9.8 9 10.2 6 12 6 H16.5 M14 3.5 L16.5 6 L14 8.5',
@@ -226,12 +229,15 @@ export function mixPartOf(id: string): string | undefined {
   return part.startsWith('add:') ? undefined : part
 }
 
-/** A "+" of the mix: one adding to a bus's row, the master's, or a bus */
-export function mixAddId(to: MixOwner | 'bus'): string {
+/**
+ * A "+" of the mix: one adding to a bus's row, the master's, a bus, or
+ * a track
+ */
+export function mixAddId(to: MixOwner | 'bus' | 'track'): string {
   return `mix:add:${to}`
 }
 
-/** What a mix "+" tile's id adds to: a bus's letter, master, or bus */
+/** What a mix "+" tile's id adds to: a bus's letter, master, bus, track */
 export function mixAddingTo(id: string): string | undefined {
   return id.startsWith('mix:add:') ? id.slice('mix:add:'.length) : undefined
 }
@@ -253,7 +259,9 @@ export function stillMixPicked(mix: Mix, picked: string): string {
     return findMixPart(mix, part) ? picked : mixId(MASTER)
   }
   const adding = mixAddingTo(picked)
-  if (adding === 'bus' || adding === MASTER) return picked
+  if (adding === 'bus' || adding === 'track' || adding === MASTER) {
+    return picked
+  }
   if (adding !== undefined && findMixPart(mix, adding)?.type === 'bus') {
     return picked
   }
@@ -261,33 +269,37 @@ export function stillMixPicked(mix: Mix, picked: string): string {
 }
 
 /**
- * A mix part's name: Bus B, the Master, an effect by its bus and kind
- * (B Delay, Master Reverb), numbered where its row has two (B Delay 2)
+ * A mix part's name: a strip's by its place (Track 2: its track's own is
+ * the tracks', trackName), Bus B, the Master, an effect by its row and
+ * kind (B Delay, Master Reverb), numbered where its row has two (B Delay
+ * 2)
  */
 export function mixPartName(mix: Mix, part: string): string {
   const found = findMixPart(mix, part)
   switch (found?.type) {
     case 'strip':
-      return 'Synth'
+      return `Track ${found.index + 1}`
     case 'bus':
       return `Bus ${busLetter(found.bus.id)}`
     case 'master':
       return 'Master'
     case 'effect': {
       const { effect, owner } = found
-      const row =
-        owner === MASTER
-          ? mix.master.effects
-          : (mix.buses.find((bus) => bus.id === owner)?.effects ?? [])
+      const row = ownedBy(mix, owner) ?? []
       const same = row.filter((each) => each.kind === effect.kind)
       const label = EFFECT_KINDS[effect.kind].label
       const kind =
         same.length > 1 ? `${label} ${same.indexOf(effect) + 1}` : label
-      return `${owner === MASTER ? 'Master' : busLetter(owner)} ${kind}`
+      return `${ownerName(owner)} ${kind}`
     }
     default:
       return part
   }
+}
+
+/** A row of the mix's effects, short: Master, or a bus's letter */
+function ownerName(owner: MixOwner): string {
+  return owner === MASTER ? 'Master' : busLetter(owner)
 }
 
 /** The name of what id picks: a part's (partName), or the mix's Bus B */
@@ -296,6 +308,7 @@ export function pickedName(sound: Sound, mix: Mix, id: string): string {
   if (part !== undefined) return mixPartName(mix, part)
   const adding = mixAddingTo(id)
   if (adding === 'bus') return 'Add a bus'
+  if (adding === 'track') return 'Add a track'
   if (adding !== undefined) return 'Add an effect'
   return partName(sound, id)
 }
@@ -579,6 +592,24 @@ export function stillPicked(sound: Sound, picked: string): string {
   }
   const first = sound.chains[0]
   return first?.items[0]?.id ?? first?.id ?? AMP
+}
+
+/**
+ * The kit's pad picked, as a tile of the kit's view in the sound's place
+ * (its preset mapped onto it): whichever pad the kit has picked
+ */
+export const PAD_TILE = 'pad'
+
+/**
+ * The tile to pick in the kit's view when picked names nothing there (a
+ * tile of the synth's sound, an effect removed): the pad. Its tiles are
+ * the pad, the kit's effects (sound's, a pad shown with the kit's
+ * chain), their "+" and the out.
+ */
+export function stillKitPicked(sound: Sound, picked: string): string {
+  if (picked === SENDS || picked === addId('effect')) return picked
+  if (sound.effects.some((effect) => effect.id === picked)) return picked
+  return PAD_TILE
 }
 
 /** The "+" tiles but a chain's, which are add:<chain id> */

@@ -54,6 +54,29 @@ export function padGrid(width: number, height: number): PadGrid {
 }
 
 /**
+ * The grid of a kit's pads (src/state/kit.ts), count of them (16) in all
+ * on a surface of width x height CSS px, however small: of the grids of
+ * that many, up to MAX_ROWS rows, the one whose pads are nearest square
+ * (8 x 2 on a phone held upright, 4 x 4 on a taller surface)
+ */
+export function kitGrid(width: number, height: number, count = 16): PadGrid {
+  let best: PadGrid = { columns: count, rows: 1 }
+  let bestSkew = Infinity
+  for (let rows = 1; rows <= MAX_ROWS; rows++) {
+    if (count % rows !== 0) continue
+    const columns = count / rows
+    const padWidth = (width - (columns - 1) * PAD_GAP) / columns
+    const padHeight = (height - (rows - 1) * PAD_GAP) / rows
+    const skew = Math.abs(Math.log(padWidth / padHeight))
+    if (skew < bestSkew) {
+      best = { columns, rows }
+      bestSkew = skew
+    }
+  }
+  return best
+}
+
+/**
  * The MIDI note of pad index: 0 is the bottom left pad, a row runs left to
  * right and the row above it goes on with the scale, so index order walks
  * up the scale whatever the grid looks like. steps are semitones above the

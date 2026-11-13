@@ -1,4 +1,10 @@
-import { useState, type HTMLAttributes, type ReactNode } from 'react'
+import {
+  useState,
+  type FormEvent,
+  useSyncExternalStore,
+  type HTMLAttributes,
+  type ReactNode,
+} from 'react'
 import type { Engine, OutputSource } from '../engine/engine'
 import {
   addChain,
@@ -8,11 +14,28 @@ import {
   addModulator,
   movePart,
   removePart,
-  sendsWithout,
   setRef,
   setSend,
   type Added,
 } from '../state/sound/edit'
+import {
+  PAD_NOTE_MAX,
+  PAD_NOTE_MIN,
+  padName,
+  type PartKind,
+} from '../state/kit'
+import type { Library, LibrarySnapshot, PresetRef } from '../state/library'
+import {
+  MAX_NAME_LENGTH,
+  cleanName,
+  type PresetCategory,
+} from '../state/presets'
+import {
+  MAX_TRACKS,
+  kindLabel,
+  trackName,
+  tracksWithoutBus,
+} from '../state/tracks'
 import {
   AMP_SPEC,
   CHAIN_SPEC,
@@ -42,6 +65,7 @@ import {
   busName,
   findMixPart,
   moveMixEffect,
+  ownedBy,
   removeMixPart,
   stripId,
   type Mix,
@@ -63,6 +87,9 @@ import {
   KNOB_SIZE,
   OPTION,
   PANEL_BODY,
+  SMALL_BUTTON,
+  SMALL_CONFIRM,
+  SMALL_FIELD,
   SMALL_ICON_BUTTON,
   TALL_HIT,
 } from './controls'
@@ -72,6 +99,7 @@ import {
   MOD_COLOR,
   MOD_LOOK,
   NEUTRAL_LOOK,
+  PAD_TILE,
   VOICE_LOOK,
   addingTo,
   busLook,
@@ -93,8 +121,9 @@ import {
 import { ConfirmDialog } from './ConfirmDialog'
 import { FadeRow } from './FadeRow'
 import { Knob, MixKnob, NEUTRAL_ARC } from './Knob'
-import { MASTER_VIEWS, SOUND_OUTPUT, type MasterViewKind } from './MasterViews'
+import { MASTER_VIEWS, type MasterViewKind } from './MasterViews'
 import { knoblessDests, routesTo } from '../state/sound/knob'
+import { noteName } from '../viz/keyboard'
 
 /** One kind a "+" offers: its pictogram, name and what it does */
 interface Choice {
@@ -127,6 +156,8 @@ const ICONS = {
   up: 'M9 14V4M5 8l4-4 4 4',
   down: 'M9 4v10M5 10l4 4 4-4',
   remove: 'M3.5 5h11M7.5 5V3.5h3V5M5 5l.8 9.5h6.4L13 5M7.8 8v4M10.2 8v4',
+  // A pencil: a track's name
+  rename: 'M3.5 14.5l.8-3.3 7.4-7.4 2.5 2.5-7.4 7.4zM10.2 5.3l2.5 2.5',
   hide: 'M4 4l5 5 5-5M4 14h10',
   // Corners pulled out: the master's views, large
   open: 'M10.5 3.5h4v4M14.5 3.5l-4.5 4.5M7.5 14.5h-4v-4M3.5 14.5L8 10',
@@ -213,10 +244,23 @@ interface Target {
   readonly via: boolean
 }
 
+/** A name the panel's header gives, in its title's place */
+interface Naming {
+  /** What is named: the form is for it alone */
+  readonly id: string
+  /** Its own name; none, it goes by another (fallback) */
+  readonly name: string | undefined
+  readonly fallback: string
+  /** Names it; blank, it goes by fallback again */
+  readonly set: (name: string) => void
+}
+
 /** What the panel shows for the tile picked */
 interface View {
   readonly title: string
   readonly kind: string
+  /** A name of its own to give it, in the title's place: a track's */
+  readonly naming?: Naming
   readonly chip: { look: Look; glyph?: string; mark?: string; add?: boolean }
   /** A knob of a part, under its own label or another (→ IN 1) */
   readonly knobs: readonly {
@@ -256,6 +300,8 @@ interface View {
   readonly choices?: readonly Choice[]
   readonly choiceNote?: string
   readonly actions?: readonly Action[]
+  /** In the knobs' place, what a part of no knobs holds: a pad's presets */
+  readonly body?: ReactNode
 }
 
 const INPUT_HINTS: Record<InputKind, string> = {
@@ -297,7 +343,9 @@ const KIND_GLYPHS = {
  */
 export function PartPanel({
   engine,
+  library,
   sound,
+  output,
   picked,
   pick,
   focus,
@@ -307,10 +355,15 @@ export function PartPanel({
   viewOf: outputView,
   chooseView,
   onMaster,
+  onPresets,
   inMix = false,
 }: {
   engine: Engine
+  /** The presets: a pad's mapped onto it */
+  library: Library
   sound: Sound
+  /** The part played's place in the mix: its strip, its own output */
+  output: number
   picked: string
   pick: (id: string, input?: string) => void
   focus: string | undefined
@@ -319,7 +372,9 @@ export function PartPanel({
   chooseView: (source: OutputSource, view: MasterViewKind) => void
   /** Opens the master's views, large; none, no button for it */
   onMaster?: () => void
-  /** In the mix, where the sound's panel is its strip's (Synth) */
+  /** Opens the presets' popover; none, no button for it */
+  onPresets?: () => void
+  /** In the mix, where the sound's panel is its part's strip's (Synth) */
   inMix?: boolean
   /** Opens the routes into a destination: a knob held, a target tapped */
   onRoute: (target: string, key: string) => void
@@ -333,12 +388,45 @@ export function PartPanel({
     shown: outputView(source),
     choose: (kind: MasterViewKind) => chooseView(source, kind),
   })
+  const presets = useSyncExternalStore(library.subscribe, library.getSnapshot)
+  // A pad's note changes without its sound doing so
+  const padNotes = useSyncExternalStore(
+    engine.subscribeSound,
+    engine.getPadNotes
+  )
+  /** The track being named in the header, by its id */
+  const [named, setNamed] = useState<string>()
   const view =
     picked === SENDS
-      ? sendsView(engine.getMix(), views(SOUND_OUTPUT), inMix)
+      ? sendsView(
+          engine.getMix(),
+          views(output),
+          output,
+          engine.getPart(),
+          inMix ? trackStrip(engine, (id) => setNamed(id)) : undefined
+        )
       : isMixId(picked)
-        ? mixView(engine, picked, views('master'), onMaster, pick)
-        : viewOf(engine, sound, picked, focus, pick)
+        ? mixView(engine, library, picked, views('master'), onMaster, pick)
+        : picked === PAD_TILE
+          ? padView(
+              presets,
+              engine.getPad(),
+              padNotes[engine.getPad()] ?? PAD_NOTE_MIN,
+              (note) => {
+                engine.setPadNote(engine.getPad(), note)
+                tryPad(engine, engine.getPad())
+              },
+              library.load.bind(library),
+              onPresets
+            )
+          : viewOf(
+              engine,
+              sound,
+              picked,
+              focus,
+              pick,
+              engine.getPart() === 'kit'
+            )
   const { chip } = view
   const mixKnobs = view.mixKnobs?.map(({ part, key }) => (
     <MixKnob
@@ -352,6 +440,7 @@ export function PartPanel({
   /** The action being asked about, and the part it was for */
   const [asking, setAsking] = useState<{ id: string; action: Action }>()
   const question = asking?.id === picked ? asking.action : undefined
+  const naming = view.naming?.id === named ? view.naming : undefined
 
   return (
     <section
@@ -389,15 +478,25 @@ export function PartPanel({
               </svg>
             ))}
         </span>
-        <h2 className="shrink-0 text-sm font-semibold whitespace-nowrap text-zinc-100">
-          {view.title}
-        </h2>
-        <span className="min-w-0 truncate text-[11px] text-zinc-400">
-          {view.kind}
-        </span>
+        {naming ? (
+          <NameForm
+            key={naming.id}
+            naming={naming}
+            onDone={() => setNamed(undefined)}
+          />
+        ) : (
+          <>
+            <h2 className="min-w-0 shrink truncate text-sm font-semibold whitespace-nowrap text-zinc-100">
+              {view.title}
+            </h2>
+            <span className="min-w-0 flex-1 truncate text-[11px] text-zinc-400">
+              {view.kind}
+            </span>
+          </>
+        )}
         <span className="ml-auto flex shrink-0 items-center gap-1">
           {view.refs && <span className="mr-1 flex gap-1.5">{view.refs}</span>}
-          {view.actions?.map((action) => (
+          {(naming ? [] : (view.actions ?? [])).map((action) => (
             <button
               key={action.label}
               type="button"
@@ -451,138 +550,292 @@ export function PartPanel({
         />
       )}
       <div className={PANEL_BODY}>
-        {view.choices ? (
-          <>
-            <div className="flex gap-2">
-              {view.choices.map((choice) => (
-                <button
-                  key={choice.label}
-                  type="button"
-                  disabled={!choice.add}
-                  onClick={choice.add}
-                  className="flex h-[54px] max-w-[108px] flex-1 flex-col items-start justify-center gap-[3px] rounded-[7px] bg-[#1c1c23] px-2.5 text-left text-zinc-100 disabled:opacity-40"
-                  style={{ boxShadow: `inset 0 0 0 1.5px ${choice.look.ring}` }}
-                >
-                  <span className="flex items-center gap-1.5">
-                    <svg viewBox="0 0 18 12" width={18} height={12} aria-hidden>
-                      <path
-                        d={choice.glyph}
-                        fill="none"
-                        stroke={choice.look.ink}
-                        strokeWidth={1.7}
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                    <span className="text-xs font-semibold">
-                      {choice.label}
-                    </span>
-                  </span>
-                  <span className="text-[10px] whitespace-nowrap text-zinc-400">
-                    {choice.hint}
-                  </span>
-                </button>
-              ))}
-            </div>
-            {view.choiceNote && (
-              <p className="text-[11px] leading-snug text-zinc-500">
-                {view.choiceNote}
-              </p>
-            )}
-          </>
-        ) : (
-          <>
-            {view.knobs.length > 0 ||
-            view.knobless?.length ||
-            view.mixKnobs?.length ? (
-              <div
-                className={knobRow(
-                  view.knobs.length +
-                    (view.knobless?.length ?? 0) +
-                    (view.mixKnobs?.length ?? 0)
-                )}
-              >
-                {view.mixFirst && mixKnobs}
-                {view.knobs.map(({ part, key, hot, label }) => (
-                  <Knob
-                    key={`${part} ${key}`}
-                    engine={engine}
-                    part={part}
-                    knob={key}
-                    label={label}
-                    color={view.color}
-                    hot={hot}
-                    onHold={(dest) => onRoute(part, dest)}
-                  />
-                ))}
-                {!view.mixFirst && mixKnobs}
-                {view.knobless?.map(({ part, dest, count }) => (
+        {view.body ??
+          (view.choices ? (
+            <>
+              <div className="flex gap-2">
+                {view.choices.map((choice) => (
                   <button
-                    key={`${part} ${dest.key}`}
+                    key={choice.label}
                     type="button"
-                    aria-label={`Route to ${view.title} ${dest.label}`}
-                    onClick={() => onRoute(part, dest.key)}
-                    className="flex min-w-0 flex-col items-center gap-0.5"
+                    disabled={!choice.add}
+                    onClick={choice.add}
+                    className="flex h-[54px] max-w-[108px] flex-1 flex-col items-start justify-center gap-[3px] rounded-[7px] bg-[#1c1c23] px-2.5 text-left text-zinc-100 disabled:opacity-40"
+                    style={{
+                      boxShadow: `inset 0 0 0 1.5px ${choice.look.ring}`,
+                    }}
                   >
-                    <span
-                      aria-hidden
-                      style={{ border: `1.5px dashed ${MOD_LOOK.ring}` }}
-                      className={`${KNOB_SIZE} relative flex aspect-square items-center justify-center rounded-full`}
-                    >
-                      <svg viewBox="0 0 18 12" width={24} height={16}>
+                    <span className="flex items-center gap-1.5">
+                      <svg
+                        viewBox="0 0 18 12"
+                        width={18}
+                        height={12}
+                        aria-hidden
+                      >
                         <path
-                          d={GLYPHS.route}
+                          d={choice.glyph}
                           fill="none"
-                          stroke={MOD_COLOR}
-                          strokeWidth={1.4}
+                          stroke={choice.look.ink}
+                          strokeWidth={1.7}
                           strokeLinecap="round"
                           strokeLinejoin="round"
                         />
                       </svg>
+                      <span className="text-xs font-semibold">
+                        {choice.label}
+                      </span>
                     </span>
-                    <span className="text-[11px] leading-tight whitespace-nowrap text-zinc-400">
-                      {dest.label}
-                    </span>
-                    <span className="font-mono text-[11px] leading-tight whitespace-nowrap text-zinc-200">
-                      {count === 0
-                        ? 'Route'
-                        : count === 1
-                          ? '1 route'
-                          : `${count} routes`}
+                    <span className="text-[10px] whitespace-nowrap text-zinc-400">
+                      {choice.hint}
                     </span>
                   </button>
                 ))}
               </div>
-            ) : (
-              view.note && (
-                <p className="text-xs leading-snug text-zinc-400">
-                  {view.note}
+              {view.choiceNote && (
+                <p className="text-[11px] leading-snug text-zinc-500">
+                  {view.choiceNote}
                 </p>
-              )
-            )}
-            {view.targets && (
-              <Targets {...view.targets} onRoute={onRoute} onMap={onMap} />
-            )}
-            {view.views && (
-              <PanRow role="group" aria-label="The output shows">
-                {MASTER_VIEWS.map(({ view: kind, label }) => (
-                  <button
-                    key={kind}
-                    type="button"
-                    aria-pressed={view.views?.shown === kind}
-                    onClick={() => view.views?.choose(kind)}
-                    className={`${OPTION} shrink-0`}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </PanRow>
-            )}
-          </>
-        )}
+              )}
+            </>
+          ) : (
+            <>
+              {view.knobs.length > 0 ||
+              view.knobless?.length ||
+              view.mixKnobs?.length ? (
+                <div
+                  className={knobRow(
+                    view.knobs.length +
+                      (view.knobless?.length ?? 0) +
+                      (view.mixKnobs?.length ?? 0)
+                  )}
+                >
+                  {view.mixFirst && mixKnobs}
+                  {view.knobs.map(({ part, key, hot, label }) => (
+                    <Knob
+                      key={`${part} ${key}`}
+                      engine={engine}
+                      part={part}
+                      knob={key}
+                      label={label}
+                      color={view.color}
+                      hot={hot}
+                      onHold={(dest) => onRoute(part, dest)}
+                    />
+                  ))}
+                  {!view.mixFirst && mixKnobs}
+                  {view.knobless?.map(({ part, dest, count }) => (
+                    <button
+                      key={`${part} ${dest.key}`}
+                      type="button"
+                      aria-label={`Route to ${view.title} ${dest.label}`}
+                      onClick={() => onRoute(part, dest.key)}
+                      className="flex min-w-0 flex-col items-center gap-0.5"
+                    >
+                      <span
+                        aria-hidden
+                        style={{ border: `1.5px dashed ${MOD_LOOK.ring}` }}
+                        className={`${KNOB_SIZE} relative flex aspect-square items-center justify-center rounded-full`}
+                      >
+                        <svg viewBox="0 0 18 12" width={24} height={16}>
+                          <path
+                            d={GLYPHS.route}
+                            fill="none"
+                            stroke={MOD_COLOR}
+                            strokeWidth={1.4}
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      </span>
+                      <span className="text-[11px] leading-tight whitespace-nowrap text-zinc-400">
+                        {dest.label}
+                      </span>
+                      <span className="font-mono text-[11px] leading-tight whitespace-nowrap text-zinc-200">
+                        {count === 0
+                          ? 'Route'
+                          : count === 1
+                            ? '1 route'
+                            : `${count} routes`}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                view.note && (
+                  <p className="text-xs leading-snug text-zinc-400">
+                    {view.note}
+                  </p>
+                )
+              )}
+              {view.targets && (
+                <Targets {...view.targets} onRoute={onRoute} onMap={onMap} />
+              )}
+              {view.views && (
+                <PanRow role="group" aria-label="The output shows">
+                  {MASTER_VIEWS.map(({ view: kind, label }) => (
+                    <button
+                      key={kind}
+                      type="button"
+                      aria-pressed={view.views?.shown === kind}
+                      onClick={() => view.views?.choose(kind)}
+                      className={`${OPTION} shrink-0`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </PanRow>
+              )}
+            </>
+          ))}
       </div>
     </section>
   )
+}
+
+/** The touch a pad tried from its panel is: no finger's, no computer key's */
+const TRY_ID = -1
+/** How long a pad tried is held, in ms: a hit, then let go */
+const TRY_MS = 180
+let trying: ReturnType<typeof setTimeout> | undefined
+
+/** Strikes pad once, for its note just set to be heard */
+function tryPad(engine: Engine, pad: number): void {
+  if (trying !== undefined) {
+    clearTimeout(trying)
+    engine.noteOff(TRY_ID)
+  }
+  engine.hit(TRY_ID, pad)
+  trying = setTimeout(() => {
+    trying = undefined
+    engine.noteOff(TRY_ID)
+  }, TRY_MS)
+}
+
+/** The steps a pad's note takes: a semitone and an octave, down and up */
+const NOTE_STEPS = [
+  { by: -12, label: '\u221212', say: 'An octave down' },
+  { by: -1, label: '\u22121', say: 'A semitone down' },
+  { by: 1, label: '+1', say: 'A semitone up' },
+  { by: 12, label: '+12', say: 'An octave up' },
+] as const
+
+/**
+ * The note a pad plays its preset at: its name between the steps down and
+ * the steps up, one that would leave MIDI's notes off.
+ */
+function PadNote({
+  name,
+  note,
+  onNote,
+}: {
+  name: string
+  note: number
+  onNote: (note: number) => void
+}) {
+  const step = ({ by, label, say }: (typeof NOTE_STEPS)[number]) => (
+    <button
+      key={by}
+      type="button"
+      aria-label={say}
+      disabled={note + by < PAD_NOTE_MIN || note + by > PAD_NOTE_MAX}
+      onClick={() => onNote(note + by)}
+      className={`${SMALL_BUTTON} tabular-nums`}
+    >
+      {label}
+    </button>
+  )
+  return (
+    <div
+      role="group"
+      aria-label={`${name} note`}
+      className="flex items-center gap-1.5"
+    >
+      <span className="mr-auto text-[11px] text-zinc-400">Note</span>
+      {NOTE_STEPS.slice(0, 2).map(step)}
+      <output
+        aria-label={`${name} plays at`}
+        className="w-11 shrink-0 text-center text-xs font-semibold text-zinc-100 tabular-nums"
+      >
+        {noteName(note)}
+      </output>
+      {NOTE_STEPS.slice(2).map(step)}
+    </div>
+  )
+}
+
+/**
+ * The kit's pad picked (PAD_TILE): the preset mapped onto it, played as
+ * it is, at the pad's note (set here: setNote); the presets of its
+ * category in a row, a tap mapping another (map: onto the pad picked);
+ * and all of them, the presets' popover (onPresets). A pad of no preset
+ * (its own deleted) offers the Drums.
+ */
+function padView(
+  presets: LibrarySnapshot,
+  pad: number,
+  note: number,
+  setNote: (note: number) => void,
+  map: (ref: PresetRef) => void,
+  onPresets: (() => void) | undefined
+): View {
+  const current = presets.pads[pad]
+  const mine = current?.source === 'user'
+  const preset =
+    current &&
+    (mine ? presets.user : presets.factory).find(
+      (each) => each.name === current.name
+    )
+  const category: PresetCategory = preset?.category ?? 'Drums'
+  const refs = (source: PresetRef['source']) =>
+    (source === 'user' ? presets.user : presets.factory)
+      .filter((each) => each.category === category)
+      .map((each): PresetRef => ({ source, name: each.name }))
+  // As the presets list them: the user's first
+  const choices = [...refs('user'), ...refs('factory')]
+  const name = `Pad ${pad + 1}`
+  return {
+    title: padName(current, pad),
+    kind: preset ? `${name} · ${category}${mine ? ', mine' : ''}` : 'No preset',
+    chip: { look: NEUTRAL_LOOK, mark: String(pad + 1) },
+    knobs: [],
+    color: NEUTRAL_ARC,
+    body: (
+      <>
+        <PanRow role="group" aria-label={`${category} presets for ${name}`}>
+          {choices.map((ref) => (
+            <button
+              key={`${ref.source}:${ref.name}`}
+              type="button"
+              aria-pressed={
+                current?.source === ref.source && current.name === ref.name
+              }
+              onClick={() => map(ref)}
+              className={`${OPTION} shrink-0`}
+            >
+              {ref.name}
+            </button>
+          ))}
+        </PanRow>
+        <PadNote name={name} note={note} onNote={setNote} />
+        <div className="flex items-center gap-2">
+          <p className="min-w-0 flex-1 text-[11px] leading-snug text-zinc-500">
+            {preset
+              ? 'Plays its preset as it is: saved over in a synth, the preset changes here too.'
+              : 'Its preset is gone: it keeps the sound it had.'}
+          </p>
+          {onPresets && (
+            <button
+              type="button"
+              onClick={onPresets}
+              className={`${SMALL_BUTTON} shrink-0`}
+            >
+              All presets
+            </button>
+          )}
+        </div>
+      </>
+    ),
+  }
 }
 
 /**
@@ -751,22 +1004,77 @@ function feeds(sound: Sound, chainId: string, inputId: string): boolean {
   return (chain?.sends[inputId] ?? 0) > 0
 }
 
+/** What a strip's panel has of its track in the mix */
+interface TrackStrip {
+  readonly title: string
+  readonly naming: Naming
+  readonly actions: readonly Action[]
+}
+
 /**
- * The panel of the sound's output (its Out tile, the mix's strip, there
- * named Synth): its fader, a level and a balance, the session's (a preset
- * loaded plays at them, as a desk's channel would), then how much it
- * sends to each of the session's buses, kept with the sound, and the
- * view of its own output that both show
+ * The track played's, for its strip's panel in the mix: its name, the
+ * giving of one (onName opens the form), and its header's actions: a
+ * place up or down among the tracks, its strip with it in their column,
+ * and its removal, asked first (never the only track's)
+ */
+function trackStrip(engine: Engine, onName: (id: string) => void): TrackStrip {
+  const track = engine.getTrack()
+  const place = engine.getPlace()
+  const count = engine.getTracks().length
+  const { id } = track
+  const kit = track.kind === 'kit'
+  const move = (to: number) =>
+    to < 0 || to >= count ? undefined : () => engine.moveTrack(id, to)
+  return {
+    title: trackName(track, place),
+    naming: {
+      id,
+      name: track.name,
+      fallback: `${kindLabel(track.kind)} ${place + 1}`,
+      set: (name) => engine.renameTrack(id, name),
+    },
+    actions: [
+      { label: 'Move up', icon: ICONS.up, run: move(place - 1) },
+      { label: 'Move down', icon: ICONS.down, run: move(place + 1) },
+      { label: 'Rename', icon: ICONS.rename, run: () => onName(id) },
+      {
+        label: 'Remove',
+        icon: ICONS.remove,
+        run: count > 1 ? () => engine.removeTrack(id) : undefined,
+        danger: true,
+        confirm: kit
+          ? 'Its pads and its chain go with it, and its strip’s level and balance. The presets its pads play stay.'
+          : 'Its sound goes with it, and its strip’s level and balance. A preset saved from it stays.',
+      },
+    ],
+  }
+}
+
+/**
+ * The panel of the sound's output (its Out tile, its track's strip in the
+ * mix, there under the track's name): its part's fader, a level and a
+ * balance, the session's (a preset loaded plays at them, as a desk's
+ * channel would), then how much it sends to each of the session's buses
+ * (the synth's, its sound's own, kept with its preset; the kit's, its
+ * chain's, kept with the kit, the same for every pad), and the view of
+ * its part's own output that both show
  */
 function sendsView(
   mix: Mix,
   views: NonNullable<View['views']>,
-  inMix: boolean
+  place: number,
+  part: PartKind,
+  track: TrackStrip | undefined
 ): View {
-  const strip = stripId(0)
+  const strip = stripId(place)
+  const kit = part === 'kit'
   return {
-    title: inMix ? 'Synth' : 'Out',
-    kind: 'Its level and balance, then a send to each bus',
+    title: track ? track.title : kit ? 'Kit Out' : 'Out',
+    naming: track?.naming,
+    actions: track?.actions,
+    kind: kit
+      ? 'The kit’s level and balance, then its send to each bus'
+      : 'Its level and balance, then a send to each bus',
     chip: { look: NEUTRAL_LOOK, glyph: GLYPHS.sends },
     knobs: mix.buses.map((bus) => ({
       part: SENDS,
@@ -783,19 +1091,23 @@ function sendsView(
     note:
       mix.buses.length === 0
         ? 'The mix has no bus: add one there to hear the sound.'
-        : 'Level and Balance are the mix’s; the sends, the sound’s own, kept with its preset.',
+        : kit
+          ? 'Level and Balance are the mix’s; the sends, the kit’s, the same for every pad, kept with the kit.'
+          : 'Level and Balance are the mix’s; the sends, the sound’s own, kept with its preset.',
   }
 }
 
 /**
- * The panel of a mix tile: a bus's level and balance after the sound's
- * send to it (Send, the sound's own, kept with its preset; the rest the
+ * The panel of a mix tile: a bus's level and balance after the part
+ * played's send to it (Send: the synth's sound's own, kept with its
+ * preset; the kit's, its chain's, kept with the kit; the rest the
  * session's); an effect's knobs, on a bus or the master; the master's
  * level, the views its tile may show, and the button that opens them
  * large; for a "+", the kinds it adds, or a new bus
  */
 function mixView(
   engine: Engine,
+  library: Library,
   picked: string,
   views: NonNullable<View['views']>,
   onMaster: (() => void) | undefined,
@@ -813,6 +1125,12 @@ function mixView(
   }
   const adding = mixAddingTo(picked)
   if (adding === 'bus') return addBusView(mix, added)
+  if (adding === 'track') {
+    return addTrackView(engine.getTracks().length, (kind) => {
+      // The one added is the one played: its strip, picked
+      if (library.addTrack(kind) !== undefined) pick(SENDS)
+    })
+  }
   if (adding !== undefined) {
     return addMixEffectView(mix, adding as MixOwner, added)
   }
@@ -824,6 +1142,7 @@ function mixView(
       const { bus } = found
       const letter = busLetter(bus.id)
       const look = busLook(bus.id)
+      const kit = engine.getPart() === 'kit'
       return {
         title: `Bus ${letter}`,
         kind: `${busName(bus)} · every sound sends to it`,
@@ -834,15 +1153,18 @@ function mixView(
           { part: bus.id, key: 'pan' },
         ],
         color: look.ink,
-        note: 'Send is the sound’s own, kept with its preset.',
+        note: kit
+          ? 'Send is the kit’s, the same for every pad, kept with the kit.'
+          : 'Send is the sound’s own, kept with its preset.',
         actions: [
           {
             label: 'Remove',
             icon: ICONS.remove,
             run: () => {
-              // Those after it move up a letter, the sound's sends too
+              // Those after it move up a letter, every track's sends
+              // with them
               edit((current) => removeMixPart(current, bus.id))
-              engine.edit((sound) => sendsWithout(sound, bus.id))
+              engine.setTracks(tracksWithoutBus(engine.getTracks(), bus.id))
               pick(mixId(MASTER))
             },
             danger: true,
@@ -856,10 +1178,7 @@ function mixView(
     }
     case 'effect': {
       const { effect, owner, index } = found
-      const row =
-        owner === MASTER
-          ? mix.master.effects
-          : (mix.buses.find((bus) => bus.id === owner)?.effects ?? [])
+      const row = ownedBy(mix, owner) ?? []
       const move = (by: number) => {
         const to = index + by
         if (to < 0 || to >= row.length) return undefined
@@ -908,6 +1227,76 @@ function mixView(
           : undefined,
       }
   }
+}
+
+/**
+ * The "+" after the strips: a track after the last, a synth or a kit,
+ * which is then the one played
+ */
+function addTrackView(count: number, add: (kind: PartKind) => void): View {
+  const room = count < MAX_TRACKS
+  return {
+    title: 'Add a track',
+    kind: room
+      ? `Track ${count + 1} of ${MAX_TRACKS} at most`
+      : `${MAX_TRACKS} tracks at most`,
+    chip: { look: NEUTRAL_LOOK, glyph: GLYPHS.plus, add: true },
+    knobs: [],
+    color: NEUTRAL_ARC,
+    choices: [
+      {
+        label: 'Synth',
+        hint: 'One sound, on keys',
+        glyph: GLYPHS.saw,
+        look: NEUTRAL_LOOK,
+        add: room ? () => add('synth') : undefined,
+      },
+      {
+        label: 'Kit',
+        hint: '16 pads of presets',
+        glyph: GLYPHS.pads,
+        look: NEUTRAL_LOOK,
+        add: room ? () => add('kit') : undefined,
+      },
+    ],
+    choiceNote:
+      'A synth starts on the first preset, a kit as the factory’s, each with a strip at full level sending to A. It is the one played once added.',
+  }
+}
+
+/**
+ * A name given in the panel's header: a field holding the name it has
+ * (or none, showing the one it goes by without), and Done, which names it
+ * and puts the form away; blank, it goes by the other again
+ */
+function NameForm({ naming, onDone }: { naming: Naming; onDone: () => void }) {
+  const [name, setName] = useState(naming.name ?? '')
+  const send = (event: FormEvent) => {
+    event.preventDefault()
+    naming.set(cleanName(name))
+    onDone()
+  }
+  return (
+    <form onSubmit={send} className="flex min-w-0 flex-1 gap-1.5">
+      <input
+        aria-label="Name"
+        value={name}
+        placeholder={naming.fallback}
+        maxLength={MAX_NAME_LENGTH}
+        autoFocus
+        enterKeyHint="done"
+        autoComplete="off"
+        spellCheck={false}
+        onChange={(event) => setName(event.currentTarget.value)}
+        onFocus={(event) => event.currentTarget.select()}
+        // WebKit inherits the page's user-select: none, which stops typing
+        className={`${SMALL_FIELD} flex-1 select-text`}
+      />
+      <button type="submit" className={SMALL_CONFIRM}>
+        Done
+      </button>
+    </form>
+  )
 }
 
 /**
@@ -963,13 +1352,7 @@ function addMixEffectView(
   owner: MixOwner,
   added: (add: (current: Mix) => MixAdded) => void
 ): View {
-  const found = findMixPart(mix, owner)
-  const row =
-    found?.type === 'bus'
-      ? found.bus.effects
-      : found?.type === 'master'
-        ? found.master.effects
-        : undefined
+  const row = ownedBy(mix, owner)
   const room = row !== undefined && row.length < MAX_EFFECTS
   const last = row?.[row.length - 1]
   const onMaster = owner === MASTER
@@ -1004,7 +1387,9 @@ function viewOf(
   sound: Sound,
   picked: string,
   focus: string | undefined,
-  pick: (id: string, input?: string) => void
+  pick: (id: string, input?: string) => void,
+  /** The kit played: the inserts are its chain's, after every pad's amp */
+  kit: boolean
 ): View {
   // Every edit here applies to the engine's sound as it is when tapped:
   // sound, from the last redraw, misses knobs turned since
@@ -1026,7 +1411,7 @@ function viewOf(
 
   const adding = addingTo(picked)
   if (adding !== undefined) {
-    return addView(sound, adding, added)
+    return addView(sound, adding, added, kit)
   }
   if (picked === AMP) {
     return {
@@ -1171,11 +1556,14 @@ function viewOf(
     case 'effect': {
       const { kind } = found.part
       return {
-        title,
-        kind: `${EFFECT_HINTS[kind]} · after the amp`,
+        title: kit ? `Kit ${title}` : title,
+        kind: `${EFFECT_HINTS[kind]} · ${kit ? 'on the kit, after every pad’s amp' : 'after the amp'}`,
         chip: { look: NEUTRAL_LOOK, glyph: EFFECT_GLYPHS[kind] },
         knobs: knobsOf(picked, EFFECT_KINDS[kind].knobs),
         color: NEUTRAL_ARC,
+        note: kit
+          ? 'The kit’s, the same for every pad, kept with the kit: every pad goes through it once summed.'
+          : undefined,
         actions: [
           { label: 'Move left', icon: ICONS.left, run: move(-1) },
           { label: 'Move right', icon: ICONS.right, run: move(1) },
@@ -1311,7 +1699,9 @@ function viewOf(
 function addView(
   sound: Sound,
   adding: string,
-  added: (add: (current: Sound) => Added) => void
+  added: (add: (current: Sound) => Added) => void,
+  /** The kit played: an effect goes on its chain, after every pad's amp */
+  kit: boolean
 ): View {
   if (adding === 'input') {
     const room = sound.inputs.length < MAX_INPUTS
@@ -1380,8 +1770,12 @@ function addView(
     const room = sound.effects.length < MAX_EFFECTS
     const last = sound.effects[sound.effects.length - 1]
     return {
-      title: 'Add an effect',
-      kind: last ? `After ${partName(sound, last.id)}` : 'After the amp',
+      title: kit ? 'Add to the kit' : 'Add an effect',
+      kind: last
+        ? `After ${kit ? 'Kit ' : ''}${partName(sound, last.id)}`
+        : kit
+          ? 'After every pad’s amp'
+          : 'After the amp',
       chip: { look: NEUTRAL_LOOK, glyph: GLYPHS.plus, add: true },
       knobs: [],
       color: NEUTRAL_ARC,
@@ -1392,7 +1786,9 @@ function addView(
         look: NEUTRAL_LOOK,
         add: room ? () => added((s) => addEffect(s, kind)) : undefined,
       })),
-      choiceNote: `Every voice goes through it, in stereo, once summed: up to ${MAX_EFFECTS}, in the order they stand.`,
+      choiceNote: kit
+        ? `Every pad goes through it, in stereo, once summed, the same whichever is picked: up to ${MAX_EFFECTS}, in the order they stand.`
+        : `Every voice goes through it, in stereo, once summed: up to ${MAX_EFFECTS}, in the order they stand.`,
     }
   }
   // A chain's "+": an item at its end

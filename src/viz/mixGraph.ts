@@ -1,30 +1,38 @@
 /**
  * Where the mix's tiles go (docs/plan/effects-parts-sequencer.md), laid
- * out as the sound's graph lays out a sound (graph.ts): the sound's strip
- * at the left, as tall as the buses beside it, a peg on the seam to each
- * as long as its send, as an input's pegs are to the chains it feeds;
- * the buses in rows, one under another, as chains are: a head with the
- * bus's letter, its effects in a row after it, and its "+" filling the
- * row to the longest; a bus down the seam after them, each bus's level a
- * peg on it; then the master's effects and the master, as tall as the
- * strip, filling the rest of the frame, the view of the output it holds
- * as wide as it can be. Under the rows, "+ Bus", and "+ FX" under the
- * master's. Pure math, no DOM.
+ * out as the sound's graph lays out a sound (graph.ts): the tracks'
+ * strips at the left in one column, one under another, as a sound's
+ * inputs stand, each with room for its view under its name, and under
+ * the last the "+" that adds a track; a peg on the seam to each bus as
+ * long as the track played's send to it, as an input's pegs are to the
+ * chains it feeds; the buses in rows, one under another, as chains are: a
+ * head with the bus's letter, its effects in a row after it, and its "+"
+ * filling the row to the longest; a bus down the seam after them, each
+ * bus's level a peg on it; then the master's effects and the master, as
+ * tall as the rows, filling the rest of the frame, the view of the output
+ * it holds as wide as it can be. Along the foot, the "+"s: a track's
+ * under the strips, "+ Bus" under the rows, and "+ FX" under the
+ * master's. More tracks make the mix taller, never wider: the column and
+ * the rows stand as tall as the taller of them, and a frame shorter than
+ * that pans down. Pure math, no DOM.
  */
 import type { Box } from './graph'
 
 /**
  * The mix in pixels at rest: a bus a row tall (44, a touch's height), 6
- * between rows; the strip 72 wide, 4 between it and the heads, as
- * between the sound's inputs and chains, and 4 between the rows and the
- * master's; a head 36 wide, an effect 60, a "+" 44 at least, 3 between
- * them, as in a chain; the master 96 wide at least; the "+" row 30
- * tall. The strip and the master stand as tall as two rows at least.
+ * between rows; a strip 62 tall at least (its view under its name) and
+ * 84 wide (a track's name by its kind and place and its level on a
+ * line), 6 between strips, 4 between them and the heads, as between the
+ * sound's inputs and chains, and 4 between the rows and the master's; a
+ * head 36 wide, an effect 60, a "+" 44 at least, 3 between them, as in a
+ * chain; the master 96 wide at least; the "+" row 30 tall. The master
+ * stands as tall as two rows at least.
  *
  * A wider frame widens the strip, the effects and the "+" by a third of
  * what it has past that, in proportion, up to stretch times theirs (the
  * heads keep theirs), and the master takes the rest. A taller one grows
- * the rows up to stretch times, the frame's rest left empty past that.
+ * the strips and the rows, up to stretch times at rest for the taller of
+ * the two, the frame's rest left empty past that.
  */
 export const MIX_GRAPH = {
   top: 8,
@@ -32,7 +40,8 @@ export const MIX_GRAPH = {
   end: 8,
   row: 44,
   rowGap: 6,
-  stripW: 72,
+  strip: 62,
+  stripW: 84,
   seam: 4,
   headW: 36,
   itemW: 60,
@@ -43,8 +52,12 @@ export const MIX_GRAPH = {
   stretch: 2,
 } as const
 
-/** What the layout reads of a mix: its buses and effects, by id */
+/**
+ * What the layout reads of a mix: its tracks' strips (one, unless given),
+ * its buses and effects, by id
+ */
 export interface MixGraphMix {
+  readonly strips?: readonly unknown[]
   readonly buses: readonly {
     readonly id: string
     readonly effects: readonly { readonly id: string }[]
@@ -52,10 +65,14 @@ export interface MixGraphMix {
   readonly master: { readonly effects: readonly { readonly id: string }[] }
 }
 
-/** How many buses a mix holds, and effects in a row, at most */
+/**
+ * How many buses a mix holds, and effects in a row, at most; and tracks,
+ * where one can be added from here (without, no "+" stands for one)
+ */
 export interface MixLimits {
   readonly buses: number
   readonly effects: number
+  readonly tracks?: number
 }
 
 /** A peg's place: on a seam, at a row's middle */
@@ -87,8 +104,17 @@ export interface MixGeometry {
   readonly height: number
   /** Its height at rest (rows MIX_GRAPH.row tall): what it asks of a frame */
   readonly rest: number
-  /** The sound's strip: as tall as the buses together, two rows at least */
-  readonly strip: Box
+  /**
+   * Each track's strip, in the mix's order, down the one column: as tall
+   * as each other, sharing it down to the "+" row (to its foot, with no
+   * "+" for another)
+   */
+  readonly strips: readonly Box[]
+  /**
+   * The dashed "+" that adds a track, under the last strip in the "+"
+   * row, unless there are the most
+   */
+  readonly addTrack: Box | undefined
   /** The buses, in their order */
   readonly buses: readonly BusRow[]
   /** The sound's send to each bus, on the seam before its head */
@@ -98,7 +124,7 @@ export interface MixGeometry {
   /** Down that seam, the first bus's middle to the last's, if two or more */
   readonly bus:
     { readonly x: number; readonly y: number; readonly h: number } | undefined
-  /** The master's effects, after the buses: as tall as the strip */
+  /** The master's effects, after the buses: as tall as the master */
   readonly masterEffects: readonly EffectBox[]
   /**
    * The seams between them, and before the master: each centre. The first
@@ -107,7 +133,7 @@ export interface MixGeometry {
    * chains join its amp
    */
   readonly masterJoints: readonly number[]
-  /** The master, last: as tall as the strip */
+  /** The master, last: from the top down to the "+" row */
   readonly master: Box
   /** The dashed "+ Bus" under the rows, and "+ FX" under the master's */
   readonly addBus: Box | undefined
@@ -128,6 +154,15 @@ function widths(s: number, round: (n: number) => number): Widths {
     item: round(g.itemW * s),
     add: round(g.addMin * s),
   }
+}
+
+/** How many strips stand in the column, and whether a "+" under them */
+function stripsOf(mix: MixGraphMix, limits: MixLimits) {
+  const parts = Math.max(1, mix.strips?.length ?? 1)
+  return {
+    parts,
+    more: limits.tracks !== undefined && parts < limits.tracks,
+  } as const
 }
 
 /** Where the heads, the effects, the rows' end and the master stand */
@@ -165,22 +200,43 @@ function stretchFor(mix: MixGraphMix, limits: MixLimits, fill: number): number {
   return Math.min(g.stretch, s)
 }
 
-/** The rows the strip and the master stand beside: two at least */
+/** The rows the master stands beside: two at least */
 const rowsOf = (mix: MixGraphMix) => Math.max(2, mix.buses.length)
 
-/** The mix's height with rows row tall: the "+" row is always there */
-function heightAt(mix: MixGraphMix, row: number): number {
+/**
+ * How tall everything stands in a frame room tall (unframed, at rest):
+ * the body, from the top of the tiles to the "+" row's foot, is the
+ * taller of the strips' column and the buses' rows, each over its "+"
+ * (the rows' is always there); a taller frame grows it, until the taller
+ * of the two is stretch times its rest. The strips share their column;
+ * the rows share theirs up to stretch times a row, and stand in its
+ * middle past that.
+ */
+function heights(mix: MixGraphMix, limits: MixLimits, room?: number) {
   const g = MIX_GRAPH
-  const n = rowsOf(mix)
-  return g.top + n * (row + g.rowGap) + g.addRow + g.end
-}
-
-/** How tall a row is in a frame room tall: at rest up to twice that */
-function rowFor(mix: MixGraphMix, room: number): number {
-  const g = MIX_GRAPH
-  const n = rowsOf(mix)
-  const fits = Math.floor((room - heightAt(mix, 0)) / n)
-  return Math.min(g.row * g.stretch, Math.max(g.row, fits))
+  const { parts, more } = stripsOf(mix, limits)
+  const rows = rowsOf(mix)
+  const foot = g.rowGap + g.addRow
+  const under = more ? foot : 0
+  const column = (strip: number) =>
+    parts * (strip + g.rowGap) - g.rowGap + under
+  const beside = (row: number) => rows * (row + g.rowGap) - g.rowGap + foot
+  const rest = Math.max(column(g.strip), beside(g.row))
+  const most = Math.max(column(g.strip * g.stretch), beside(g.row * g.stretch))
+  const body =
+    room === undefined
+      ? rest
+      : Math.min(most, Math.max(rest, room - g.top - g.end))
+  const span = body - foot
+  const row = Math.min(
+    g.row * g.stretch,
+    Math.floor((span + g.rowGap) / rows) - g.rowGap
+  )
+  // The strips' own, down to their "+" or the foot; the last takes what
+  // rounding leaves
+  const own = body - under
+  const strip = Math.floor((own + g.rowGap) / parts) - g.rowGap
+  return { rest, body, span, row, own, strip }
 }
 
 /**
@@ -195,11 +251,10 @@ export function mixGeometry(
   room?: number
 ): MixGeometry {
   const g = MIX_GRAPH
-  const row = room === undefined ? g.row : rowFor(mix, room)
+  const { rest, body, span, row, own, strip } = heights(mix, limits, room)
   const tall = (rows: number) => rows * (row + g.rowGap) - g.rowGap
-  const span = tall(rowsOf(mix))
   const count = mix.buses.length
-  // The rows stand in the strip's middle when fewer than it is tall for
+  // The rows stand in the master's middle when they do not fill it
   const rowsTop = g.top + Math.floor((span - tall(Math.max(1, count))) / 2)
   const rowY = (k: number) => rowsTop + k * (row + g.rowGap)
   const middle = (k: number) => rowY(k) + row / 2
@@ -242,11 +297,22 @@ export function mixGeometry(
   const sendX = headX - g.seam / 2
   const first = middle(0)
   const last = middle(count - 1)
+  const { parts, more } = stripsOf(mix, limits)
+  const strips = Array.from({ length: parts }, (_, k) => {
+    const y = k * (strip + g.rowGap)
+    return {
+      x: g.x,
+      y: g.top + y,
+      w: w.strip,
+      h: k === parts - 1 ? own - y : strip,
+    }
+  })
   return {
     width: masterX + masterW + g.end,
-    height: addY + g.addRow + g.end,
-    rest: heightAt(mix, g.row),
-    strip: { x: g.x, y: g.top, w: w.strip, h: span },
+    height: g.top + body + g.end,
+    rest: g.top + rest + g.end,
+    strips,
+    addTrack: more ? { x: g.x, y: addY, w: w.strip, h: g.addRow } : undefined,
     buses,
     sends: mix.buses.map((bus, k) => ({ bus: bus.id, x: sendX, y: middle(k) })),
     levels: mix.buses.map((bus, k) => ({ bus: bus.id, x: busX, y: middle(k) })),

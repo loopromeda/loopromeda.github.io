@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   useSyncExternalStore,
@@ -9,6 +10,7 @@ import type { Engine } from './engine/engine'
 import type { BenchReport } from './engine/protocol'
 import type { Offline } from './offline'
 import type { PlatformReport } from './platform'
+import { padName } from './state/kit'
 import type { Library } from './state/library'
 import { readSettings, writeSettings, type AppSettings } from './state/settings'
 import {
@@ -32,6 +34,7 @@ import { SoundEditor, type RoutesAsked } from './ui/SoundEditor'
 import { StatusBar } from './ui/StatusBar'
 import { SurfaceButton } from './ui/SurfaceButton'
 import { SurfacePicker } from './ui/SurfacePicker'
+import { TrackButton, TrackPicker } from './ui/TrackPicker'
 import { UpdateButton } from './ui/UpdateButton'
 import type { ScreenAwake } from './wakeLock'
 
@@ -159,6 +162,15 @@ export function App({
   }, [])
   const closeSheet = useCallback(() => showSheet(null), [showSheet])
   const toggle = (which: Sheet) => showSheet(sheet === which ? null : which)
+  // The track played and edited, a synth or a kit; a kit's pads' names,
+  // and the pad picked, whose preset the patch's button names
+  const part = useSyncExternalStore(engine.subscribeSound, engine.getPart)
+  const pad = useSyncExternalStore(engine.subscribeSound, engine.getPad)
+  const { pads } = useSyncExternalStore(library.subscribe, library.getSnapshot)
+  const names = useMemo(
+    () => pads.map((current, k) => padName(current, k)),
+    [pads]
+  )
   const [surface, setSurface] = useState(() => readSurface(storage))
   const changeSurface = (next: SurfaceSettings) => {
     setSurface(next)
@@ -188,7 +200,9 @@ export function App({
   // presets and the surface popovers over the page, which stays as it is;
   // the settings a dialog over everything
   const covered = sheet === 'master'
-  const popover = sheet === 'presets' || sheet === 'surface'
+  const popover =
+    sheet === 'tracks' || sheet === 'presets' || sheet === 'surface'
+  const trackRef = useRef<HTMLButtonElement>(null)
   const patchRef = useRef<HTMLButtonElement>(null)
   const surfaceRef = useRef<HTMLButtonElement>(null)
   // Put away, the controls still come back under a sheet: it needs room
@@ -239,6 +253,7 @@ export function App({
           >
             <SoundEditor
               engine={engine}
+              library={library}
               asked={asked}
               scope={
                 settings.waveform
@@ -246,6 +261,7 @@ export function App({
                   : undefined
               }
               onMaster={() => showSheet('master')}
+              onPresets={() => showSheet('presets')}
             />
           </div>
         </div>
@@ -258,25 +274,43 @@ export function App({
         className={controls ? KEYS_SIZE : 'flex-1'}
         settings={surface}
         fullVelocity={settings.velocity === 'full'}
+        kit={part === 'kit' ? names : undefined}
         beside={
-          surface.wheel && <ModWheel engine={engine} onRoute={routeWheel} />
+          surface.wheel && (
+            <ModWheel
+              engine={engine}
+              // Routes are a sound's, made in the synth: a pad's, its preset's
+              onRoute={part === 'synth' ? routeWheel : undefined}
+            />
+          )
         }
         start={
-          <PatchButton
-            ref={patchRef}
-            library={library}
-            open={sheet === 'presets'}
-            onToggle={() => toggle('presets')}
-          />
+          <>
+            <TrackButton
+              ref={trackRef}
+              engine={engine}
+              open={sheet === 'tracks'}
+              onToggle={() => toggle('tracks')}
+            />
+            <PatchButton
+              ref={patchRef}
+              library={library}
+              pad={part === 'kit' ? pad : undefined}
+              open={sheet === 'presets'}
+              onToggle={() => toggle('presets')}
+            />
+          </>
         }
         end={
           <>
-            <SurfaceButton
-              ref={surfaceRef}
-              settings={surface}
-              open={sheet === 'surface'}
-              onToggle={() => toggle('surface')}
-            />
+            {part === 'synth' && (
+              <SurfaceButton
+                ref={surfaceRef}
+                settings={surface}
+                open={sheet === 'surface'}
+                onToggle={() => toggle('surface')}
+              />
+            )}
             <IconButton
               label="Hide controls"
               pressed={surface.hideControls}
@@ -296,14 +330,24 @@ export function App({
           </>
         }
       />
+      {sheet === 'tracks' && (
+        <TrackPicker
+          engine={engine}
+          library={library}
+          anchor={trackRef}
+          onClose={closeSheet}
+        />
+      )}
       {sheet === 'presets' && (
         <PresetBrowser
           library={library}
+          pad={part === 'kit' ? pad : undefined}
           anchor={patchRef}
           onClose={closeSheet}
         />
       )}
-      {sheet === 'surface' && (
+      {/* The surface's choices are a synth's */}
+      {sheet === 'surface' && part === 'synth' && (
         <SurfacePicker
           settings={surface}
           anchor={surfaceRef}

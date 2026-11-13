@@ -85,14 +85,19 @@ const WANT_H = 30
  * the next row filters by category or holds the form at hand (a name, a
  * deletion to confirm, the file actions), and a line at the bottom says
  * what happened. Presets move between devices as a file: Export shares
- * or downloads the user's, Import adds a file's.
+ * or downloads the user's, Import adds a file's. With a kit played, a
+ * tap maps the preset onto the pad picked, and there is nothing to save:
+ * a pad plays its preset as it is, its sound made in the synth.
  */
 export function PresetBrowser({
   library,
+  pad,
   anchor,
   onClose,
 }: {
   library: Library
+  /** The pad the presets map onto, with a kit played */
+  pad?: number
   /** The button it opens from, which places it */
   anchor: RefObject<HTMLElement | null>
   onClose: () => void
@@ -227,10 +232,12 @@ export function PresetBrowser({
           Patches
         </h2>
         <span className="min-w-0 truncate text-[11px] text-zinc-400">
-          {plural(shown.length, 'preset')}
+          {pad === undefined
+            ? plural(shown.length, 'preset')
+            : `onto Pad ${pad + 1}`}
         </span>
         <span className="ml-auto flex shrink-0 items-center gap-1">
-          {mine && (
+          {mine && pad === undefined && (
             <button
               type="button"
               disabled={!edited}
@@ -240,14 +247,16 @@ export function PresetBrowser({
               Save
             </button>
           )}
-          <button
-            type="button"
-            aria-pressed={mode.kind === 'saveAs'}
-            onClick={() => toggle('saveAs', mode.kind === 'saveAs')}
-            className={SMALL_BUTTON}
-          >
-            Save as…
-          </button>
+          {pad === undefined && (
+            <button
+              type="button"
+              aria-pressed={mode.kind === 'saveAs'}
+              onClick={() => toggle('saveAs', mode.kind === 'saveAs')}
+              className={SMALL_BUTTON}
+            >
+              Save as…
+            </button>
+          )}
           <SmallIconButton
             label="More"
             pressed={more}
@@ -304,7 +313,8 @@ export function PresetBrowser({
             </button>
           </FadeRow>
         )}
-        {(mode.kind === 'saveAs' || mode.kind === 'rename') && (
+        {((mode.kind === 'saveAs' && pad === undefined) ||
+          mode.kind === 'rename') && (
           <NameForm
             // A new form for each: its fields start from the preset
             key={mode.kind}
@@ -354,7 +364,9 @@ export function PresetBrowser({
         ))}
         {filter === 'mine' && user.length === 0 && (
           <li className="px-3 py-2 text-[13px] leading-snug text-zinc-500">
-            None yet. Save as… keeps the sound as a preset of your own.
+            {pad === undefined
+              ? 'None yet. Save as… keeps the sound as a preset of your own.'
+              : 'None yet. Save a sound as a preset in a synth to map it here.'}
           </li>
         )}
       </ul>

@@ -98,13 +98,6 @@ export const MASTER_VIEWS = [
 export type MasterViewKind = (typeof MASTER_VIEWS)[number]['view']
 
 /**
- * The sound's own output, after its inserts and before its sends: the
- * first part's (the only one until the parts come), which the Out and the
- * mix's strip show
- */
-export const SOUND_OUTPUT: OutputSource = 0
-
-/**
  * Where the view each output's tiles show is kept, each its own (asked
  * for by ashon, 2026-11-13: "시각화 스타일이 각각 다르게"): the master's
  * under the key it always had, the parts' in a list by their place

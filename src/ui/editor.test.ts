@@ -11,13 +11,14 @@ import {
   setValue,
   type Added,
 } from '../state/sound/edit'
-import { AMP, VOICE, initSound, type Sound } from '../state/sound/sound'
+import { AMP, SENDS, VOICE, initSound, type Sound } from '../state/sound/sound'
 import {
   CHAIN_COLORS,
   FM_START,
   GLYPHS,
   MOD_LOOK,
   NEUTRAL_LOOK,
+  PAD_TILE,
   addId,
   chainLook,
   destName,
@@ -28,6 +29,7 @@ import {
   modulated,
   reachOf,
   shapeKey,
+  stillKitPicked,
   stillPicked,
   tileLabel,
   tileLine,
@@ -236,6 +238,20 @@ describe('shapeKey', () => {
       setValue(sound, AMP, 'release', 2),
     ]
     for (const after of turned) expect(shapeKey(after)).toBe(key)
+  })
+})
+
+describe('stillKitPicked', () => {
+  it('keeps the kit’s tiles, and picks the pad for any other', () => {
+    const sound = addEffect(initSound(), 'chorus').sound
+    const effect = sound.effects[0]?.id ?? ''
+    for (const id of [PAD_TILE, SENDS, addId('effect'), effect]) {
+      expect(stillKitPicked(sound, id)).toBe(id)
+    }
+    // A synth's tile, or an effect since removed
+    for (const id of [AMP, VOICE, 'c1', 'x1', addId('chain'), 'f9']) {
+      expect(stillKitPicked(sound, id)).toBe(PAD_TILE)
+    }
   })
 })
 

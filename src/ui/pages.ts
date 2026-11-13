@@ -4,7 +4,13 @@
  * reload opens it again and Back closes it. A hash needs nothing of the
  * server that serves the page.
  */
-export const SHEETS = ['presets', 'surface', 'master', 'settings'] as const
+export const SHEETS = [
+  'tracks',
+  'presets',
+  'surface',
+  'master',
+  'settings',
+] as const
 
 export type Sheet = (typeof SHEETS)[number]
 

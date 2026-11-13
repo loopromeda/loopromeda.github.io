@@ -5,10 +5,12 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   type CSSProperties,
   type ReactNode,
 } from 'react'
 import type { Engine } from '../engine/engine'
+import { KIT_PADS, PAD_NOTE } from '../state/kit'
 import {
   scaleName,
   scaleSteps,
@@ -28,12 +30,13 @@ import {
   whiteStep,
   whitesAbove,
 } from '../viz/keyboard'
-import { padGrid, padNote, type PadGrid } from '../viz/pads'
+import { kitGrid, padGrid, padNote, type PadGrid } from '../viz/pads'
 import { xyOctaves } from '../viz/xy'
 import { COMPUTER_ID, Hands } from './hands'
 import { IconButton } from './IconButton'
 import { Keys } from './Keys'
 import { KeysNavigator } from './KeysNavigator'
+import { KitPads } from './KitPads'
 import { Pads } from './Pads'
 import { XyPad } from './XyPad'
 
@@ -134,22 +137,29 @@ const typing = (target: EventTarget | null): boolean =>
 interface Fit {
   octaves: number
   grid: PadGrid
+  /** The kit's pads, all of them */
+  kit: PadGrid
   /** The XY pad's octaves across */
   xy: number
   /** Whether the header has room for the keys' navigator */
   wide: boolean
 }
 
+const sameGrid = (a: PadGrid, b: PadGrid) =>
+  a.columns === b.columns && a.rows === b.rows
+
 const sameFit = (a: Fit, b: Fit) =>
   a.octaves === b.octaves &&
   a.xy === b.xy &&
-  a.grid.columns === b.grid.columns &&
-  a.grid.rows === b.grid.rows &&
+  sameGrid(a.grid, b.grid) &&
+  sameGrid(a.kit, b.kit) &&
   a.wide === b.wide
 
 /**
  * Where notes are played, on piano keys, on pads or on the XY pad
- * (settings.kind), sized by className in the page's column: App gives it
+ * (settings.kind), or given kit (the kit's pads' names: the kit is the
+ * part played), on the kit's pads (KitPads), a tap picking the pad too.
+ * Sized by className in the page's column: App gives it
  * the rest, at most the keys' length (the pads stand as tall), under what
  * stands above them, which the section holds as --play-head.
  * Keys: as many octaves as fit at a finger's width (one on a phone held
@@ -180,9 +190,15 @@ export function PlaySurface({
   beside,
   fullVelocity = false,
   className = 'flex-1',
+  kit,
 }: {
   engine: Engine
   settings: SurfaceSettings
+  /**
+   * The kit's pads' names, while the kit is the part played: its pads
+   * stand instead of the synth's surface, and no octaves
+   */
+  kit?: readonly string[]
   /** At the header's left */
   start?: ReactNode
   /** At the header's right, after the octave controls */
@@ -194,10 +210,36 @@ export function PlaySurface({
   className?: string
 }) {
   const [hands] = useState(() => new Hands(engine))
+  // On the kit, a pad's place is its note: struck, its pad sounds
+  const [kitHands] = useState(
+    () =>
+      new Hands({
+        noteOn: (id, pad, velocity) => engine.hit(id, pad, velocity),
+        noteOff: (id) => engine.noteOff(id),
+        slide: (id, value) => engine.slide(id, value),
+        bend: () => undefined,
+      })
+  )
+  const picked = useSyncExternalStore(engine.subscribeSound, engine.getPad)
+  // Each pad's note, said on it where it is not the one all start at
+  const padNotes = useSyncExternalStore(
+    engine.subscribeSound,
+    engine.getPadNotes
+  )
+  const padMarks = useMemo(
+    () =>
+      padNotes.map((note) => (note === PAD_NOTE ? undefined : noteName(note))),
+    [padNotes]
+  )
+  const pick = useCallback(
+    (pad: number) => engine.pickTrack(engine.getPick().track, pad),
+    [engine]
+  )
   const [starts, setStarts] = useState(STARTS)
   const [fit, setFit] = useState<Fit>({
     octaves: 1,
     grid: { columns: 4, rows: 4 },
+    kit: { columns: 8, rows: 2 },
     xy: 1,
     wide: false,
   })
@@ -230,7 +272,7 @@ export function PlaySurface({
   const range = `${noteName(lowestNote)} – ${noteName(highestNote)}`
   // The navigator, for keys that do not reach C−1 to G9 at once
   const whites = whiteCount(fit.octaves)
-  const navigator = kind === 'keys' && whites < REACH_WHITES
+  const navigator = !kit && kind === 'keys' && whites < REACH_WHITES
   const inHeader = navigator && fit.wide
   const inStrip = navigator && !fit.wide
   const notes = useMemo(
@@ -253,6 +295,7 @@ export function PlaySurface({
       const next = {
         ...keysFit(width),
         grid: padGrid(width, height),
+        kit: kitGrid(width, height, KIT_PADS),
         xy: xyOctaves(width),
         wide: header.getBoundingClientRect().width >= NAVIGATOR_IN_HEADER,
       }
@@ -282,8 +325,38 @@ export function PlaySurface({
     [moveTo, place.down]
   )
 
-  // Computer keys, for a desktop: they play, Z and X shift the octave
+  // Computer keys, for a desktop: they play, Z and X shift the octave; on
+  // the kit, the pads' keys strike and pick them
   useEffect(() => {
+    if (kit) {
+      const padOf = (code: string) => {
+        const pad = PAD_CODES.indexOf(code)
+        return pad >= 0 && pad < kit.length ? pad : undefined
+      }
+      const down = (event: KeyboardEvent) => {
+        if (event.repeat || event.metaKey || event.ctrlKey || event.altKey)
+          return
+        if (typing(event.target)) return
+        const pad = padOf(event.code)
+        if (pad === undefined) return
+        event.preventDefault()
+        kitHands.play(computerId(event.code), pad)
+        pick(pad)
+      }
+      const up = (event: KeyboardEvent) => {
+        if (CODES.includes(event.code)) kitHands.stop(computerId(event.code))
+      }
+      const blur = () => kitHands.stopComputerKeys()
+      window.addEventListener('keydown', down)
+      window.addEventListener('keyup', up)
+      window.addEventListener('blur', blur)
+      return () => {
+        window.removeEventListener('keydown', down)
+        window.removeEventListener('keyup', up)
+        window.removeEventListener('blur', blur)
+        kitHands.stopComputerKeys()
+      }
+    }
     const noteOf = (code: string): number | undefined => {
       if (pads) return notes[PAD_CODES.indexOf(code)]
       const semitones = KEY_CODES.indexOf(code)
@@ -315,7 +388,19 @@ export function PlaySurface({
       window.removeEventListener('keyup', up)
       window.removeEventListener('blur', blur)
     }
-  }, [hands, pads, xy, notes, lowestNote, fit.octaves, fit.xy, shift])
+  }, [
+    hands,
+    kitHands,
+    kit,
+    pick,
+    pads,
+    xy,
+    notes,
+    lowestNote,
+    fit.octaves,
+    fit.xy,
+    shift,
+  ])
 
   const keysNavigator = (className: string) => (
     <KeysNavigator
@@ -346,14 +431,16 @@ export function PlaySurface({
         ref={headerRef}
         className="@container flex h-11 shrink-0 items-center gap-3"
       >
-        {/* Held upright, the patch takes the room the buttons leave */}
+        {/* Held upright, the patch (start's last) takes the room the
+            buttons leave */}
         <div
-          className={`flex min-w-0 items-center gap-2 ${inHeader ? '' : 'flex-1 *:flex-1'}`}
+          className={`flex min-w-0 items-center gap-2 ${inHeader ? '' : 'flex-1 *:last:flex-1'}`}
         >
           {start}
         </div>
         {inHeader && keysNavigator('ml-auto h-7 max-w-md min-w-40 flex-1')}
         <div
+          hidden={kit !== undefined}
           className={`flex shrink-0 items-center gap-2 ${inHeader ? '' : 'ml-auto'}`}
         >
           <IconButton
@@ -378,7 +465,18 @@ export function PlaySurface({
       <div className="flex min-h-28 flex-1 gap-2">
         {beside}
         <div ref={surfaceRef} className="relative min-w-0 flex-1">
-          {pads ? (
+          {kit ? (
+            <KitPads
+              hands={kitHands}
+              grid={fit.kit}
+              names={kit}
+              marks={padMarks}
+              picked={picked}
+              onPick={pick}
+              fullVelocity={fullVelocity}
+              label="The kit's pads: a tap plays a pad and picks it, its sound in the editor. Computer keys A to ; and Q to Y play them"
+            />
+          ) : pads ? (
             <Pads
               hands={hands}
               grid={grid}

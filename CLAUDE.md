@@ -5,7 +5,9 @@ played by touch, installable as a PWA. The plan and the decisions behind it:
 `docs/plan/initial-setup.md`; the sound built from inputs, chains and
 modulators: `docs/plan/sound-chains.md`; effects, then parts and a drum
 kit, then a step sequencer, under way:
-`docs/plan/effects-parts-sequencer.md`. What real devices did:
+`docs/plan/effects-parts-sequencer.md`; tracks (a synth or a kit each,
+as many as are added), then a sequence for each and a song, under way:
+`docs/plan/tracks-and-song.md`. What real devices did:
 `docs/platform-notes.md`.
 
 ## Commands
@@ -52,10 +54,13 @@ src/dsp/      pure DSP (oscillators, envelopes, LFOs, filters, voices);
               parts: voice pool, allocator, mono/legato, routes, mix;
               chainVoice.ts one voice of it; slots.ts numbers the parts,
               sources and destinations; effects.ts the chorus, delay
-              and reverb, in stereo, in racks: a part's inserts, a
-              bus's, the master's; output.ts a part's strip (its
-              synth, inserts, fader and sends) and the mixer after
-              them (up to four buses, the master, the clip); clip.ts
+              and reverb, in stereo, in racks: a sound's inserts, the
+              kit's, a bus's, the master's; output.ts a sound's strip
+              (its synth, inserts and sends), a part (a fader over
+              strips: the synth's one; the kit's sixteen, a group
+              summed through the kit's chain, its inserts and sends)
+              and the mixer
+              after them (up to four buses, the master, the clip); clip.ts
               the soft
               clip the output ends in, untouched up to -6 dBFS, and
               its inverse for the meters; chainStress.ts is the
@@ -65,7 +70,9 @@ src/dsp/      pure DSP (oscillators, envelopes, LFOs, filters, voices);
 src/worklet/  the AudioWorkletProcessor around src/dsp; own globals and
               tsconfig (tsconfig.worklet.json), loaded via ?worker&url;
               sound.ts loads a sound document onto the ChainSynth and
-              its effects, and sets its knobs one by one (Node-testable);
+              its effects, and sets its knobs one by one, the mix and
+              the kit's chain (Node-testable); the processor keeps a
+              part for each track, by the track's id;
               load.ts the
               share of its time the synth takes, for the status line
 src/sw/       the service worker (own globals, tsconfig.sw.json): keeps
@@ -77,19 +84,29 @@ src/engine/   AudioContext lifecycle, unlock, node wiring; the sound,
               held here and edited, sent whole or as the knobs that
               moved; the session's mix, sent whole; the analysers on the
               output (each side, the waveform, the spectrum), the
-              master's and each part's own (the node's later outputs);
+              master's and each track's own (the node's later outputs);
+              the tracks, the one picked edited and played;
               protocol.ts is the message types both threads share
               (plain data only)
 src/state/    params.ts: the knob schema and the old parameters;
               presets.ts: the preset and file format (version 2 holds
-              sounds); factory.ts: the shipped presets, written by
-              name (sound/write.ts); library.ts: user presets and the
-              last sound, kept in localStorage;
+              sounds); factory.ts: the shipped presets and the factory
+              kit, written by name (sound/write.ts); library.ts: user
+              presets and the session's tracks, kept in localStorage;
               surface.ts: keys or pads, the pads' key (root and scale);
+              kit.ts: a kit's 16 pads, each a preset mapped onto
+              it and played as it is at the pad's note, and its
+              chain (the inserts and sends after them, every
+              pad's), and a pad shown with the chain;
+              kit.bench.ts the kit's cost;
+              tracks.ts: the session's tracks, each a synth (its
+              sound) or a kit (its pads and chain), up to eight,
+              named, added, moved and removed, and the track played
+              and the pad picked;
               settings.ts: the device's settings (voices, latency,
               velocity, what the screen shows); mix.ts: the session's
-              mix (each part's fader, a level and a balance; the buses
-              every part sends to, lettered by
+              mix (each track's fader, a level and a balance, by the
+              track's place; the buses every track sends to, lettered by
               their place, each a row of effects, a level and a balance,
               and the master's effects and level), kept in
               localStorage; sound/: a sound as a
@@ -101,7 +118,8 @@ src/viz/      pure display math (scope trigger and decimation, envelope
               and LFO outlines, filter response, drive curve, keyboard
               and pad grid geometry, the sound editor's input column
               (and left of it what each input reads, pegged to it) and
-              chain rows in graph.ts, the mix's strip, bus rows and
+              chain rows in graph.ts, the kit's pads and chain in its
+              place in kitGraph.ts, the mix's strip, bus rows and
               master in mixGraph.ts, the master's views (spectrum,
               spectrogram, stereo, meters) in master.ts, and where a
               tile dragged goes in
@@ -112,8 +130,9 @@ src/viz/      pure display math (scope trigger and decimation, envelope
               a glide's dot in xy.ts, where a popover stands by its
               button in popover.ts)
 src/ui/       React components; SoundEditor.tsx the sound as tiles
-              (editor.ts: their names, lines, pictograms and colours), or,
-              switched to Mix, the session's mix; the sound's Out and the
+              (editor.ts: their names, lines, pictograms and colours),
+              with the kit its pads and its chain, or, switched to Mix,
+              the session's mix; the sound's Out and the
               mix's Master hold a view of the output (MasterViews.tsx:
               Scope.tsx's waveform, the spectrum, the spectrogram, the
               stereo, the meters; frames.ts draws them a display frame
@@ -127,8 +146,12 @@ src/ui/       React components; SoundEditor.tsx the sound as tiles
               a knob held, or a source's depths on the tiles picked;
               tileDrag.ts holds a tile and drags it to a new place; Knob.tsx
               turns one knob of one part (or a source's depth into one),
-              finer with the finger off to the side; PlaySurface.tsx plays
-              notes on Keys.tsx, Pads.tsx or XyPad.tsx (hands.ts: who
+              finer with the finger off to the side; TrackPicker.tsx
+              picks the track played, a popover on its button, and adds
+              one (a track is renamed, moved and removed on its strip in
+              the Mix); PlaySurface.tsx plays
+              notes on Keys.tsx, Pads.tsx or XyPad.tsx, or the kit on
+              KitPads.tsx (hands.ts: who
               holds which note, and bends it), KeysNavigator.tsx moves the keys a white key at a
               time over C−1 to G9 (all of MIDI's notes), ModWheel.tsx the mod wheel at their
               left (the Wheel source) and its Route, PresetBrowser.tsx
