@@ -59,7 +59,7 @@ export const BUTTON = `${BUTTON_SHAPE} bg-white/5 text-zinc-200 aria-pressed:bg-
 export const BUTTON_DANGER = `${BUTTON_SHAPE} bg-red-500/20 text-red-200`
 
 /** A 44 px button that confirms: a form's submit */
-export const BUTTON_CONFIRM = `${BUTTON_SHAPE} bg-emerald-500/20 text-emerald-200`
+export const BUTTON_CONFIRM = `${BUTTON_SHAPE} bg-(--accent)/20 text-(--accent)`
 
 /** An option's face: dim, lit when chosen (aria-pressed) */
 const OPTION_FACE =
@@ -90,7 +90,7 @@ export const ICON_BUTTON =
 
 /** A 44 px text field or select */
 export const FIELD =
-  'h-11 min-w-0 rounded-[10px] bg-black/40 px-3 text-[13px] text-zinc-100 outline-none focus-visible:shadow-[inset_0_0_0_1px_#34d399]'
+  'h-11 min-w-0 rounded-[10px] bg-black/40 px-3 text-[13px] text-zinc-100 outline-none focus-visible:shadow-[inset_0_0_0_1px_var(--accent)]'
 
 /**
  * A touch kept still this long (ms) is held, not tapped: a knob held
@@ -112,7 +112,7 @@ export const SMALL_BUTTON = `${SMALL_BUTTON_SHAPE} bg-white/5 text-zinc-200 aria
 export const SMALL_DANGER = `${SMALL_BUTTON_SHAPE} bg-red-500/15 text-red-200`
 
 /** A 28 px button that confirms: a panel's form's submit */
-export const SMALL_CONFIRM = `${SMALL_BUTTON_SHAPE} bg-emerald-500/20 text-emerald-200`
+export const SMALL_CONFIRM = `${SMALL_BUTTON_SHAPE} bg-(--accent)/20 text-(--accent)`
 
 /** One of a row of 28 px options, the chosen one aria-pressed */
 export const SMALL_OPTION = `${SMALL_BUTTON_SHAPE} bg-white/5 text-zinc-400 aria-pressed:bg-white/10 aria-pressed:text-white`
@@ -122,7 +122,7 @@ export const SMALL_ICON_BUTTON = `${TALL_HIT} flex size-7 shrink-0 items-center 
 
 /** A 28 px text field in a panel, what is typed at 13 px */
 export const SMALL_FIELD =
-  'h-7 min-w-0 rounded-md bg-black/35 px-2.5 text-[13px] text-zinc-100 outline-none focus-visible:shadow-[inset_0_0_0_1px_#34d399]'
+  'h-7 min-w-0 rounded-md bg-black/35 px-2.5 text-[13px] text-zinc-100 outline-none focus-visible:shadow-[inset_0_0_0_1px_var(--accent)]'
 
 /** A 28 px select in a panel, the option chosen in its label's type */
 export const SMALL_SELECT =

@@ -279,7 +279,7 @@ export function App({
         <button
           type="button"
           onClick={() => location.reload()}
-          className="w-full max-w-xs rounded-xl bg-emerald-500 px-6 py-4 text-lg font-semibold text-black"
+          className="w-full max-w-xs rounded-xl bg-(--accent) px-6 py-4 text-lg font-semibold text-black"
         >
           Reload
         </button>
@@ -514,7 +514,7 @@ export function App({
             Loopromeda
           </span>
           <span
-            className={`w-full max-w-xs rounded-xl bg-emerald-500 px-6 py-4 text-lg font-semibold text-black group-focus-visible:ring-2 group-focus-visible:ring-emerald-200 group-focus-visible:ring-offset-2 group-focus-visible:ring-offset-black ${state === 'starting' ? 'opacity-50' : ''}`}
+            className={`w-full max-w-xs rounded-xl bg-(--accent) px-6 py-4 text-lg font-semibold text-black group-focus-visible:ring-2 group-focus-visible:ring-(--accent) group-focus-visible:ring-offset-2 group-focus-visible:ring-offset-black ${state === 'starting' ? 'opacity-50' : ''}`}
           >
             {state === 'starting' ? 'Starting…' : 'Tap to start audio'}
           </span>

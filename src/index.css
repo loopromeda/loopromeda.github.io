@@ -97,6 +97,12 @@ body {
   color: #e7e7ee;
 }
 
+/* The accent role's colour: the theme's (ui/theme.ts), put here by the
+   page (App). This value is the Default theme's, for the first paint */
+:root {
+  --accent: #34d399;
+}
+
 /*
  * A small select in a panel: no native arrow, whose room differs from one
  * browser to the next, but a chevron of its own, 0.5rem in from its right

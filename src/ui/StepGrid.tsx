@@ -52,12 +52,12 @@ const BLACK_BEAT_CELL = 'border-r border-b border-black/50 bg-white/[0.07]'
 
 /** A note's face within its box: its start marked at its left */
 const NOTE =
-  'absolute inset-px rounded-[3px] bg-emerald-400 shadow-[inset_2px_0_0_rgb(255_255_255/0.55)]'
+  'absolute inset-px rounded-[3px] bg-(--accent) shadow-[inset_2px_0_0_rgb(255_255_255/0.55)]'
 /** One held in from the bar before: no start to it */
-const HELD_NOTE = 'absolute inset-px rounded-r-[3px] bg-emerald-400'
+const HELD_NOTE = 'absolute inset-px rounded-r-[3px] bg-(--accent)'
 
 /** A bar's chip: the bar shown pressed, the bar playing marked under it */
-const BAR = `${TALL_HIT} flex size-7 shrink-0 items-center justify-center rounded-md bg-white/5 font-mono text-[11px] font-semibold text-zinc-400 aria-pressed:bg-white/10 aria-pressed:text-white data-playing:shadow-[inset_0_-2px_0_#34d399]`
+const BAR = `${TALL_HIT} flex size-7 shrink-0 items-center justify-center rounded-md bg-white/5 font-mono text-[11px] font-semibold text-zinc-400 aria-pressed:bg-white/10 aria-pressed:text-white data-playing:shadow-[inset_0_-2px_0_var(--accent)]`
 
 const LABEL =
   'flex min-h-0 min-w-0 items-center justify-end rounded-sm pr-1 font-mono text-[10px] leading-none text-zinc-400 active:bg-white/10'
@@ -66,7 +66,7 @@ const BLACK_LABEL =
 const PAD_LABEL =
   'flex min-h-0 min-w-0 items-center rounded-sm px-1 text-left text-[10px] leading-none text-zinc-400 active:bg-white/10'
 const PICKED_LABEL =
-  'flex min-h-0 min-w-0 items-center rounded-sm px-1 text-left text-[10px] leading-none text-emerald-300 active:bg-white/10'
+  'flex min-h-0 min-w-0 items-center rounded-sm px-1 text-left text-[10px] leading-none text-(--accent) active:bg-white/10'
 
 /** A finger on the grid: the note it holds, and what it had as it took it */
 interface Drag {

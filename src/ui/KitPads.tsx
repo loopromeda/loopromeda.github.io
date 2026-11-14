@@ -12,7 +12,7 @@ const PAD =
   'relative flex min-w-0 items-end overflow-hidden rounded-lg p-2 text-[11px] leading-tight font-medium shadow-[inset_0_-3px_0_rgb(0_0_0/0.25)] data-pressed:bg-[#1e6a55] data-pressed:text-emerald-100 data-pressed:shadow-[inset_0_3px_0_#34d399]'
 const OTHER_PAD = `${PAD} bg-[#2a2a31] text-zinc-400`
 /** The pad picked, its sound in the editor: ringed, its name brighter */
-const PICKED_PAD = `${PAD} bg-[#2a2a31] text-zinc-100 outline-2 -outline-offset-2 outline-emerald-400/80`
+const PICKED_PAD = `${PAD} bg-[#2a2a31] text-zinc-100 outline-2 -outline-offset-2 outline-(--accent)/80`
 
 /**
  * The kit's pads (src/state/kit.ts), names[k] on pad k and marks[k], if

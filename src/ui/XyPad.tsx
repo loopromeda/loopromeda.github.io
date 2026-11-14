@@ -13,16 +13,16 @@ import type { Hands } from './hands'
 
 /** The ring under a finger, and the line down the pad at its pitch */
 const MARK =
-  'pointer-events-none absolute top-0 left-0 size-11 -translate-1/2 rounded-full bg-emerald-400/15 shadow-[inset_0_0_0_2px_#34d399]'
+  'pointer-events-none absolute top-0 left-0 size-11 -translate-1/2 rounded-full bg-(--accent)/15 shadow-[inset_0_0_0_2px_var(--accent)]'
 const STEM =
-  'pointer-events-none absolute inset-y-0 left-0 w-px bg-emerald-400/50'
+  'pointer-events-none absolute inset-y-0 left-0 w-px bg-(--accent)/50'
 const TUNING =
-  'pointer-events-none absolute top-0 left-0 rounded bg-black/60 px-1 font-mono text-[11px] whitespace-nowrap text-emerald-100'
+  'pointer-events-none absolute top-0 left-0 rounded bg-black/60 px-1 font-mono text-[11px] whitespace-nowrap text-(--accent)'
 /** Where a gliding note sounds, and its way left to the finger, turned */
 const SOUND =
-  'pointer-events-none absolute top-0 left-0 hidden size-3 -translate-1/2 rounded-full bg-emerald-300 shadow-[0_0_8px_#34d399]'
+  'pointer-events-none absolute top-0 left-0 hidden size-3 -translate-1/2 rounded-full bg-(--accent) shadow-[0_0_8px_var(--accent)]'
 const TRAIL =
-  'pointer-events-none absolute top-0 left-0 hidden h-0.5 origin-left -translate-y-1/2 rounded-full bg-emerald-300/45'
+  'pointer-events-none absolute top-0 left-0 hidden h-0.5 origin-left -translate-y-1/2 rounded-full bg-(--accent)/45'
 /** The ring's radius, CSS px (size-11): the trail stops at its edge */
 const RING = 22
 /** The pitch stands over the ring, or under it this near the pad's top */
@@ -225,7 +225,7 @@ export function XyPad({
           key={line.note}
           aria-hidden
           style={{ left: `${line.x * 100}%` }}
-          className={`pointer-events-none absolute inset-y-0 w-px ${line.c ? 'bg-emerald-300/30' : line.black ? 'bg-white/[0.04]' : 'bg-white/[0.09]'}`}
+          className={`pointer-events-none absolute inset-y-0 w-px ${line.c ? 'bg-(--accent)/30' : line.black ? 'bg-white/[0.04]' : 'bg-white/[0.09]'}`}
         >
           {line.c && (
             <span

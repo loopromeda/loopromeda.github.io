@@ -145,7 +145,7 @@ export function KeysNavigator({
       onLostPointerCapture={up}
       onKeyDown={step}
       // Its hit area reaches into the gaps above and below it
-      className={`relative touch-none rounded-md outline-none before:absolute before:inset-x-0 before:-inset-y-2 focus-visible:ring-2 focus-visible:ring-emerald-400 ${className}`}
+      className={`relative touch-none rounded-md outline-none before:absolute before:inset-x-0 before:-inset-y-2 focus-visible:ring-2 focus-visible:ring-(--accent) ${className}`}
     >
       <ReachKeys />
       <div
@@ -164,7 +164,7 @@ export function KeysNavigator({
       <div
         aria-hidden="true"
         style={{ left: at(position), width: at(whites) }}
-        className="pointer-events-none absolute inset-y-0 rounded-[5px] bg-emerald-400/10 shadow-[0_0_0_1.5px_#34d399]"
+        className="pointer-events-none absolute inset-y-0 rounded-[5px] bg-(--accent)/10 shadow-[0_0_0_1.5px_var(--accent)]"
       />
     </div>
   )

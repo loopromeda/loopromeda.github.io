@@ -118,7 +118,7 @@ export function RowNavigator({
       onLostPointerCapture={up}
       onKeyDown={step}
       // Its hit area reaches into the gaps at its sides
-      className={`relative w-4 shrink-0 touch-none rounded-md outline-none before:absolute before:inset-y-0 before:-inset-x-2 focus-visible:ring-2 focus-visible:ring-emerald-400 ${className}`}
+      className={`relative w-4 shrink-0 touch-none rounded-md outline-none before:absolute before:inset-y-0 before:-inset-x-2 focus-visible:ring-2 focus-visible:ring-(--accent) ${className}`}
     >
       <div
         aria-hidden="true"
@@ -169,7 +169,7 @@ export function RowNavigator({
       <div
         aria-hidden="true"
         style={{ bottom: at(position, total), height: at(rows, total) }}
-        className="pointer-events-none absolute inset-x-0 rounded-[5px] bg-emerald-400/10 shadow-[0_0_0_1.5px_#34d399]"
+        className="pointer-events-none absolute inset-x-0 rounded-[5px] bg-(--accent)/10 shadow-[0_0_0_1.5px_var(--accent)]"
       />
     </div>
   )

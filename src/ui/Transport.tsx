@@ -83,7 +83,7 @@ const WANT_W = 20
 /** Around its choices, in CSS px: the header, a gap, the padding (p-2.5) */
 const AROUND = 28 + 8 + 2 * 10
 
-const SLIDER = 'h-11 min-w-0 flex-1 accent-emerald-400'
+const SLIDER = 'h-11 min-w-0 flex-1 accent-[var(--accent)]'
 
 /**
  * The song's tempo and its swing, a popover on the tempo's button: the
@@ -274,10 +274,9 @@ function Stroke({ path }: { path: string }) {
   )
 }
 
-const LIGHT =
-  'size-1.5 shrink-0 rounded-full bg-white/15 data-on:bg-emerald-400'
+const LIGHT = 'size-1.5 shrink-0 rounded-full bg-white/15 data-on:bg-(--accent)'
 const BEAT_LIGHT =
-  'size-2 shrink-0 rounded-full bg-white/30 data-on:bg-emerald-400'
+  'size-2 shrink-0 rounded-full bg-white/30 data-on:bg-(--accent)'
 
 /**
  * A bar of sixteenths as a row of lights, the beats' larger: the one the
