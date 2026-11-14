@@ -477,7 +477,9 @@ export function SoundEditor({
   // screen a little over a third of the row, up to 40rem. Both fill the
   // height the page gives the editor beside (App.tsx: what the keys
   // leave), the tiles at the top of theirs, and the graph pans only past
-  // it. On a tall
+  // it. Beside, the dock starts below the tab rail (top-14: its 40 px and
+  // the gap), since at z-20 a dock at the card's own inset would lie over
+  // the switch and the rail's buttons. On a tall
   // one (index.css) the panel stands under the graph again, the whole
   // width, its knobs 72 px in a row over the keys (knobRow), and the graph
   // takes the rest of the height. Held upright or beside, the tab panel
@@ -562,7 +564,7 @@ export function SoundEditor({
       </section>
       <div
         ref={setDock}
-        className={`absolute inset-x-2 bottom-2 z-20 h-[calc(7.75rem_+_var(--knob))] max-h-[calc(100%-9.25rem)] min-h-0 side:inset-y-2 side:right-2 side:left-auto side:h-auto side:max-h-none side:w-[clamp(22rem,36%,40rem)] tall:top-auto tall:left-2 tall:h-[calc(7.75rem_+_var(--knob))] tall:max-h-[calc(100%-9.25rem)] tall:w-auto ${panel ? `grid overflow-y-auto overscroll-contain ${DOCKED}` : 'pointer-events-none'}`}
+        className={`absolute inset-x-2 bottom-2 z-20 h-[calc(7.75rem_+_var(--knob))] max-h-[calc(100%-9.25rem)] min-h-0 side:top-14 side:bottom-2 side:right-2 side:left-auto side:h-auto side:max-h-none side:w-[clamp(22rem,36%,40rem)] tall:top-auto tall:left-2 tall:h-[calc(7.75rem_+_var(--knob))] tall:max-h-[calc(100%-9.25rem)] tall:w-auto ${panel ? `grid overflow-y-auto overscroll-contain ${DOCKED}` : 'pointer-events-none'}`}
       >
         {!panel && (
           <button
