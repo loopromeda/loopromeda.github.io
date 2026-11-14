@@ -161,7 +161,11 @@ Built 2026-11-13.
   up or down from a note sets how hard it plays, sideways (a synth's)
   how long. Bars are picked by number, added and taken at the end;
   Clear asks first. The column playing and the bar's number are lit
-  outside React.
+  outside React. While it plays the grid shows the bar playing, a page
+  at a time, as the position over it counts the bars (ashon: "위쪽에서는
+  1 -> 2 -> 3 -> 4 로 가는데 아래쪽 노트는 그대로 있어서"), until a bar
+  is tapped; the bar playing is ringed, not underlined, and a note is one
+  colour, no lighter edge at its start.
 - **The transport** (Play and the tempo, `src/ui/Transport.tsx`) stands
   in the play surface's header whichever surface is up, in a header 600
   px wide or more; in a narrower one (a phone upright) in a row of its

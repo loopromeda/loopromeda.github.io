@@ -50,14 +50,16 @@ const BEAT_CELL = 'border-r border-b border-(--under)/50 bg-(--over)/12'
 const BLACK_CELL = 'border-r border-b border-(--under)/50 bg-(--over)/3'
 const BLACK_BEAT_CELL = 'border-r border-b border-(--under)/50 bg-(--over)/7'
 
-/** A note's face within its box: its start marked at its left */
-const NOTE =
-  'absolute inset-px rounded-[3px] bg-(--accent) shadow-[inset_2px_0_0_rgb(255_255_255/0.55)]'
-/** One held in from the bar before: no start to it */
+/** A note's face within its box, one colour */
+const NOTE = 'absolute inset-px rounded-[3px] bg-(--accent)'
+/** One held in from the bar before: no start to it, so no rounded left */
 const HELD_NOTE = 'absolute inset-px rounded-r-[3px] bg-(--accent)'
 
-/** A bar's chip: the bar shown pressed, the bar playing marked under it */
-const BAR = `${TALL_HIT} flex size-7 shrink-0 items-center justify-center rounded-md bg-(--lift) font-mono text-[11px] font-semibold text-(--ink-400) aria-pressed:bg-(--lift-2) aria-pressed:text-(--ink-0) data-playing:shadow-[inset_0_-2px_0_var(--accent)]`
+/**
+ * A bar's chip: the bar shown pressed, the bar playing ringed within and
+ * its number lit
+ */
+const BAR = `${TALL_HIT} flex size-7 shrink-0 items-center justify-center rounded-md bg-(--lift) font-mono text-[11px] font-semibold text-(--ink-400) aria-pressed:bg-(--lift-2) aria-pressed:text-(--ink-0) data-playing:text-(--accent) data-playing:shadow-[inset_0_0_0_1.5px_var(--accent)]`
 
 const LABEL =
   'flex min-h-0 min-w-0 items-center justify-end rounded-sm pr-1 font-mono text-[10px] leading-none text-(--ink-400) active:bg-(--lift-2)'
@@ -96,8 +98,11 @@ interface Drag {
  * down from a note sets its velocity (the fainter, the softer) and, on a
  * synth, sideways its length. A note put while the sequencer is stopped
  * is heard. Over the grid: a bar fewer or more, the loop's bars (a tap
- * shows one, the one playing marked and carried into sight, the row
- * panned sideways when there are more of them than fit), and Clear. A
+ * shows one, the one playing ringed and carried into sight, the row
+ * panned sideways when there are more of them than fit), and Clear.
+ * While the sequencer plays the grid shows the bar playing, page by
+ * page, until a bar is tapped (the one playing tapped, or Play, follows
+ * again); stopped, it shows the bar Play starts from as that moves. A
  * camera at the grid's left frames the rows shown over the whole reach:
  * a tap or a drag brings another part of it on screen. A row's name at
  * the left plays it, and picks a kit's pad. A dot marks a row another
@@ -137,6 +142,22 @@ export function StepGrid({
   const bars = barsOf(loop)
   const [shown, setShown] = useState(0)
   const bar = Math.min(shown, bars - 1)
+  // While it plays, the bar shown is the bar playing, until one is picked
+  const followRef = useRef(true)
+  /** The loop's bar the step falls in: none for none */
+  const barAt = useCallback(
+    (step: number) =>
+      step < 0 ? -1 : Math.floor((step % loop.steps) / COLUMNS),
+    [loop.steps]
+  )
+  /**
+   * Shows a bar picked: while it plays, kept in sight (the bar playing
+   * followed again where it is the one picked)
+   */
+  const pickBar = (each: number) => {
+    setShown(each)
+    followRef.current = !engine.getPlaying() || each === barAt(engine.step)
+  }
   // The rows another track of the same kind plays in the bar shown
   const kind = kit === undefined ? 'synth' : 'kit'
   const others = useMemo(() => {
@@ -196,7 +217,11 @@ export function StepGrid({
     let marked = -1
     const show = (step: number) => {
       const at = step < 0 ? -1 : step % loop.steps
-      const playing = at < 0 ? -1 : Math.floor(at / COLUMNS)
+      const playing = barAt(step)
+      // Paged to the bar playing: shown again, from the bar's own render
+      if (followRef.current && playing >= 0 && playing !== bar) {
+        setShown(playing)
+      }
       if (playing !== marked) {
         if (marked >= 0) chips.children[marked]?.removeAttribute('data-playing')
         if (playing >= 0) {
@@ -217,7 +242,22 @@ export function StepGrid({
       stop()
       if (marked >= 0) chips.children[marked]?.removeAttribute('data-playing')
     }
-  }, [engine, loop.steps, bar, bars])
+  }, [engine, loop.steps, bar, bars, barAt])
+
+  // Played, the grid follows the bar playing again; stopped, it shows
+  // the bar Play starts from as that moves (the arrow keys)
+  useEffect(() => {
+    let cue = engine.cue
+    return engine.subscribeTransport(() => {
+      if (engine.getPlaying()) {
+        followRef.current = true
+      } else if (engine.cue !== cue) {
+        followRef.current = true
+        setShown(barAt(engine.cue))
+      }
+      cue = engine.cue
+    })
+  }, [engine, barAt])
 
   // A finger still down as the grid goes lets its note go
   useEffect(
@@ -341,7 +381,7 @@ export function StepGrid({
           disabled={bars <= 1}
           onClick={() => {
             engine.editLoop((each) => setBars(each, bars - 1))
-            setShown(Math.min(bar, bars - 2))
+            pickBar(Math.min(bar, bars - 2))
           }}
         />
         <SmallIconButton
@@ -350,7 +390,7 @@ export function StepGrid({
           disabled={bars >= MAX_BARS}
           onClick={() => {
             engine.editLoop((each) => setBars(each, bars + 1))
-            setShown(bars)
+            pickBar(bars)
           }}
         />
         <div
@@ -365,7 +405,7 @@ export function StepGrid({
               type="button"
               aria-pressed={each === bar}
               aria-label={`Bar ${each + 1}`}
-              onClick={() => setShown(each)}
+              onClick={() => pickBar(each)}
               className={BAR}
             >
               {each + 1}

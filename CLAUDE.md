@@ -217,8 +217,9 @@ src/ui/       React components; SoundEditor.tsx the sound as tiles
               KitPads.tsx (hands.ts: who
               holds which note, bends it, and on the XY pad places it,
               its Slide from the start), or with Seq shows
-              StepGrid.tsx, the picked track's loop a bar at a time
-              (a tap puts a note or takes it away, a drag from one
+              StepGrid.tsx, the picked track's loop a bar at a time,
+              the bar playing followed (a tap puts a note or takes
+              it away, a drag from one
               sets how hard and how long; RowNavigator.tsx a camera
               over its rows), with the lights for the bar's steps in
               its header, or in a row under a narrow one (Play and the
