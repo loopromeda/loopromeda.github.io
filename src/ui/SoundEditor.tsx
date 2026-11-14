@@ -455,7 +455,7 @@ export function SoundEditor({
   // screen a little over a third of the row, up to 40rem. Both fill the
   // height the page gives the editor beside (App.tsx: what the keys
   // leave), the tiles at the top of theirs, and the graph pans only past
-  // it. On a wide
+  // it. On a tall
   // one (index.css) the panel stands under the graph again, the whole
   // width, its knobs 72 px in a row over the keys (knobRow), and the graph
   // takes the rest of the height. Held upright, the rack stands over the
@@ -476,7 +476,7 @@ export function SoundEditor({
   // last of them, shown. Either way the frame pans them out from under
   // the panel or the bar, and showing it resizes nothing.
   return (
-    <div className="relative isolate flex min-h-0 flex-1 flex-col [--dock:calc(7.75rem_+_var(--knob)_+_0.5rem)] [--knob:clamp(3rem,calc((100vw_-_4.5rem)/8.5),4.5rem)] side:[--dock:0px] side:[--knob:3rem] wide:[--knob:4.5rem]">
+    <div className="relative isolate flex min-h-0 flex-1 flex-col [--dock:calc(7.75rem_+_var(--knob)_+_0.5rem)] [--knob:clamp(3rem,calc((100vw_-_4.5rem)/8.5),4.5rem)] side:[--dock:0px] side:[--knob:3rem] tall:[--knob:4.5rem]">
       <section
         aria-label={
           pane === 'mix'
@@ -525,14 +525,14 @@ export function SoundEditor({
       </section>
       <div
         ref={setDock}
-        className={`absolute inset-x-2 bottom-2 z-20 h-[calc(7.75rem_+_var(--knob))] max-h-[calc(100%-9.25rem)] min-h-0 side:inset-y-2 side:right-2 side:left-auto side:h-auto side:max-h-none side:w-[clamp(22rem,36%,40rem)] wide:top-auto wide:left-2 wide:h-[calc(7.75rem_+_var(--knob))] wide:max-h-[calc(100%-9.25rem)] wide:w-auto ${panel ? `grid overflow-y-auto overscroll-contain ${DOCKED}` : 'pointer-events-none'}`}
+        className={`absolute inset-x-2 bottom-2 z-20 h-[calc(7.75rem_+_var(--knob))] max-h-[calc(100%-9.25rem)] min-h-0 side:inset-y-2 side:right-2 side:left-auto side:h-auto side:max-h-none side:w-[clamp(22rem,36%,40rem)] tall:top-auto tall:left-2 tall:h-[calc(7.75rem_+_var(--knob))] tall:max-h-[calc(100%-9.25rem)] tall:w-auto ${panel ? `grid overflow-y-auto overscroll-contain ${DOCKED}` : 'pointer-events-none'}`}
       >
         {!panel && (
           <button
             type="button"
             aria-label={`Show the knobs: ${shownName}`}
             onClick={() => show(true)}
-            className={`pointer-events-auto absolute inset-x-0 bottom-0 flex h-9 items-center gap-2 px-3 text-left side:inset-x-auto side:inset-y-0 side:right-0 side:h-auto side:w-11 side:justify-center side:px-0 wide:inset-x-0 wide:top-auto wide:h-9 wide:w-auto wide:justify-start wide:px-3 ${DOCKED}`}
+            className={`pointer-events-auto absolute inset-x-0 bottom-0 flex h-9 items-center gap-2 px-3 text-left side:inset-x-auto side:inset-y-0 side:right-0 side:h-auto side:w-11 side:justify-center side:px-0 tall:inset-x-0 tall:top-auto tall:h-9 tall:w-auto tall:justify-start tall:px-3 ${DOCKED}`}
           >
             <svg
               width="14"
@@ -544,19 +544,19 @@ export function SoundEditor({
               strokeLinecap="round"
               strokeLinejoin="round"
               aria-hidden="true"
-              className="shrink-0 text-zinc-300 side:-rotate-90 wide:rotate-0"
+              className="shrink-0 text-zinc-300 side:-rotate-90 tall:rotate-0"
             >
               <path d="M4 11l5-5 5 5" />
             </svg>
             <span
               aria-hidden
-              className="text-xs font-semibold text-zinc-200 side:hidden wide:inline"
+              className="text-xs font-semibold text-zinc-200 side:hidden tall:inline"
             >
               Show the knobs
             </span>
             <span
               aria-hidden
-              className="min-w-0 truncate text-[11px] text-zinc-400 side:hidden wide:inline"
+              className="min-w-0 truncate text-[11px] text-zinc-400 side:hidden tall:inline"
             >
               {shownName}
             </span>

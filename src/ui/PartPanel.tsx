@@ -548,7 +548,7 @@ export function PartPanel({
           >
             <ActionIcon
               path={ICONS.hide}
-              className="side:-rotate-90 wide:rotate-0"
+              className="side:-rotate-90 tall:rotate-0"
             />
           </button>
         </span>

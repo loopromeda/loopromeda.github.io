@@ -43,11 +43,13 @@
 @custom-variant short (@media (height < 30rem));
 
 /*
- * Wider still, and tall enough for three rows (a desktop's window): the
- * editor's panel moves from beside the graph to under it, a row of knobs
- * over the keys, and the graph has the whole width (SoundEditor.tsx)
+ * Tall enough for a row of knobs under the graph (a desktop's window, a
+ * tablet held upright): the editor's panel moves from beside the graph to
+ * under it, a row of knobs over the keys, and the graph has the whole
+ * width (SoundEditor.tsx). md's width too: under it there is no beside to
+ * leave (side), the panel standing under the graph already.
  */
-@custom-variant wide (@media (width >= 80rem) and (height >= 48rem));
+@custom-variant tall (@media (width >= 48rem) and (height >= 48rem));
 
 /*
  * The master's views, at least two and a half times as wide as they are

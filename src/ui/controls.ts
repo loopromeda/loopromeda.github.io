@@ -130,22 +130,22 @@ export const SMALL_SELECT =
 
 /**
  * Columns for one to seven knobs, written out for Tailwind to find:
- * across the panel, or 9rem each in the row a wide screen gives it
+ * across the panel, or 9rem each in the row a tall screen gives it
  */
 const KNOB_COLUMNS = [
-  'grid-cols-1 wide:grid-cols-[repeat(1,9rem)]',
-  'grid-cols-2 wide:grid-cols-[repeat(2,9rem)]',
-  'grid-cols-3 wide:grid-cols-[repeat(3,9rem)]',
-  'grid-cols-4 wide:grid-cols-[repeat(4,9rem)]',
-  'grid-cols-5 wide:grid-cols-[repeat(5,9rem)]',
-  'grid-cols-6 wide:grid-cols-[repeat(6,9rem)]',
-  'grid-cols-7 wide:grid-cols-[repeat(7,9rem)]',
+  'grid-cols-1 tall:grid-cols-[repeat(1,9rem)]',
+  'grid-cols-2 tall:grid-cols-[repeat(2,9rem)]',
+  'grid-cols-3 tall:grid-cols-[repeat(3,9rem)]',
+  'grid-cols-4 tall:grid-cols-[repeat(4,9rem)]',
+  'grid-cols-5 tall:grid-cols-[repeat(5,9rem)]',
+  'grid-cols-6 tall:grid-cols-[repeat(6,9rem)]',
+  'grid-cols-7 tall:grid-cols-[repeat(7,9rem)]',
 ] as const
 
 /**
  * A panel's count knobs, spread across its width: a column each, six at
  * most, so a part with few knobs leaves no empty stretch at the right. In
- * the row under the graph on a wide screen, where that would scatter
+ * the row under the graph on a tall screen, where that would scatter
  * them, each column is 9rem from the left. Every knob is the size
  * KNOB_SIZE gives its row's width, whatever the row holds: knobs match
  * from part to part. Seven (a chain's level and six inputs) stand in one
@@ -170,8 +170,8 @@ export const PANEL_BODY = 'my-auto flex flex-col gap-2'
  * A knob's width in a knobRow: --knob, or a sixth of the row (less five
  * gaps) where six would not fit; a seventh in a row of seven
  * (--knob-columns). The panel sets --knob with its height (SoundEditor):
- * 48 px beside the graph, up to 72 px under it on a wide screen held
- * upright, 72 px in a wide screen's row; 48 px elsewhere.
+ * 48 px beside the graph, up to 72 px under it on a tall screen held
+ * upright, 72 px in a tall screen's row; 48 px elsewhere.
  */
 export const KNOB_SIZE =
   'w-[min(var(--knob,3rem),calc((100cqw_-_(var(--knob-columns,6)_-_1)_*_0.25rem)/var(--knob-columns,6)))]'
