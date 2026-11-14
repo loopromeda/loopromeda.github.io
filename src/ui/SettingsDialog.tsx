@@ -17,7 +17,13 @@ import {
   type Latency,
   type VelocityMode,
 } from '../state/settings'
-import { CARD, SMALL_BUTTON, SMALL_OPTION } from './controls'
+import {
+  CARD,
+  SMALL_BUTTON,
+  SMALL_OPTION,
+  SMALL_SELECT,
+  TALL_HIT,
+} from './controls'
 import { SmallIconButton } from './IconButton'
 import { PlatformChecks } from './PlatformChecks'
 import { THEMES } from './theme'
@@ -32,11 +38,6 @@ const LATENCY_LABELS: readonly { value: Latency; label: string }[] = [
 const VELOCITY_LABELS: readonly { value: VelocityMode; label: string }[] = [
   { value: 'touch', label: 'Touch' },
   { value: 'full', label: 'Full' },
-]
-
-const ON_OFF: readonly { value: boolean; label: string }[] = [
-  { value: true, label: 'On' },
-  { value: false, label: 'Off' },
 ]
 
 /** The voice counts a measurement times */
@@ -151,7 +152,7 @@ export function SettingsDialog({
 
       <div className="-mx-2.5 flex min-h-0 flex-col gap-3 overflow-y-auto overscroll-contain px-2.5">
         <Group title="Look">
-          <Choice
+          <Dropdown
             label="Theme"
             hint="The chains' colours, the modulation colour and the accent, together. The letters stay, so colour is never the only cue."
             options={THEMES.map((theme) => ({
@@ -184,9 +185,8 @@ export function SettingsDialog({
             value={settings.latency}
             onChange={(latency) => set({ latency })}
           />
-          <Choice
+          <Toggle
             label="Waveform"
-            options={ON_OFF}
             value={settings.waveform}
             onChange={(waveform) => set({ waveform })}
           />
@@ -200,29 +200,26 @@ export function SettingsDialog({
             value={settings.velocity}
             onChange={(velocity) => set({ velocity })}
           />
-          <Choice
+          <Toggle
             label="Keep screen on"
             hint={
               platform.checks['Screen Wake Lock']
                 ? 'While the audio runs and this page is in front.'
                 : 'This browser cannot keep the screen on: it dims as usual.'
             }
-            options={ON_OFF}
             value={settings.keepAwake}
             onChange={(keepAwake) => set({ keepAwake })}
           />
         </Group>
 
         <Group title="Debug">
-          <Choice
+          <Toggle
             label="Audio details"
-            options={ON_OFF}
             value={settings.audioDetails}
             onChange={(audioDetails) => set({ audioDetails })}
           />
-          <Choice
+          <Toggle
             label="Waveform timing"
-            options={ON_OFF}
             value={settings.waveformTiming}
             onChange={(waveformTiming) => set({ waveformTiming })}
           />
@@ -300,7 +297,7 @@ function Row({
 }
 
 /** A setting chosen from a row of options, the chosen one pressed */
-function Choice<T extends string | number | boolean>({
+function Choice<T extends string | number>({
   label,
   hint,
   options,
@@ -309,12 +306,7 @@ function Choice<T extends string | number | boolean>({
 }: {
   label: string
   hint?: string
-  options: readonly {
-    value: T
-    label: string
-    /** The theme's colours, as dots before the name */
-    readonly swatch?: readonly string[]
-  }[]
+  options: readonly { value: T; label: string }[]
   value: T
   onChange: (value: T) => void
 }) {
@@ -340,20 +332,113 @@ function Choice<T extends string | number | boolean>({
             onClick={() => onChange(option.value)}
             className={SMALL_OPTION}
           >
-            {option.swatch && (
-              <span aria-hidden className="mr-1 flex items-center gap-0.5">
-                {option.swatch.map((colour) => (
-                  <span
-                    key={colour}
-                    className="size-2 rounded-full"
-                    style={{ background: colour }}
-                  />
-                ))}
-              </span>
-            )}
             {option.label}
           </button>
         ))}
+      </div>
+    </Row>
+  )
+}
+
+/** A setting that is on or off: a switch, its knob to the accent when on */
+function Toggle({
+  label,
+  hint,
+  value,
+  onChange,
+}: {
+  label: string
+  hint?: string
+  value: boolean
+  onChange: (value: boolean) => void
+}) {
+  const id = useId()
+  return (
+    <Row
+      label={label}
+      labelId={`${id}-label`}
+      hint={hint}
+      hintId={`${id}-hint`}
+    >
+      <button
+        type="button"
+        role="switch"
+        aria-checked={value}
+        aria-labelledby={`${id}-label`}
+        aria-describedby={hint === undefined ? undefined : `${id}-hint`}
+        onClick={() => onChange(!value)}
+        className={`${TALL_HIT} group flex h-7 w-11 shrink-0 items-center rounded-full bg-(--well) px-1 outline-none focus-visible:shadow-[inset_0_0_0_1px_var(--accent)] aria-checked:bg-(--accent)/25`}
+      >
+        <span
+          aria-hidden
+          className={`size-4 rounded-full bg-(--ink-400) transition-transform duration-150 group-aria-checked:translate-x-5 group-aria-checked:bg-(--accent)`}
+        />
+      </button>
+    </Row>
+  )
+}
+
+/**
+ * A setting picked from a list, in the browser's own picker (on a phone,
+ * its wheel); the theme's dots stand before the box, for the chosen one
+ */
+function Dropdown<T extends string | number>({
+  label,
+  hint,
+  options,
+  value,
+  onChange,
+}: {
+  label: string
+  hint?: string
+  options: readonly {
+    value: T
+    label: string
+    /** The theme's colours, as dots before the name */
+    readonly swatch?: readonly string[]
+  }[]
+  value: T
+  onChange: (value: T) => void
+}) {
+  const id = useId()
+  const chosen = options.find((option) => option.value === value)
+  return (
+    <Row
+      label={label}
+      labelId={`${id}-label`}
+      hint={hint}
+      hintId={`${id}-hint`}
+    >
+      <div className="flex items-center gap-2">
+        {chosen?.swatch && (
+          <span aria-hidden className="flex shrink-0 items-center gap-0.5">
+            {chosen.swatch.map((colour) => (
+              <span
+                key={colour}
+                className="size-2 rounded-full"
+                style={{ background: colour }}
+              />
+            ))}
+          </span>
+        )}
+        <select
+          aria-labelledby={`${id}-label`}
+          aria-describedby={hint === undefined ? undefined : `${id}-hint`}
+          value={`${value}`}
+          onChange={(event) => {
+            const option = options.find(
+              (candidate) => `${candidate.value}` === event.target.value
+            )
+            if (option) onChange(option.value)
+          }}
+          className={`${SMALL_SELECT} min-w-28`}
+        >
+          {options.map((option) => (
+            <option key={`${option.value}`} value={`${option.value}`}>
+              {option.label}
+            </option>
+          ))}
+        </select>
       </div>
     </Row>
   )
