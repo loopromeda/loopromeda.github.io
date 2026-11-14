@@ -20,23 +20,23 @@ export function PlatformChecks({ platform }: { platform: PlatformReport }) {
         {Object.entries(platform.checks).map(([name, ok]) => (
           <li
             key={name}
-            className="flex justify-between gap-4 text-[13px] text-zinc-300"
+            className="flex justify-between gap-4 text-[13px] text-(--ink-300)"
           >
             <span>
               {name}
               {!ok && hints[name] && (
-                <span className="block text-[11px] leading-snug text-zinc-500">
+                <span className="block text-[11px] leading-snug text-(--ink-500)">
                   {hints[name]}
                 </span>
               )}
             </span>
-            <span className={ok ? 'text-emerald-400' : 'text-zinc-500'}>
+            <span className={ok ? 'text-emerald-400' : 'text-(--ink-500)'}>
               {ok ? 'yes' : 'no'}
             </span>
           </li>
         ))}
       </ul>
-      <p className="text-[11px] leading-snug break-words text-zinc-500 select-text">
+      <p className="text-[11px] leading-snug break-words text-(--ink-500) select-text">
         {platform.standalone ? 'Home screen · ' : ''}
         {platform.userAgent}
       </p>

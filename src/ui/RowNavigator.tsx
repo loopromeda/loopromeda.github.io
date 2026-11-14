@@ -133,8 +133,8 @@ export function RowNavigator({
             }}
             className={
               black && black(k)
-                ? 'absolute inset-x-0 bg-[#0b0b10]'
-                : 'absolute inset-x-0 bg-[#2a2a31]'
+                ? 'absolute inset-x-0 bg-(--bg)'
+                : 'absolute inset-x-0 bg-(--key)'
             }
           />
         ))}
@@ -143,7 +143,7 @@ export function RowNavigator({
             <div
               key={octave}
               style={{ bottom: at(octave * 12, total) }}
-              className="absolute inset-x-0 h-px bg-white/10"
+              className="absolute inset-x-0 h-px bg-(--lift-2)"
             />
           ))}
         {black && total > 60 && (

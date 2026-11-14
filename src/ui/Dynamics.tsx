@@ -57,7 +57,7 @@ export function Reduction({
 
   return (
     <div className="flex h-7 items-center gap-2.5">
-      <span className="shrink-0 text-[11px] font-semibold tracking-wider text-zinc-400">
+      <span className="shrink-0 text-[11px] font-semibold tracking-wider text-(--ink-400)">
         Reduction
       </span>
       <div
@@ -86,7 +86,7 @@ export function Reduction({
       </div>
       <span
         ref={textRef}
-        className="w-[52px] shrink-0 text-right font-mono text-[11px] text-zinc-200"
+        className="w-[52px] shrink-0 text-right font-mono text-[11px] text-(--ink-200)"
       >
         0 dB
       </span>
@@ -188,7 +188,7 @@ export function Loudness({ engine }: { engine: Engine }) {
             key={key}
             className="flex h-11 min-w-0 flex-col justify-center rounded-[10px] bg-black/25 px-2"
           >
-            <span className="truncate text-[10px] leading-tight text-zinc-500">
+            <span className="truncate text-[10px] leading-tight text-(--ink-500)">
               {label}
             </span>
             <span className="truncate leading-tight whitespace-nowrap">
@@ -196,11 +196,14 @@ export function Loudness({ engine }: { engine: Engine }) {
                 ref={(span) => {
                   textRefs.current[i] = span
                 }}
-                className="font-mono text-[13px] text-zinc-100"
+                className="font-mono text-[13px] text-(--ink-100)"
               >
                 –
               </span>
-              <span className="font-mono text-[10px] text-zinc-500"> LUFS</span>
+              <span className="font-mono text-[10px] text-(--ink-500)">
+                {' '}
+                LUFS
+              </span>
             </span>
           </div>
         ))}

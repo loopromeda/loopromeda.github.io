@@ -205,7 +205,7 @@ export function ModWheel({
         onPointerCancel={up}
         onKeyDown={key}
         style={style}
-        className="relative min-h-0 flex-1 cursor-ns-resize touch-none overflow-hidden rounded-[10px] bg-white/5 outline-none select-none focus-visible:shadow-[inset_0_0_0_1.5px_var(--accent)]"
+        className="relative min-h-0 flex-1 cursor-ns-resize touch-none overflow-hidden rounded-[10px] bg-(--lift) outline-none select-none focus-visible:shadow-[inset_0_0_0_1.5px_var(--accent)]"
       >
         <div
           aria-hidden

@@ -57,16 +57,16 @@ const NOTE =
 const HELD_NOTE = 'absolute inset-px rounded-r-[3px] bg-(--accent)'
 
 /** A bar's chip: the bar shown pressed, the bar playing marked under it */
-const BAR = `${TALL_HIT} flex size-7 shrink-0 items-center justify-center rounded-md bg-white/5 font-mono text-[11px] font-semibold text-zinc-400 aria-pressed:bg-white/10 aria-pressed:text-white data-playing:shadow-[inset_0_-2px_0_var(--accent)]`
+const BAR = `${TALL_HIT} flex size-7 shrink-0 items-center justify-center rounded-md bg-(--lift) font-mono text-[11px] font-semibold text-(--ink-400) aria-pressed:bg-(--lift-2) aria-pressed:text-white data-playing:shadow-[inset_0_-2px_0_var(--accent)]`
 
 const LABEL =
-  'flex min-h-0 min-w-0 items-center justify-end rounded-sm pr-1 font-mono text-[10px] leading-none text-zinc-400 active:bg-white/10'
+  'flex min-h-0 min-w-0 items-center justify-end rounded-sm pr-1 font-mono text-[10px] leading-none text-(--ink-400) active:bg-(--lift-2)'
 const BLACK_LABEL =
-  'flex min-h-0 min-w-0 items-center justify-end rounded-sm pr-1 font-mono text-[10px] leading-none text-zinc-600 active:bg-white/10'
+  'flex min-h-0 min-w-0 items-center justify-end rounded-sm pr-1 font-mono text-[10px] leading-none text-(--ink-600) active:bg-(--lift-2)'
 const PAD_LABEL =
-  'flex min-h-0 min-w-0 items-center rounded-sm px-1 text-left text-[10px] leading-none text-zinc-400 active:bg-white/10'
+  'flex min-h-0 min-w-0 items-center rounded-sm px-1 text-left text-[10px] leading-none text-(--ink-400) active:bg-(--lift-2)'
 const PICKED_LABEL =
-  'flex min-h-0 min-w-0 items-center rounded-sm px-1 text-left text-[10px] leading-none text-(--accent) active:bg-white/10'
+  'flex min-h-0 min-w-0 items-center rounded-sm px-1 text-left text-[10px] leading-none text-(--accent) active:bg-(--lift-2)'
 
 /** A finger on the grid: the note it holds, and what it had as it took it */
 interface Drag {
@@ -374,7 +374,7 @@ export function StepGrid({
         </div>
         <span
           aria-live="off"
-          className="min-w-0 flex-1 truncate text-center font-mono text-[11px] text-zinc-300"
+          className="min-w-0 flex-1 truncate text-center font-mono text-[11px] text-(--ink-300)"
         >
           {hint}
         </span>
@@ -474,7 +474,7 @@ export function StepGrid({
           <div
             ref={headRef}
             hidden
-            className="pointer-events-none absolute inset-y-0 w-[6.25%] bg-white/15"
+            className="pointer-events-none absolute inset-y-0 w-[6.25%] bg-(--lift-3)"
           />
           {loop.notes.map((note) => {
             const box = noteBox(note, bar, first, rows)

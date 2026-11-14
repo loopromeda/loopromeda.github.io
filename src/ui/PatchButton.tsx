@@ -44,7 +44,7 @@ export function PatchButton({
       aria-controls="presets"
       aria-label={`Patch: ${name}${changed ? ', edited' : ''}`}
       onClick={onToggle}
-      className="flex h-11 w-48 min-w-0 items-center gap-2 rounded-[10px] bg-white/5 px-3 text-[13px] font-medium text-zinc-200 aria-expanded:bg-white/10 @max-[26rem]:px-2.5"
+      className="flex h-11 w-48 min-w-0 items-center gap-2 rounded-[10px] bg-(--lift) px-3 text-[13px] font-medium text-(--ink-200) aria-expanded:bg-(--lift-2) @max-[26rem]:px-2.5"
     >
       <span className="flex min-w-0 flex-1 items-center gap-2">
         <span className="truncate">{name}</span>
@@ -65,7 +65,7 @@ export function PatchButton({
         strokeLinecap="round"
         strokeLinejoin="round"
         aria-hidden="true"
-        className={`shrink-0 text-zinc-500 @max-[26rem]:hidden ${open ? 'rotate-180' : ''}`}
+        className={`shrink-0 text-(--ink-500) @max-[26rem]:hidden ${open ? 'rotate-180' : ''}`}
       >
         {/* Up: the presets open above it, but for the controls put away */}
         <path d="M3.5 8.5L7 5l3.5 3.5" />

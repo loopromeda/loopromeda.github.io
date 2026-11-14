@@ -88,7 +88,7 @@ export function SurfaceButton({
                 : 'Play surface: keys'
       }
       onClick={onToggle}
-      className={`${ICON_BUTTON} aria-expanded:bg-white/10`}
+      className={`${ICON_BUTTON} aria-expanded:bg-(--lift-2)`}
     >
       <SurfaceIcon kind={seq ? 'seq' : played} />
     </button>

@@ -41,7 +41,7 @@ export function MasterSheet({
       <div className="flex h-11 shrink-0 items-center justify-end gap-1.5">
         <h2
           id="master-heading"
-          className="mr-auto min-w-0 truncate px-1 text-[11px] font-medium tracking-widest text-zinc-500 uppercase"
+          className="mr-auto min-w-0 truncate px-1 text-[11px] font-medium tracking-widest text-(--ink-500) uppercase"
         >
           Master
         </h2>
@@ -115,7 +115,7 @@ function Named({
       {children}
       <span
         aria-hidden
-        className="pointer-events-none absolute top-1 right-1.5 text-[9px] font-medium tracking-widest text-zinc-600 uppercase"
+        className="pointer-events-none absolute top-1 right-1.5 text-[9px] font-medium tracking-widest text-(--ink-600) uppercase"
       >
         {name}
       </span>

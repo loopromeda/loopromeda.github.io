@@ -63,12 +63,12 @@ export function ConfirmDialog({
       onClick={outside}
       className={`m-auto w-[calc(100%_-_1.5rem)] max-w-xs flex-col gap-3 p-3 text-inherit open:flex backdrop:bg-black/70 ${CARD}`}
     >
-      <h2 id="confirm-title" className="text-sm font-semibold text-zinc-100">
+      <h2 id="confirm-title" className="text-sm font-semibold text-(--ink-100)">
         {title}
       </h2>
       <p
         id="confirm-message"
-        className="text-[13px] leading-snug text-zinc-400"
+        className="text-[13px] leading-snug text-(--ink-400)"
       >
         {message}
       </p>

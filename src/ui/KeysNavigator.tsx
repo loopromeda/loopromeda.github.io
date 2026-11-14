@@ -38,8 +38,8 @@ const ReachKeys = memo(function ReachKeys() {
           }}
           className={
             key.black
-              ? 'absolute top-0 h-[58%] rounded-b-[1px] bg-[#0b0b10]'
-              : 'absolute inset-y-0 bg-[#2a2a31]'
+              ? 'absolute top-0 h-[58%] rounded-b-[1px] bg-(--bg)'
+              : 'absolute inset-y-0 bg-(--key)'
           }
         />
       ))}

@@ -43,8 +43,8 @@ function useFlag(engine: Engine, place: number, flag: 'mute' | 'solo') {
 const SMALL = 'group flex h-11 w-9 shrink-0 items-center justify-center'
 const SMALL_SHAPE =
   'flex size-7 items-center justify-center rounded-md font-mono text-[11px] font-semibold'
-const SMALL_MUTE = `${SMALL_SHAPE} bg-white/5 text-zinc-400 group-aria-pressed:bg-amber-400/20 group-aria-pressed:text-amber-200`
-const SMALL_SOLO = `${SMALL_SHAPE} bg-white/5 text-zinc-400 group-aria-pressed:bg-emerald-400/20 group-aria-pressed:text-emerald-200`
+const SMALL_MUTE = `${SMALL_SHAPE} bg-(--lift) text-(--ink-400) group-aria-pressed:bg-amber-400/20 group-aria-pressed:text-amber-200`
+const SMALL_SOLO = `${SMALL_SHAPE} bg-(--lift) text-(--ink-400) group-aria-pressed:bg-emerald-400/20 group-aria-pressed:text-emerald-200`
 
 /**
  * Mute and Solo for the track at place, named name: two toggles side by

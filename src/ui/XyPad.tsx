@@ -229,7 +229,7 @@ export function XyPad({
         >
           {line.c && (
             <span
-              className={`absolute bottom-1.5 font-mono text-[11px] text-zinc-500 ${line.x === 1 ? 'right-1.5' : 'left-1.5'}`}
+              className={`absolute bottom-1.5 font-mono text-[11px] text-(--ink-500) ${line.x === 1 ? 'right-1.5' : 'left-1.5'}`}
             >
               {noteName(line.note)}
             </span>

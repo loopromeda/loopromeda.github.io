@@ -9,7 +9,7 @@ const SLIDERS =
 
 /** As small as the status line, it answers a larger touch */
 const LINE =
-  'relative -mr-1.5 flex h-4 w-8 shrink-0 items-center justify-center rounded text-zinc-400 before:absolute before:-top-2 before:-right-0.5 before:-bottom-2 before:-left-1.5'
+  'relative -mr-1.5 flex h-4 w-8 shrink-0 items-center justify-center rounded text-(--ink-400) before:absolute before:-top-2 before:-right-0.5 before:-bottom-2 before:-left-1.5'
 
 /**
  * Opens the settings dialog, which gives the focus back here when it

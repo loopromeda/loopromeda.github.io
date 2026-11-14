@@ -102,7 +102,7 @@ export function StatusBar({
           ? `Latency: base ${ms(baseLatency)} + output ${bad ? `unknown (reads ${ms(outputLatency)})` : ms(output)}`
           : undefined
       }
-      className="flex h-4 shrink-0 items-center justify-between gap-3 font-mono text-[11px] text-zinc-400"
+      className="flex h-4 shrink-0 items-center justify-between gap-3 font-mono text-[11px] text-(--ink-400)"
     >
       <span className="flex items-center gap-1.5">
         <span

@@ -91,7 +91,7 @@ export function Keys({
           className={
             key.black
               ? 'absolute top-0 rounded-b-md bg-[#111116] shadow-[inset_0_0_0_1px_rgb(255_255_255/0.08)] data-pressed:bg-[#2a8f6c] data-pressed:shadow-[inset_0_3px_0_#6ee7b7]'
-              : 'absolute top-0 flex items-end justify-center rounded-b-lg bg-[#2a2a31] pb-2.5 font-mono text-[11px] text-zinc-400 shadow-[inset_0_-3px_0_rgb(0_0_0/0.25)] data-pressed:bg-[#1e6a55] data-pressed:text-emerald-100 data-pressed:shadow-[inset_0_3px_0_#34d399]'
+              : 'absolute top-0 flex items-end justify-center rounded-b-lg bg-(--key) pb-2.5 font-mono text-[11px] text-(--ink-400) shadow-[inset_0_-3px_0_rgb(0_0_0/0.25)] data-pressed:bg-[#1e6a55] data-pressed:text-emerald-100 data-pressed:shadow-[inset_0_3px_0_#34d399]'
           }
         >
           {!key.black && key.note % 12 === 0 ? noteName(key.note) : null}

@@ -138,7 +138,7 @@ export function SettingsDialog({
       <div className="flex h-7 shrink-0 items-center justify-end gap-1.5">
         <h2
           id="settings-heading"
-          className="mr-auto min-w-0 truncate px-1 text-[13px] font-semibold text-zinc-200"
+          className="mr-auto min-w-0 truncate px-1 text-[13px] font-semibold text-(--ink-200)"
         >
           Settings
         </h2>
@@ -249,7 +249,7 @@ function Group({ title, children }: { title: string; children: ReactNode }) {
     <section aria-labelledby={id} className="flex flex-col gap-1.5">
       <h3
         id={id}
-        className="px-1 pt-0.5 text-[11px] font-medium tracking-widest text-zinc-500 uppercase"
+        className="px-1 pt-0.5 text-[11px] font-medium tracking-widest text-(--ink-500) uppercase"
       >
         {title}
       </h3>
@@ -281,7 +281,7 @@ function Row({
   return (
     <div className="flex flex-col gap-1 px-1">
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-        <span id={labelId} className="text-[13px] text-zinc-300">
+        <span id={labelId} className="text-[13px] text-(--ink-300)">
           {label}
         </span>
         {children}
@@ -290,7 +290,7 @@ function Row({
         <p
           id={hintId}
           aria-live={live ? 'polite' : undefined}
-          className="text-[11px] leading-snug text-zinc-500"
+          className="text-[11px] leading-snug text-(--ink-500)"
         >
           {hint}
         </p>
@@ -425,7 +425,7 @@ function OfflineRow({
             aria-describedby={`${id}-hint`}
             disabled={check === 'checking' || check === 'found'}
             onClick={look}
-            className={`${SMALL_BUTTON} disabled:text-zinc-500`}
+            className={`${SMALL_BUTTON} disabled:text-(--ink-500)`}
           >
             {check === 'checking' ? 'Checking…' : 'Check for update'}
           </button>
@@ -440,7 +440,7 @@ function OfflineRow({
           Update
         </button>
       ) : (
-        <span className="text-[13px] text-zinc-500">
+        <span className="text-[13px] text-(--ink-500)">
           {OFFLINE_LABELS[state]}
         </span>
       )}
@@ -567,7 +567,7 @@ function BenchResults({
         <Fragment key={result.voices}>
           {index > 0 && ' · '}
           <span className="whitespace-nowrap">
-            <span className="text-zinc-300">
+            <span className="text-(--ink-300)">
               {result.voices} v {result.meanMs.toFixed(2)} ms
             </span>{' '}
             ({Math.round((result.meanMs / blockMs) * 100)}%)

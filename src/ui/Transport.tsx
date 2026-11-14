@@ -37,7 +37,7 @@ export function PlayButton({ engine }: { engine: Engine }) {
 }
 
 const TEMPO_BUTTON =
-  'flex h-11 w-14 shrink-0 items-center justify-center rounded-[10px] bg-white/5 font-mono text-[13px] text-zinc-200 aria-expanded:bg-white/10'
+  'flex h-11 w-14 shrink-0 items-center justify-center rounded-[10px] bg-(--lift) font-mono text-[13px] text-(--ink-200) aria-expanded:bg-(--lift-2)'
 
 /**
  * Beside Play: the song's tempo, in beats a minute, as its face. A tap
@@ -155,9 +155,9 @@ export function TempoPicker({
       <div className="flex h-7 shrink-0 items-center gap-2">
         <span
           aria-hidden
-          className="flex h-5 w-[26px] shrink-0 items-center justify-center rounded-[5px] text-zinc-200"
+          className="flex h-5 w-[26px] shrink-0 items-center justify-center rounded-[5px] text-(--ink-200)"
           style={{
-            background: '#1c1c23',
+            background: 'var(--tile)',
             boxShadow: `inset 0 0 0 1.5px ${NEUTRAL_LOOK.ring}`,
           }}
         >
@@ -176,11 +176,11 @@ export function TempoPicker({
         </span>
         <h2
           id="tempo-heading"
-          className="shrink-0 text-sm font-semibold whitespace-nowrap text-zinc-100"
+          className="shrink-0 text-sm font-semibold whitespace-nowrap text-(--ink-100)"
         >
           Tempo
         </h2>
-        <span className="min-w-0 truncate font-mono text-[11px] text-zinc-400">
+        <span className="min-w-0 truncate font-mono text-[11px] text-(--ink-400)">
           {tempo} BPM
         </span>
         <SmallIconButton
@@ -228,11 +228,11 @@ export function TempoPicker({
             <div className="flex items-baseline justify-between px-1">
               <h3
                 id="tempo-swing"
-                className="text-[11px] font-medium tracking-widest text-zinc-500 uppercase"
+                className="text-[11px] font-medium tracking-widest text-(--ink-500) uppercase"
               >
                 Swing
               </h3>
-              <span className="font-mono text-[11px] text-zinc-400">
+              <span className="font-mono text-[11px] text-(--ink-400)">
                 {percent <= MIN_SWING * 100 ? 'Straight' : `${percent}%`}
               </span>
             </div>
@@ -274,9 +274,10 @@ function Stroke({ path }: { path: string }) {
   )
 }
 
-const LIGHT = 'size-1.5 shrink-0 rounded-full bg-white/15 data-on:bg-(--accent)'
+const LIGHT =
+  'size-1.5 shrink-0 rounded-full bg-(--lift-3) data-on:bg-(--accent)'
 const BEAT_LIGHT =
-  'size-2 shrink-0 rounded-full bg-white/30 data-on:bg-(--accent)'
+  'size-2 shrink-0 rounded-full bg-(--lift-4) data-on:bg-(--accent)'
 
 /**
  * A bar of sixteenths as a row of lights, the beats' larger: the one the

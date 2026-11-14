@@ -155,9 +155,9 @@ const sameGrid = (a: PadGrid, b: PadGrid) =>
  * header too narrow for it (a wide one holds the transport too)
  */
 const RANGE =
-  'font-mono text-[13px] whitespace-nowrap text-zinc-400 @max-[26rem]:sr-only'
+  'font-mono text-[13px] whitespace-nowrap text-(--ink-400) @max-[26rem]:sr-only'
 const WIDE_RANGE =
-  'font-mono text-[13px] whitespace-nowrap text-zinc-400 @max-[52rem]:sr-only'
+  'font-mono text-[13px] whitespace-nowrap text-(--ink-400) @max-[52rem]:sr-only'
 
 const sameFit = (a: Fit, b: Fit) =>
   a.octaves === b.octaves &&

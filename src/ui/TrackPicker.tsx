@@ -53,7 +53,7 @@ export function TrackButton({
       aria-controls="tracks"
       aria-label={words ? `Track: ${name}, ${words}` : `Track: ${name}`}
       onClick={onToggle}
-      className="flex h-11 w-24 shrink-0 items-center justify-center gap-1.5 rounded-[10px] bg-white/5 px-2.5 text-xs font-semibold text-zinc-200 aria-expanded:bg-white/10 @max-[26rem]:w-16 @max-[26rem]:gap-1 @max-[26rem]:px-1.5"
+      className="flex h-11 w-24 shrink-0 items-center justify-center gap-1.5 rounded-[10px] bg-(--lift) px-2.5 text-xs font-semibold text-(--ink-200) aria-expanded:bg-(--lift-2) @max-[26rem]:w-16 @max-[26rem]:gap-1 @max-[26rem]:px-1.5"
     >
       {state !== 'on' && (
         <span
@@ -168,9 +168,9 @@ export function TrackPicker({
       <div className="flex h-7 shrink-0 items-center gap-2">
         <span
           aria-hidden
-          className="flex h-5 w-[26px] shrink-0 items-center justify-center rounded-[5px] font-mono text-[11px] font-semibold text-zinc-200"
+          className="flex h-5 w-[26px] shrink-0 items-center justify-center rounded-[5px] font-mono text-[11px] font-semibold text-(--ink-200)"
           style={{
-            background: '#1c1c23',
+            background: 'var(--tile)',
             boxShadow: `inset 0 0 0 1.5px ${NEUTRAL_LOOK.ring}`,
           }}
         >
@@ -178,11 +178,11 @@ export function TrackPicker({
         </span>
         <h2
           id="tracks-heading"
-          className="shrink-0 text-sm font-semibold whitespace-nowrap text-zinc-100"
+          className="shrink-0 text-sm font-semibold whitespace-nowrap text-(--ink-100)"
         >
           Tracks
         </h2>
-        <span className="min-w-0 truncate text-[11px] text-zinc-400">
+        <span className="min-w-0 truncate text-[11px] text-(--ink-400)">
           {full ? `${MAX_TRACKS} at most` : `of ${MAX_TRACKS}`}
         </span>
         <SmallIconButton
@@ -208,15 +208,15 @@ export function TrackPicker({
                       engine.pickTrack(track.id)
                       onClose()
                     }}
-                    className="flex h-11 min-w-0 flex-1 items-center gap-2.5 rounded-lg px-2.5 text-left text-[13px] text-zinc-300 aria-[current]:bg-white/10 aria-[current]:text-white"
+                    className="flex h-11 min-w-0 flex-1 items-center gap-2.5 rounded-lg px-2.5 text-left text-[13px] text-(--ink-300) aria-[current]:bg-(--lift-2) aria-[current]:text-white"
                   >
-                    <span className="w-3 shrink-0 text-center font-mono text-[11px] text-zinc-500">
+                    <span className="w-3 shrink-0 text-center font-mono text-[11px] text-(--ink-500)">
                       {k + 1}
                     </span>
                     <span className="min-w-0 flex-1 truncate font-medium">
                       {trackName(track, k)}
                     </span>
-                    <span className="max-w-[45%] shrink-0 truncate text-[11px] text-zinc-500">
+                    <span className="max-w-[45%] shrink-0 truncate text-[11px] text-(--ink-500)">
                       {playing(track)}
                     </span>
                   </button>
@@ -259,7 +259,7 @@ export function TrackPicker({
               </button>
             ))}
           </div>
-          <p className="px-1 text-[11px] leading-snug text-zinc-500">
+          <p className="px-1 text-[11px] leading-snug text-(--ink-500)">
             Rename, move or remove a track on its strip in the Mix.
           </p>
         </div>

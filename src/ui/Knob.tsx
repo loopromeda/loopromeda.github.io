@@ -706,13 +706,13 @@ function Dial({
       )}
       <span
         style={hot ? { color: hot } : undefined}
-        className="text-[11px] leading-tight whitespace-nowrap text-zinc-400"
+        className="text-[11px] leading-tight whitespace-nowrap text-(--ink-400)"
       >
         {spec.label}
       </span>
       <span
         ref={textRef}
-        className="font-mono text-[11px] leading-tight whitespace-nowrap text-zinc-200 tabular-nums"
+        className="font-mono text-[11px] leading-tight whitespace-nowrap text-(--ink-200) tabular-nums"
       />
     </div>
   )

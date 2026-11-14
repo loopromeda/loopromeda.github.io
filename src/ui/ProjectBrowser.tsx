@@ -36,10 +36,10 @@ const FOLDER =
 
 /** On the status line: as small as the line, it answers a larger touch */
 const LINE =
-  'relative flex h-4 min-w-8 shrink-0 items-center justify-center gap-1 rounded text-zinc-400 before:absolute before:-top-2 before:right-0 before:-bottom-2 before:-left-1.5 aria-expanded:text-zinc-200'
+  'relative flex h-4 min-w-8 shrink-0 items-center justify-center gap-1 rounded text-(--ink-400) before:absolute before:-top-2 before:right-0 before:-bottom-2 before:-left-1.5 aria-expanded:text-(--ink-200)'
 
 /** On the tab rail: the panel's 28 px class, its face lit when open */
-const RAIL = `${TALL_HIT} flex h-7 min-w-7 shrink-0 items-center justify-center gap-1 rounded-md bg-white/5 px-1.5 text-[11px] font-semibold text-zinc-400 aria-expanded:bg-white/10 aria-expanded:text-white`
+const RAIL = `${TALL_HIT} flex h-7 min-w-7 shrink-0 items-center justify-center gap-1 rounded-md bg-(--lift) px-1.5 text-[11px] font-semibold text-(--ink-400) aria-expanded:bg-(--lift-2) aria-expanded:text-white`
 
 /**
  * At the right end of the editor's tab rail (rail), left of the settings
@@ -283,9 +283,9 @@ export function ProjectBrowser({
       <div className="flex h-7 shrink-0 items-center gap-2">
         <span
           aria-hidden
-          className="flex h-5 w-[26px] shrink-0 items-center justify-center rounded-[5px] text-zinc-200"
+          className="flex h-5 w-[26px] shrink-0 items-center justify-center rounded-[5px] text-(--ink-200)"
           style={{
-            background: '#1c1c23',
+            background: 'var(--tile)',
             boxShadow: `inset 0 0 0 1.5px ${NEUTRAL_LOOK.ring}`,
           }}
         >
@@ -304,11 +304,11 @@ export function ProjectBrowser({
         </span>
         <h2
           id="project-heading"
-          className="shrink-0 text-sm font-semibold whitespace-nowrap text-zinc-100"
+          className="shrink-0 text-sm font-semibold whitespace-nowrap text-(--ink-100)"
         >
           Projects
         </h2>
-        <span className="min-w-0 truncate text-[11px] text-zinc-400">
+        <span className="min-w-0 truncate text-[11px] text-(--ink-400)">
           {list.length}
         </span>
         <span className="ml-auto flex shrink-0 items-center gap-1">
@@ -347,7 +347,7 @@ export function ProjectBrowser({
 
       <div className="flex h-7 shrink-0 items-center gap-1.5">
         {mode.kind === 'idle' && (
-          <p className="min-w-0 flex-1 truncate px-1 text-[13px] text-zinc-400">
+          <p className="min-w-0 flex-1 truncate px-1 text-[13px] text-(--ink-400)">
             {current === undefined ? (
               edited ? (
                 'What plays is in no project yet'
@@ -356,7 +356,7 @@ export function ProjectBrowser({
               )
             ) : (
               <>
-                <span className="text-zinc-200">{current}</span>
+                <span className="text-(--ink-200)">{current}</span>
                 {edited ? ' · edited since it was saved' : ' · saved'}
               </>
             )}
@@ -416,7 +416,7 @@ export function ProjectBrowser({
         )}
         {mode.kind === 'delete' && current !== undefined && (
           <>
-            <p className="min-w-0 flex-1 truncate px-1 text-[13px] text-zinc-300">
+            <p className="min-w-0 flex-1 truncate px-1 text-[13px] text-(--ink-300)">
               Delete “{current}”?
             </p>
             <button type="button" onClick={remove} className={SMALL_DANGER}>
@@ -433,7 +433,7 @@ export function ProjectBrowser({
         )}
         {mode.kind === 'replace' && (
           <>
-            <p className="min-w-0 flex-1 truncate px-1 text-[13px] text-zinc-300">
+            <p className="min-w-0 flex-1 truncate px-1 text-[13px] text-(--ink-300)">
               {mode.name !== undefined && mode.name === current
                 ? `Go back to “${current}” as saved?`
                 : 'Lose what is not saved?'}
@@ -477,7 +477,7 @@ export function ProjectBrowser({
           />
         ))}
         {list.length === 0 && (
-          <li className="px-3 py-2 text-[13px] leading-snug text-zinc-500">
+          <li className="px-3 py-2 text-[13px] leading-snug text-(--ink-500)">
             None yet. Save as… keeps the tracks, the mix and the song under a
             name, to come back to.
           </li>
@@ -493,7 +493,7 @@ export function ProjectBrowser({
       {(problem ?? message) && (
         <p
           aria-hidden
-          className={`h-4 shrink-0 truncate px-1 text-[11px] ${problem ? 'text-amber-300' : 'text-zinc-500'}`}
+          className={`h-4 shrink-0 truncate px-1 text-[11px] ${problem ? 'text-amber-300' : 'text-(--ink-500)'}`}
         >
           {problem ?? message}
         </p>
@@ -576,7 +576,7 @@ function ProjectRow({
         type="button"
         aria-current={current ? 'true' : undefined}
         onClick={onOpen}
-        className="flex h-11 w-full items-center gap-2 rounded-lg px-2.5 text-left text-[13px] text-zinc-300 aria-[current]:bg-white/10 aria-[current]:text-white"
+        className="flex h-11 w-full items-center gap-2 rounded-lg px-2.5 text-left text-[13px] text-(--ink-300) aria-[current]:bg-(--lift-2) aria-[current]:text-white"
       >
         <svg
           width="14"
@@ -593,7 +593,7 @@ function ProjectRow({
           <path d="M3 7.5l2.5 2.5L11 4.5" />
         </svg>
         <span className="min-w-0 flex-1 truncate">{name}</span>
-        <span className="shrink-0 text-[11px] text-zinc-500">
+        <span className="shrink-0 text-[11px] text-(--ink-500)">
           {plural(tracks.length, 'track')} · {song.tempo} BPM
         </span>
       </button>

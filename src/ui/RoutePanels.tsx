@@ -78,7 +78,7 @@ export function RoutesFrom({
               <span aria-hidden className="shrink-0 text-sky-300">
                 →
               </span>
-              <h2 className="min-w-0 truncate text-sm font-semibold text-zinc-100">
+              <h2 className="min-w-0 truncate text-sm font-semibold text-(--ink-100)">
                 {title}
               </h2>
             </>
@@ -172,10 +172,10 @@ export function RoutesInto({
       onClose={onClose}
       title={
         <>
-          <h2 className="min-w-0 truncate text-sm font-semibold text-zinc-100">
+          <h2 className="min-w-0 truncate text-sm font-semibold text-(--ink-100)">
             {title}
           </h2>
-          <span className="shrink-0 text-[11px] text-zinc-400">
+          <span className="shrink-0 text-[11px] text-(--ink-400)">
             {count === 0
               ? 'not routed'
               : count === 1
@@ -216,7 +216,7 @@ export function RoutesInto({
                       })
                     )
                   }
-                  className="select-chevron h-7 w-full min-w-0 truncate rounded-md bg-black/35 pr-6 pl-2 text-[11px] text-zinc-200"
+                  className="select-chevron h-7 w-full min-w-0 truncate rounded-md bg-black/35 pr-6 pl-2 text-[11px] text-(--ink-200)"
                 >
                   <option value="">No via</option>
                   {all
@@ -246,7 +246,7 @@ export function RoutesInto({
           aria-label={`Route to ${title} from`}
           className="flex shrink-0 flex-col justify-center gap-1 px-0.5"
         >
-          <span className="text-[10px] font-semibold tracking-[0.12em] text-zinc-500">
+          <span className="text-[10px] font-semibold tracking-[0.12em] text-(--ink-500)">
             {count === 0 ? 'FROM' : 'ADD FROM'}
           </span>
           <div className="grid grid-flow-col grid-rows-2 gap-1">
@@ -341,7 +341,7 @@ function Chip({ glyph }: { glyph: string }) {
       aria-hidden
       className="flex h-5 w-[26px] shrink-0 items-center justify-center rounded-[5px]"
       style={{
-        background: '#1c1c23',
+        background: 'var(--tile)',
         boxShadow: `inset 0 0 0 1.5px ${modLook().ring}`,
       }}
     >
@@ -361,7 +361,7 @@ function Chip({ glyph }: { glyph: string }) {
 
 function Hint({ children }: { children: ReactNode }) {
   return (
-    <p className="shrink-0 text-[11px] leading-snug text-zinc-500">
+    <p className="shrink-0 text-[11px] leading-snug text-(--ink-500)">
       {children}
     </p>
   )

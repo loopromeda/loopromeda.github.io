@@ -510,7 +510,7 @@ export function SoundEditor({
       >
         <PaneSwitch pane={pane} onPane={choosePane} />
         {(pane === 'mix' || kitView) && (
-          <p className="min-w-0 truncate text-[11px] text-zinc-500">
+          <p className="min-w-0 truncate text-[11px] text-(--ink-500)">
             {kitView
               ? 'Each pad plays a preset as it is: make sounds in a synth.'
               : 'The session’s mix: a preset keeps only its sound’s sends.'}
@@ -583,19 +583,19 @@ export function SoundEditor({
               strokeLinecap="round"
               strokeLinejoin="round"
               aria-hidden="true"
-              className="shrink-0 text-zinc-300 side:-rotate-90 tall:rotate-0"
+              className="shrink-0 text-(--ink-300) side:-rotate-90 tall:rotate-0"
             >
               <path d="M4 11l5-5 5 5" />
             </svg>
             <span
               aria-hidden
-              className="text-xs font-semibold text-zinc-200 side:hidden tall:inline"
+              className="text-xs font-semibold text-(--ink-200) side:hidden tall:inline"
             >
               Show the knobs
             </span>
             <span
               aria-hidden
-              className="min-w-0 truncate text-[11px] text-zinc-400 side:hidden tall:inline"
+              className="min-w-0 truncate text-[11px] text-(--ink-400) side:hidden tall:inline"
             >
               {shownName}
             </span>
@@ -685,7 +685,7 @@ function PaneSwitch({
           type="button"
           aria-pressed={pane === each}
           onClick={() => onPane(each)}
-          className={`${TALL_HIT} h-7 rounded-md px-3 text-[11px] font-semibold tracking-wider text-zinc-400 aria-pressed:bg-white/10 aria-pressed:text-white`}
+          className={`${TALL_HIT} h-7 rounded-md px-3 text-[11px] font-semibold tracking-wider text-(--ink-400) aria-pressed:bg-(--lift-2) aria-pressed:text-white`}
         >
           {label}
         </button>
@@ -1461,7 +1461,7 @@ function KitGraph({
               {name}
             </span>
             {at && (
-              <span className="text-[9px] leading-none font-medium text-zinc-400 tabular-nums">
+              <span className="text-[9px] leading-none font-medium text-(--ink-400) tabular-nums">
                 {at}
               </span>
             )}
@@ -1993,11 +1993,11 @@ function SendsLine({
     >
       {[...letters].map((id, k) => (
         <span key={id} className="flex items-center gap-1">
-          <span className="w-[7px] text-[9px] leading-none text-zinc-500">
+          <span className="w-[7px] text-[9px] leading-none text-(--ink-500)">
             {id.toUpperCase()}
           </span>
           <span
-            className={`relative h-[3px] overflow-hidden rounded-full bg-white/10 ${across ? 'w-3.5' : 'w-7'}`}
+            className={`relative h-[3px] overflow-hidden rounded-full bg-(--lift-2) ${across ? 'w-3.5' : 'w-7'}`}
           >
             <span
               className="absolute inset-y-0 left-0 rounded-full"
@@ -2500,7 +2500,7 @@ function Tile({
           {mark}
         </span>
         {(line !== undefined || text !== undefined) && (
-          <span className="font-mono text-[10px] leading-tight whitespace-nowrap text-zinc-400">
+          <span className="font-mono text-[10px] leading-tight whitespace-nowrap text-(--ink-400)">
             {line === undefined ? text : <Line engine={engine} id={line} />}
           </span>
         )}
@@ -2542,7 +2542,7 @@ function Tile({
             {label}
           </span>
           {(line !== undefined || text !== undefined) && (
-            <span className="shrink-0 font-mono text-[10px] leading-tight whitespace-nowrap text-zinc-400">
+            <span className="shrink-0 font-mono text-[10px] leading-tight whitespace-nowrap text-(--ink-400)">
               {text ??
                 (line !== undefined && <Line engine={engine} id={line} />)}
             </span>

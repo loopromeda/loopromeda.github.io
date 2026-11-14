@@ -39,7 +39,7 @@
 export const CARD_FACE = '#16161c'
 
 /** A card: CARD_FACE, rounded at 12 px, no ring */
-export const CARD = 'rounded-xl bg-[#16161c]'
+export const CARD = 'rounded-xl bg-(--panel)'
 
 /**
  * What stands over the cards, raised: the editor's panel over the graph,
@@ -47,13 +47,13 @@ export const CARD = 'rounded-xl bg-[#16161c]'
  * it blurred, with a shadow and a faint ring to stand it off them.
  */
 export const RAISED =
-  'glass rounded-xl shadow-[0_0_24px_rgba(0,0,0,0.6)] ring-1 ring-white/10'
+  'glass rounded-xl shadow-[0_0_24px_rgba(0,0,0,0.6)] ring-1 ring-(--lift-2)'
 
 export const BUTTON_SHAPE =
   'flex h-11 shrink-0 items-center justify-center gap-2 rounded-[10px] px-3.5 text-xs font-semibold tracking-wider whitespace-nowrap disabled:opacity-40'
 
 /** A 44 px text button; given aria-pressed, a toggle */
-export const BUTTON = `${BUTTON_SHAPE} bg-white/5 text-zinc-200 aria-pressed:bg-white/10`
+export const BUTTON = `${BUTTON_SHAPE} bg-(--lift) text-(--ink-200) aria-pressed:bg-(--lift-2)`
 
 /** A 44 px button that deletes */
 export const BUTTON_DANGER = `${BUTTON_SHAPE} bg-red-500/20 text-red-200`
@@ -63,7 +63,7 @@ export const BUTTON_CONFIRM = `${BUTTON_SHAPE} bg-(--accent)/20 text-(--accent)`
 
 /** An option's face: dim, lit when chosen (aria-pressed) */
 const OPTION_FACE =
-  'bg-white/5 text-zinc-400 aria-pressed:bg-white/10 aria-pressed:text-white'
+  'bg-(--lift) text-(--ink-400) aria-pressed:bg-(--lift-2) aria-pressed:text-white'
 
 /** One of a row of 44 px options, the chosen one aria-pressed */
 export const OPTION = `${BUTTON_SHAPE} ${OPTION_FACE}`
@@ -86,11 +86,11 @@ export const OPTION_CELL = `flex h-11 min-w-0 items-center justify-center rounde
 
 /** A 44 px square button holding an 18 px icon */
 export const ICON_BUTTON =
-  'flex size-11 shrink-0 items-center justify-center rounded-[10px] bg-white/5 text-zinc-200 disabled:opacity-40 aria-pressed:bg-white/10'
+  'flex size-11 shrink-0 items-center justify-center rounded-[10px] bg-(--lift) text-(--ink-200) disabled:opacity-40 aria-pressed:bg-(--lift-2)'
 
 /** A 44 px text field or select */
 export const FIELD =
-  'h-11 min-w-0 rounded-[10px] bg-black/40 px-3 text-[13px] text-zinc-100 outline-none focus-visible:shadow-[inset_0_0_0_1px_var(--accent)]'
+  'h-11 min-w-0 rounded-[10px] bg-(--well) px-3 text-[13px] text-(--ink-100) outline-none focus-visible:shadow-[inset_0_0_0_1px_var(--accent)]'
 
 /**
  * A touch kept still this long (ms) is held, not tapped: a knob held
@@ -106,7 +106,7 @@ export const TALL_HIT =
 export const SMALL_BUTTON_SHAPE = `${TALL_HIT} flex h-7 shrink-0 items-center justify-center gap-1.5 rounded-md px-3 text-[11px] font-semibold tracking-wider whitespace-nowrap disabled:opacity-40`
 
 /** A 28 px button in a panel's header row; given aria-pressed, a toggle */
-export const SMALL_BUTTON = `${SMALL_BUTTON_SHAPE} bg-white/5 text-zinc-200 aria-pressed:bg-white/10`
+export const SMALL_BUTTON = `${SMALL_BUTTON_SHAPE} bg-(--lift) text-(--ink-200) aria-pressed:bg-(--lift-2)`
 
 /** A 28 px button that deletes */
 export const SMALL_DANGER = `${SMALL_BUTTON_SHAPE} bg-red-500/15 text-red-200`
@@ -115,18 +115,18 @@ export const SMALL_DANGER = `${SMALL_BUTTON_SHAPE} bg-red-500/15 text-red-200`
 export const SMALL_CONFIRM = `${SMALL_BUTTON_SHAPE} bg-(--accent)/20 text-(--accent)`
 
 /** One of a row of 28 px options, the chosen one aria-pressed */
-export const SMALL_OPTION = `${SMALL_BUTTON_SHAPE} bg-white/5 text-zinc-400 aria-pressed:bg-white/10 aria-pressed:text-white`
+export const SMALL_OPTION = `${SMALL_BUTTON_SHAPE} bg-(--lift) text-(--ink-400) aria-pressed:bg-(--lift-2) aria-pressed:text-white`
 
 /** A 28 px square button holding a 14 px icon: a panel header's action */
-export const SMALL_ICON_BUTTON = `${TALL_HIT} flex size-7 shrink-0 items-center justify-center rounded-md bg-white/5 text-zinc-200 disabled:opacity-30 aria-pressed:bg-white/10`
+export const SMALL_ICON_BUTTON = `${TALL_HIT} flex size-7 shrink-0 items-center justify-center rounded-md bg-(--lift) text-(--ink-200) disabled:opacity-30 aria-pressed:bg-(--lift-2)`
 
 /** A 28 px text field in a panel, what is typed at 13 px */
 export const SMALL_FIELD =
-  'h-7 min-w-0 rounded-md bg-black/35 px-2.5 text-[13px] text-zinc-100 outline-none focus-visible:shadow-[inset_0_0_0_1px_var(--accent)]'
+  'h-7 min-w-0 rounded-md bg-(--well) px-2.5 text-[13px] text-(--ink-100) outline-none focus-visible:shadow-[inset_0_0_0_1px_var(--accent)]'
 
 /** A 28 px select in a panel, the option chosen in its label's type */
 export const SMALL_SELECT =
-  'select-chevron h-7 min-w-0 truncate rounded-md bg-white/[0.08] pr-6 pl-2.5 text-[11px] font-semibold text-zinc-200'
+  'select-chevron h-7 min-w-0 truncate rounded-md bg-white/[0.08] pr-6 pl-2.5 text-[11px] font-semibold text-(--ink-200)'
 
 /**
  * Columns for one to seven knobs, written out for Tailwind to find:

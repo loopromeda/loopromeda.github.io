@@ -211,7 +211,7 @@ export function PresetBrowser({
           aria-hidden
           className="flex h-5 w-[26px] shrink-0 items-center justify-center rounded-[5px]"
           style={{
-            background: '#1c1c23',
+            background: 'var(--tile)',
             boxShadow: `inset 0 0 0 1.5px ${NEUTRAL_LOOK.ring}`,
           }}
         >
@@ -227,11 +227,11 @@ export function PresetBrowser({
         </span>
         <h2
           id="presets-heading"
-          className="shrink-0 text-sm font-semibold whitespace-nowrap text-zinc-100"
+          className="shrink-0 text-sm font-semibold whitespace-nowrap text-(--ink-100)"
         >
           Patches
         </h2>
-        <span className="min-w-0 truncate text-[11px] text-zinc-400">
+        <span className="min-w-0 truncate text-[11px] text-(--ink-400)">
           {pad === undefined
             ? plural(shown.length, 'preset')
             : `onto Pad ${pad + 1}`}
@@ -326,7 +326,7 @@ export function PresetBrowser({
         )}
         {mode.kind === 'delete' && mine && (
           <>
-            <p className="min-w-0 flex-1 truncate px-1 text-[13px] text-zinc-300">
+            <p className="min-w-0 flex-1 truncate px-1 text-[13px] text-(--ink-300)">
               Delete “{mine}”?
             </p>
             <button type="button" onClick={remove} className={SMALL_DANGER}>
@@ -363,7 +363,7 @@ export function PresetBrowser({
           />
         ))}
         {filter === 'mine' && user.length === 0 && (
-          <li className="px-3 py-2 text-[13px] leading-snug text-zinc-500">
+          <li className="px-3 py-2 text-[13px] leading-snug text-(--ink-500)">
             {pad === undefined
               ? 'None yet. Save as… keeps the sound as a preset of your own.'
               : 'None yet. Save a sound as a preset in a synth to map it here.'}
@@ -380,7 +380,7 @@ export function PresetBrowser({
       {(problem ?? message) && (
         <p
           aria-hidden
-          className={`h-4 shrink-0 truncate px-1 text-[11px] ${problem ? 'text-amber-300' : 'text-zinc-500'}`}
+          className={`h-4 shrink-0 truncate px-1 text-[11px] ${problem ? 'text-amber-300' : 'text-(--ink-500)'}`}
         >
           {problem ?? message}
         </p>
@@ -523,7 +523,7 @@ function PresetRow({
         type="button"
         aria-current={current ? 'true' : undefined}
         onClick={() => onLoad({ source, name: preset.name })}
-        className="flex h-11 w-full items-center gap-2 rounded-lg px-2.5 text-left text-[13px] text-zinc-300 aria-[current]:bg-white/10 aria-[current]:text-white"
+        className="flex h-11 w-full items-center gap-2 rounded-lg px-2.5 text-left text-[13px] text-(--ink-300) aria-[current]:bg-(--lift-2) aria-[current]:text-white"
       >
         <svg
           width="14"
@@ -541,7 +541,7 @@ function PresetRow({
         </svg>
         <span className="min-w-0 flex-1 truncate">{preset.name}</span>
         {notes.length > 0 && (
-          <span className="shrink-0 text-[11px] text-zinc-500">
+          <span className="shrink-0 text-[11px] text-(--ink-500)">
             {notes.join(' · ')}
           </span>
         )}

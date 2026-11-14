@@ -483,7 +483,7 @@ export function PartPanel({
                   color: chip.look.ink,
                 }
               : {
-                  background: '#1c1c23',
+                  background: 'var(--tile)',
                   boxShadow: `inset 0 0 0 1.5px ${chip.look.ring}`,
                   color: chip.look.ink,
                 }
@@ -511,10 +511,10 @@ export function PartPanel({
           />
         ) : (
           <>
-            <h2 className="min-w-0 shrink truncate text-sm font-semibold whitespace-nowrap text-zinc-100">
+            <h2 className="min-w-0 shrink truncate text-sm font-semibold whitespace-nowrap text-(--ink-100)">
               {view.title}
             </h2>
-            <span className="min-w-0 flex-1 truncate text-[11px] text-zinc-400">
+            <span className="min-w-0 flex-1 truncate text-[11px] text-(--ink-400)">
               {view.kind}
             </span>
           </>
@@ -592,7 +592,7 @@ export function PartPanel({
                     type="button"
                     disabled={!choice.add}
                     onClick={choice.add}
-                    className="flex h-[54px] min-w-0 max-w-[108px] flex-1 flex-col items-start justify-center gap-[3px] rounded-[7px] bg-[#1c1c23] px-2.5 text-left text-zinc-100 disabled:opacity-40"
+                    className="flex h-[54px] min-w-0 max-w-[108px] flex-1 flex-col items-start justify-center gap-[3px] rounded-[7px] bg-(--tile) px-2.5 text-left text-(--ink-100) disabled:opacity-40"
                     style={{
                       boxShadow: `inset 0 0 0 1.5px ${choice.look.ring}`,
                     }}
@@ -617,14 +617,14 @@ export function PartPanel({
                         {choice.label}
                       </span>
                     </span>
-                    <span className="text-[10px] whitespace-nowrap text-zinc-400">
+                    <span className="text-[10px] whitespace-nowrap text-(--ink-400)">
                       {choice.hint}
                     </span>
                   </button>
                 ))}
               </div>
               {view.choiceNote && (
-                <p className="text-[11px] leading-snug text-zinc-500">
+                <p className="text-[11px] leading-snug text-(--ink-500)">
                   {view.choiceNote}
                 </p>
               )}
@@ -679,10 +679,10 @@ export function PartPanel({
                           />
                         </svg>
                       </span>
-                      <span className="text-[11px] leading-tight whitespace-nowrap text-zinc-400">
+                      <span className="text-[11px] leading-tight whitespace-nowrap text-(--ink-400)">
                         {dest.label}
                       </span>
-                      <span className="font-mono text-[11px] leading-tight whitespace-nowrap text-zinc-200">
+                      <span className="font-mono text-[11px] leading-tight whitespace-nowrap text-(--ink-200)">
                         {count === 0
                           ? 'Route'
                           : count === 1
@@ -694,7 +694,7 @@ export function PartPanel({
                 </div>
               ) : (
                 view.note && (
-                  <p className="text-xs leading-snug text-zinc-400">
+                  <p className="text-xs leading-snug text-(--ink-400)">
                     {view.note}
                   </p>
                 )
@@ -719,7 +719,10 @@ export function PartPanel({
                       className="flex shrink-0 items-center gap-1.5"
                     >
                       {view.mutes}
-                      <span aria-hidden className="mx-1 h-4 w-px bg-white/10" />
+                      <span
+                        aria-hidden
+                        className="mx-1 h-4 w-px bg-(--lift-2)"
+                      />
                     </div>
                   )}
                   <div
@@ -741,7 +744,10 @@ export function PartPanel({
                   </div>
                   {view.views.shown === 'spectrogram' && (
                     <>
-                      <span aria-hidden className="mx-1 h-4 w-px bg-white/10" />
+                      <span
+                        aria-hidden
+                        className="mx-1 h-4 w-px bg-(--lift-2)"
+                      />
                       <ColourKey />
                     </>
                   )}
@@ -812,11 +818,11 @@ function PadNote({
       aria-label={`${name} note`}
       className="flex items-center gap-1.5"
     >
-      <span className="mr-auto text-[11px] text-zinc-400">Note</span>
+      <span className="mr-auto text-[11px] text-(--ink-400)">Note</span>
       {NOTE_STEPS.slice(0, 2).map(step)}
       <output
         aria-label={`${name} plays at`}
-        className="w-11 shrink-0 text-center text-xs font-semibold text-zinc-100 tabular-nums"
+        className="w-11 shrink-0 text-center text-xs font-semibold text-(--ink-100) tabular-nums"
       >
         {noteName(note)}
       </output>
@@ -880,7 +886,7 @@ function padView(
         </PanRow>
         <PadNote name={name} note={note} onNote={setNote} />
         <div className="flex items-center gap-2">
-          <p className="min-w-0 flex-1 text-[11px] leading-snug text-zinc-500">
+          <p className="min-w-0 flex-1 text-[11px] leading-snug text-(--ink-500)">
             {preset
               ? 'Plays its preset as it is: saved over in a synth, the preset changes here too.'
               : 'Its preset is gone: it keeps the sound it had.'}
@@ -926,7 +932,7 @@ function Feeds({
   const none = !feeds.some((feed) => feed.on) && !fm?.some((into) => into.on)
   return (
     <PanRow role="group" aria-label={`Chains ${title} feeds`}>
-      <span className="mr-0.5 shrink-0 text-[11px] text-zinc-500">Into</span>
+      <span className="mr-0.5 shrink-0 text-[11px] text-(--ink-500)">Into</span>
       {feeds.map((feed) => (
         <button
           key={feed.chain}
@@ -953,7 +959,7 @@ function Feeds({
       ))}
       {fm && fm.length > 0 && (
         <>
-          <span className="mr-0.5 ml-1.5 shrink-0 text-[11px] whitespace-nowrap text-zinc-500">
+          <span className="mr-0.5 ml-1.5 shrink-0 text-[11px] whitespace-nowrap text-(--ink-500)">
             FM →
           </span>
           {fm.map((into) => (
@@ -984,7 +990,7 @@ function Feeds({
         </>
       )}
       {none && (
-        <span className="ml-1 shrink-0 text-[11px] whitespace-nowrap text-zinc-500">
+        <span className="ml-1 shrink-0 text-[11px] whitespace-nowrap text-(--ink-500)">
           {through ? `Heard through ${through}` : 'Silent: tap a chain'}
         </span>
       )}
@@ -1033,12 +1039,12 @@ function Targets({
         Route
       </button>
       {to.length === 0 ? (
-        <span className="text-[11px] leading-snug text-zinc-500">
+        <span className="text-[11px] leading-snug text-(--ink-500)">
           then tap a tile and turn its knobs
         </span>
       ) : (
         <>
-          <span className="mx-0.5 text-[11px] text-zinc-500">To</span>
+          <span className="mx-0.5 text-[11px] text-(--ink-500)">To</span>
           {to.map((target) => (
             <button
               key={target.id}
@@ -1916,7 +1922,7 @@ function RefPicker({
         const to = event.target.value || null
         engine.edit((sound) => setRef(sound, input, refName, to))
       }}
-      className="select-chevron h-7 max-w-28 min-w-0 truncate rounded-md bg-white/[0.08] pr-6 pl-2.5 text-[11px] font-semibold text-zinc-200"
+      className="select-chevron h-7 max-w-28 min-w-0 truncate rounded-md bg-white/[0.08] pr-6 pl-2.5 text-[11px] font-semibold text-(--ink-200)"
     >
       <option value="">{label}: none</option>
       {sound.inputs.map((other) => (

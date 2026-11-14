@@ -13,7 +13,7 @@ const PAD =
   'flex items-end rounded-lg p-2 font-mono text-[11px] shadow-[inset_0_-3px_0_rgb(0_0_0/0.25)] data-pressed:bg-[#1e6a55] data-pressed:text-emerald-100 data-pressed:shadow-[inset_0_3px_0_#34d399]'
 /** The root's pads stand out, as the key's home */
 const ROOT_PAD = `${PAD} bg-[#203a33] text-emerald-300`
-const OTHER_PAD = `${PAD} bg-[#2a2a31] text-zinc-500`
+const OTHER_PAD = `${PAD} bg-(--key) text-(--ink-500)`
 
 /**
  * A grid of pads, notes[i] on pad i: the lowest at the bottom left, up

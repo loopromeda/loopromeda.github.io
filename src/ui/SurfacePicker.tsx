@@ -30,7 +30,7 @@ const KINDS: readonly { kind: SurfaceKind; label: string }[] = [
  * its name close together
  */
 const SURFACE =
-  'flex h-11 min-w-0 items-center justify-center gap-1.5 rounded-[10px] bg-white/5 px-1 text-xs font-semibold tracking-wider whitespace-nowrap text-zinc-400 aria-pressed:bg-white/10 aria-pressed:text-white'
+  'flex h-11 min-w-0 items-center justify-center gap-1.5 rounded-[10px] bg-(--lift) px-1 text-xs font-semibold tracking-wider whitespace-nowrap text-(--ink-400) aria-pressed:bg-(--lift-2) aria-pressed:text-white'
 
 /** C to B, as semitones above C */
 const ROOTS = Array.from({ length: 12 }, (_, semitone) => semitone)
@@ -138,9 +138,9 @@ export function SurfacePicker({
       <div className="flex h-7 shrink-0 items-center gap-2">
         <span
           aria-hidden
-          className="flex h-5 w-[26px] shrink-0 items-center justify-center rounded-[5px] text-zinc-200"
+          className="flex h-5 w-[26px] shrink-0 items-center justify-center rounded-[5px] text-(--ink-200)"
           style={{
-            background: '#1c1c23',
+            background: 'var(--tile)',
             boxShadow: `inset 0 0 0 1.5px ${NEUTRAL_LOOK.ring}`,
           }}
         >
@@ -148,11 +148,11 @@ export function SurfacePicker({
         </span>
         <h2
           id="surface-heading"
-          className="shrink-0 text-sm font-semibold whitespace-nowrap text-zinc-100"
+          className="shrink-0 text-sm font-semibold whitespace-nowrap text-(--ink-100)"
         >
           Play on
         </h2>
-        <span className="min-w-0 truncate text-[11px] text-zinc-400">
+        <span className="min-w-0 truncate text-[11px] text-(--ink-400)">
           {playing}
         </span>
         <SmallIconButton
@@ -231,20 +231,20 @@ export function SurfacePicker({
           </div>
 
           {seq && (
-            <p className="px-1 text-[13px] leading-snug text-zinc-500">
+            <p className="px-1 text-[13px] leading-snug text-(--ink-500)">
               Seq puts notes on the steps of this track’s loop: tap a step for a
               note, tap a note to take it away. Drag up or down from a note for
               how hard it plays{kit ? '' : ', sideways for how long'}.
             </p>
           )}
           {!seq && !kit && kind === 'keys' && (
-            <p className="px-1 text-[13px] leading-snug text-zinc-500">
+            <p className="px-1 text-[13px] leading-snug text-(--ink-500)">
               Keys play every note. Pads play the notes of one key: choose Pads,
               then its root and scale.
             </p>
           )}
           {!seq && !kit && kind === 'xy' && (
-            <p className="px-1 text-[13px] leading-snug text-zinc-500">
+            <p className="px-1 text-[13px] leading-snug text-(--ink-500)">
               XY plays a note under each finger: across, its pitch, gliding with
               no steps between the lines; up, its Slide, for what a route from
               Slide moves.
@@ -304,7 +304,7 @@ function Choices({
     <div role="group" aria-labelledby={id} className="flex flex-col gap-1.5">
       <h3
         id={id}
-        className="px-1 text-[11px] font-medium tracking-widest text-zinc-500 uppercase"
+        className="px-1 text-[11px] font-medium tracking-widest text-(--ink-500) uppercase"
       >
         {label}
       </h3>
