@@ -444,3 +444,33 @@ export function lufsText(lufs: number): string {
   const r = Math.round(lufs * 10) / 10
   return `${r < 0 ? '−' : r > 0 ? '+' : ''}${Math.abs(r).toFixed(1)}`
 }
+
+/**
+ * The narrowest a view of an output stands beside others, as a share of
+ * its height: the stereo square, the rest half again as wide as tall
+ */
+export const VIEW_LEAST = { square: 1, wide: 1.5 } as const
+
+/**
+ * How many of an output's views stand side by side in a box width by
+ * height, gap apart, so that each keeps a shape the eye reads (asked for
+ * by ashon, 2026-11-15: "가로세로 비율에 잘 맞춰서"): the views in order,
+ * the one chosen first, each square or not (squares); as many from the
+ * first as fit at their narrowest (VIEW_LEAST), one at least, which
+ * then fills the box alone.
+ */
+export function viewsSideBySide(
+  squares: readonly boolean[],
+  width: number,
+  height: number,
+  gap: number
+): number {
+  let used = -gap
+  let count = 0
+  for (const square of squares) {
+    used += gap + height * (square ? VIEW_LEAST.square : VIEW_LEAST.wide)
+    if (used > width) break
+    count++
+  }
+  return Math.max(1, count)
+}

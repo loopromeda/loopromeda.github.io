@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Engine, OutputSource } from '../engine/engine'
 import { masterLimited } from '../state/mix'
 import {
@@ -16,6 +16,7 @@ import {
   sampleLevels,
   toDb,
   unclippedLevels,
+  viewsSideBySide,
   type Levels,
 } from '../viz/master'
 import { SCALES } from '../viz/colourScale'
@@ -253,6 +254,78 @@ export function keepView(source: OutputSource, view: MasterViewKind): void {
   } catch {
     // Shown all the same, for this visit
   }
+}
+
+/** The gap between views side by side, px (gap-1) */
+const VIEWS_GAP = 4
+
+/** The views in the order they stand side by side: the one chosen first */
+const viewsFrom = (view: MasterViewKind): MasterViewKind[] => [
+  view,
+  ...MASTER_VIEWS.map((one) => one.view).filter((one) => one !== view),
+]
+
+/**
+ * An output's views side by side in the box its tile leaves them, each
+ * kept in a shape the eye reads (viewsSideBySide; asked for by ashon,
+ * 2026-11-15: "가로세로 비율에 잘 맞춰서", of the master stretched long
+ * across a wide mix): the one chosen first, alone where the box has room
+ * for no more, then the others in their order (MASTER_VIEWS) as it
+ * widens, the stereo square and the rest sharing what is left alike, so
+ * none is narrower than viewsSideBySide counted it. The box is measured
+ * as it changes size, and only the number of views goes through React.
+ */
+export function ViewsAcross({
+  engine,
+  view,
+  source = 'master',
+  className = '',
+  timing = false,
+  onStats,
+}: {
+  engine: Engine
+  view: MasterViewKind
+  source?: OutputSource
+  className?: string
+  timing?: boolean
+  onStats?: (stats: ScopeStats) => void
+}) {
+  const boxRef = useRef<HTMLSpanElement>(null)
+  const order = viewsFrom(view)
+  const [count, setCount] = useState(1)
+  useEffect(() => {
+    const box = boxRef.current
+    if (!box) return
+    const squares = viewsFrom(view).map((one) => one === 'stereo')
+    const fit = () =>
+      setCount(
+        viewsSideBySide(squares, box.clientWidth, box.clientHeight, VIEWS_GAP)
+      )
+    fit()
+    const observer = new ResizeObserver(fit)
+    observer.observe(box)
+    return () => observer.disconnect()
+  }, [view])
+  const shown = order.slice(0, count)
+  return (
+    <span ref={boxRef} className={`flex min-w-0 gap-1 ${className}`}>
+      {shown.map((kind, k) => (
+        <MasterView
+          key={kind}
+          engine={engine}
+          view={kind}
+          source={source}
+          timing={k === 0 && timing}
+          onStats={k === 0 ? onStats : undefined}
+          className={`h-full rounded-[4px] ${
+            shown.length > 1 && kind === 'stereo'
+              ? 'aspect-square shrink-0'
+              : 'min-w-0 flex-1'
+          }`}
+        />
+      ))}
+    </span>
+  )
 }
 
 /** One of the views by kind, the scope's drawing cost reported if asked */

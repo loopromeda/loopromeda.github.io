@@ -167,7 +167,8 @@ src/viz/      pure display math (scope trigger and decimation, envelope
               their names), the threads stitched between their tiles
               (a hole for each, a run across each seam) in threads.ts,
               the master's views (spectrum,
-              spectrogram, stereo, meters) and the mastering tools'
+              spectrogram, stereo, meters, how many stand side by
+              side) and the mastering tools'
               readouts (a reduction, a loudness) in master.ts, the
               colour scales the spectrogram's levels take, the dark's
               and the light's, in colourScale.ts, and where a
@@ -189,7 +190,8 @@ src/ui/       React components; SoundEditor.tsx the sound as tiles
               click, the count-in and each track's loop on or off;
               transportKeys.ts Space, the arrows and Home on it);
               the sound's Out and the
-              mix's Master hold a view of the output (MasterViews.tsx:
+              mix's Master hold views of the output, as many side by
+              side as keep their shapes (ViewsAcross; MasterViews.tsx:
               Scope.tsx's waveform, the spectrum, the spectrogram and
               its colours' key within it, the stereo, the meters; frames.ts
               draws them a display frame at a time, the output read

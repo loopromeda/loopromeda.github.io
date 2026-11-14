@@ -25,6 +25,7 @@ import {
   sampleLevels,
   unclippedLevels,
   vectorPoint,
+  viewsSideBySide,
   xToHz,
 } from './master'
 import { SCALES } from './colourScale'
@@ -552,5 +553,34 @@ describe('the mastering tools’ readouts', () => {
     expect(lufsText(-70)).toBe('–')
     expect(lufsText(-Infinity)).toBe('–')
     expect(lufsText(Number.NaN)).toBe('–')
+  })
+})
+
+describe('viewsSideBySide', () => {
+  // The scope, the spectrum, the spectrogram, then the stereo, square
+  const ORDER = [false, false, false, true]
+
+  it('keeps the one chosen alone in a box too narrow for two', () => {
+    expect(viewsSideBySide(ORDER, 73, 180, 4)).toBe(1)
+    expect(viewsSideBySide(ORDER, 299, 100, 4)).toBe(1)
+    // Alone however narrow
+    expect(viewsSideBySide(ORDER, 10, 100, 4)).toBe(1)
+  })
+
+  it('adds the next once each is half again as wide as tall', () => {
+    expect(viewsSideBySide(ORDER, 304, 100, 4)).toBe(2)
+    expect(viewsSideBySide(ORDER, 458, 100, 4)).toBe(3)
+  })
+
+  it('counts a square one as wide as tall', () => {
+    // Three at 150 and the stereo at 100, three gaps between
+    expect(viewsSideBySide(ORDER, 562, 100, 4)).toBe(4)
+    expect(viewsSideBySide(ORDER, 561, 100, 4)).toBe(3)
+    // The stereo chosen, first: then two wide ones after it
+    expect(viewsSideBySide([true, false, false, false], 408, 100, 4)).toBe(3)
+  })
+
+  it('shows every view across a wide, short master', () => {
+    expect(viewsSideBySide(ORDER, 1070, 75, 4)).toBe(4)
   })
 })

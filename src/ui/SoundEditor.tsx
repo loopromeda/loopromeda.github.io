@@ -98,7 +98,7 @@ import {
 import { CARD, CARD_FACE, RAISED, TALL_HIT } from './controls'
 import { TileReduction } from './Dynamics'
 import {
-  MasterView,
+  ViewsAcross,
   Meters,
   keepView,
   readView,
@@ -811,8 +811,10 @@ function Frame({
 }
 
 /**
- * An output's view and meters: the sound's own in the Out's tile and the
- * mix's strip, everything after the master in the Master's
+ * An output's views and meters: the sound's own in the Out's tile and the
+ * mix's strip, everything after the master in the Master's; as many
+ * views as the tile has room for in their shapes (ViewsAcross), the one
+ * its panel chooses first
  */
 function OutputAside({
   engine,
@@ -831,13 +833,13 @@ function OutputAside({
 }) {
   return (
     <>
-      <MasterView
+      <ViewsAcross
         engine={engine}
         view={view}
         source={source}
         timing={scope?.timing}
         onStats={scope?.onStats}
-        className="h-full min-w-0 flex-1 rounded-[4px]"
+        className="h-full flex-1"
       />
       <Meters
         engine={engine}
