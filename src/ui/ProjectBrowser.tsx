@@ -1,5 +1,4 @@
 import {
-  useEffect,
   useLayoutEffect,
   useRef,
   useState,
@@ -18,17 +17,15 @@ import {
 } from '../state/project'
 import type { Projects } from '../state/projects'
 import {
-  RAISED,
   SMALL_BUTTON,
   SMALL_CONFIRM,
   SMALL_DANGER,
   SMALL_FIELD,
   TALL_HIT,
 } from './controls'
-import { neutralLook } from './editor'
 import { FadeRow } from './FadeRow'
 import { SmallIconButton } from './IconButton'
-import { usePlacement } from './placement'
+import { Popover } from './Popover'
 
 /** A folder, 18 px stroked: its tab at the left, over its body */
 const FOLDER =
@@ -164,7 +161,6 @@ export function ProjectBrowser({
   anchor: RefObject<HTMLElement | null>
   onClose: () => void
 }) {
-  const placed = usePlacement(anchor, WANT_W, WANT_H)
   const { list, current, edited, problem } = useSyncExternalStore(
     projects.subscribe,
     projects.getSnapshot
@@ -181,7 +177,7 @@ export function ProjectBrowser({
     setMode({ kind: open ? 'idle' : kind })
 
   // Open on the current project, and on one saved as it joins the list
-  const ready = placed !== undefined
+  const [ready, setReady] = useState(false)
   useLayoutEffect(() => {
     if (!ready) return
     listRef.current
@@ -255,63 +251,33 @@ export function ProjectBrowser({
   }
 
   // Escape backs out of a form, then closes
-  useEffect(() => {
-    const key = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return
-      if (mode.kind === 'idle') onClose()
-      else setMode({ kind: 'idle' })
-    }
-    window.addEventListener('keydown', key)
-    return () => window.removeEventListener('keydown', key)
-  }, [mode, onClose])
+  const escape = () =>
+    mode.kind === 'idle' ? onClose() : setMode({ kind: 'idle' })
 
   return (
-    <section
+    <Popover
       id="project"
-      aria-labelledby="project-heading"
-      // Unseen until placed, a frame after it opens
-      style={
-        placed && {
-          left: placed.left,
-          top: placed.top,
-          width: placed.width,
-          height: placed.height,
-        }
+      anchor={anchor}
+      width={WANT_W}
+      height={WANT_H}
+      chip={
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 18 18"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d={FOLDER} />
+        </svg>
       }
-      className={`fixed z-10 flex flex-col gap-2 p-2.5 ${RAISED} ${placed ? '' : 'invisible'}`}
-    >
-      <div className="flex h-7 shrink-0 items-center gap-2">
-        <span
-          aria-hidden
-          className="flex h-5 w-[26px] shrink-0 items-center justify-center rounded-[5px] text-(--ink-200)"
-          style={{
-            background: 'var(--tile)',
-            boxShadow: `inset 0 0 0 1.5px ${neutralLook().ring}`,
-          }}
-        >
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 18 18"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d={FOLDER} />
-          </svg>
-        </span>
-        <h2
-          id="project-heading"
-          className="shrink-0 text-sm font-semibold whitespace-nowrap text-(--ink-100)"
-        >
-          Projects
-        </h2>
-        <span className="min-w-0 truncate text-[11px] text-(--ink-400)">
-          {list.length}
-        </span>
-        <span className="ml-auto flex shrink-0 items-center gap-1">
+      title="Projects"
+      note={list.length}
+      actions={
+        <>
           {current !== undefined && (
             <button
               type="button"
@@ -336,15 +302,13 @@ export function ProjectBrowser({
             onClick={() => toggle('more', more)}
             path="M4 9h.01M9 9h.01M14 9h.01"
           />
-          <SmallIconButton
-            label="Close projects"
-            onClick={onClose}
-            path="M5 5l8 8M13 5l-8 8"
-            className="ml-1"
-          />
-        </span>
-      </div>
-
+        </>
+      }
+      closeLabel="Close projects"
+      onClose={onClose}
+      onEscape={escape}
+      onPlaced={() => setReady(true)}
+    >
       <div className="flex h-7 shrink-0 items-center gap-1.5">
         {mode.kind === 'idle' && (
           <p className="min-w-0 flex-1 truncate px-1 text-[13px] text-(--ink-400)">
@@ -508,7 +472,7 @@ export function ProjectBrowser({
         onChange={(event) => void importChosen(event)}
         className="hidden"
       />
-    </section>
+    </Popover>
   )
 }
 

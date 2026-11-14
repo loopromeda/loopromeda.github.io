@@ -236,8 +236,13 @@ src/ui/       React components; SoundEditor.tsx the sound as tiles
               the dark and the light, appearance.ts setting them and
               the mode (index.css's tokens) on the page; pages.ts gives each
               sheet an address (#/presets), so a reload keeps it and Back
-              closes it; controls.ts the shared sizes, the insets and
-              the card every panel stands on; FadeRow.tsx a row that
+              closes it; Popover.tsx the shell every popover stands in
+              (its header, its place by its button, its height
+              measured, Escape); SettingRows.tsx a titled group of
+              settings, a setting's row and a switch's (Switch.tsx);
+              controls.ts the shared sizes, the insets, the section
+              heading and the card every panel stands on; FadeRow.tsx
+              a row that
               pans sideways, faded out where there is more
 scripts/      dev tooling: tailnet.sh, the device-report Vite plugin,
               vite-licences.ts, which gathers LICENSE and the licences

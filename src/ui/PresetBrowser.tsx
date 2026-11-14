@@ -1,5 +1,4 @@
 import {
-  useEffect,
   useLayoutEffect,
   useRef,
   useState,
@@ -25,7 +24,6 @@ import {
   type PresetFile,
 } from '../state/presets'
 import {
-  RAISED,
   SMALL_BUTTON,
   SMALL_CONFIRM,
   SMALL_DANGER,
@@ -36,7 +34,7 @@ import {
 import { neutralLook } from './editor'
 import { FadeRow } from './FadeRow'
 import { SmallIconButton } from './IconButton'
-import { usePlacement } from './placement'
+import { Popover } from './Popover'
 
 /** Which presets the list shows */
 type Filter = 'all' | 'mine' | PresetCategory
@@ -102,7 +100,6 @@ export function PresetBrowser({
   anchor: RefObject<HTMLElement | null>
   onClose: () => void
 }) {
-  const placed = usePlacement(anchor, WANT_W, WANT_H)
   const snapshot = useSyncExternalStore(library.subscribe, library.getSnapshot)
   const { current, edited, problem, user } = snapshot
   const [filter, setFilter] = useState<Filter>('all')
@@ -121,7 +118,7 @@ export function PresetBrowser({
     setMode({ kind: open ? 'filters' : kind })
 
   // Open on the current preset, once there is a list to scroll
-  const ready = placed !== undefined
+  const [ready, setReady] = useState(false)
   useLayoutEffect(() => {
     if (!ready) return
     listRef.current
@@ -179,64 +176,34 @@ export function PresetBrowser({
   }
 
   // Escape backs out of a form, then closes
-  useEffect(() => {
-    const key = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return
-      if (mode.kind === 'filters') onClose()
-      else setMode({ kind: 'filters' })
-    }
-    window.addEventListener('keydown', key)
-    return () => window.removeEventListener('keydown', key)
-  }, [mode, onClose])
+  const escape = () =>
+    mode.kind === 'filters' ? onClose() : setMode({ kind: 'filters' })
 
   return (
-    <section
+    <Popover
       id="presets"
-      aria-labelledby="presets-heading"
-      // Unseen until placed, a frame after it opens
-      style={
-        placed && {
-          left: placed.left,
-          top: placed.top,
-          width: placed.width,
-          height: placed.height,
-        }
+      anchor={anchor}
+      width={WANT_W}
+      height={WANT_H}
+      chip={
+        <svg viewBox="0 0 18 12" width={15} height={10}>
+          <path
+            d="M3.5 2.5h11M3.5 6h11M3.5 9.5h7"
+            fill="none"
+            stroke={neutralLook().ink}
+            strokeWidth={1.8}
+            strokeLinecap="round"
+          />
+        </svg>
       }
-      className={`fixed z-10 flex flex-col gap-2 p-2.5 ${RAISED} ${placed ? '' : 'invisible'}`}
-    >
-      {/* As a panel's header: its chip, its name, what it shows, and the
-          actions at its right, the last one apart */}
-      <div className="flex h-7 shrink-0 items-center gap-2">
-        <span
-          aria-hidden
-          className="flex h-5 w-[26px] shrink-0 items-center justify-center rounded-[5px]"
-          style={{
-            background: 'var(--tile)',
-            boxShadow: `inset 0 0 0 1.5px ${neutralLook().ring}`,
-          }}
-        >
-          <svg viewBox="0 0 18 12" width={15} height={10}>
-            <path
-              d="M3.5 2.5h11M3.5 6h11M3.5 9.5h7"
-              fill="none"
-              stroke={neutralLook().ink}
-              strokeWidth={1.8}
-              strokeLinecap="round"
-            />
-          </svg>
-        </span>
-        <h2
-          id="presets-heading"
-          className="shrink-0 text-sm font-semibold whitespace-nowrap text-(--ink-100)"
-        >
-          Patches
-        </h2>
-        <span className="min-w-0 truncate text-[11px] text-(--ink-400)">
-          {pad === undefined
-            ? plural(shown.length, 'preset')
-            : `onto Pad ${pad + 1}`}
-        </span>
-        <span className="ml-auto flex shrink-0 items-center gap-1">
+      title="Patches"
+      note={
+        pad === undefined
+          ? plural(shown.length, 'preset')
+          : `onto Pad ${pad + 1}`
+      }
+      actions={
+        <>
           {mine && pad === undefined && (
             <button
               type="button"
@@ -263,15 +230,13 @@ export function PresetBrowser({
             onClick={() => toggle('more', more)}
             path="M4 9h.01M9 9h.01M14 9h.01"
           />
-          <SmallIconButton
-            label="Close patches"
-            onClick={onClose}
-            path="M5 5l8 8M13 5l-8 8"
-            className="ml-1"
-          />
-        </span>
-      </div>
-
+        </>
+      }
+      closeLabel="Close patches"
+      onClose={onClose}
+      onEscape={escape}
+      onPlaced={() => setReady(true)}
+    >
       <div className="flex h-7 shrink-0 items-center gap-1.5">
         {mode.kind === 'filters' && (
           <Filters filter={filter} onChange={setFilter} />
@@ -395,7 +360,7 @@ export function PresetBrowser({
         onChange={(event) => void importChosen(event)}
         className="hidden"
       />
-    </section>
+    </Popover>
   )
 }
 

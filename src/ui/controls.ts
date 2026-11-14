@@ -86,6 +86,10 @@ export const SOLO_FACE =
  */
 export const OPTION_CELL = `flex h-11 min-w-0 items-center justify-center rounded-[10px] px-2 text-center text-xs leading-tight font-semibold tracking-wider text-balance disabled:opacity-40 ${OPTION_FACE}`
 
+/** A section's name over its rows, in small capitals: a group's title */
+export const SECTION_HEADING =
+  'text-[11px] font-medium tracking-widest text-(--ink-500) uppercase'
+
 /** A 44 px square button holding an 18 px icon */
 export const ICON_BUTTON =
   'flex size-11 shrink-0 items-center justify-center rounded-[10px] bg-(--lift) text-(--ink-200) disabled:opacity-40 aria-pressed:bg-(--lift-2)'

@@ -1,6 +1,6 @@
 import { useEffect, type ReactNode } from 'react'
 import type { Engine } from '../engine/engine'
-import { CARD } from './controls'
+import { CARD, SECTION_HEADING } from './controls'
 import { IconButton } from './IconButton'
 import { Loudness } from './Dynamics'
 import { Meters, Spectrogram, Spectrum, Vectorscope } from './MasterViews'
@@ -41,7 +41,7 @@ export function MasterSheet({
       <div className="flex h-11 shrink-0 items-center justify-end gap-1.5">
         <h2
           id="master-heading"
-          className="mr-auto min-w-0 truncate px-1 text-[11px] font-medium tracking-widest text-(--ink-500) uppercase"
+          className={`mr-auto min-w-0 truncate px-1 ${SECTION_HEADING}`}
         >
           Master
         </h2>

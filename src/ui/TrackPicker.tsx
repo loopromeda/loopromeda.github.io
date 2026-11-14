@@ -1,22 +1,13 @@
-import {
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-  useSyncExternalStore,
-  type Ref,
-  type RefObject,
-} from 'react'
+import { useSyncExternalStore, type Ref, type RefObject } from 'react'
 import type { Engine } from '../engine/engine'
 import type { PartKind } from '../state/kit'
 import type { Library } from '../state/library'
 import { VOICE } from '../state/sound/sound'
 import { MAX_TRACKS, kindLabel, trackName, type Track } from '../state/tracks'
-import { OPTION, RAISED } from './controls'
-import { neutralLook, tileLine } from './editor'
-import { SmallIconButton } from './IconButton'
+import { OPTION } from './controls'
+import { tileLine } from './editor'
 import { Mutes, STATE_WORDS, useStripState } from './Mutes'
-import { usePlacement } from './placement'
+import { Popover } from './Popover'
 
 /**
  * At the left of the keyboard's header, before the patch: the track
@@ -68,11 +59,6 @@ export function TrackButton({
 
 /** The popover's width, in rem, where the page has room for it */
 const WANT_W = 18
-/**
- * What it stands around its list, in CSS pixels: its header (28), the gap
- * under it (8) and its padding (10 each side)
- */
-const AROUND = 28 + 8 + 2 * 10
 
 /** What a track plays, said short beside its name */
 function playing(track: Track): string {
@@ -115,32 +101,6 @@ export function TrackPicker({
   const voice = useSyncExternalStore(engine.subscribeSound, () =>
     tileLine(engine.getSound(), VOICE)
   )
-  const contentRef = useRef<HTMLDivElement>(null)
-  // As tall as its list is, measured as it changes: a rem to start
-  const [wantH, setWantH] = useState(1)
-  const placed = usePlacement(anchor, WANT_W, wantH)
-
-  useLayoutEffect(() => {
-    const content = contentRef.current
-    if (!content) return
-    const measure = () => {
-      const rem =
-        parseFloat(getComputedStyle(document.documentElement).fontSize) || 16
-      const next = (content.offsetHeight + AROUND) / rem
-      setWantH((was) => (Math.abs(was - next) < 0.01 ? was : next))
-    }
-    const observer = new ResizeObserver(measure)
-    observer.observe(content)
-    return () => observer.disconnect()
-  }, [])
-
-  useEffect(() => {
-    const key = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', key)
-    return () => window.removeEventListener('keydown', key)
-  }, [onClose])
 
   const full = tracks.length >= MAX_TRACKS
   /** The track played, whose Voice the button calls when it is a synth's */
@@ -151,119 +111,83 @@ export function TrackPicker({
   }
 
   return (
-    <section
+    <Popover
       id="tracks"
-      aria-labelledby="tracks-heading"
-      // Unseen until placed, a frame after it opens
-      style={
-        placed && {
-          left: placed.left,
-          top: placed.top,
-          width: placed.width,
-          height: placed.height,
-        }
-      }
-      className={`fixed z-10 flex flex-col gap-2 p-2.5 ${RAISED} ${placed ? '' : 'invisible'}`}
+      anchor={anchor}
+      width={WANT_W}
+      chip={tracks.length}
+      title="Tracks"
+      note={full ? `${MAX_TRACKS} at most` : `of ${MAX_TRACKS}`}
+      closeLabel="Close tracks"
+      onClose={onClose}
     >
-      <div className="flex h-7 shrink-0 items-center gap-2">
-        <span
-          aria-hidden
-          className="flex h-5 w-[26px] shrink-0 items-center justify-center rounded-[5px] font-mono text-[11px] font-semibold text-(--ink-200)"
-          style={{
-            background: 'var(--tile)',
-            boxShadow: `inset 0 0 0 1.5px ${neutralLook().ring}`,
-          }}
-        >
-          {tracks.length}
-        </span>
-        <h2
-          id="tracks-heading"
-          className="shrink-0 text-sm font-semibold whitespace-nowrap text-(--ink-100)"
-        >
-          Tracks
-        </h2>
-        <span className="min-w-0 truncate text-[11px] text-(--ink-400)">
-          {full ? `${MAX_TRACKS} at most` : `of ${MAX_TRACKS}`}
-        </span>
-        <SmallIconButton
-          label="Close tracks"
-          onClick={onClose}
-          path="M5 5l8 8M13 5l-8 8"
-          className="ml-auto"
-        />
-      </div>
-
-      <div className="-mx-2.5 min-h-0 flex-1 overflow-y-auto overscroll-contain px-2.5">
-        <div ref={contentRef} className="flex flex-col gap-2">
-          <ul className="flex flex-col">
-            {tracks.map((track, k) => {
-              const chosen = track.id === pick.track
-              return (
-                <li key={track.id} className="flex items-center">
-                  <button
-                    type="button"
-                    aria-current={chosen ? 'true' : undefined}
-                    aria-label={`Play ${trackName(track, k)}, ${kindLabel(track.kind).toLowerCase()}`}
-                    onClick={() => {
-                      engine.pickTrack(track.id)
-                      onClose()
-                    }}
-                    className="flex h-11 min-w-0 flex-1 items-center gap-2.5 rounded-lg px-2.5 text-left text-[13px] text-(--ink-300) aria-[current]:bg-(--lift-2) aria-[current]:text-(--ink-0)"
-                  >
-                    <span className="w-3 shrink-0 text-center font-mono text-[11px] text-(--ink-500)">
-                      {k + 1}
-                    </span>
-                    <span className="min-w-0 flex-1 truncate font-medium">
-                      {trackName(track, k)}
-                    </span>
-                    <span className="max-w-[45%] shrink-0 truncate text-[11px] text-(--ink-500)">
-                      {playing(track)}
-                    </span>
-                  </button>
-                  <Mutes
-                    engine={engine}
-                    place={k}
-                    name={trackName(track, k)}
-                    small
-                  />
-                </li>
-              )
-            })}
-          </ul>
-          {played?.kind === 'synth' && (
-            <button
-              type="button"
-              onClick={() => {
-                onVoice()
-                onClose()
-              }}
-              className={OPTION}
-            >
-              Voice{voice ? `: ${voice}` : ''}
-            </button>
-          )}
-          <div
-            role="group"
-            aria-label="Add a track"
-            className="grid grid-cols-2 gap-1.5"
-          >
-            {(['synth', 'kit'] as const).map((kind) => (
+      <ul className="flex flex-col">
+        {tracks.map((track, k) => {
+          const chosen = track.id === pick.track
+          return (
+            <li key={track.id} className="flex items-center">
               <button
-                key={kind}
                 type="button"
-                disabled={full}
-                onClick={() => add(kind)}
-                className={OPTION}
+                aria-current={chosen ? 'true' : undefined}
+                aria-label={`Play ${trackName(track, k)}, ${kindLabel(track.kind).toLowerCase()}`}
+                onClick={() => {
+                  engine.pickTrack(track.id)
+                  onClose()
+                }}
+                className="flex h-11 min-w-0 flex-1 items-center gap-2.5 rounded-lg px-2.5 text-left text-[13px] text-(--ink-300) aria-[current]:bg-(--lift-2) aria-[current]:text-(--ink-0)"
               >
-                + {kindLabel(kind)}
+                <span className="w-3 shrink-0 text-center font-mono text-[11px] text-(--ink-500)">
+                  {k + 1}
+                </span>
+                <span className="min-w-0 flex-1 truncate font-medium">
+                  {trackName(track, k)}
+                </span>
+                <span className="max-w-[45%] shrink-0 truncate text-[11px] text-(--ink-500)">
+                  {playing(track)}
+                </span>
               </button>
-            ))}
-          </div>
-          <p className="px-1 text-[11px] leading-snug text-(--ink-500)">
-            Rename, move or remove a track on its strip in the Mix.
-          </p>
-        </div>
+              <Mutes
+                engine={engine}
+                place={k}
+                name={trackName(track, k)}
+                small
+              />
+            </li>
+          )
+        })}
+      </ul>
+      {played?.kind === 'synth' && (
+        <button
+          type="button"
+          onClick={() => {
+            onVoice()
+            onClose()
+          }}
+          className={OPTION}
+        >
+          Voice{voice ? `: ${voice}` : ''}
+        </button>
+      )}
+      <div
+        role="group"
+        aria-label="Add a track"
+        className="grid grid-cols-2 gap-1.5"
+      >
+        {(['synth', 'kit'] as const).map((kind) => (
+          <button
+            key={kind}
+            type="button"
+            disabled={full}
+            onClick={() => add(kind)}
+            className={OPTION}
+          >
+            + {kindLabel(kind)}
+          </button>
+        ))}
       </div>
-    </section>
+      <p className="px-1 text-[11px] leading-snug text-(--ink-500)">
+        Rename, move or remove a track on its strip in the Mix.
+      </p>
+    </Popover>
   )
 }

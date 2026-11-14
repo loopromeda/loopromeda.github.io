@@ -1,9 +1,6 @@
 import {
   useEffect,
-  useId,
-  useLayoutEffect,
   useRef,
-  useState,
   useSyncExternalStore,
   type Ref,
   type RefObject,
@@ -20,11 +17,10 @@ import type { AppSettings } from '../state/settings'
 import { loopOn, setLoopOn, setSwing, setTempo } from '../state/song'
 import { trackName, tracksKey } from '../state/tracks'
 import { COLUMNS } from '../viz/steps'
-import { ICON_BUTTON, RAISED, TALL_HIT } from './controls'
-import { neutralLook } from './editor'
+import { ICON_BUTTON, SECTION_HEADING, TALL_HIT } from './controls'
 import { IconButton, SmallIconButton } from './IconButton'
-import { usePlacement } from './placement'
-import { Switch } from './Switch'
+import { Popover } from './Popover'
+import { SettingGroup, SwitchRow } from './SettingRows'
 
 /** Play's triangle, and Stop's square, in an 18 px box */
 const PLAY = 'M6 4l8 5-8 5z'
@@ -156,13 +152,10 @@ const useSwing = (engine: Engine): number =>
 /** As wide as it wants to be, in rem: two rows of a slider and its ends */
 const WANT_W = 20
 
-/** Around its choices, in CSS px: the header, a gap, the padding (p-2.5) */
-const AROUND = 28 + 8 + 2 * 10
+/** A metronome, its arm off to the right, in an 18 px box */
+const METRONOME = 'M6.5 2.5h5l3 13h-11zM9 11.5l4-7'
 
 const SLIDER = 'h-11 min-w-0 flex-1 accent-[var(--accent)]'
-
-const SECTION =
-  'text-[11px] font-medium tracking-widest text-(--ink-500) uppercase'
 
 /**
  * The transport, a popover on the tempo's button (below it on the tab
@@ -195,32 +188,7 @@ export function TransportPicker({
     tracksKey(engine.getTracks())
   )
   const tracks = engine.getTracks()
-  const id = useId()
   const percent = Math.round(swing * 100)
-  const contentRef = useRef<HTMLDivElement>(null)
-  // As tall as its choices are, measured as they change: a rem to start
-  const [wantH, setWantH] = useState(1)
-  const placed = usePlacement(anchor, WANT_W, wantH)
-  useLayoutEffect(() => {
-    const content = contentRef.current
-    if (!content) return
-    const measure = () => {
-      const rem =
-        parseFloat(getComputedStyle(document.documentElement).fontSize) || 16
-      const next = (content.offsetHeight + AROUND) / rem
-      setWantH((was) => (Math.abs(was - next) < 0.01 ? was : next))
-    }
-    const observer = new ResizeObserver(measure)
-    observer.observe(content)
-    return () => observer.disconnect()
-  }, [])
-  useEffect(() => {
-    const key = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', key)
-    return () => window.removeEventListener('keydown', key)
-  }, [onClose])
 
   const turn = (value: number) =>
     engine.editSong((song) => setTempo(song, value))
@@ -231,193 +199,112 @@ export function TransportPicker({
     engine.editSong((song) => setSwing(song, value / 100))
 
   return (
-    <section
+    <Popover
       id="tempo"
-      aria-labelledby="tempo-heading"
-      // Unseen until placed, a frame after it opens
-      style={
-        placed && {
-          left: placed.left,
-          top: placed.top,
-          width: placed.width,
-          height: placed.height,
-        }
+      anchor={anchor}
+      width={WANT_W}
+      chip={
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 18 18"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d={METRONOME} />
+        </svg>
       }
-      className={`fixed z-10 flex flex-col gap-2 p-2.5 ${RAISED} ${placed ? '' : 'invisible'}`}
+      title="Transport"
+      note={`${tempo} BPM`}
+      closeLabel="Close the transport"
+      onClose={onClose}
+      bodyClassName="gap-3"
     >
-      <div className="flex h-7 shrink-0 items-center gap-2">
-        <span
-          aria-hidden
-          className="flex h-5 w-[26px] shrink-0 items-center justify-center rounded-[5px] text-(--ink-200)"
-          style={{
-            background: 'var(--tile)',
-            boxShadow: `inset 0 0 0 1.5px ${neutralLook().ring}`,
-          }}
+      <div className="flex items-center gap-1.5">
+        <button
+          type="button"
+          aria-label="A beat a minute slower"
+          disabled={tempo <= MIN_TEMPO}
+          onClick={() => nudge(-1)}
+          className={ICON_BUTTON}
         >
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 18 18"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M6.5 2.5h5l3 13h-11zM9 11.5l4-7" />
-          </svg>
-        </span>
-        <h2
-          id="tempo-heading"
-          className="shrink-0 text-sm font-semibold whitespace-nowrap text-(--ink-100)"
+          <Stroke path="M4.5 9h9" />
+        </button>
+        <input
+          type="range"
+          aria-label="Tempo, beats a minute"
+          min={MIN_TEMPO}
+          max={MAX_TEMPO}
+          step={1}
+          value={tempo}
+          onChange={(event) => turn(Number(event.target.value))}
+          className={SLIDER}
+        />
+        <button
+          type="button"
+          aria-label="A beat a minute faster"
+          disabled={tempo >= MAX_TEMPO}
+          onClick={() => nudge(1)}
+          className={ICON_BUTTON}
         >
-          Transport
-        </h2>
-        <span className="min-w-0 truncate font-mono text-[11px] text-(--ink-400)">
-          {tempo} BPM
-        </span>
-        <SmallIconButton
-          label="Close the transport"
-          onClick={onClose}
-          path="M5 5l8 8M13 5l-8 8"
-          className="ml-auto"
+          <Stroke path="M4.5 9h9M9 4.5v9" />
+        </button>
+      </div>
+
+      <div className="flex flex-col gap-0.5">
+        <div className="flex items-baseline justify-between px-1">
+          <h3 id="tempo-swing" className={SECTION_HEADING}>
+            Swing
+          </h3>
+          <span className="font-mono text-[11px] text-(--ink-400)">
+            {percent <= MIN_SWING * 100 ? 'Straight' : `${percent}%`}
+          </span>
+        </div>
+        <div className="flex px-1">
+          <input
+            type="range"
+            aria-labelledby="tempo-swing"
+            min={MIN_SWING * 100}
+            max={MAX_SWING * 100}
+            step={1}
+            value={percent}
+            onChange={(event) => swung(Number(event.target.value))}
+            className={SLIDER}
+          />
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <SwitchRow
+          label="Click"
+          hint="Each beat, the bar's first higher."
+          value={settings.click}
+          onChange={(click) => onSettings({ ...settings, click })}
+        />
+        <SwitchRow
+          label="Count-in"
+          hint="A bar of beats before the first step."
+          value={settings.countIn}
+          onChange={(countIn) => onSettings({ ...settings, countIn })}
         />
       </div>
 
-      <div className="-mx-2.5 min-h-0 flex-1 overflow-y-auto overscroll-contain px-2.5">
-        <div ref={contentRef} className="flex flex-col gap-3">
-          <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              aria-label="A beat a minute slower"
-              disabled={tempo <= MIN_TEMPO}
-              onClick={() => nudge(-1)}
-              className={ICON_BUTTON}
-            >
-              <Stroke path="M4.5 9h9" />
-            </button>
-            <input
-              type="range"
-              aria-label="Tempo, beats a minute"
-              min={MIN_TEMPO}
-              max={MAX_TEMPO}
-              step={1}
-              value={tempo}
-              onChange={(event) => turn(Number(event.target.value))}
-              className={SLIDER}
-            />
-            <button
-              type="button"
-              aria-label="A beat a minute faster"
-              disabled={tempo >= MAX_TEMPO}
-              onClick={() => nudge(1)}
-              className={ICON_BUTTON}
-            >
-              <Stroke path="M4.5 9h9M9 4.5v9" />
-            </button>
-          </div>
-
-          <div className="flex flex-col gap-0.5">
-            <div className="flex items-baseline justify-between px-1">
-              <h3 id="tempo-swing" className={SECTION}>
-                Swing
-              </h3>
-              <span className="font-mono text-[11px] text-(--ink-400)">
-                {percent <= MIN_SWING * 100 ? 'Straight' : `${percent}%`}
-              </span>
-            </div>
-            <div className="flex px-1">
-              <input
-                type="range"
-                aria-labelledby="tempo-swing"
-                min={MIN_SWING * 100}
-                max={MAX_SWING * 100}
-                step={1}
-                value={percent}
-                onChange={(event) => swung(Number(event.target.value))}
-                className={SLIDER}
-              />
-            </div>
-          </div>
-
-          <div className="flex flex-col">
-            <SwitchRow
-              id={`${id}-click`}
-              label="Click"
-              hint="Each beat, the bar's first higher"
-              checked={settings.click}
-              onChange={(click) => onSettings({ ...settings, click })}
-            />
-            <SwitchRow
-              id={`${id}-count`}
-              label="Count-in"
-              hint="A bar of beats before the first step"
-              checked={settings.countIn}
-              onChange={(countIn) => onSettings({ ...settings, countIn })}
-            />
-          </div>
-
-          <div className="flex flex-col">
-            <h3 id={`${id}-loops`} className={`px-1 ${SECTION}`}>
-              Loops
-            </h3>
-            <ul aria-labelledby={`${id}-loops`} className="flex flex-col">
-              {tracks.map((track, k) => (
-                <li key={track.id}>
-                  <SwitchRow
-                    id={`${id}-${track.id}`}
-                    label={trackName(track, k)}
-                    checked={loopOn(song, track.id)}
-                    onChange={(on) =>
-                      engine.editSong((each) => setLoopOn(each, track.id, on))
-                    }
-                  />
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
-      </div>
-    </section>
-  )
-}
-
-/** Something on or off in the transport, by name: a switch at its end */
-function SwitchRow({
-  id,
-  label,
-  hint,
-  checked,
-  onChange,
-}: {
-  id: string
-  label: string
-  hint?: string
-  checked: boolean
-  onChange: (checked: boolean) => void
-}) {
-  return (
-    <div className="flex min-h-10 items-center justify-between gap-3 px-1">
-      <span className="flex min-w-0 flex-col">
-        <span id={id} className="truncate text-[13px] text-(--ink-300)">
-          {label}
-        </span>
-        {hint !== undefined && (
-          <span
-            id={`${id}-hint`}
-            className="truncate text-[11px] text-(--ink-500)"
-          >
-            {hint}
-          </span>
-        )}
-      </span>
-      <Switch
-        checked={checked}
-        onChange={onChange}
-        labelledBy={id}
-        describedBy={hint === undefined ? undefined : `${id}-hint`}
-      />
-    </div>
+      <SettingGroup title="Loops">
+        {tracks.map((track, k) => (
+          <SwitchRow
+            key={track.id}
+            label={trackName(track, k)}
+            value={loopOn(song, track.id)}
+            onChange={(on) =>
+              engine.editSong((each) => setLoopOn(each, track.id, on))
+            }
+          />
+        ))}
+      </SettingGroup>
+    </Popover>
   )
 }
 

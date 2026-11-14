@@ -5,7 +5,6 @@ import {
   useRef,
   useState,
   type MouseEvent,
-  type ReactNode,
 } from 'react'
 import type { Engine } from '../engine/engine'
 import type { BenchReport } from '../engine/protocol'
@@ -22,7 +21,7 @@ import { CARD, SMALL_BUTTON, SMALL_OPTION } from './controls'
 import { Dropdown } from './Dropdown'
 import { SmallIconButton } from './IconButton'
 import { PlatformChecks } from './PlatformChecks'
-import { Switch } from './Switch'
+import { SettingGroup, SettingRow, SwitchRow } from './SettingRows'
 import { THEMES, mode as pageMode } from './theme'
 
 /** Each latencyHint as the player picks it, lowest first */
@@ -156,7 +155,7 @@ export function SettingsDialog({
       </div>
 
       <div className="-mx-2.5 flex min-h-0 flex-col gap-3 overflow-y-auto overscroll-contain px-2.5">
-        <Group title="Look">
+        <SettingGroup title="Look">
           <Picker
             label="Theme"
             hint="The chains' colours, the modulation colour and the accent, together. The letters stay, so colour is never the only cue."
@@ -175,9 +174,9 @@ export function SettingsDialog({
             value={settings.appearance}
             onChange={(appearance) => set({ appearance })}
           />
-        </Group>
+        </SettingGroup>
 
-        <Group title="Performance">
+        <SettingGroup title="Performance">
           <Choice
             label="Voices"
             options={VOICE_LIMITS.map((voices) => ({
@@ -194,14 +193,14 @@ export function SettingsDialog({
             value={settings.latency}
             onChange={(latency) => set({ latency })}
           />
-          <Toggle
+          <SwitchRow
             label="Waveform"
             value={settings.waveform}
             onChange={(waveform) => set({ waveform })}
           />
-        </Group>
+        </SettingGroup>
 
-        <Group title="Playing">
+        <SettingGroup title="Playing">
           <Choice
             label="Velocity"
             hint="Touch: lower on a key or a pad plays louder. Full: every note at full velocity."
@@ -209,7 +208,7 @@ export function SettingsDialog({
             value={settings.velocity}
             onChange={(velocity) => set({ velocity })}
           />
-          <Toggle
+          <SwitchRow
             label="Keep screen on"
             hint={
               platform.checks['Screen Wake Lock']
@@ -219,89 +218,32 @@ export function SettingsDialog({
             value={settings.keepAwake}
             onChange={(keepAwake) => set({ keepAwake })}
           />
-        </Group>
+        </SettingGroup>
 
-        <Group title="Debug">
-          <Toggle
+        <SettingGroup title="Debug">
+          <SwitchRow
             label="Audio details"
             value={settings.audioDetails}
             onChange={(audioDetails) => set({ audioDetails })}
           />
-          <Toggle
+          <SwitchRow
             label="Waveform timing"
             value={settings.waveformTiming}
             onChange={(waveformTiming) => set({ waveformTiming })}
           />
           <MeasureCpu engine={engine} onBench={onBench} />
-        </Group>
+        </SettingGroup>
 
-        <Group title="Browser">
+        <SettingGroup title="Browser">
           <PlatformChecks platform={platform} />
           <OfflineRow state={offline} onUpdate={onUpdate} onCheck={onCheck} />
-        </Group>
+        </SettingGroup>
 
-        <Group title="About">
+        <SettingGroup title="About">
           <About />
-        </Group>
+        </SettingGroup>
       </div>
     </dialog>
-  )
-}
-
-/** A titled run of settings */
-function Group({ title, children }: { title: string; children: ReactNode }) {
-  const id = useId()
-  return (
-    <section aria-labelledby={id} className="flex flex-col gap-1.5">
-      <h3
-        id={id}
-        className="px-1 pt-0.5 text-[11px] font-medium tracking-widest text-(--ink-500) uppercase"
-      >
-        {title}
-      </h3>
-      {children}
-    </section>
-  )
-}
-
-/**
- * One setting: its name at the left, the control at the right (under it
- * when they do not fit side by side), and what it does below
- */
-function Row({
-  label,
-  labelId,
-  hint,
-  hintId,
-  live = false,
-  children,
-}: {
-  label: string
-  labelId: string
-  hint?: ReactNode
-  hintId?: string
-  /** The hint changes to report something: it is read out as it does */
-  live?: boolean
-  children: ReactNode
-}) {
-  return (
-    <div className="flex flex-col gap-1 px-1">
-      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-        <span id={labelId} className="text-[13px] text-(--ink-300)">
-          {label}
-        </span>
-        {children}
-      </div>
-      {hint !== undefined && (
-        <p
-          id={hintId}
-          aria-live={live ? 'polite' : undefined}
-          className="text-[11px] leading-snug text-(--ink-500)"
-        >
-          {hint}
-        </p>
-      )}
-    </div>
   )
 }
 
@@ -321,7 +263,7 @@ function Choice<T extends string | number>({
 }) {
   const id = useId()
   return (
-    <Row
+    <SettingRow
       label={label}
       labelId={`${id}-label`}
       hint={hint}
@@ -345,37 +287,7 @@ function Choice<T extends string | number>({
           </button>
         ))}
       </div>
-    </Row>
-  )
-}
-
-/** A setting that is on or off: a switch, its knob to the accent when on */
-function Toggle({
-  label,
-  hint,
-  value,
-  onChange,
-}: {
-  label: string
-  hint?: string
-  value: boolean
-  onChange: (value: boolean) => void
-}) {
-  const id = useId()
-  return (
-    <Row
-      label={label}
-      labelId={`${id}-label`}
-      hint={hint}
-      hintId={`${id}-hint`}
-    >
-      <Switch
-        checked={value}
-        onChange={onChange}
-        labelledBy={`${id}-label`}
-        describedBy={hint === undefined ? undefined : `${id}-hint`}
-      />
-    </Row>
+    </SettingRow>
   )
 }
 
@@ -404,7 +316,7 @@ function Picker<T extends string | number>({
 }) {
   const id = useId()
   return (
-    <Row
+    <SettingRow
       label={label}
       labelId={`${id}-label`}
       hint={hint}
@@ -417,7 +329,7 @@ function Picker<T extends string | number>({
         value={value}
         onChange={onChange}
       />
-    </Row>
+    </SettingRow>
   )
 }
 
@@ -470,7 +382,7 @@ function OfflineRow({
   const hint =
     state === 'ready' && check ? CHECK_HINTS[check] : OFFLINE_HINTS[state]
   return (
-    <Row
+    <SettingRow
       label="Offline"
       labelId={`${id}-label`}
       hint={hint}
@@ -506,7 +418,7 @@ function OfflineRow({
           {OFFLINE_LABELS[state]}
         </span>
       )}
-    </Row>
+    </SettingRow>
   )
 }
 
@@ -517,7 +429,7 @@ function OfflineRow({
 function About() {
   const id = useId()
   return (
-    <Row
+    <SettingRow
       label="Loopromeda"
       labelId={`${id}-label`}
       hint="© 2026 ashon, under the MIT License. Licences lists the software it is built with, each under its own."
@@ -546,7 +458,7 @@ function About() {
           Source
         </a>
       </div>
-    </Row>
+    </SettingRow>
   )
 }
 
@@ -583,7 +495,7 @@ function MeasureCpu({
   }
 
   return (
-    <Row
+    <SettingRow
       label="CPU"
       labelId={`${id}-label`}
       hintId={`${id}-hint`}
@@ -609,7 +521,7 @@ function MeasureCpu({
       >
         {bench.state === 'running' ? 'Measuring…' : 'Measure'}
       </button>
-    </Row>
+    </SettingRow>
   )
 }
 
