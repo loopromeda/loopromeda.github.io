@@ -17,13 +17,8 @@ import {
   type Latency,
   type VelocityMode,
 } from '../state/settings'
-import {
-  CARD,
-  SMALL_BUTTON,
-  SMALL_OPTION,
-  SMALL_SELECT,
-  TALL_HIT,
-} from './controls'
+import { CARD, SMALL_BUTTON, SMALL_OPTION, TALL_HIT } from './controls'
+import { Dropdown } from './Dropdown'
 import { SmallIconButton } from './IconButton'
 import { PlatformChecks } from './PlatformChecks'
 import { THEMES } from './theme'
@@ -152,7 +147,7 @@ export function SettingsDialog({
 
       <div className="-mx-2.5 flex min-h-0 flex-col gap-3 overflow-y-auto overscroll-contain px-2.5">
         <Group title="Look">
-          <Dropdown
+          <Picker
             label="Theme"
             hint="The chains' colours, the modulation colour and the accent, together. The letters stay, so colour is never the only cue."
             options={THEMES.map((theme) => ({
@@ -379,10 +374,11 @@ function Toggle({
 }
 
 /**
- * A setting picked from a list, in the browser's own picker (on a phone,
- * its wheel); the theme's dots stand before the box, for the chosen one
+ * A setting picked from a list: the row's name and hint, and the app's own
+ * dropdown (Dropdown) reading them — its look is this app's, not the
+ * operating system's, so it sits with the switches and the option rows
  */
-function Dropdown<T extends string | number>({
+function Picker<T extends string | number>({
   label,
   hint,
   options,
@@ -401,7 +397,6 @@ function Dropdown<T extends string | number>({
   onChange: (value: T) => void
 }) {
   const id = useId()
-  const chosen = options.find((option) => option.value === value)
   return (
     <Row
       label={label}
@@ -409,37 +404,13 @@ function Dropdown<T extends string | number>({
       hint={hint}
       hintId={`${id}-hint`}
     >
-      <div className="flex items-center gap-2">
-        {chosen?.swatch && (
-          <span aria-hidden className="flex shrink-0 items-center gap-0.5">
-            {chosen.swatch.map((colour) => (
-              <span
-                key={colour}
-                className="size-2 rounded-full"
-                style={{ background: colour }}
-              />
-            ))}
-          </span>
-        )}
-        <select
-          aria-labelledby={`${id}-label`}
-          aria-describedby={hint === undefined ? undefined : `${id}-hint`}
-          value={`${value}`}
-          onChange={(event) => {
-            const option = options.find(
-              (candidate) => `${candidate.value}` === event.target.value
-            )
-            if (option) onChange(option.value)
-          }}
-          className={`${SMALL_SELECT} min-w-28`}
-        >
-          {options.map((option) => (
-            <option key={`${option.value}`} value={`${option.value}`}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-      </div>
+      <Dropdown
+        labelId={`${id}-label`}
+        hintId={`${id}-hint`}
+        options={options}
+        value={value}
+        onChange={onChange}
+      />
     </Row>
   )
 }

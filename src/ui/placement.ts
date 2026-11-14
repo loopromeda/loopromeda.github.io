@@ -7,14 +7,16 @@ const GAP = 8
 /**
  * Where a popover opened from anchor stands (placePopover), w by h rem as
  * it wants, within the page inside its padding (its margins, the screen's
- * safe areas): measured again whenever the button moves, for what stands
- * around it resizing (the controls put away), or the page does. Undefined
- * until measured, a frame after it opens.
+ * safe areas), on the side it prefers (above, as the app's popovers;
+ * below, as a dropdown's list): measured again whenever the button moves,
+ * for what stands around it resizing (the controls put away), or the page
+ * does. Undefined until measured, a frame after it opens.
  */
 export function usePlacement(
   anchor: RefObject<HTMLElement | null>,
   w: number,
-  h: number
+  h: number,
+  prefer: 'above' | 'below' = 'above'
 ): Placement | undefined {
   const [placed, setPlaced] = useState<Placement>()
   useLayoutEffect(() => {
@@ -35,7 +37,8 @@ export function usePlacement(
           bottom: box.bottom - parseFloat(style.paddingBottom),
         },
         { w: w * rem, h: h * rem },
-        GAP
+        GAP,
+        prefer
       )
       setPlaced((was) =>
         was &&
@@ -58,6 +61,6 @@ export function usePlacement(
       observer.disconnect()
       window.removeEventListener('resize', measure)
     }
-  }, [anchor, w, h])
+  }, [anchor, w, h, prefer])
   return placed
 }

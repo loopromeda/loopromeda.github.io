@@ -21,13 +21,17 @@ export interface Placement {
  * wants or as the room above; below it where the room above is short of
  * that and the room below is more (a button at the top of the page). Its
  * height does not follow what it holds, so a list filtered shorter moves
- * nothing.
+ * nothing. The side it prefers (above, as the app's popovers stand on
+ * their buttons; below, as a dropdown's list falls from its box) is the
+ * side it gets, unless it is short of what is wanted and the other has
+ * more (a dropdown at the page's foot opens above).
  */
 export function placePopover(
   anchor: Edges,
   bounds: Edges,
   want: { readonly w: number; readonly h: number },
-  gap: number
+  gap: number,
+  prefer: 'above' | 'below' = 'above'
 ): Placement {
   const width = Math.max(0, Math.min(want.w, bounds.right - bounds.left))
   const left = Math.max(
@@ -36,16 +40,20 @@ export function placePopover(
   )
   const above = Math.max(0, anchor.top - gap - bounds.top)
   const below = Math.max(0, bounds.bottom - anchor.bottom - gap)
-  if (above >= want.h || above >= below) {
-    const height = Math.min(want.h, above)
-    return {
-      left,
-      top: anchor.top - gap - height,
-      width,
-      height,
-      side: 'above',
-    }
+  const first = prefer === 'below' ? below : above
+  const other = prefer === 'below' ? above : below
+  const side: 'above' | 'below' =
+    first >= want.h || first >= other
+      ? prefer
+      : prefer === 'below'
+        ? 'above'
+        : 'below'
+  const height = Math.min(want.h, side === 'above' ? above : below)
+  return {
+    left,
+    top: side === 'above' ? anchor.top - gap - height : anchor.bottom + gap,
+    width,
+    height,
+    side,
   }
-  const height = Math.min(want.h, below)
-  return { left, top: anchor.bottom + gap, width, height, side: 'below' }
 }

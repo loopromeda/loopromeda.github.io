@@ -80,4 +80,30 @@ describe('placePopover', () => {
     expect(placed.width).toBe(0)
     expect(placed.height).toBe(0)
   })
+
+  it('falls below its box, as a dropdown prefers', () => {
+    // The same button, 306 above and 209 below: a dropdown takes the
+    // below it prefers, short as it is next to the above
+    const placed = placePopover(button, bounds, { w: 176, h: 128 }, 8, 'below')
+    expect(placed).toEqual({
+      left: 16,
+      top: 382,
+      width: 176,
+      height: 128,
+      side: 'below',
+    })
+  })
+
+  it('turns above where the room below is short of the other', () => {
+    // A box at the page's foot: 509 above, 6 below
+    const placed = placePopover(
+      { ...button, top: 533, bottom: 577 },
+      bounds,
+      { w: 176, h: 128 },
+      8,
+      'below'
+    )
+    expect(placed.side).toBe('above')
+    expect(placed.top + placed.height).toBe(525)
+  })
 })
