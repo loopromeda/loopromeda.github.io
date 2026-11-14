@@ -129,7 +129,7 @@ src/state/    params.ts: the knob schema and the old parameters;
               and the pad picked;
               song.ts: the session's song (the tempo, the swing and
               each track's loops, by the track's id; a loop one to
-              four bars of sixteenths and its notes, each a step, a
+              thirty-two bars of sixteenths and its notes, each a step, a
               key (a synth's note, a kit's pad), a length and a
               velocity), its edits, kept in localStorage;
               project.ts: a project, the session (the tracks, the mix,

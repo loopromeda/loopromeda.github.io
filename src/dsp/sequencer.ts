@@ -11,14 +11,14 @@
  */
 import type { Strip } from './output'
 
-/** The longest loop, in steps: four bars of sixteenths */
-export const MAX_STEPS = 64
+/** The longest loop, in steps: thirty-two bars of sixteenths */
+export const MAX_STEPS = 512
 
 /** The notes of a lane sounding at once; one past them is not played */
 export const MAX_HELD = 32
 
 /** The tempo's range, in beats a minute */
-export const MIN_TEMPO = 40
+export const MIN_TEMPO = 30
 export const MAX_TEMPO = 240
 
 /**

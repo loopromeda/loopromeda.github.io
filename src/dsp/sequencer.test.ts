@@ -7,6 +7,7 @@ import {
   KitTarget,
   Lane,
   MAX_HELD,
+  MAX_STEPS,
   Sequencer,
   SynthTarget,
   type LaneNote,
@@ -176,8 +177,8 @@ describe('Sequencer', () => {
     slow.sequencer.setTempo(1, 3)
     slow.sequencer.play()
     slow.run(STEP * 8)
-    // 40 beats a minute, a step of 18000, the first of a pair 3/4 of two
-    expect(slow.tape.ons()).toEqual([0, 27000])
+    // 30 beats a minute, a step of 24000, the first of a pair 3/4 of two
+    expect(slow.tape.ons()).toEqual([0, 36000])
     const unset = clock([[16, [note(0), note(1)]]])
     unset.sequencer.setTempo(NaN, NaN)
     unset.sequencer.play()
@@ -344,12 +345,12 @@ describe('Lane', () => {
   it('holds a loop no longer than the longest', () => {
     const tape = new Tape()
     const lane = new Lane(tape)
-    lane.setLoop(1000, [note(63), note(64)])
-    for (let step = 0; step < 128; step++) {
+    lane.setLoop(2 * MAX_STEPS, [note(MAX_STEPS - 1), note(MAX_STEPS)])
+    for (let step = 0; step < 2 * MAX_STEPS; step++) {
       tape.base = step
       lane.fire(step, 0)
     }
-    expect(tape.ons()).toEqual([63, 127])
+    expect(tape.ons()).toEqual([MAX_STEPS - 1, 2 * MAX_STEPS - 1])
   })
 
   it('plays no more notes at once than it can hold', () => {

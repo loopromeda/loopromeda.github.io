@@ -2,9 +2,9 @@
  * The session's song (docs/plan/tracks-and-song.md, D): the tempo and the
  * swing, and each track's loops of notes, by the track's id, kept apart
  * from its sound (a preset loaded leaves the notes; a track removed takes
- * its own away). A loop is one to four bars of sixteenths; a note stands
- * on a step at a key (a kit's pad, a synth's note), for a length in
- * steps, at a velocity; one at most on a step and a key. The first loop
+ * its own away). A loop is one to thirty-two bars of sixteenths; a note
+ * stands on a step at a key (a kit's pad, a synth's note), for a length
+ * in steps, at a velocity; one at most on a step and a key. The first loop
  * of a track is the one played and edited for now: more, and scenes and a
  * timeline over them, come with E. Plain data, never changed in place,
  * kept in localStorage.

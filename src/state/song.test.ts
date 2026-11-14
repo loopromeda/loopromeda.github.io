@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { MAX_STEPS } from '../dsp/sequencer'
 import {
   BAR_STEPS,
   MAX_BARS,
@@ -115,7 +116,7 @@ describe('a loop', () => {
       note(1, 1, 1, 1),
       note(2, 1, 1, 0.1),
     ])
-    expect(loop([note(0, 1, 1000)]).notes).toEqual([note(0, 1, 64)])
+    expect(loop([note(0, 1, 1000)]).notes).toEqual([note(0, 1, MAX_STEPS)])
     expect(loop([note(0, 1, NaN, NaN)]).notes).toEqual([note(0, 1, 1, 1)])
   })
 
@@ -123,7 +124,7 @@ describe('a loop', () => {
     const from = initLoop()
     for (const bad of [
       note(-1),
-      note(64),
+      note(MAX_STEPS),
       note(1.5),
       note(0, -1),
       note(0, 128),
@@ -140,11 +141,11 @@ describe('a loop', () => {
     expect(removeNote(from, 5, 0)).toBe(from)
   })
 
-  it('is one to four bars long', () => {
+  it('is one to thirty-two bars long', () => {
     const from = loop([note(0)])
     expect(setBars(from, 2).steps).toBe(32)
     expect(setBars(from, 4).steps).toBe(64)
-    expect(setBars(from, 9).steps).toBe(MAX_BARS * BAR_STEPS)
+    expect(setBars(from, MAX_BARS + 8).steps).toBe(MAX_BARS * BAR_STEPS)
     expect(setBars(from, 0).steps).toBe(16)
     expect(setBars(from, NaN).steps).toBe(16)
     expect(setBars(from, 1)).toBe(from)
@@ -205,7 +206,7 @@ describe('a song', () => {
     const song = initSong()
     expect(setTempo(song, 140).tempo).toBe(140)
     expect(setTempo(song, 140.4).tempo).toBe(140)
-    expect(setTempo(song, 1).tempo).toBe(40)
+    expect(setTempo(song, 1).tempo).toBe(30)
     expect(setTempo(song, 999).tempo).toBe(240)
     expect(setTempo(song, NaN).tempo).toBe(120)
     expect(setTempo(song, 120)).toBe(song)
@@ -264,7 +265,7 @@ describe('a song kept', () => {
               { step: 'x', key: 60 },
               { step: 2, key: 300 },
               'note',
-              { step: 0, key: 62, length: 99 },
+              { step: 0, key: 62, length: 1000 },
             ],
           },
           'loop',
@@ -276,7 +277,7 @@ describe('a song kept', () => {
     expect(read.tempo).toBe(90)
     expect(Object.keys(read.loops)).toEqual(['t1'])
     expect(read.loops.t1).toEqual([
-      { steps: 16, notes: [note(0, 62, 64), note(4, 60)] },
+      { steps: 16, notes: [note(0, 62, MAX_STEPS), note(4, 60)] },
       { steps: 16, notes: [] },
     ])
   })
