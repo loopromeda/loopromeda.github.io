@@ -10,9 +10,10 @@ import {
 import type { Engine } from '../engine/engine'
 import type { PartKind } from '../state/kit'
 import type { Library } from '../state/library'
+import { VOICE } from '../state/sound/sound'
 import { MAX_TRACKS, kindLabel, trackName, type Track } from '../state/tracks'
 import { OPTION, RAISED } from './controls'
-import { NEUTRAL_LOOK } from './editor'
+import { NEUTRAL_LOOK, tileLine } from './editor'
 import { SmallIconButton } from './IconButton'
 import { Mutes, STATE_WORDS, useStripState } from './Mutes'
 import { usePlacement } from './placement'
@@ -87,7 +88,9 @@ function playing(track: Track): string {
  * 44 px for the finger with its number, its name and what it plays (a
  * synth's preset; Kit), the one played lit, and at the row's end its Mute
  * and Solo (M and S: Mutes), which leave the popover open; under them the
- * two adds, side by side, until there are the most. Picking one, or
+ * two adds, side by side, until there are the most. Between the two, the
+ * track's Voice, when it is a synth's: the editor's sound pane, its
+ * voice's panel called, the popover closed with it. Picking one, or
  * adding one (which is picked), closes it. A track is renamed, moved and
  * removed in the Mix, on its strip.
  */
@@ -95,16 +98,23 @@ export function TrackPicker({
   engine,
   library,
   anchor,
+  onVoice,
   onClose,
 }: {
   engine: Engine
   library: Library
   /** The button it opens from, which places it */
   anchor: RefObject<HTMLElement | null>
+  /** The editor's sound pane, its voice's panel */
+  onVoice: () => void
   onClose: () => void
 }) {
   const tracks = useSyncExternalStore(engine.subscribeSound, engine.getTracks)
   const pick = useSyncExternalStore(engine.subscribeSound, engine.getPick)
+  // The voice, in a word: the Voice button's label
+  const voice = useSyncExternalStore(engine.subscribeSound, () =>
+    tileLine(engine.getSound(), VOICE)
+  )
   const contentRef = useRef<HTMLDivElement>(null)
   // As tall as its list is, measured as it changes: a rem to start
   const [wantH, setWantH] = useState(1)
@@ -133,6 +143,8 @@ export function TrackPicker({
   }, [onClose])
 
   const full = tracks.length >= MAX_TRACKS
+  /** The track played, whose Voice the button calls when it is a synth's */
+  const played = tracks.find((each) => each.id === pick.track)
   const add = (kind: PartKind) => {
     library.addTrack(kind)
     onClose()
@@ -218,6 +230,18 @@ export function TrackPicker({
               )
             })}
           </ul>
+          {played?.kind === 'synth' && (
+            <button
+              type="button"
+              onClick={() => {
+                onVoice()
+                onClose()
+              }}
+              className={OPTION}
+            >
+              Voice{voice ? `: ${voice}` : ''}
+            </button>
+          )}
           <div
             role="group"
             aria-label="Add a track"

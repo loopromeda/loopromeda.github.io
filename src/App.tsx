@@ -211,6 +211,9 @@ export function App({
     if (surface.hideControls) changeSurface({ ...surface, hideControls: false })
     setAsked({ source: 'wheel' })
   }
+  // The track popover's Voice: each new ask opens the editor's sound pane
+  // and shows the voice's panel (SoundEditor)
+  const [voiceAsked, setVoiceAsked] = useState(0)
   const [settings, setSettings] = useState(() => readSettings(storage))
   useEffect(() => {
     awake.want(settings.keepAwake && state === 'running')
@@ -290,6 +293,7 @@ export function App({
               engine={engine}
               library={library}
               asked={asked}
+              voiceAsked={voiceAsked}
               scope={
                 settings.waveform
                   ? { timing: settings.waveformTiming, onStats: onScopeStats }
@@ -398,6 +402,7 @@ export function App({
           engine={engine}
           library={library}
           anchor={trackRef}
+          onVoice={() => setVoiceAsked((n) => n + 1)}
           onClose={closeSheet}
         />
       )}

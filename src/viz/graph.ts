@@ -362,6 +362,8 @@ export interface GeometrySound extends GraphSound {
     readonly items: readonly { readonly id: string }[]
   })[]
   readonly effects: readonly { readonly id: string }[]
+  /** The modulators, in the lane's order; absent where none is drawn */
+  readonly modulators?: readonly { readonly id: string }[]
 }
 
 /** How many of each the sound may hold: where the "+" tiles stop */
@@ -370,6 +372,8 @@ export interface GraphLimits {
   readonly chains: number
   readonly items: number
   readonly effects: number
+  /** Absent: the lane's "+" never shows */
+  readonly modulators?: number
 }
 
 /** A rectangle in CSS pixels, from the graph's top left */
@@ -411,6 +415,9 @@ export interface GraphGeometry {
   readonly height: number
   /** Its height at rest (slots GRAPH.slot tall): what it asks of a frame */
   readonly rest: number
+  /** The modulators' lane across the head: the blocks and their "+" */
+  readonly mods: readonly { readonly mod: string; readonly box: Box }[]
+  readonly addMod: Box | undefined
   readonly inputs: readonly InputBox[]
   readonly chains: readonly ChainBoxes[]
   /** The amp, at the end of every row: in their middle, past its cap */
@@ -490,9 +497,23 @@ export interface GraphGeometry {
  * amp, and the out after them, as tall too. Their "+" stands in the "+"
  * row, under them and the amp, so a sound with none is no wider for it.
  * That row is always there, under one slot at least.
+ *
+ * Across the head, above every row, stands the modulators' lane: blocks
+ * 64 wide, 4 apart, and their "+" 28 wide, all 44 tall; the rows begin 8
+ * under it.
  */
 export const GRAPH = {
   top: 8,
+  /** The modulators' lane across the graph's head: a block's height */
+  modH: 44,
+  /** A block's width, as the rack's tiles had theirs (w-16) */
+  modW: 64,
+  /** Between blocks, and what their drag's seam measures (4) */
+  modGap: 4,
+  /** Between the lane and the rows under it */
+  modRow: 8,
+  /** The lane's "+", as narrow as the rack's (w-7) */
+  modAdd: 28,
   slot: 44,
   slotGap: 6,
   inputX: 8,
@@ -630,12 +651,19 @@ function shareFor(
 const slotsOf = (layout: GraphLayout) => Math.max(1, layout.slots)
 
 /**
- * The graph's height with slots slot tall, as graphGeometry draws it:
- * the "+" row is always there
+ * The graph's height with slots slot tall, as graphGeometry draws it: the
+ * lane across the head is always there, and the "+" row
  */
 function heightAt(layout: GraphLayout, slot: number): number {
   const g = GRAPH
-  return g.top + slotsOf(layout) * (slot + g.slotGap) + g.addRow + g.end
+  return (
+    g.top +
+    g.modH +
+    g.modRow +
+    slotsOf(layout) * (slot + g.slotGap) +
+    g.addRow +
+    g.end
+  )
 }
 
 /**
@@ -655,12 +683,14 @@ function slotFor(layout: GraphLayout, room: number): number {
 }
 
 /**
- * Where everything in the sound's graph is drawn. Given the width of its
- * frame, the tiles share it (see GRAPH): the items, the amp and its
- * inserts widening to squares first, then the rest; the out fills what
- * they leave, at least GRAPH.outW wide and at most GRAPH.stretch times
- * that, the frame's rest left empty; unframed, everything is as GRAPH
- * has it. Given its height too (room), the slots share that.
+ * Where everything in the sound's graph is drawn, the modulators' blocks
+ * and their "+" standing in a lane across the head above every row. Given
+ * the width of its frame, the tiles share it (see GRAPH): the items, the
+ * amp and its inserts widening to squares first, then the rest; the out
+ * fills what they leave, at least GRAPH.outW wide and at most
+ * GRAPH.stretch times that, the frame's rest left empty; unframed,
+ * everything is as GRAPH has it. Given its height too (room), the slots
+ * share that.
  */
 export function graphGeometry(
   sound: GeometrySound,
@@ -672,19 +702,21 @@ export function graphGeometry(
   const layout = graphLayout(sound)
   const slot = room === undefined ? g.slot : slotFor(layout, room)
   const pitch = slot + g.slotGap
-  const slotY = (n: number) => g.top + n * pitch
+  // The rows begin under the lane across the head
+  const head = g.top + g.modH + g.modRow
+  const slotY = (n: number) => head + n * pitch
   const tall = (slots: number) => slots * pitch - g.slotGap
   const sources = layout.columns
   const lastRow = layout.rows[layout.rows.length - 1]
   const rowsEnd = lastRow
     ? slotY(lastRow.first) + tall(lastRow.slots)
-    : g.top + slot
+    : head + slot
   const heights: Heights = {
     items: Math.max(
       0,
       ...layout.rows.map((row) => tall(Math.min(2, row.slots)))
     ),
-    span: rowsEnd - g.top,
+    span: rowsEnd - head,
     two: tall(2),
   }
   const share =
@@ -802,7 +834,7 @@ export function graphGeometry(
       : w.out
   const span = heights.span
   const ampH = w.ampH
-  const ampY = g.top + Math.floor((span - ampH) / 2)
+  const ampY = head + Math.floor((span - ampH) / 2)
   const fxX = ampX + w.amp + g.seam
   const effects = sound.effects.map((effect, k) => ({
     effect: effect.id,
@@ -837,10 +869,39 @@ export function graphGeometry(
   })
   const ampY2 = ampY + ampH / 2
   const stages = [amp, ...effects.map(({ box }) => box)]
+  // The lane's blocks, left to right from the inputs' margin, and the "+"
+  // after the last where there is room; past the out they widen the graph
+  const mods = (sound.modulators ?? []).map((mod, k) => ({
+    mod: mod.id,
+    box: {
+      x: g.inputX + k * (g.modW + g.modGap),
+      y: g.top,
+      w: g.modW,
+      h: g.modH,
+    },
+  }))
+  const lastMod = mods[mods.length - 1]
+  const addMod =
+    limits.modulators !== undefined &&
+    (sound.modulators?.length ?? 0) < limits.modulators
+      ? {
+          x: lastMod ? lastMod.box.x + g.modW + g.modGap : g.inputX,
+          y: g.top,
+          w: g.modAdd,
+          h: g.modH,
+        }
+      : undefined
+  const lane = addMod
+    ? addMod.x + addMod.w
+    : lastMod
+      ? lastMod.box.x + g.modW
+      : 0
   return {
-    width: outX + outW + g.end,
+    width: Math.max(outX + outW, lane) + g.end,
     height: bottom + g.end,
     rest: heightAt(layout, g.slot),
+    mods,
+    addMod,
     inputs,
     chains: rows,
     amp,

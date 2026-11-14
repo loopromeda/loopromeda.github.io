@@ -71,7 +71,6 @@ import {
   MOD_LOOK,
   NEUTRAL_LOOK,
   PAD_TILE,
-  VOICE_LOOK,
   addId,
   busLook,
   chainLetter,
@@ -96,7 +95,7 @@ import {
   tileLine,
   type Look,
 } from './editor'
-import { CARD, CARD_FACE, RAISED } from './controls'
+import { CARD, CARD_FACE, RAISED, TALL_HIT } from './controls'
 import { TileReduction } from './Dynamics'
 import {
   MasterView,
@@ -135,16 +134,15 @@ const LIMITS = {
   chains: MAX_CHAINS,
   items: MAX_ITEMS,
   effects: MAX_EFFECTS,
+  modulators: MAX_MODULATORS,
 }
-/** The space between the rack's tiles (gap-1) */
-const RACK_GAP = 4
 /**
  * Kept clear between the tiles and the panel over them, past the graph's
- * own end (GRAPH.end, 8): nothing more, so they stand 8 apart as the rack
- * and the tiles do
+ * own end (GRAPH.end, 8): nothing more, so they stand 8 apart as the tiles
+ * stand from the card's edges
  */
 const DOCK_GAP = 0
-/** How far in the dock stands from the card's edges (2): the rack's too */
+/** How far in the dock stands from the card's edges (2) */
 const DOCK_INSET = 8
 /**
  * The bar the hidden panel leaves in the dock: beside the graph its width
@@ -245,16 +243,19 @@ interface Picking {
 
 /**
  * The sound as flat tiles flowing left to right (docs/plan/sound-chains.md,
- * The editor): the modulators' rack and the voice above (beside, at the
- * left, on a wider screen), the inputs in a column, a row per chain (its
+ * The editor): the Sound and Mix switch in a thin panel over the card,
+ * the modulators in a lane across the graph's head, the inputs in a
+ * column, a row per chain (its
  * head, its items, the amp at the end of every row, its inserts and the
  * sound's out after it), and under it all the panel of the tile picked
- * (beside the graph on a wider screen). The rack's first switch shows the
+ * (beside the graph on a wider screen). The panel's switch shows the
  * session's mix in the graph's place instead (MixGraph: the sound, the
  * returns, the master), the panel then the mix's; each keeps its tile
  * picked, and the two ask the card for the same height, so the keys
  * under it stay put. The sound's sends are turned in either: the Out's
- * panel and the mix's strip's are the same. Tapping a tile picks it; the
+ * panel and the mix's strip's are the same. The voice is called from the
+ * track's popover (TrackPicker.tsx): its Voice button opens the sound pane
+ * and picks the voice, the panel with it. Tapping a tile picks it; the
  * thread between an input and a chain picks the chain, its knob for that
  * input lit, and one between an input and the oscillator whose FM reads
  * it picks the input, its knob for that FM lit (threads.ts: a tap target
@@ -277,7 +278,7 @@ interface Picking {
  *
  * Held, a tile lifts to be dragged (tileDrag.ts): an item along its chain
  * or into another, a chain's head (its row with it) up or down, a
- * modulator along the rack. Inputs stand beside the chains they feed, so
+ * modulator along the lane. Inputs stand beside the chains they feed, so
  * only the panel moves them.
  *
  * With the kit played, the sound's place holds the kit (KitGraph): its
@@ -291,6 +292,7 @@ export function SoundEditor({
   library,
   scope,
   asked,
+  voiceAsked,
   onMaster,
   onPresets,
 }: {
@@ -299,6 +301,11 @@ export function SoundEditor({
   library: Library
   scope?: OutputViews
   asked?: RoutesAsked
+  /**
+   * The track popover's Voice: each new ask opens the sound pane and shows
+   * the voice's panel once (the same way as asked routes)
+   */
+  voiceAsked?: number
   /** Opens the master's views, large (#/master) */
   onMaster?: () => void
   /** Opens the presets' popover (#/presets), for a pad to map one */
@@ -394,6 +401,15 @@ export function SoundEditor({
     setRouting(null)
     setMapping(null)
   }
+  // A new Voice ask shows the voice's panel, the sound pane and the panel
+  // brought up: once, as it comes (as the wheel's Route above)
+  const [voiced, setVoiced] = useState(voiceAsked)
+  if (voiceAsked !== undefined && voiceAsked !== voiced) {
+    setVoiced(voiceAsked)
+    choosePane('sound')
+    pick(VOICE)
+    show(true)
+  }
   // The kit played: its pads and its chain in the sound's place
   const kitView = part === 'kit' && pane === 'sound'
   const kitPicked = stillKitPicked(sound, kitChosen)
@@ -458,10 +474,11 @@ export function SoundEditor({
   // it. On a tall
   // one (index.css) the panel stands under the graph again, the whole
   // width, its knobs 72 px in a row over the keys (knobRow), and the graph
-  // takes the rest of the height. Held upright, the rack stands over the
-  // graph; beside (index.css: a wider screen, or a phone on its side,
-  // whose graph has width to spare and little height), it stands at its
-  // left, a column, and the panel at the graph's right.
+  // takes the rest of the height. Held upright or beside, the tab panel
+  // stands in a card of its own over the graph's; beside (index.css: a
+  // wider screen, or a phone on its side, whose graph has width to spare
+  // and little height), the panel of the tile picked stands at the graph's
+  // right.
   //
   // The panel stands over the graph's card, a dock (dock), not beside
   // it: the card fills the editor and the tiles keep to the room the dock
@@ -477,6 +494,21 @@ export function SoundEditor({
   // the panel or the bar, and showing it resizes nothing.
   return (
     <div className="relative isolate flex min-h-0 flex-1 flex-col [--dock:calc(7.75rem_+_var(--knob)_+_0.5rem)] [--knob:clamp(3rem,calc((100vw_-_4.5rem)/8.5),4.5rem)] side:[--dock:0px] side:[--knob:3rem] tall:[--knob:4.5rem]">
+      {/* The two panes, in a panel of their own over the card: the switch,
+          slim as a header row, and where the mix or the kit is shown,
+          what it is */}
+      <div
+        className={`mb-2 flex h-10 shrink-0 items-center gap-2 px-1 ${CARD}`}
+      >
+        <PaneSwitch pane={pane} onPane={choosePane} />
+        {(pane === 'mix' || kitView) && (
+          <p className="min-w-0 truncate text-[11px] text-zinc-500">
+            {kitView
+              ? 'Each pad plays a preset as it is: make sounds in a synth.'
+              : 'The session’s mix: a preset keeps only its sound’s sends.'}
+          </p>
+        )}
+      </div>
       <section
         aria-label={
           pane === 'mix'
@@ -487,13 +519,6 @@ export function SoundEditor({
         }
         className={`flex min-h-[8rem] min-w-0 flex-1 flex-col overflow-hidden side:flex-row ${CARD}`}
       >
-        <Rack
-          {...picking}
-          source={from}
-          pane={pane}
-          kit={kitView}
-          onPane={choosePane}
-        />
         {kitView ? (
           <KitGraph
             {...picking}
@@ -508,6 +533,7 @@ export function SoundEditor({
           <Graph
             {...picking}
             focus={picked === chosen ? focus : undefined}
+            source={from}
             scope={scope}
             dock={dock}
             docked={panel}
@@ -623,16 +649,9 @@ export function SoundEditor({
 }
 
 /**
- * The rack's strip, over the graph or beside it at its left: 8 px in from
- * the card's edges, as the dock is (DOCK_INSET), and 8 from the tiles,
- * which stand that far into their frame (GRAPH.top, GRAPH.inputX)
- */
-const RACK =
-  'mx-2 mt-2 flex h-14 shrink-0 items-center gap-1.5 rounded-lg bg-white/[0.03] pr-0.5 pl-1.5 side:mr-0 side:mb-2 side:h-auto side:w-[4.25rem] side:flex-col side:px-0 side:pt-1.5 side:pb-0.5'
-
-/**
- * Sound or Mix, the two the editor shows: first in the rack, where it
- * stands in both (beside the graph, stacked)
+ * Sound or Mix, the two the editor shows: first in the panel over the
+ * card, where it stands in both. Its buttons are of the panel's 28 px
+ * class, their touch reaching 44 (TALL_HIT).
  */
 function PaneSwitch({
   pane,
@@ -645,7 +664,7 @@ function PaneSwitch({
     <div
       role="group"
       aria-label="The editor shows"
-      className="flex shrink-0 gap-0.5 rounded-lg bg-black/25 p-0.5 side:w-14 side:flex-col"
+      className="flex shrink-0 gap-0.5 rounded-lg bg-black/25 p-0.5"
     >
       {PANES.map(({ pane: each, label }) => (
         <button
@@ -653,179 +672,11 @@ function PaneSwitch({
           type="button"
           aria-pressed={pane === each}
           onClick={() => onPane(each)}
-          className="h-10 rounded-md px-2 text-[11px] font-semibold text-zinc-500 aria-pressed:bg-white/10 aria-pressed:text-zinc-100 side:h-7 side:px-0"
+          className={`${TALL_HIT} h-7 rounded-md px-3 text-[11px] font-semibold tracking-wider text-zinc-400 aria-pressed:bg-white/10 aria-pressed:text-white`}
         >
           {label}
         </button>
       ))}
-    </div>
-  )
-}
-
-/**
- * Sound or Mix first (PaneSwitch). Showing the sound, the voice, a block
- * over the inputs, whose pitch it sets: where a
- * note comes in, its mode under its name. Then the modulators in a row,
- * each a block drawing its shape, and a "+" while there is room. Held
- * upright its tiles stand as tall as the graph's (44 px), wider than
- * tall; beside the graph, 56 px squares, and on a short screen (a phone
- * on its side) 56 by 44, for more of them to show; and there the
- * modulators give up height, down to 44 px, before their column scrolls,
- * so that a column that almost fits is not one to scroll a few pixels
- * (the switch over it took room, the Fold open on its side was short of
- * a few). The row scrolls under
- * the voice, which clips at its padding: there is room in it for a tile's
- * rings (a reach ring stands 3.5 px out). Beside the graph (a wider
- * screen, a phone on its side) it is a column at the graph's left, the
- * voice on top, scrolling down
- * (it asks no height of the card: the graph sets that). The source being
- * routed from is outlined in sky. A modulator dragged moves along it.
- * Showing the mix, what the mix is: the session's, but for each sound's
- * sends.
- */
-function Rack({
-  engine,
-  sound,
-  picked,
-  pick,
-  hold,
-  reach,
-  source,
-  pane,
-  kit,
-  onPane,
-}: Picking & {
-  source: string | null
-  pane: Pane
-  /** The kit's view: no voice, no modulators, its sounds its presets' */
-  kit: boolean
-  onPane: (pane: Pane) => void
-}) {
-  const routed = modulated(sound)
-  const scrollerRef = useRef<HTMLDivElement>(null)
-  const contentRef = useRef<HTMLDivElement>(null)
-  const markerRef = useRef<HTMLSpanElement>(null)
-  /** Whether the rack stands as a column, read as a drag starts */
-  const downRef = useRef(false)
-  const drag = useTileDrag<Place>({
-    scroller: scrollerRef,
-    content: contentRef,
-    marker: markerRef,
-    axis: () => {
-      const content = contentRef.current
-      downRef.current =
-        content !== null && getComputedStyle(content).flexDirection === 'column'
-      return downRef.current ? 'y' : 'x'
-    },
-    // Measured: the tiles stand in a row (or a column) of their own sizes
-    locate: (id, x, y) => {
-      const down = downRef.current
-      const tiles = Array.from(
-        contentRef.current?.querySelectorAll<HTMLElement>('[data-drag]') ?? []
-      )
-      const from = tiles.findIndex((tile) => tile.dataset.drag === id)
-      const tile = tiles[from]
-      const spans = tiles.map((each) =>
-        down
-          ? { start: each.offsetTop, end: each.offsetTop + each.offsetHeight }
-          : { start: each.offsetLeft, end: each.offsetLeft + each.offsetWidth }
-      )
-      const at = tile && spanDrop(spans, from, down ? y : x, RACK_GAP, 0)
-      if (!tile || !at) return undefined
-      const seam = at.middle - MARK / 2
-      return {
-        to: at.to,
-        color: MOD_LOOK.ink,
-        marker: down
-          ? { x: tile.offsetLeft, y: seam, w: tile.offsetWidth, h: MARK }
-          : { x: seam, y: tile.offsetTop, w: MARK, h: tile.offsetHeight },
-      }
-    },
-    drop: (id, at) => engine.edit((current) => movePart(current, id, at.to)),
-    lift: (id) => hold(id),
-  })
-  const divider = (
-    <span
-      aria-hidden
-      className="h-8 w-px shrink-0 bg-white/10 side:h-px side:w-10"
-    />
-  )
-  if (pane === 'mix' || kit) {
-    return (
-      <div className={RACK}>
-        <PaneSwitch pane={pane} onPane={onPane} />
-        {divider}
-        <p className="line-clamp-2 min-w-0 pr-1.5 text-[11px] leading-snug text-zinc-500 side:hidden">
-          {kit
-            ? 'Each pad plays a preset as it is: make sounds in a synth.'
-            : 'The session’s mix: a preset keeps only its sound’s sends.'}
-        </p>
-      </div>
-    )
-  }
-  return (
-    <div className={RACK}>
-      <PaneSwitch pane={pane} onPane={onPane} />
-      {divider}
-      <Tile
-        engine={engine}
-        label="Voice"
-        line={VOICE}
-        look={VOICE_LOOK}
-        picked={picked === VOICE}
-        routed={routed.has(VOICE)}
-        reach={reach.has(VOICE)}
-        aria="Voice"
-        onClick={() => pick(VOICE)}
-        className="h-11 w-14 shrink-0 side:size-14 short:h-11"
-        small
-      />
-      {divider}
-      <div
-        ref={scrollerRef}
-        aria-label="Modulators"
-        className="flex min-w-0 flex-1 overflow-x-auto overscroll-x-contain px-1 py-1.5 side:min-h-0 side:basis-0 side:flex-col side:self-stretch side:overflow-x-hidden side:overflow-y-auto side:overscroll-y-contain side:px-1.5 side:py-1"
-      >
-        <div
-          ref={contentRef}
-          className="relative flex shrink-0 gap-1 side:min-h-0 side:shrink side:flex-col"
-        >
-          {sound.modulators.map((modulator) => (
-            <Tile
-              key={modulator.id}
-              engine={engine}
-              drag={drag(modulator.id)}
-              label={tileLabel(sound, modulator.id)}
-              look={MOD_LOOK}
-              picked={picked === modulator.id}
-              member={source === modulator.id}
-              reach={reach.has(modulator.id)}
-              routed={routed.has(modulator.id)}
-              aria={partName(sound, modulator.id)}
-              onClick={() => pick(modulator.id)}
-              // A block, its shape under its name, as its knobs turn
-              picture={modulator.id}
-              stacked
-              className="h-11 w-16 shrink-0 side:size-14 side:min-h-11 side:shrink short:h-11"
-              small
-            />
-          ))}
-          {sound.modulators.length < MAX_MODULATORS && (
-            <Tile
-              engine={engine}
-              label="+"
-              look={MOD_LOOK}
-              picked={picked === addId('modulator')}
-              dashed="add"
-              aria="Add a modulator"
-              onClick={() => pick(addId('modulator'))}
-              className="h-11 w-7 shrink-0 side:h-7 side:w-14"
-              small
-            />
-          )}
-          <Marker ref={markerRef} />
-        </div>
-      </div>
     </div>
   )
 }
@@ -912,7 +763,7 @@ function Frame({
       // Held upright, its height at rest is what it asks of the card, the
       // slots grown or not (at most 45% of the screen, and the panel's
       // dock under the tiles besides): a card given more grows it. Beside
-      // the rack and the panel, it takes the card's height, the editor
+      // the panel, it takes the card's height, the editor
       // filling what the keys leave. The slots fill what the dock leaves.
       style={{ '--rest': `${rest}px` } as CSSProperties}
       className="relative min-h-0 grow basis-[calc(min(var(--rest),22rem,45dvh)_+_var(--dock,0px))] overflow-auto overscroll-contain side:min-w-0 side:basis-0"
@@ -980,7 +831,10 @@ function OutputAside({
 
 /**
  * The inputs, the chains, the amp and its inserts, and the sound's out,
- * laid out by graphGeometry: the tiles share the frame's width, the out
+ * laid out by graphGeometry: the modulators stand in a lane across the
+ * head, above the inputs, their blocks left to right and the "+" at the
+ * lane's right, each held to be dragged along it; the tiles share the
+ * frame's width, the out
  * filling what they leave and holding the output's view (the scope, the
  * spectrum, the spectrogram or the two sides, as its panel chooses) and
  * its meters under its name and the sound's sends to the mix's buses.
@@ -999,11 +853,14 @@ function Graph({
   reach,
   viewOf,
   focus,
+  source,
   scope,
   dock,
   docked,
 }: Picking & {
   focus: string | undefined
+  /** The source being routed from: its modulators are outlined in sky */
+  source: string | null
   scope: OutputViews | undefined
   /** The panel's dock, over the frame: the tiles keep to what it leaves */
   dock: HTMLElement | null
@@ -1080,6 +937,38 @@ function Graph({
       ),
     lift: (id) => hold(id),
   })
+  const modMarkerRef = useRef<HTMLSpanElement>(null)
+  /** The lane's blocks, for the modulator drag to find its own tiles */
+  const modulatorId = new Set(sound.modulators.map((modulator) => modulator.id))
+  // A modulator dragged moves along the lane, the lane's own rule
+  const dragMod = useTileDrag<Place>({
+    scroller: frameRef,
+    content: contentRef,
+    marker: modMarkerRef,
+    axis: () => 'x',
+    // Measured: the blocks stand in a row of their own sizes
+    locate: (id, x) => {
+      const tiles = Array.from(
+        contentRef.current?.querySelectorAll<HTMLElement>('[data-drag]') ?? []
+      ).filter((tile) => modulatorId.has(tile.dataset.drag ?? ''))
+      const from = tiles.findIndex((tile) => tile.dataset.drag === id)
+      const tile = tiles[from]
+      const spans = tiles.map((each) => ({
+        start: each.offsetLeft,
+        end: each.offsetLeft + each.offsetWidth,
+      }))
+      const at = tile && spanDrop(spans, from, x, GRAPH.modGap, 0)
+      if (!tile || !at) return undefined
+      const seam = at.middle - MARK / 2
+      return {
+        to: at.to,
+        color: MOD_LOOK.ink,
+        marker: { x: seam, y: tile.offsetTop, w: MARK, h: tile.offsetHeight },
+      }
+    },
+    drop: (id, at) => engine.edit((current) => movePart(current, id, at.to)),
+    lift: (id) => hold(id),
+  })
 
   return (
     <Frame
@@ -1092,6 +981,39 @@ function Graph({
       height={geometry.height}
       contentRef={contentRef}
     >
+      {geometry.mods.map(({ mod, box }) => (
+        <Tile
+          key={mod}
+          engine={engine}
+          drag={dragMod(mod)}
+          label={tileLabel(sound, mod)}
+          look={MOD_LOOK}
+          picked={picked === mod}
+          member={source === mod}
+          reach={reach.has(mod)}
+          routed={routed.has(mod)}
+          aria={partName(sound, mod)}
+          onClick={() => pick(mod)}
+          // A block, its shape under its name, as its knobs turn
+          picture={mod}
+          stacked
+          style={place(box)}
+          small
+        />
+      ))}
+      {geometry.addMod && (
+        <Tile
+          engine={engine}
+          label="+"
+          look={MOD_LOOK}
+          picked={picked === addId('modulator')}
+          dashed="add"
+          aria="Add a modulator"
+          onClick={() => pick(addId('modulator'))}
+          style={place(geometry.addMod)}
+          small
+        />
+      )}
       {geometry.inputs.map((tile) => {
         const into = tile.chains.map((chain) => chainOf.get(chain) ?? 0)
         if (tile.copy && tile.column > 0) {
@@ -1418,6 +1340,7 @@ function Graph({
         />
       ))}
       <Marker ref={markerRef} />
+      <Marker ref={modMarkerRef} />
     </Frame>
   )
 }

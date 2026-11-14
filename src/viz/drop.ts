@@ -3,7 +3,7 @@
  * (docs/plan/sound-chains.md, The editor): at the seam between tiles
  * nearest the finger, which a marker shows. An item goes into the chain
  * whose row is nearest, a chain between the rows, a modulator between the
- * rack's tiles. Pure math on the graph's geometry, or on tiles measured.
+ * lane's blocks. Pure math on the graph's geometry, or on tiles measured.
  */
 import { GRAPH, type Box, type ChainBoxes, type GraphGeometry } from './graph'
 
