@@ -421,9 +421,13 @@ export function SoundEditor({
   }
 
   // Under the graph, the panel stands at one height whatever is picked,
-  // so the keys below it stay put: 7.5rem and a knob (--knob, KNOB_SIZE)
-  // hold the tallest panel most parts make (a header, a row of chains or
-  // routes, a row of knobs), and more scrolls in it. The knob is 48 px, or
+  // so the keys below it stay put: 7.75rem and a knob (--knob, KNOB_SIZE)
+  // hold the tallest panel most parts make, a header, a row of knobs and
+  // a row of 28 px controls (chains, routes, the views, a reduction): its
+  // insets (2 x 10 px), the header and the row (2 x 28), the gaps between
+  // (2 x 8) and the knob's two lines under it (31.5), with half a pixel to
+  // spare, so nothing scrolls a pixel or two for nothing. More scrolls in
+  // it. The knob is 48 px, or
   // on a wider screen held upright (a Fold open) up to 72 px with the
   // width, the keys giving up the height. Short of room, the graph gives
   // way first, down to a row of tiles; the panel shrinks only past that
@@ -454,7 +458,7 @@ export function SoundEditor({
   // last of them, shown. Either way the frame pans them out from under
   // the panel or the bar, and showing it resizes nothing.
   return (
-    <div className="relative isolate flex min-h-0 flex-1 flex-col [--dock:calc(7.5rem_+_var(--knob)_+_0.5rem)] [--knob:clamp(3rem,calc((100vw_-_4.5rem)/8.5),4.5rem)] side:[--dock:0px] side:[--knob:3rem] wide:[--knob:4.5rem]">
+    <div className="relative isolate flex min-h-0 flex-1 flex-col [--dock:calc(7.75rem_+_var(--knob)_+_0.5rem)] [--knob:clamp(3rem,calc((100vw_-_4.5rem)/8.5),4.5rem)] side:[--dock:0px] side:[--knob:3rem] wide:[--knob:4.5rem]">
       <section
         aria-label={
           pane === 'mix'
@@ -503,7 +507,7 @@ export function SoundEditor({
       </section>
       <div
         ref={setDock}
-        className={`absolute inset-x-2 bottom-2 z-20 h-[calc(7.5rem_+_var(--knob))] max-h-[calc(100%-9.25rem)] min-h-0 side:inset-y-2 side:right-2 side:left-auto side:h-auto side:max-h-none side:w-[clamp(22rem,36%,40rem)] wide:top-auto wide:left-2 wide:h-[calc(7.5rem_+_var(--knob))] wide:max-h-[calc(100%-9.25rem)] wide:w-auto ${panel ? `grid overflow-y-auto overscroll-contain ${DOCKED}` : 'pointer-events-none'}`}
+        className={`absolute inset-x-2 bottom-2 z-20 h-[calc(7.75rem_+_var(--knob))] max-h-[calc(100%-9.25rem)] min-h-0 side:inset-y-2 side:right-2 side:left-auto side:h-auto side:max-h-none side:w-[clamp(22rem,36%,40rem)] wide:top-auto wide:left-2 wide:h-[calc(7.75rem_+_var(--knob))] wide:max-h-[calc(100%-9.25rem)] wide:w-auto ${panel ? `grid overflow-y-auto overscroll-contain ${DOCKED}` : 'pointer-events-none'}`}
       >
         {!panel && (
           <button

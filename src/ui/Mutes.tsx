@@ -6,7 +6,7 @@ import {
   stripState,
   type StripState,
 } from '../state/mix'
-import { BUTTON_SHAPE, MUTE_FACE, SOLO_FACE } from './controls'
+import { MUTE_FACE, SMALL_BUTTON_SHAPE, SOLO_FACE } from './controls'
 
 /**
  * A track's Mute and Solo (src/state/mix.ts): the two toggles, where a
@@ -48,10 +48,10 @@ const SMALL_SOLO = `${SMALL_SHAPE} bg-white/5 text-zinc-400 group-aria-pressed:b
 
 /**
  * Mute and Solo for the track at place, named name: two toggles side by
- * side, 44 px buttons by their words, or small, an M and an S for a
- * list's row. Muted, nothing of the track goes on to its sends, though
- * it plays on in time; soloed, only the tracks soloed are heard; a track
- * both is muted.
+ * side, 28 px buttons by their words (a touch 44 px tall), or small, an
+ * M and an S for a list's row. Muted, nothing of the track goes on to
+ * its sends, though it plays on in time; soloed, only the tracks soloed
+ * are heard; a track both is muted.
  */
 export function Mutes({
   engine,
@@ -92,7 +92,7 @@ export function Mutes({
           aria-label={`${word} ${name}`}
           title={word}
           onClick={() => engine.setMix(set(engine.getMix(), place, !on))}
-          className={small ? SMALL : `${BUTTON_SHAPE} ${face}`}
+          className={small ? SMALL : `${SMALL_BUTTON_SHAPE} ${face}`}
         >
           {small ? (
             <span aria-hidden className={smallFace}>

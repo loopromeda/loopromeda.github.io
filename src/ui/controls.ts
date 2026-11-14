@@ -102,19 +102,20 @@ export const HOLD = 450
 export const TALL_HIT =
   'relative before:absolute before:inset-x-0 before:-top-2 before:-bottom-2'
 
-const SMALL_SHAPE = `${TALL_HIT} flex h-7 shrink-0 items-center justify-center gap-1.5 rounded-md px-3 text-[11px] font-semibold tracking-wider whitespace-nowrap disabled:opacity-40`
+/** A 28 px button's shape, its touch 44 px tall (TALL_HIT): no face */
+export const SMALL_BUTTON_SHAPE = `${TALL_HIT} flex h-7 shrink-0 items-center justify-center gap-1.5 rounded-md px-3 text-[11px] font-semibold tracking-wider whitespace-nowrap disabled:opacity-40`
 
 /** A 28 px button in a panel's header row; given aria-pressed, a toggle */
-export const SMALL_BUTTON = `${SMALL_SHAPE} bg-white/5 text-zinc-200 aria-pressed:bg-white/10`
+export const SMALL_BUTTON = `${SMALL_BUTTON_SHAPE} bg-white/5 text-zinc-200 aria-pressed:bg-white/10`
 
 /** A 28 px button that deletes */
-export const SMALL_DANGER = `${SMALL_SHAPE} bg-red-500/15 text-red-200`
+export const SMALL_DANGER = `${SMALL_BUTTON_SHAPE} bg-red-500/15 text-red-200`
 
 /** A 28 px button that confirms: a panel's form's submit */
-export const SMALL_CONFIRM = `${SMALL_SHAPE} bg-emerald-500/20 text-emerald-200`
+export const SMALL_CONFIRM = `${SMALL_BUTTON_SHAPE} bg-emerald-500/20 text-emerald-200`
 
 /** One of a row of 28 px options, the chosen one aria-pressed */
-export const SMALL_OPTION = `${SMALL_SHAPE} bg-white/5 text-zinc-400 aria-pressed:bg-white/10 aria-pressed:text-white`
+export const SMALL_OPTION = `${SMALL_BUTTON_SHAPE} bg-white/5 text-zinc-400 aria-pressed:bg-white/10 aria-pressed:text-white`
 
 /** A 28 px square button holding a 14 px icon: a panel header's action */
 export const SMALL_ICON_BUTTON = `${TALL_HIT} flex size-7 shrink-0 items-center justify-center rounded-md bg-white/5 text-zinc-200 disabled:opacity-30 aria-pressed:bg-white/10`

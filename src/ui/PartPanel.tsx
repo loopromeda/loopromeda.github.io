@@ -94,6 +94,7 @@ import {
   SMALL_CONFIRM,
   SMALL_FIELD,
   SMALL_ICON_BUTTON,
+  SMALL_OPTION,
   TALL_HIT,
 } from './controls'
 import {
@@ -719,7 +720,7 @@ export function PartPanel({
                       className="flex shrink-0 items-center gap-1.5"
                     >
                       {view.mutes}
-                      <span aria-hidden className="mx-1 h-5 w-px bg-white/10" />
+                      <span aria-hidden className="mx-1 h-4 w-px bg-white/10" />
                     </div>
                   )}
                   <div
@@ -733,7 +734,7 @@ export function PartPanel({
                         type="button"
                         aria-pressed={view.views?.shown === kind}
                         onClick={() => view.views?.choose(kind)}
-                        className={`${OPTION} shrink-0`}
+                        className={`${SMALL_OPTION} shrink-0`}
                       >
                         {label}
                       </button>
@@ -742,7 +743,7 @@ export function PartPanel({
                   {(view.views.shown === 'spectrum' ||
                     view.views.shown === 'spectrogram') && (
                     <>
-                      <span aria-hidden className="mx-1 h-5 w-px bg-white/10" />
+                      <span aria-hidden className="mx-1 h-4 w-px bg-white/10" />
                       <SpectrumRangePicker />
                     </>
                   )}
