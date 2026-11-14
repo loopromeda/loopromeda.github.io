@@ -82,6 +82,10 @@ body {
   overscroll-behavior: none;
 }
 
+html {
+  background: #0b0b10;
+}
+
 body {
   margin: 0;
   -webkit-user-select: none;

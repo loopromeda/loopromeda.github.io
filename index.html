@@ -18,6 +18,14 @@
     <link rel="icon" href="/icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <meta name="apple-mobile-web-app-title" content="Loopromeda" />
+    <!-- Standalone on iOS: the page runs under the status bar, so the
+         body's own dark (index.css) shows through it, as on Android,
+         where the manifest's theme_color tints it -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta
+      name="apple-mobile-web-app-status-bar-style"
+      content="black-translucent"
+    />
   </head>
   <body>
     <div id="root"></div>
