@@ -79,7 +79,8 @@ src/dsp/      pure DSP (oscillators, envelopes, LFOs, filters, voices);
               for measuring; fastMath.ts the
               cheaper tanh and sine the voices call per sample;
               sequencer.ts the step sequencer's clock, counted in
-              frames (a bar counted in first, if asked), and a lane
+              frames (from a beat given, moved by beats in time, a
+              bar counted in first, if asked), and a lane
               for each track playing its loop into the track's
               strips, each note on its own frame (a strip's queue of
               what starts and stops within a block); click.ts the
@@ -185,7 +186,8 @@ src/ui/       React components; SoundEditor.tsx the sound as tiles
               the session's mix, under its tab rail (Sound | Mix, then
               the transport: Transport.tsx's Play, the position and
               the tempo, whose popover holds the tempo, the swing, the
-              click, the count-in and each track's loop on or off);
+              click, the count-in and each track's loop on or off;
+              transportKeys.ts Space, the arrows and Home on it);
               the sound's Out and the
               mix's Master hold a view of the output (MasterViews.tsx:
               Scope.tsx's waveform, the spectrum, the spectrogram and

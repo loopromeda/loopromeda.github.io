@@ -21,8 +21,8 @@ export const MAX_HELD = 32
 /** A bar's steps: sixteenths in four-four */
 export const BAR_STEPS = 16
 
-/** A step a beat: the click sounds on every fourth */
-const BEAT_STEPS = 4
+/** A beat's steps, sixteenths: the click sounds on every fourth */
+export const BEAT_STEPS = 4
 
 /** The steps counted in before the first, as a bar */
 export const COUNT_IN_STEPS = BAR_STEPS
@@ -209,6 +209,16 @@ export class Lane {
     }
   }
 
+  /**
+   * The clock moved by steps: each note sounding ends as many steps on,
+   * after as long as it was going to sound
+   */
+  shift(steps: number): void {
+    for (let h = 0; h < this.#held; h++) {
+      this.#heldEnd[h] = (this.#heldEnd[h] as number) + steps
+    }
+  }
+
   /** Every note sounding lets go on frame offset of the next block */
   release(offset = 0): void {
     for (let h = 0; h < this.#held; h++) {
@@ -232,18 +242,22 @@ export class Lane {
 }
 
 /**
- * The clock, and the lanes it steps: stopped until play. A tempo or a
- * swing set while it plays applies from the step after the next. Played
- * with a count-in, it steps a bar before the first (from
- * -COUNT_IN_STEPS), the lanes silent and the click sounding; the click
- * otherwise sounds each beat while it is on (click).
+ * The clock, and the lanes it steps: stopped until play, from the first
+ * step or a bar's given. A tempo or a swing set while it plays applies
+ * from the step after the next. Played with a count-in, it steps a bar
+ * before the one it starts on, told as -COUNT_IN_STEPS up to -1, the
+ * lanes silent and the click sounding; the click otherwise sounds each
+ * beat while it is on (click). Moved by beats while it plays (seek), it
+ * keeps its time.
  */
 export class Sequencer {
   readonly #sampleRate: number
   #lanes: readonly Lane[] = []
   #playing = false
-  /** The next step to fire, counted from play: below 0 counting in */
+  /** The next step to fire, counted from the first: once counted in */
   #step = 0
+  /** The steps of the count-in still to come */
+  #counting = 0
   /** Frames from the next block's start until it does */
   #until = 0
   #tempo = 120
@@ -278,13 +292,32 @@ export class Sequencer {
   }
 
   /**
-   * Plays from the first step, at the start of the next block, or with
+   * Plays from step from (the first unless given: a beat's first, or the
+   * swing's pairs are lost), at the start of the next block, or with
    * countIn a bar of beats before it
    */
-  play(countIn = false): void {
+  play(countIn = false, from = 0): void {
     this.stop()
     this.#playing = true
-    this.#step = countIn ? -COUNT_IN_STEPS : 0
+    this.#step = Math.max(0, Math.floor(from) || 0)
+    this.#counting = countIn ? COUNT_IN_STEPS : 0
+  }
+
+  /**
+   * Moves the next step by beats while it plays, its place in the beat
+   * kept, so the time goes on; the notes sounding end as they were going
+   * to. Not before the first beat: back past it, it moves to the first
+   * beat's same place. Counting in, it moves the step it will start on.
+   */
+  seek(beats: number): void {
+    if (!this.#playing) return
+    const next = this.#step
+    let to = next + Math.trunc(beats || 0) * BEAT_STEPS
+    if (!(to >= 0)) to = next % BEAT_STEPS
+    const by = to - next
+    if (by === 0) return
+    this.#step = to
+    for (const lane of this.#lanes) lane.shift(by)
   }
 
   /** Stops: every note sounding lets go at the start of the next block */
@@ -292,6 +325,7 @@ export class Sequencer {
     for (const lane of this.#lanes) lane.release(0)
     this.#playing = false
     this.#step = 0
+    this.#counting = 0
     this.#until = 0
     this.position = -1
   }
@@ -312,15 +346,17 @@ export class Sequencer {
     const lanes = this.#lanes
     let fired = false
     while (this.#until < length) {
-      const step = this.#step
+      const counting = this.#counting > 0
+      // Counting in: the count's steps, -COUNT_IN_STEPS up to -1
+      const step = counting ? -this.#counting : this.#step
       const offset = Math.floor(this.#until)
-      if (step >= 0) {
+      if (!counting) {
         for (let l = 0; l < lanes.length; l++) {
           ;(lanes[l] as Lane).fire(step, offset)
         }
       }
       // A beat: every fourth step, counting in or clicking
-      if ((step < 0 || this.clicking) && step % BEAT_STEPS === 0) {
+      if ((counting || this.clicking) && step % BEAT_STEPS === 0) {
         this.click?.trigger(offset, step % BAR_STEPS === 0)
       }
       this.position = step
@@ -329,7 +365,8 @@ export class Sequencer {
       const pair = (this.#sampleRate * 30) / this.#tempo
       const share = step % 2 === 0 ? this.#swing : 1 - this.#swing
       this.#until += pair * share
-      this.#step = step + 1
+      if (counting) this.#counting--
+      else this.#step = step + 1
     }
     this.#until -= length
     return fired

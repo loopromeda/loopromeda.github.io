@@ -1,4 +1,4 @@
-import { COUNT_IN_STEPS } from '../dsp/sequencer'
+import { BEAT_STEPS, COUNT_IN_STEPS } from '../dsp/sequencer'
 import {
   KIT_PADS,
   clampPadNote,
@@ -250,6 +250,8 @@ export class Engine {
   /** Whether the sequencer plays, counting in from its Play */
   #playing = false
   #counted = false
+  /** The step Play starts from: a beat's first */
+  #cue = 0
   readonly #transportListeners = new Set<() => void>()
   #step = -1
   readonly #stepListeners = new Set<(step: number) => void>()
@@ -431,19 +433,21 @@ export class Engine {
   readonly getPlaying = (): boolean => this.#playing
 
   /**
-   * The sequencer plays every track's loop from the first step, the
-   * clock the audio thread's, counting a bar in first where the player
-   * asked for it (setCountIn); played again, it starts over. Nothing
-   * before the audio has started.
+   * The sequencer plays every track's loop from the beat cued (the
+   * first unless moved: seek), the clock the audio thread's, counting a
+   * bar in first where the player asked for it (setCountIn); played
+   * again, it starts over. Nothing before the audio has started.
    */
   play(): void {
     if (!this.#node) return
     const countIn = this.#countIn
-    this.#post(
-      countIn
-        ? { t: 'transport', playing: true, countIn }
-        : { t: 'transport', playing: true }
-    )
+    const from = this.#cue
+    this.#post({
+      t: 'transport',
+      playing: true,
+      ...(countIn && { countIn }),
+      ...(from > 0 && { from }),
+    })
     this.#counted = countIn
     // Before the audio thread tells of a step: the count's, or none
     this.#setStep(countIn ? -COUNT_IN_STEPS : -1)
@@ -477,6 +481,44 @@ export class Engine {
     this.#countIn = on
   }
 
+  /** The step Play starts from, a beat's first: the first unless moved */
+  get cue(): number {
+    return this.#cue
+  }
+
+  /**
+   * Moves by beats (back past the first, to it): while the sequencer
+   * plays, where it plays, in time; stopped, the beat Play starts from
+   * (cue). Its listeners hear of a cue moved.
+   */
+  seek(beats: number): void {
+    if (this.#playing) {
+      this.#post({ t: 'seek', beats })
+      return
+    }
+    this.#setCue(this.#cue + beats * BEAT_STEPS)
+  }
+
+  /**
+   * Back to the first beat: while the sequencer plays, in time; stopped,
+   * Play starts from the first step again
+   */
+  rewind(): void {
+    if (!this.#playing) {
+      this.#setCue(0)
+      return
+    }
+    // Back past every beat: the audio thread stops at the first
+    this.#post({ t: 'seek', beats: -Number.MAX_SAFE_INTEGER })
+  }
+
+  #setCue(step: number): void {
+    const cue = Math.max(0, Math.floor(step / BEAT_STEPS) * BEAT_STEPS)
+    if (cue === this.#cue) return
+    this.#cue = cue
+    for (const listener of this.#transportListeners) listener()
+  }
+
   /** The sequencer stops, its notes let go */
   stop(): void {
     if (!this.#playing) return
@@ -484,7 +526,10 @@ export class Engine {
     this.#stopped()
   }
 
-  /** Calls listener as the sequencer starts and stops: the way to end it */
+  /**
+   * Calls listener as the sequencer starts and stops, and as the beat it
+   * starts from moves: the way to end it
+   */
   readonly subscribeTransport = (listener: () => void): (() => void) => {
     this.#transportListeners.add(listener)
     return () => this.#transportListeners.delete(listener)

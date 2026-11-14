@@ -145,6 +145,8 @@ const projects = new Projects(
     }),
     setSession: ({ tracks, mix, song }) => {
       engine.stop()
+      // Another song: Play starts it from its first step
+      engine.rewind()
       library.play(tracks)
       engine.setMix(mix)
       engine.setSong(song)

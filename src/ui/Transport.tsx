@@ -21,6 +21,7 @@ import { ICON_BUTTON, SECTION_HEADING, TALL_HIT } from './controls'
 import { IconButton, SmallIconButton } from './IconButton'
 import { Popover } from './Popover'
 import { SettingGroup, SwitchRow } from './SettingRows'
+import { transportKey } from './transportKeys'
 
 /** Play's triangle, and Stop's square, in an 18 px box */
 const PLAY = 'M6 4l8 5-8 5z'
@@ -52,6 +53,44 @@ export function PlayButton({
   return small ? <SmallIconButton {...props} /> : <IconButton {...props} />
 }
 
+/**
+ * The transport's keys on the page, for a desktop (transportKeys.ts):
+ * Space plays and stops, the arrows move a beat back and on (with Shift a
+ * bar), Home goes to the first
+ */
+export function useTransportKeys(engine: Engine): void {
+  useEffect(() => {
+    // The Space that played presses no button focused as it comes up
+    let spaceTaken = false
+    const down = (event: KeyboardEvent) => {
+      const action = transportKey(event)
+      if (action === undefined) return
+      event.preventDefault()
+      if (action.kind === 'toggle') {
+        spaceTaken = true
+        if (event.repeat) return
+        if (engine.getPlaying()) engine.stop()
+        else engine.play()
+      } else if (action.kind === 'start') {
+        engine.rewind()
+      } else {
+        engine.seek(action.beats)
+      }
+    }
+    const up = (event: KeyboardEvent) => {
+      if (event.key !== ' ' || !spaceTaken) return
+      spaceTaken = false
+      event.preventDefault()
+    }
+    window.addEventListener('keydown', down)
+    window.addEventListener('keyup', up)
+    return () => {
+      window.removeEventListener('keydown', down)
+      window.removeEventListener('keyup', up)
+    }
+  }, [engine])
+}
+
 /** Where the song is: bar, beat and sixteenth from 1, or the count's beats */
 export function positionText(step: number, counting: boolean): string {
   if (counting) return `\u2212${Math.ceil(-step / 4)}`
@@ -63,9 +102,10 @@ export function positionText(step: number, counting: boolean): string {
 
 /**
  * Where the song is, beside Play on the tab rail: bar, beat and sixteenth
- * counted from Play (`3.2.1`), dim while stopped, the beats left while it
- * counts in (`−4`). Written outside React a step at a time, as the audio
- * thread tells of them; it leads what is heard by the output's latency.
+ * (`3.2.1`), the beats left while it counts in (`−4`), and while stopped
+ * the beat Play starts from, dim. Written outside React a step at a time,
+ * as the audio thread tells of them; it leads what is heard by the
+ * output's latency.
  */
 export function Position({ engine }: { engine: Engine }) {
   const textRef = useRef<HTMLSpanElement>(null)
@@ -76,7 +116,10 @@ export function Position({ engine }: { engine: Engine }) {
     const show = () => {
       const playing = engine.getPlaying()
       const counting = engine.countingIn
-      const next = positionText(playing ? engine.step : -1, counting)
+      const step = engine.step
+      // Stopped, or not yet told of a step: the beat Play starts from
+      const at = counting || (playing && step >= 0) ? step : engine.cue
+      const next = positionText(at, counting)
       if (next !== shown) {
         text.textContent = next
         shown = next

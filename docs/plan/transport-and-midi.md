@@ -49,6 +49,19 @@ Each builds on the last and is usable by itself.
 - **The count-in** is a bar of clicks before the first step, whether
   the click is on or not: the steps count from −16 and the lanes fire
   from 0.
+- **Keys**, for a desktop (asked for by ashon: "스페이스바로 시작 멈춤
+  기능 있으면 좋겠어", and the arrows moving the position, chosen over
+  stepping a sixteenth at a time and looping a bar): Space plays and
+  stops; ← and → move a beat back and on, Shift with them a bar, Home
+  to the first. First a bar, then a beat at ashon's word ("4분음표
+  단위로 움직이게 하면 어떨까?"): a loop of a bar or two sounds the same
+  a bar on, so a bar's jump went unheard. While it plays the jump keeps
+  time (3.2.1 to 3.3.1, the next step on the frame it was due), the
+  notes sounding ending as they were going to; stopped, they move the
+  beat Play starts from, shown dim in the position, kept until another
+  project opens. Each key is left alone where its target works it: text
+  typed, a slider's or a list's arrows, a dialog's keys, a knob focused
+  (`src/ui/transportKeys.ts`).
 - **A track's loop off** plays nothing from the next step on, its notes
   ending where they were going to; its keys still play, which a mute
   would silence. Kept in the song (`Song.off`, by the track's id), so a

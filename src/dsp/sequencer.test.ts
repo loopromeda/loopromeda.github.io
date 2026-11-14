@@ -383,6 +383,72 @@ describe('the count-in and the click', () => {
   })
 })
 
+describe('a beat to start on, and moving by beats', () => {
+  it('plays from the step given, a loop from its place there', () => {
+    const { sequencer, tape, run } = clock([[32, [note(0, 1), note(16, 2)]]])
+    sequencer.play(false, 16)
+    expect(run(STEP * 2)).toEqual([16, 17])
+    expect(tape.ons(2)).toEqual([0])
+    expect(tape.ons(1)).toEqual([])
+  })
+
+  it('counts a bar in before the bar it starts on', () => {
+    const { sequencer, tape, run } = clicked([[32, [note(16, 2)]]])
+    sequencer.play(true, 16)
+    const fired = run(STEP * (COUNT_IN_STEPS + 1))
+    expect(fired[0]).toBe(-COUNT_IN_STEPS)
+    expect(fired.at(-1)).toBe(16)
+    expect(tape.ons(2)).toEqual([STEP * COUNT_IN_STEPS])
+  })
+
+  it('moves by beats as it plays, in time', () => {
+    const { sequencer, tape, run } = clock([[32, [note(22, 2)]]])
+    sequencer.play(false, 16)
+    expect(run(STEP * 2)).toEqual([16, 17])
+    sequencer.seek(1)
+    // The next step a beat on, on the frame the one it took over fell on
+    expect(run(STEP)).toEqual([22])
+    expect(tape.ons(2)).toEqual([STEP * 2])
+    // A bar's four beats back
+    sequencer.seek(-4)
+    expect(run(STEP)).toEqual([7])
+  })
+
+  it('stops at the first beat, its place in the beat kept', () => {
+    const { sequencer, run } = clock([[16, []]])
+    sequencer.play(false, 16)
+    run(STEP * 2)
+    sequencer.seek(-20)
+    expect(run(STEP)).toEqual([2])
+  })
+
+  it('ends a note sounding as it was going to', () => {
+    const { sequencer, tape, run } = clock([[32, [note(0, 1, 4)]]])
+    sequencer.play()
+    run(STEP)
+    sequencer.seek(4)
+    run(STEP * 4)
+    expect(tape.offs(1)).toEqual([STEP * 4])
+  })
+
+  it('moves the bar it starts on while counting in', () => {
+    const { sequencer, run } = clicked([[16, []]])
+    sequencer.play(true)
+    run(STEP * 2)
+    sequencer.seek(8)
+    const fired = run(STEP * (COUNT_IN_STEPS - 1))
+    expect(fired.at(-2)).toBe(-1)
+    expect(fired.at(-1)).toBe(32)
+  })
+
+  it('does not move while stopped', () => {
+    const { sequencer, run } = clock([[16, []]])
+    sequencer.seek(1)
+    sequencer.play()
+    expect(run(STEP)).toEqual([0])
+  })
+})
+
 describe('Lane', () => {
   it('leaves out notes past the loop’s end, or not whole', () => {
     const tape = new Tape()

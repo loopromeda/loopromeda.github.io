@@ -390,13 +390,16 @@ class SynthProcessor extends AudioWorkletProcessor {
         break
       case 'transport':
         if (message.playing) {
-          this.#sequencer.play(message.countIn === true)
+          this.#sequencer.play(message.countIn === true, message.from ?? 0)
           // A playthrough's own integrated loudness
           this.#loudness.resetIntegrated()
         } else {
           this.#sequencer.stop()
         }
         this.#reportStep()
+        break
+      case 'seek':
+        this.#sequencer.seek(message.beats)
         break
       case 'tempo':
         this.#sequencer.setTempo(message.tempo, message.swing)

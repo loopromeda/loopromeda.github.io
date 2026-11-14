@@ -141,12 +141,18 @@ export type ToWorklet =
   /** Everything stops: all notes released, the sequencer with them */
   | { t: 'panic' }
   /**
-   * The sequencer plays from its first step, at the next block, or with
-   * countIn a bar of beats before it, or stops (its notes let go). The
-   * clock is the audio thread's (src/dsp/sequencer.ts); the page hears
-   * of each step as it passes, counted from -16 while it counts in.
+   * The sequencer plays from step from (a beat's first; the first step
+   * unless given), at the next block, or with countIn a bar of beats
+   * before it, or stops (its notes let go). The clock is the audio
+   * thread's (src/dsp/sequencer.ts); the page hears of each step as it
+   * passes, counted from -16 while it counts in.
    */
-  | { t: 'transport'; playing: boolean; countIn?: boolean }
+  | { t: 'transport'; playing: boolean; countIn?: boolean; from?: number }
+  /**
+   * The sequencer playing moves by beats, in time (back past the first
+   * beat, to the first)
+   */
+  | { t: 'seek'; beats: number }
   /** The click sounds each beat while the sequencer plays, or not */
   | { t: 'click'; on: boolean }
   /** Beats a minute, and the share of a pair of sixteenths the first takes */

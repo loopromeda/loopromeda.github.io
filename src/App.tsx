@@ -43,6 +43,7 @@ import {
   Position,
   TempoButton,
   TransportPicker,
+  useTransportKeys,
 } from './ui/Transport'
 import { UpdateButton } from './ui/UpdateButton'
 import type { ScreenAwake } from './wakeLock'
@@ -159,6 +160,8 @@ export function App({
 }) {
   const snapshot = useSyncExternalStore(engine.subscribe, engine.getSnapshot)
   const { state } = snapshot
+  // Space plays and stops, the arrows move a beat (with Shift a bar)
+  useTransportKeys(engine)
   const offlineState = useSyncExternalStore(
     offline.subscribe,
     offline.getSnapshot
