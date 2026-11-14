@@ -12,7 +12,7 @@ import {
   outlineFill,
   outlinePath,
 } from './outline'
-import { ground, mode, palette } from './theme'
+import { ground, mode, palette, themeId } from './theme'
 
 /** Samples on screen: 21 ms at 48 kHz, about nine cycles of A4 */
 const WINDOW = 1024
@@ -99,8 +99,10 @@ export function Scope({
   /** The picture's colour: the ground's neutral ink unless given */
   pictureColor?: string
 }) {
-  // The canvas is drawn again in the other mode: its ground, its grid
+  // The canvas is drawn again in the other mode or theme: its ground,
+  // its grid
   const tone = mode()
+  const theme = themeId()
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const readoutRef = useRef<HTMLSpanElement>(null)
   // The latest callback, without restarting the loop when it changes
@@ -350,7 +352,7 @@ export function Scope({
       unsubscribeSound()
       observer.disconnect()
     }
-  }, [engine, source, picture, pictureColor, tone])
+  }, [engine, source, picture, pictureColor, tone, theme])
 
   return (
     <div className={`relative overflow-hidden contain-strict ${className}`}>

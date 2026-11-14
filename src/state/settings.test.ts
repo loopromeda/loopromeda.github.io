@@ -104,7 +104,7 @@ describe('readSettings', () => {
     })
     const velocity = storageWith(JSON.stringify({ ...good, velocity: 'soft' }))
     expect(readSettings(velocity)).toEqual({ ...good, velocity: 'touch' })
-    const theme = storageWith(JSON.stringify({ ...good, theme: 'neon' }))
+    const theme = storageWith(JSON.stringify({ ...good, theme: 'sepia' }))
     expect(readSettings(theme)).toEqual({ ...good, theme: 'default' })
     const appearance = storageWith(JSON.stringify({ ...good, appearance: 1 }))
     expect(readSettings(appearance)).toEqual({ ...good, appearance: 'dark' })

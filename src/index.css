@@ -112,7 +112,9 @@ body {
  * The surfaces and inks, in the dark: the app's home. A token is the
  * colour itself, so a share of it is color-mix's (Tailwind's /opacity
  * on a token); the light below gives each its value in the light
- * (data-mode, set by App from the settings' appearance)
+ * (data-mode, set by App from the settings' appearance). The five
+ * surfaces (--bg to --key-black) are the neutral's: the page puts the
+ * theme's over them (ui/appearance.ts), a pop theme's tinted
  */
 :root {
   color-scheme: dark;
@@ -191,7 +193,7 @@ body {
   --well: rgb(0 0 0 / 0.06);
   --under: #a1a1aa;
   --veil: rgb(255 255 255 / 0.6);
-  --scrim: rgb(233 233 238 / 0.88);
+  --scrim: color-mix(in srgb, var(--bg) 88%, transparent);
   --backdrop: rgb(24 24 27 / 0.35);
   --shadow: rgb(0 0 0 / 0.16);
   --on-colour: #ffffff;

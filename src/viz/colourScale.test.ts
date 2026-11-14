@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { oklab, SCALES, type ColourScale, type ScaleStop } from './colourScale'
+import {
+  oklab,
+  scaleOn,
+  SCALES,
+  type ColourScale,
+  type ScaleStop,
+} from './colourScale'
 
 const DARK = SCALES.dark
 const LIGHT = SCALES.light
@@ -146,5 +152,27 @@ describe('the light colour scale', () => {
     expect(blue).toBeGreaterThan(235)
     expect(blue).toBeLessThan(265)
     expect(indigo).toBeGreaterThan(275)
+  })
+})
+
+describe('scaleOn', () => {
+  it("is the mode's own scale on the neutral ground", () => {
+    expect(scaleOn('dark', '#0b0b10')).toBe(SCALES.dark)
+    expect(scaleOn('light', '#e9e9ee')).toBe(SCALES.light)
+  })
+
+  it('starts from a tinted ground, the rest of the way as it was', () => {
+    const scale = scaleOn('dark', '#0e0818')
+    expect(scale.stops[0]?.hex).toBe('#0e0818')
+    expect(scale.stops.slice(1).map((stop) => stop.hex)).toEqual(
+      SCALES.dark.stops.slice(1).map((stop) => stop.hex)
+    )
+    const out = new Uint8ClampedArray(4)
+    scale.colour(0, out, 0)
+    expect([...out]).toEqual([0x0e, 0x08, 0x18, 255])
+  })
+
+  it('makes a ground once', () => {
+    expect(scaleOn('light', '#f5e5eb')).toBe(scaleOn('light', '#f5e5eb'))
   })
 })

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   DEFAULT_THEME,
+  NEUTRAL,
   THEMES,
   contrastRatio,
   ground,
@@ -10,6 +11,9 @@ import {
   oklabDistance,
   palette,
   setTheme,
+  surfaces,
+  surfacesOf,
+  themeId,
   themeOf,
   type Mode,
 } from './theme'
@@ -17,15 +21,6 @@ import {
 // The checks a theme owes its colours (docs/plan/sound-chains.md): the
 // colours are roles, so each theme's values pass the same tests the app's
 // own colours were held to, in each mode.
-
-/**
- * What every colour has to be read on, in each mode: a tile's face and a
- * card's (index.css's --tile and --panel)
- */
-const FACES: Readonly<Record<Mode, readonly string[]>> = {
-  dark: ['#1c1c23', '#16161c'],
-  light: ['#ffffff', '#f5f5f8'],
-}
 
 /**
  * What a label reads on a role's colour (index.css's --on-colour): the
@@ -38,11 +33,22 @@ const ON_COLOUR: Readonly<Record<Mode, string>> = {
 
 const MODES = ['dark', 'light'] as const
 
+/** The inks every surface is read in, whatever the theme */
+const NEUTRAL_INKS: Readonly<
+  Record<Mode, { neutral: string; quiet: string; dim: string }>
+> = {
+  dark: { neutral: '#e4e4e7', quiet: '#d4d4d8', dim: '#a1a1aa' },
+  light: { neutral: '#27272a', quiet: '#3f3f46', dim: '#52525b' },
+}
+
 describe('a theme', () => {
   for (const theme of THEMES) {
     for (const tone of MODES) {
       const roles = theme[tone]
       const name = `${theme.name} (${tone})`
+      // What every colour has to be read on: the theme's tile's face and
+      // card's (index.css's --tile and --panel)
+      const { tile, panel } = surfacesOf(theme, tone)
 
       it(`reads ${name} on a tile's face and a card's`, () => {
         const colours = [
@@ -51,7 +57,7 @@ describe('a theme', () => {
           roles.accent,
           roles.secondary,
         ]
-        for (const face of FACES[tone]) {
+        for (const face of [tile, panel]) {
           for (const colour of colours) {
             expect(contrastRatio(colour, face)).toBeGreaterThanOrEqual(4.7)
           }
@@ -72,6 +78,15 @@ describe('a theme', () => {
         }
       })
 
+      it(`reads the inks on ${name}'s surfaces`, () => {
+        const { neutral, quiet, dim } = NEUTRAL_INKS[tone]
+        for (const face of [tile, panel]) {
+          expect(contrastRatio(neutral, face)).toBeGreaterThanOrEqual(10)
+          expect(contrastRatio(quiet, face)).toBeGreaterThanOrEqual(7)
+          expect(contrastRatio(dim, face)).toBeGreaterThanOrEqual(4.5)
+        }
+      })
+
       it(`reads a label on ${name}'s accent and modulation colour`, () => {
         for (const colour of [roles.accent, roles.modulator]) {
           expect(contrastRatio(ON_COLOUR[tone], colour)).toBeGreaterThanOrEqual(
@@ -81,6 +96,16 @@ describe('a theme', () => {
       })
     }
   }
+
+  it('stands the first four on the neutral, the pop themes on their own', () => {
+    for (const id of ['default', 'tidal', 'ember', 'orchard'] as const) {
+      expect(surfacesOf(themeOf(id), 'dark')).toBe(NEUTRAL.dark)
+      expect(surfacesOf(themeOf(id), 'light')).toBe(NEUTRAL.light)
+    }
+    for (const id of ['neon', 'candy', 'arcade'] as const) {
+      expect(surfacesOf(themeOf(id), 'dark')).not.toBe(NEUTRAL.dark)
+    }
+  })
 
   it("keeps the default theme at the app's own colours in the dark", () => {
     const roles = themeOf(DEFAULT_THEME).dark
@@ -105,7 +130,7 @@ describe('oklabDistance', () => {
 describe('isThemeId', () => {
   it('accepts the themes and nothing else', () => {
     for (const theme of THEMES) expect(isThemeId(theme.id)).toBe(true)
-    expect(isThemeId('neon')).toBe(false)
+    expect(isThemeId('sepia')).toBe(false)
     expect(isThemeId('')).toBe(false)
     expect(isThemeId(undefined)).toBe(false)
     expect(isThemeId(0)).toBe(false)
@@ -113,6 +138,20 @@ describe('isThemeId', () => {
 })
 
 describe('setTheme', () => {
+  it('moves the surfaces and the ground with a pop theme', () => {
+    setTheme('neon', 'dark')
+    expect(themeId()).toBe('neon')
+    expect(surfaces()).toBe(surfacesOf(themeOf('neon'), 'dark'))
+    expect(ground().page).toBe(surfaces().page)
+    expect(ground().tile).toBe(surfaces().tile)
+    expect(groundOf('light').page).toBe(
+      surfacesOf(themeOf('neon'), 'light').page
+    )
+    setTheme(DEFAULT_THEME, 'dark')
+    expect(surfaces()).toBe(NEUTRAL.dark)
+    expect(ground().page).toBe(NEUTRAL.dark.page)
+  })
+
   it('moves the palette and the ground with the theme and the mode', () => {
     setTheme('tidal', 'dark')
     expect(palette()).toBe(themeOf('tidal').dark)

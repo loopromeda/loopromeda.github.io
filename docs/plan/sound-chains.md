@@ -304,9 +304,23 @@ as a graph of flat tiles, flowing left to right.
   checks pass), the canvases drawn from the mode's ground (the
   spectrogram on a light scale of its own, quiet pale and loud near
   black), a held key or pad the accent mixed into it, and on iOS a
-  dark strip under the status bar, whose letters stay white. Next: a
-  theme of one's own, a colour for each role, lifted in lightness
-  until it passes the checks, with a reset.
+  dark strip under the status bar, whose letters stay white. Then the
+  pop themes (ashon, 2026-11-15: "좀더 팝한 테마들도 넣어보면 좋겠어"):
+  Neon (hot pink, cyan, lime and orange on violet-black, a laser yellow
+  accent), Candy (bubblegum, mint, apricot and periwinkle on
+  berry-black, a lemon accent) and Arcade (yellow, sky, green and
+  magenta on navy, an orange accent). A theme may give the surfaces
+  too (the page, a card, a tile, a key, a black key): each the
+  neutral's lightness tinted toward the theme's hue, the light's tiles
+  and keys left white. The page puts them over index.css's tokens, the
+  canvases draw on them and draw again when the theme changes, and the
+  spectrogram's scale starts from the theme's page. In the light no
+  yellow reads on white: each yellow goes gold, and hues turn until
+  the chains stand ΔE 20 apart. A fourth, Citrus (orange, lemon, lime
+  and raspberry), was left out: deepened for the light, its orange,
+  lemon and lime came within ΔE 12 of one another. A theme of one's own
+  (a colour for each role, lifted until it passes the checks) waits:
+  ashon was unsure it is needed.
 
 ## Steps
 

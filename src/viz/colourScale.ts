@@ -180,3 +180,23 @@ export const SCALES: Readonly<Record<'dark' | 'light', ColourScale>> = {
   dark: colourScale(DARK_COLOURS),
   light: colourScale(LIGHT_COLOURS),
 }
+
+/** The scales made from another ground, by mode and ground */
+const ON = new Map<string, ColourScale>()
+
+/**
+ * A mode's scale from the views' ground as a theme gives it (a pop
+ * theme's page, tinted), so that nothing is drawn in the page's own
+ * colour: its first stop that ground, the rest as they are. Made once a
+ * ground.
+ */
+export function scaleOn(mode: 'dark' | 'light', ground: string): ColourScale {
+  const colours = mode === 'dark' ? DARK_COLOURS : LIGHT_COLOURS
+  if (ground === colours[0]) return SCALES[mode]
+  const key = `${mode}${ground}`
+  const made = ON.get(key)
+  if (made) return made
+  const scale = colourScale([ground, ...colours.slice(1)])
+  ON.set(key, scale)
+  return scale
+}

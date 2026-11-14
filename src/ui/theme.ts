@@ -8,11 +8,22 @@
  * neighbours: theme.test.ts). The mode is the whole tone: the surfaces
  * and inks (index.css's tokens, and ground() for what JS draws) and the
  * palette both follow it (asked for by ashon, 2026-11-14: "다크 / 라이트
- * / 기본 액센트 / 세컨더리 색상 등 전부 컨트롤"). A pure data file, no
- * React, so the state may read it (state/settings.ts).
+ * / 기본 액센트 / 세컨더리 색상 등 전부 컨트롤"). The pop themes, louder
+ * colours on surfaces tinted toward them (ashon, 2026-11-15: "좀더 팝한
+ * 테마들도 넣어보면 좋겠어"), give the surfaces too; the others stand on
+ * the neutral greys. A pure data file, no React, so the state may read
+ * it (state/settings.ts).
  */
 
-export const THEME_IDS = ['default', 'tidal', 'ember', 'orchard'] as const
+export const THEME_IDS = [
+  'default',
+  'tidal',
+  'ember',
+  'orchard',
+  'neon',
+  'candy',
+  'arcade',
+] as const
 export type ThemeId = (typeof THEME_IDS)[number]
 
 /** The tone the page is drawn in */
@@ -33,6 +44,37 @@ export interface Palette {
   readonly secondary: string
 }
 
+/**
+ * The surfaces the page is built of, in one mode (index.css's --bg,
+ * --panel, --tile, --key and --key-black): the page, a card, a tile's
+ * face (a popover's too), a key or pad at rest, a black key at rest
+ */
+export interface Surfaces {
+  readonly page: string
+  readonly panel: string
+  readonly tile: string
+  readonly key: string
+  readonly keyBlack: string
+}
+
+/** The surfaces as index.css gives them: zinc's neutral greys */
+export const NEUTRAL: Readonly<Record<Mode, Surfaces>> = {
+  dark: {
+    page: '#0b0b10',
+    panel: '#16161c',
+    tile: '#1c1c23',
+    key: '#2a2a31',
+    keyBlack: '#111116',
+  },
+  light: {
+    page: '#e9e9ee',
+    panel: '#f5f5f8',
+    tile: '#ffffff',
+    key: '#ffffff',
+    keyBlack: '#2e2e35',
+  },
+}
+
 export interface Theme {
   readonly id: ThemeId
   /** What the setting's row calls it */
@@ -44,6 +86,12 @@ export interface Theme {
    * its hue kept or turned a little, as far as the checks ask
    */
   readonly light: Palette
+  /**
+   * A pop theme's own surfaces: the neutral's, each at its lightness,
+   * tinted toward the theme's hue (the light's tiles and keys left
+   * white). Without them, the neutral.
+   */
+  readonly surfaces?: Readonly<Record<Mode, Surfaces>>
 }
 
 /** The roles' values, the accent standing in for the secondary */
@@ -115,6 +163,106 @@ export const THEMES: readonly Theme[] = [
       '#507701'
     ),
   },
+  {
+    id: 'neon',
+    name: 'Neon',
+    // A club at night: hot pink, electric cyan, acid lime and orange on
+    // violet-black, the accent a laser yellow
+    dark: roles(
+      ['#ff4fd8', '#3ee7ff', '#c6ff3d', '#ffa23d'],
+      '#b49bff',
+      '#fff04d'
+    ),
+    // No yellow reads on white: the accent a deep gold, the lime a green
+    light: roles(
+      ['#c601a5', '#0171b1', '#217c01', '#b14f03'],
+      '#7c4fd8',
+      '#7c6c04'
+    ),
+    surfaces: {
+      dark: {
+        page: '#0e0818',
+        panel: '#191324',
+        tile: '#1f192b',
+        key: '#2d273a',
+        keyBlack: '#140e1f',
+      },
+      light: {
+        page: '#ebe7f4',
+        panel: '#f7f3ff',
+        tile: '#ffffff',
+        key: '#ffffff',
+        keyBlack: '#302d37',
+      },
+    },
+  },
+  {
+    id: 'candy',
+    name: 'Candy',
+    // Sweets: bubblegum, mint, apricot and periwinkle on berry-black, the
+    // modulation colour an ice blue, the accent lemon
+    dark: roles(
+      ['#ff6fbf', '#45f0a8', '#ffb070', '#8aa0ff'],
+      '#7fe0ff',
+      '#fff07a'
+    ),
+    // Deepened, the bubblegum and the periwinkle met the violet: the
+    // modulation colour a purple, set apart from both
+    light: roles(
+      ['#cf0288', '#027d23', '#aa5405', '#216db9'],
+      '#9333ea',
+      '#786d03'
+    ),
+    surfaces: {
+      dark: {
+        page: '#15060d',
+        panel: '#211119',
+        tile: '#28171f',
+        key: '#36252d',
+        keyBlack: '#1b0c13',
+      },
+      light: {
+        page: '#f5e5eb',
+        panel: '#fff1f7',
+        tile: '#ffffff',
+        key: '#ffffff',
+        keyBlack: '#372b30',
+      },
+    },
+  },
+  {
+    id: 'arcade',
+    name: 'Arcade',
+    // A cabinet's primaries: yellow, sky blue, green and magenta on navy,
+    // the accent orange
+    dark: roles(
+      ['#ffd23f', '#4db5ff', '#34e0a1', '#ff5ccd'],
+      '#b18cff',
+      '#ff9248'
+    ),
+    // The yellow deepened goes orange, the accent's place: it goes gold
+    light: roles(
+      ['#ae5200', '#0372af', '#147c15', '#c61b9a'],
+      '#8453bf',
+      '#836801'
+    ),
+    surfaces: {
+      dark: {
+        page: '#040a1e',
+        panel: '#0c162b',
+        tile: '#121c32',
+        key: '#202a41',
+        keyBlack: '#081025',
+      },
+      light: {
+        page: '#e3eaf8',
+        panel: '#f1f6fe',
+        tile: '#ffffff',
+        key: '#ffffff',
+        keyBlack: '#2a2f39',
+      },
+    },
+  },
 ]
 
 /** The theme when nothing was chosen: the colours the app has always had */
@@ -132,6 +280,11 @@ const BY_ID = Object.fromEntries(
 /** The theme under an id */
 export function themeOf(id: ThemeId): Theme {
   return BY_ID[id]
+}
+
+/** A theme's surfaces in a mode: its own, or the neutral */
+export function surfacesOf(theme: Theme, mode: Mode): Surfaces {
+  return theme.surfaces?.[mode] ?? NEUTRAL[mode]
 }
 
 /**
@@ -158,8 +311,8 @@ export interface Ground {
 
 const GROUNDS: Readonly<Record<Mode, Ground>> = {
   dark: {
-    page: '#0b0b10',
-    tile: '#1c1c23',
+    page: NEUTRAL.dark.page,
+    tile: NEUTRAL.dark.tile,
     over: '255, 255, 255',
     neutral: '#e4e4e7',
     quiet: '#d4d4d8',
@@ -167,8 +320,8 @@ const GROUNDS: Readonly<Record<Mode, Ground>> = {
     hot: '#fbbf24',
   },
   light: {
-    page: '#e9e9ee',
-    tile: '#ffffff',
+    page: NEUTRAL.light.page,
+    tile: NEUTRAL.light.tile,
     over: '0, 0, 0',
     neutral: '#27272a',
     quiet: '#3f3f46',
@@ -176,6 +329,18 @@ const GROUNDS: Readonly<Record<Mode, Ground>> = {
     hot: '#d97706',
   },
 }
+
+/** Each theme's grounds: the neutral's inks on its own surfaces */
+const THEMED: Readonly<Record<ThemeId, Readonly<Record<Mode, Ground>>>> =
+  Object.fromEntries(
+    THEMES.map((theme) => {
+      const on = (mode: Mode): Ground => {
+        const { page, tile } = surfacesOf(theme, mode)
+        return { ...GROUNDS[mode], page, tile }
+      }
+      return [theme.id, { dark: on('dark'), light: on('light') }]
+    })
+  ) as Record<ThemeId, Record<Mode, Ground>>
 
 let current = themeOf(DEFAULT_THEME)
 let tone: Mode = 'dark'
@@ -197,19 +362,29 @@ export function mode(): Mode {
   return tone
 }
 
+/** The theme the page is drawn in: what a canvas draws again for */
+export function themeId(): ThemeId {
+  return current.id
+}
+
 /** The palette the tiles, the accent and the secondary read */
 export function palette(): Palette {
   return current[tone]
 }
 
-/** The neutral colours JS draws with, in the page's mode */
-export function ground(): Ground {
-  return GROUNDS[tone]
+/** The surfaces the page is built of, in its theme and mode */
+export function surfaces(): Surfaces {
+  return surfacesOf(current, tone)
 }
 
-/** A mode's neutral colours, whatever the page's */
+/** The neutral colours JS draws with, in the page's theme and mode */
+export function ground(): Ground {
+  return THEMED[current.id][tone]
+}
+
+/** A mode's neutral colours in the page's theme, whatever its mode */
 export function groundOf(mode: Mode): Ground {
-  return GROUNDS[mode]
+  return THEMED[current.id][mode]
 }
 
 /** An #rrggbb as rgba() at the given share: what the canvases fill with */

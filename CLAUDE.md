@@ -248,8 +248,9 @@ src/ui/       React components; SoundEditor.tsx the sound as tiles
               name a moment as the page opens, and the first tap
               anywhere starting audio held back; theme.ts the
               colour roles and the themes that give them values, in
-              the dark and the light, appearance.ts setting them and
-              the mode (index.css's tokens) on the page; pages.ts gives each
+              the dark and the light (a pop theme its surfaces too),
+              appearance.ts setting them and the mode (index.css's
+              tokens) on the page; pages.ts gives each
               sheet an address (#/presets), so a reload keeps it and Back
               closes it; Popover.tsx the shell every popover stands in
               (its header, its place by its button, its height

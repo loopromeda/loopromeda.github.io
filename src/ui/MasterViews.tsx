@@ -19,10 +19,18 @@ import {
   viewsSideBySide,
   type Levels,
 } from '../viz/master'
-import { SCALES } from '../viz/colourScale'
+import { scaleOn } from '../viz/colourScale'
 import { outputTap, useFrames } from './frames'
 import { Scope, type ScopeStats } from './Scope'
-import { alpha, groundOf, mode, palette, type Mode } from './theme'
+import {
+  alpha,
+  ground,
+  groundOf,
+  mode,
+  palette,
+  themeId,
+  type Mode,
+} from './theme'
 
 /**
  * The output's views (docs/plan/effects-parts-sequencer.md): what the
@@ -62,7 +70,7 @@ function viewColours(tone: Mode) {
     /** The spectrogram's lines: a grey, white or black (blendTowards) */
     line: tone === 'light' ? 0 : 255,
     lineColour: (share: number) => `rgba(${over}, ${share})`,
-    scale: SCALES[tone],
+    scale: scaleOn(tone, page),
   }
 }
 
@@ -112,7 +120,9 @@ export function ColourKey({
 }) {
   const light = mode() === 'light'
   const label = `The spectrogram’s colours: ${SPECTRUM_FLOOR} dB ${light ? 'light' : 'dark'}, ${SPECTRUM_TOP} dB ${light ? 'near black' : 'near white'}`
-  const gradient = SCALES[light ? 'light' : 'dark'].gradient('to right')
+  const gradient = scaleOn(light ? 'light' : 'dark', ground().page).gradient(
+    'to right'
+  )
   if (fit) {
     return (
       <span
@@ -496,7 +506,7 @@ export function Spectrum({
         },
       }
     },
-    `${source}:${tone}`
+    `${source}:${tone}:${themeId()}`
   )
   return (
     <div className={`relative overflow-hidden contain-strict ${className}`}>
@@ -669,7 +679,7 @@ export function Spectrogram({
         },
       }
     },
-    `${source}:${tone}`
+    `${source}:${tone}:${themeId()}`
   )
   return (
     <div
@@ -864,7 +874,7 @@ export function Vectorscope({
         },
       }
     },
-    `${source}:${tone}`
+    `${source}:${tone}:${themeId()}`
   )
   return (
     <div
@@ -1082,7 +1092,7 @@ export function Meters({
         },
       }
     },
-    `${source}:${tone}`
+    `${source}:${tone}:${themeId()}`
   )
   return (
     <div className={`flex min-h-0 flex-col items-stretch gap-1 ${className}`}>
