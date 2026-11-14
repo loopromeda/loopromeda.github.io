@@ -18,10 +18,11 @@ import {
   type Latency,
   type VelocityMode,
 } from '../state/settings'
-import { CARD, SMALL_BUTTON, SMALL_OPTION, TALL_HIT } from './controls'
+import { CARD, SMALL_BUTTON, SMALL_OPTION } from './controls'
 import { Dropdown } from './Dropdown'
 import { SmallIconButton } from './IconButton'
 import { PlatformChecks } from './PlatformChecks'
+import { Switch } from './Switch'
 import { THEMES, mode as pageMode } from './theme'
 
 /** Each latencyHint as the player picks it, lowest first */
@@ -368,20 +369,12 @@ function Toggle({
       hint={hint}
       hintId={`${id}-hint`}
     >
-      <button
-        type="button"
-        role="switch"
-        aria-checked={value}
-        aria-labelledby={`${id}-label`}
-        aria-describedby={hint === undefined ? undefined : `${id}-hint`}
-        onClick={() => onChange(!value)}
-        className={`${TALL_HIT} group flex h-7 w-11 shrink-0 items-center rounded-full bg-(--well) px-1 outline-none focus-visible:shadow-[inset_0_0_0_1px_var(--accent)] aria-checked:bg-(--accent)/25`}
-      >
-        <span
-          aria-hidden
-          className={`size-4 rounded-full bg-(--ink-400) transition-transform duration-150 group-aria-checked:translate-x-5 group-aria-checked:bg-(--accent)`}
-        />
-      </button>
+      <Switch
+        checked={value}
+        onChange={onChange}
+        labelledBy={`${id}-label`}
+        describedBy={hint === undefined ? undefined : `${id}-hint`}
+      />
     </Row>
   )
 }

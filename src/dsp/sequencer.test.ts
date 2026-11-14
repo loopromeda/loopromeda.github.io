@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { ChainSynth } from './chainSynth'
+import { Click } from './click'
 import { EffectRack } from './effects'
 import { SAW } from './oscillator'
 import { Strip } from './output'
 import {
+  COUNT_IN_STEPS,
   KitTarget,
   Lane,
   MAX_HELD,
@@ -295,6 +297,89 @@ describe('Sequencer', () => {
     // In line with the clock, not from its own first step
     expect(added.ons()).toEqual([STEP * 4])
     expect(tape.ons()).toEqual([0])
+  })
+})
+
+/** A click that writes down the frames it is started on, and which lead */
+class ClickTape extends Click {
+  readonly beats: { frame: number; accent: boolean }[] = []
+  base = 0
+
+  constructor() {
+    super(SAMPLE_RATE)
+  }
+
+  override trigger(offset: number, accent: boolean): void {
+    this.beats.push({ frame: this.base + offset, accent })
+  }
+}
+
+/** A clock as clock() makes it, with a click on a tape */
+function clicked(loops: readonly (readonly [number, readonly LaneNote[]])[]) {
+  const made = clock(loops)
+  const click = new ClickTape()
+  made.sequencer.click = click
+  let frame = 0
+  const run = (frames: number) => {
+    // A block at a time, the click's base with the tapes'
+    const fired: number[] = []
+    const end = frame + frames
+    while (frame < end) {
+      click.base = made.tape.base = frame
+      const length = Math.min(BLOCK, end - frame)
+      if (made.sequencer.process(length)) fired.push(made.sequencer.position)
+      frame += length
+    }
+    return fired
+  }
+  return { ...made, click, run }
+}
+
+describe('the count-in and the click', () => {
+  it('counts a bar in, the lanes silent, then plays from the first step', () => {
+    const { sequencer, tape, click, run } = clicked([[16, [note(0)]]])
+    sequencer.play(true)
+    const fired = run(STEP * (COUNT_IN_STEPS + 2))
+    expect(fired.slice(0, 2)).toEqual([-COUNT_IN_STEPS, -COUNT_IN_STEPS + 1])
+    expect(fired).toContain(0)
+    // The first step a bar after play, where the count ends
+    expect(tape.ons()).toEqual([STEP * COUNT_IN_STEPS])
+    // Four beats counted in, the first higher; none after with the click off
+    expect(click.beats).toEqual([
+      { frame: 0, accent: true },
+      { frame: STEP * 4, accent: false },
+      { frame: STEP * 8, accent: false },
+      { frame: STEP * 12, accent: false },
+    ])
+  })
+
+  it('clicks each beat while clicking, the bar’s first higher', () => {
+    const { sequencer, click, run } = clicked([[16, []]])
+    sequencer.clicking = true
+    sequencer.play()
+    run(STEP * 20)
+    expect(click.beats.map((beat) => beat.frame)).toEqual([
+      0,
+      STEP * 4,
+      STEP * 8,
+      STEP * 12,
+      STEP * 16,
+    ])
+    expect(click.beats.map((beat) => beat.accent)).toEqual([
+      true,
+      false,
+      false,
+      false,
+      true,
+    ])
+  })
+
+  it('counts in on a played sequencer’s every play', () => {
+    const { sequencer, run } = clicked([[16, []]])
+    sequencer.play()
+    run(STEP * 3)
+    sequencer.play(true)
+    expect(run(STEP)).toEqual([-COUNT_IN_STEPS])
   })
 })
 

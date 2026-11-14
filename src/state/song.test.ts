@@ -12,6 +12,7 @@ import {
   initSong,
   loadSong,
   loopOf,
+  loopOn,
   noteAt,
   noteOver,
   playedNotes,
@@ -21,6 +22,7 @@ import {
   roomAt,
   saveSong,
   setBars,
+  setLoopOn,
   setSwing,
   setTempo,
   type Loop,
@@ -170,7 +172,12 @@ describe('a loop', () => {
 
 describe('a song', () => {
   it('starts at 120, even, with no loops', () => {
-    expect(initSong()).toEqual({ tempo: 120, swing: 0.5, loops: {} })
+    expect(initSong()).toEqual({
+      tempo: 120,
+      swing: 0.5,
+      loops: {},
+      off: {},
+    })
   })
 
   it('gives a track with no loop a bar of nothing', () => {
@@ -227,9 +234,39 @@ describe('a song', () => {
     expect(fitSong(fitted, ['t1', 't3'])).toBe(fitted)
     expect(fitSong(initSong(), [])).toEqual(initSong())
   })
+
+  it('puts a track’s loop off and on again', () => {
+    const song = initSong()
+    expect(loopOn(song, 't1')).toBe(true)
+    const off = setLoopOn(song, 't1', false)
+    expect(loopOn(off, 't1')).toBe(false)
+    expect(loopOn(off, 't2')).toBe(true)
+    expect(setLoopOn(off, 't1', false)).toBe(off)
+    const on = setLoopOn(off, 't1', true)
+    expect(loopOn(on, 't1')).toBe(true)
+    expect(on.off).toEqual({})
+    expect(setLoopOn(song, 't1', true)).toBe(song)
+  })
+
+  it('forgets a loop put off with its track', () => {
+    const song = setLoopOn(setLoopOn(initSong(), 't1', false), 't2', false)
+    const fitted = fitSong(song, ['t2'])
+    expect(fitted.off).toEqual({ t2: true })
+    expect(fitted.loops).toBe(song.loops)
+    expect(fitSong(fitted, ['t2'])).toBe(fitted)
+  })
 })
 
 describe('a song kept', () => {
+  it('keeps the loops put off, and nothing else of that name', () => {
+    const song = setLoopOn(initSong(), 't1', false)
+    expect(readSong(JSON.parse(JSON.stringify(song)))).toEqual(song)
+    expect(readSong({ off: { t1: true, t2: 'yes', t3: 1 } }).off).toEqual({
+      t1: true,
+    })
+    expect(readSong({ off: ['t1'] }).off).toEqual({})
+  })
+
   it('is read back as it was', () => {
     let song = setSwing(setTempo(initSong(), 96), 0.6)
     song = editLoop(song, 't1', (from) =>
@@ -252,6 +289,7 @@ describe('a song kept', () => {
       tempo: 120,
       swing: 0.75,
       loops: {},
+      off: {},
     })
     const read = readSong({
       tempo: 90,

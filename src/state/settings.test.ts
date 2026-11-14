@@ -92,6 +92,8 @@ describe('readSettings', () => {
       audioDetails: false,
       waveformTiming: false,
       keepAwake: false,
+      click: true,
+      countIn: true,
     }
     const voices = storageWith(JSON.stringify({ ...good, voices: 6 }))
     expect(readSettings(voices)).toEqual({ ...good, voices: 16 })
@@ -110,6 +112,10 @@ describe('readSettings', () => {
     expect(readSettings(waveform)).toEqual({ ...good, waveform: true })
     const awake = storageWith(JSON.stringify({ ...good, keepAwake: 'on' }))
     expect(readSettings(awake)).toEqual({ ...good, keepAwake: true })
+    const click = storageWith(JSON.stringify({ ...good, click: 1 }))
+    expect(readSettings(click)).toEqual({ ...good, click: false })
+    const countIn = storageWith(JSON.stringify({ ...good, countIn: 'bar' }))
+    expect(readSettings(countIn)).toEqual({ ...good, countIn: false })
   })
 
   it('defaults voices that is not one of the counts, even as a number', () => {
@@ -144,6 +150,9 @@ describe('readSettings', () => {
       waveformTiming: false,
       // Kept before the setting was there: its default
       keepAwake: true,
+      // Kept before the transport's were there: off
+      click: false,
+      countIn: false,
     })
   })
 })
@@ -161,6 +170,8 @@ describe('writeSettings', () => {
       audioDetails: false,
       waveformTiming: true,
       keepAwake: false,
+      click: true,
+      countIn: false,
     }
     writeSettings(storage, settings)
     expect(readSettings(storage)).toEqual(settings)
@@ -184,6 +195,8 @@ describe('writeSettings', () => {
       audioDetails: true,
       waveformTiming: false,
       keepAwake: true,
+      click: false,
+      countIn: true,
     })
     expect(JSON.parse(storage.items.get(SETTINGS_KEY) ?? 'null')).toEqual({
       version: 1,
@@ -196,6 +209,8 @@ describe('writeSettings', () => {
       audioDetails: true,
       waveformTiming: false,
       keepAwake: true,
+      click: false,
+      countIn: true,
     })
   })
 

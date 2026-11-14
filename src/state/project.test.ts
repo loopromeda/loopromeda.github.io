@@ -271,6 +271,7 @@ describe('sameSession', () => {
     const [first, second] = given.tracks
     const turned: Session = {
       song: {
+        off: given.song.off,
         loops: given.song.loops,
         swing: given.song.swing,
         tempo: given.song.tempo,

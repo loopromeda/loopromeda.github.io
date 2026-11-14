@@ -293,6 +293,7 @@ export function SoundEditor({
   scope,
   asked,
   voiceAsked,
+  transport,
   rail,
   onMaster,
   onPresets,
@@ -307,6 +308,11 @@ export function SoundEditor({
    * the voice's panel once (the same way as asked routes)
    */
   voiceAsked?: number
+  /**
+   * Beside the switch on the tab panel: Play, the position and the tempo,
+   * which the page supplies (App)
+   */
+  transport?: ReactNode
   /**
    * At the right end of the tab panel: the project and the settings,
    * which the page supplies (App)
@@ -509,6 +515,9 @@ export function SoundEditor({
         className={`mb-2 flex h-10 shrink-0 items-center gap-2 px-1 ${CARD}`}
       >
         <PaneSwitch pane={pane} onPane={choosePane} />
+        {transport !== undefined && (
+          <div className="flex shrink-0 items-center gap-1.5">{transport}</div>
+        )}
         {(pane === 'mix' || kitView) && (
           <p className="min-w-0 truncate text-[11px] text-(--ink-500)">
             {kitView

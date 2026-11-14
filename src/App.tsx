@@ -38,7 +38,12 @@ import { SurfaceButton } from './ui/SurfaceButton'
 import { SurfacePicker } from './ui/SurfacePicker'
 import { useTheme } from './ui/appearance'
 import { TrackButton, TrackPicker } from './ui/TrackPicker'
-import { PlayButton, TempoButton, TempoPicker } from './ui/Transport'
+import {
+  PlayButton,
+  Position,
+  TempoButton,
+  TransportPicker,
+} from './ui/Transport'
 import { UpdateButton } from './ui/UpdateButton'
 import type { ScreenAwake } from './wakeLock'
 
@@ -230,6 +235,8 @@ export function App({
     writeSettings(storage, next)
     if (next.voices !== settings.voices) engine.setVoices(next.voices)
     if (next.latency !== settings.latency) engine.setLatency(next.latency)
+    engine.setClick(next.click)
+    engine.setCountIn(next.countIn)
   }
   // The master's views open over the controls, which they cover; the
   // presets and the surface popovers over the page, which stays as it is;
@@ -245,6 +252,8 @@ export function App({
   const patchRef = useRef<HTMLButtonElement>(null)
   const surfaceRef = useRef<HTMLButtonElement>(null)
   const tempoRef = useRef<HTMLButtonElement>(null)
+  /** The tempo's button on the tab rail, which anchors the transport */
+  const tempoRailRef = useRef<HTMLButtonElement>(null)
   const projectRef = useRef<HTMLButtonElement>(null)
   /** The same button on the editor's tab rail, which anchors the popover */
   const projectRailRef = useRef<HTMLButtonElement>(null)
@@ -308,6 +317,19 @@ export function App({
               }
               onMaster={() => showSheet('master')}
               onPresets={() => showSheet('presets')}
+              transport={
+                <>
+                  <PlayButton engine={engine} small />
+                  <Position engine={engine} />
+                  <TempoButton
+                    ref={tempoRailRef}
+                    engine={engine}
+                    open={sheet === 'tempo'}
+                    onToggle={() => toggle('tempo')}
+                    rail
+                  />
+                </>
+              }
               rail={
                 <>
                   <ProjectButton
@@ -380,15 +402,18 @@ export function App({
           </>
         }
         transport={
-          <>
-            <PlayButton engine={engine} />
-            <TempoButton
-              ref={tempoRef}
-              engine={engine}
-              open={sheet === 'tempo'}
-              onToggle={() => toggle('tempo')}
-            />
-          </>
+          // The rail holds it while the controls are shown
+          !controls && (
+            <>
+              <PlayButton engine={engine} />
+              <TempoButton
+                ref={tempoRef}
+                engine={engine}
+                open={sheet === 'tempo'}
+                onToggle={() => toggle('tempo')}
+              />
+            </>
+          )
         }
         end={
           <>
@@ -444,7 +469,13 @@ export function App({
         />
       )}
       {sheet === 'tempo' && (
-        <TempoPicker engine={engine} anchor={tempoRef} onClose={closeSheet} />
+        <TransportPicker
+          engine={engine}
+          settings={settings}
+          onSettings={changeSettings}
+          anchor={controls ? tempoRailRef : tempoRef}
+          onClose={closeSheet}
+        />
       )}
       {sheet === 'project' && (
         <ProjectBrowser

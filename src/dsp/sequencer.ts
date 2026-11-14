@@ -9,6 +9,7 @@
  * at. Allocates nothing in process: a loop is set, and a lane made, in a
  * message's handler.
  */
+import type { Click } from './click'
 import type { Strip } from './output'
 
 /** The longest loop, in steps: thirty-two bars of sixteenths */
@@ -16,6 +17,15 @@ export const MAX_STEPS = 512
 
 /** The notes of a lane sounding at once; one past them is not played */
 export const MAX_HELD = 32
+
+/** A bar's steps: sixteenths in four-four */
+export const BAR_STEPS = 16
+
+/** A step a beat: the click sounds on every fourth */
+const BEAT_STEPS = 4
+
+/** The steps counted in before the first, as a bar */
+export const COUNT_IN_STEPS = BAR_STEPS
 
 /** The tempo's range, in beats a minute */
 export const MIN_TEMPO = 30
@@ -223,13 +233,16 @@ export class Lane {
 
 /**
  * The clock, and the lanes it steps: stopped until play. A tempo or a
- * swing set while it plays applies from the step after the next.
+ * swing set while it plays applies from the step after the next. Played
+ * with a count-in, it steps a bar before the first (from
+ * -COUNT_IN_STEPS), the lanes silent and the click sounding; the click
+ * otherwise sounds each beat while it is on (click).
  */
 export class Sequencer {
   readonly #sampleRate: number
   #lanes: readonly Lane[] = []
   #playing = false
-  /** The next step to fire, counted from play */
+  /** The next step to fire, counted from play: below 0 counting in */
   #step = 0
   /** Frames from the next block's start until it does */
   #until = 0
@@ -237,6 +250,10 @@ export class Sequencer {
   #swing = MIN_SWING
   /** The step last fired, counted from play: -1 stopped, or before one */
   position = -1
+  /** Sounds each beat, while clicking or counting in */
+  click: Click | undefined
+  /** Whether the click sounds while it plays (it does counting in) */
+  clicking = false
 
   constructor(sampleRate: number) {
     this.#sampleRate = sampleRate
@@ -260,10 +277,14 @@ export class Sequencer {
     this.#swing = clamp(swing, MIN_SWING, MAX_SWING, MIN_SWING)
   }
 
-  /** Plays from the first step, at the start of the next block */
-  play(): void {
+  /**
+   * Plays from the first step, at the start of the next block, or with
+   * countIn a bar of beats before it
+   */
+  play(countIn = false): void {
     this.stop()
     this.#playing = true
+    this.#step = countIn ? -COUNT_IN_STEPS : 0
   }
 
   /** Stops: every note sounding lets go at the start of the next block */
@@ -278,6 +299,7 @@ export class Sequencer {
   /** Stops, the notes sounding forgotten: every voice was stopped */
   clear(): void {
     for (const lane of this.#lanes) lane.forget()
+    this.click?.reset()
     this.stop()
   }
 
@@ -292,8 +314,14 @@ export class Sequencer {
     while (this.#until < length) {
       const step = this.#step
       const offset = Math.floor(this.#until)
-      for (let l = 0; l < lanes.length; l++) {
-        ;(lanes[l] as Lane).fire(step, offset)
+      if (step >= 0) {
+        for (let l = 0; l < lanes.length; l++) {
+          ;(lanes[l] as Lane).fire(step, offset)
+        }
+      }
+      // A beat: every fourth step, counting in or clicking
+      if ((step < 0 || this.clicking) && step % BEAT_STEPS === 0) {
+        this.click?.trigger(offset, step % BAR_STEPS === 0)
       }
       this.position = step
       fired = true

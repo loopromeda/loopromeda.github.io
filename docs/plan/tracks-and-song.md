@@ -167,7 +167,10 @@ Built 2026-11-13.
   px wide or more; in a narrower one (a phone upright) in a row of its
   own under it, with sixteen lights for the bar, since the track, the
   patch, the surface and Hide leave it no room. The tempo's button
-  opens the tempo and the swing, a popover.
+  opens the tempo and the swing, a popover. Since moved to the tab
+  rail, with the position, a click, a count-in and each loop on or off
+  (`transport-and-midi.md`, 1): the header keeps it only while the rail
+  is put away.
 - The column lit leads what is heard by the output's latency.
 - Not built: a voice budget shared by all tracks (B, Cost), a hat's
   choke, recording what is played into a loop.

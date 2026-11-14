@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useId,
   useLayoutEffect,
   useRef,
   useState,
@@ -7,53 +8,128 @@ import {
   type Ref,
   type RefObject,
 } from 'react'
-import { MAX_SWING, MAX_TEMPO, MIN_SWING, MIN_TEMPO } from '../dsp/sequencer'
+import {
+  BAR_STEPS,
+  MAX_SWING,
+  MAX_TEMPO,
+  MIN_SWING,
+  MIN_TEMPO,
+} from '../dsp/sequencer'
 import type { Engine } from '../engine/engine'
-import { setSwing, setTempo } from '../state/song'
+import type { AppSettings } from '../state/settings'
+import { loopOn, setLoopOn, setSwing, setTempo } from '../state/song'
+import { trackName, tracksKey } from '../state/tracks'
 import { COLUMNS } from '../viz/steps'
-import { ICON_BUTTON, RAISED } from './controls'
+import { ICON_BUTTON, RAISED, TALL_HIT } from './controls'
 import { neutralLook } from './editor'
 import { IconButton, SmallIconButton } from './IconButton'
 import { usePlacement } from './placement'
+import { Switch } from './Switch'
+
+/** Play's triangle, and Stop's square, in an 18 px box */
+const PLAY = 'M6 4l8 5-8 5z'
+const STOP = 'M5 5h8v8H5z'
 
 /**
- * Starts the sequencer, every track's loop from its first step, and
- * stops it: lit while it plays. In the play surface's header, whichever
- * surface is up.
+ * Starts the sequencer, every track's loop from its first step (a bar
+ * counted in first, where the settings ask for it), and stops it: lit
+ * while it plays. On the tab rail (small), or in the play surface's
+ * header while the rail is put away with the controls.
  */
-export function PlayButton({ engine }: { engine: Engine }) {
+export function PlayButton({
+  engine,
+  small = false,
+}: {
+  engine: Engine
+  small?: boolean
+}) {
   const playing = useSyncExternalStore(
     engine.subscribeTransport,
     engine.getPlaying
   )
+  const props = {
+    label: playing ? 'Stop' : 'Play',
+    path: playing ? STOP : PLAY,
+    pressed: playing,
+    onClick: () => (playing ? engine.stop() : engine.play()),
+  }
+  return small ? <SmallIconButton {...props} /> : <IconButton {...props} />
+}
+
+/** Where the song is: bar, beat and sixteenth from 1, or the count's beats */
+export function positionText(step: number, counting: boolean): string {
+  if (counting) return `\u2212${Math.ceil(-step / 4)}`
+  if (step < 0) return '1.1.1'
+  const bar = Math.floor(step / BAR_STEPS) + 1
+  const beat = Math.floor((step % BAR_STEPS) / 4) + 1
+  return `${bar}.${beat}.${(step % 4) + 1}`
+}
+
+/**
+ * Where the song is, beside Play on the tab rail: bar, beat and sixteenth
+ * counted from Play (`3.2.1`), dim while stopped, the beats left while it
+ * counts in (`−4`). Written outside React a step at a time, as the audio
+ * thread tells of them; it leads what is heard by the output's latency.
+ */
+export function Position({ engine }: { engine: Engine }) {
+  const textRef = useRef<HTMLSpanElement>(null)
+  useEffect(() => {
+    const text = textRef.current
+    if (!text) return
+    let shown = ''
+    const show = () => {
+      const playing = engine.getPlaying()
+      const counting = engine.countingIn
+      const next = positionText(playing ? engine.step : -1, counting)
+      if (next !== shown) {
+        text.textContent = next
+        shown = next
+      }
+      text.dataset.state = counting ? 'count' : playing ? 'play' : 'stop'
+    }
+    show()
+    const stopSteps = engine.watchSteps(show)
+    const stopTransport = engine.subscribeTransport(show)
+    return () => {
+      stopSteps()
+      stopTransport()
+    }
+  }, [engine])
   return (
-    <IconButton
-      label={playing ? 'Stop' : 'Play'}
-      path={playing ? 'M5 5h8v8H5z' : 'M6 4l8 5-8 5z'}
-      pressed={playing}
-      onClick={() => (playing ? engine.stop() : engine.play())}
-    />
+    <span
+      ref={textRef}
+      role="timer"
+      aria-label="Position: bar, beat and sixteenth"
+      className="min-w-[6ch] shrink-0 text-center font-mono text-[11px] text-(--ink-200) tabular-nums data-[state=count]:text-(--accent) data-[state=stop]:text-(--ink-500)"
+    >
+      1.1.1
+    </span>
   )
 }
 
 const TEMPO_BUTTON =
   'flex h-11 w-14 shrink-0 items-center justify-center rounded-[10px] bg-(--lift) font-mono text-[13px] text-(--ink-200) aria-expanded:bg-(--lift-2)'
 
+/** On the tab rail: the panel's 28 px class, its face lit when open */
+const RAIL_TEMPO_BUTTON = `${TALL_HIT} flex h-7 min-w-9 shrink-0 items-center justify-center rounded-md bg-(--lift) px-1.5 font-mono text-[11px] text-(--ink-200) aria-expanded:bg-(--lift-2) aria-expanded:text-(--ink-0)`
+
 /**
  * Beside Play: the song's tempo, in beats a minute, as its face. A tap
- * opens the tempo and the swing, a popover standing on it (TempoPicker,
- * which ref places), and closes it again.
+ * opens the transport's popover (TransportPicker, which ref places) and
+ * closes it again. On the tab rail (rail), at the panel's 28 px.
  */
 export function TempoButton({
   ref,
   engine,
   open,
   onToggle,
+  rail = false,
 }: {
   ref?: Ref<HTMLButtonElement>
   engine: Engine
   open: boolean
   onToggle: () => void
+  rail?: boolean
 }) {
   const tempo = useTempo(engine)
   return (
@@ -64,7 +140,7 @@ export function TempoButton({
       aria-controls="tempo"
       aria-label={`Tempo: ${tempo} beats a minute`}
       onClick={onToggle}
-      className={TEMPO_BUTTON}
+      className={rail ? RAIL_TEMPO_BUTTON : TEMPO_BUTTON}
     >
       {tempo}
     </button>
@@ -85,24 +161,41 @@ const AROUND = 28 + 8 + 2 * 10
 
 const SLIDER = 'h-11 min-w-0 flex-1 accent-[var(--accent)]'
 
+const SECTION =
+  'text-[11px] font-medium tracking-widest text-(--ink-500) uppercase'
+
 /**
- * The song's tempo and its swing, a popover on the tempo's button: the
- * tempo on a slider with a beat down and a beat up at its ends, the swing
- * (the share of each pair of sixteenths the first takes) from straight to
- * a triplet's and a little past. Each change plays at once. Escape and
- * the cross close it; so does a tap outside (the page's, App.tsx).
+ * The transport, a popover on the tempo's button (below it on the tab
+ * rail, above it in the play surface's header): the song's tempo on a
+ * slider with a beat down and a beat up at its ends, the swing (the
+ * share of each pair of sixteenths the first takes) from straight to a
+ * triplet's and a little past; the click and the count-in (the device's
+ * settings); and each track with its loop on or off (the song's). Each
+ * change plays at once. Escape and the cross close it; so does a tap
+ * outside (the page's, App.tsx).
  */
-export function TempoPicker({
+export function TransportPicker({
   engine,
+  settings,
+  onSettings,
   anchor,
   onClose,
 }: {
   engine: Engine
+  settings: AppSettings
+  onSettings: (next: AppSettings) => void
   anchor: RefObject<HTMLElement | null>
   onClose: () => void
 }) {
   const tempo = useTempo(engine)
   const swing = useSwing(engine)
+  const song = useSyncExternalStore(engine.subscribeSong, engine.getSong)
+  // The tracks: which there are, in their order, and what they are called
+  useSyncExternalStore(engine.subscribeSound, () =>
+    tracksKey(engine.getTracks())
+  )
+  const tracks = engine.getTracks()
+  const id = useId()
   const percent = Math.round(swing * 100)
   const contentRef = useRef<HTMLDivElement>(null)
   // As tall as its choices are, measured as they change: a rem to start
@@ -178,13 +271,13 @@ export function TempoPicker({
           id="tempo-heading"
           className="shrink-0 text-sm font-semibold whitespace-nowrap text-(--ink-100)"
         >
-          Tempo
+          Transport
         </h2>
         <span className="min-w-0 truncate font-mono text-[11px] text-(--ink-400)">
           {tempo} BPM
         </span>
         <SmallIconButton
-          label="Close tempo"
+          label="Close the transport"
           onClick={onClose}
           path="M5 5l8 8M13 5l-8 8"
           className="ml-auto"
@@ -226,10 +319,7 @@ export function TempoPicker({
 
           <div className="flex flex-col gap-0.5">
             <div className="flex items-baseline justify-between px-1">
-              <h3
-                id="tempo-swing"
-                className="text-[11px] font-medium tracking-widest text-(--ink-500) uppercase"
-              >
+              <h3 id="tempo-swing" className={SECTION}>
                 Swing
               </h3>
               <span className="font-mono text-[11px] text-(--ink-400)">
@@ -249,9 +339,85 @@ export function TempoPicker({
               />
             </div>
           </div>
+
+          <div className="flex flex-col">
+            <SwitchRow
+              id={`${id}-click`}
+              label="Click"
+              hint="Each beat, the bar's first higher"
+              checked={settings.click}
+              onChange={(click) => onSettings({ ...settings, click })}
+            />
+            <SwitchRow
+              id={`${id}-count`}
+              label="Count-in"
+              hint="A bar of beats before the first step"
+              checked={settings.countIn}
+              onChange={(countIn) => onSettings({ ...settings, countIn })}
+            />
+          </div>
+
+          <div className="flex flex-col">
+            <h3 id={`${id}-loops`} className={`px-1 ${SECTION}`}>
+              Loops
+            </h3>
+            <ul aria-labelledby={`${id}-loops`} className="flex flex-col">
+              {tracks.map((track, k) => (
+                <li key={track.id}>
+                  <SwitchRow
+                    id={`${id}-${track.id}`}
+                    label={trackName(track, k)}
+                    checked={loopOn(song, track.id)}
+                    onChange={(on) =>
+                      engine.editSong((each) => setLoopOn(each, track.id, on))
+                    }
+                  />
+                </li>
+              ))}
+            </ul>
+          </div>
         </div>
       </div>
     </section>
+  )
+}
+
+/** Something on or off in the transport, by name: a switch at its end */
+function SwitchRow({
+  id,
+  label,
+  hint,
+  checked,
+  onChange,
+}: {
+  id: string
+  label: string
+  hint?: string
+  checked: boolean
+  onChange: (checked: boolean) => void
+}) {
+  return (
+    <div className="flex min-h-10 items-center justify-between gap-3 px-1">
+      <span className="flex min-w-0 flex-col">
+        <span id={id} className="truncate text-[13px] text-(--ink-300)">
+          {label}
+        </span>
+        {hint !== undefined && (
+          <span
+            id={`${id}-hint`}
+            className="truncate text-[11px] text-(--ink-500)"
+          >
+            {hint}
+          </span>
+        )}
+      </span>
+      <Switch
+        checked={checked}
+        onChange={onChange}
+        labelledBy={id}
+        describedBy={hint === undefined ? undefined : `${id}-hint`}
+      />
+    </div>
   )
 }
 

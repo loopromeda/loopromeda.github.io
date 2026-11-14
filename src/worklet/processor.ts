@@ -3,6 +3,7 @@ import { chainStressOutput, timeBlocks } from '../dsp/chainStress'
 import { EffectRack } from '../dsp/effects'
 import { LoudnessMeter } from '../dsp/loudness'
 import { Mixer, Part, Strip } from '../dsp/output'
+import { Click } from '../dsp/click'
 import { KitTarget, Lane, Sequencer, SynthTarget } from '../dsp/sequencer'
 import {
   BENCH_MAX_VOICES,
@@ -87,7 +88,8 @@ type Playing = SynthPlaying | KitPlaying
  * clock runs here too (src/dsp/sequencer.ts): each block it queues the
  * notes of the steps that fall within it on the tracks' strips, each on
  * its own frame, ahead of the mix rendering them, and the page hears of
- * a step as it passes. The output's loudness is measured all the while
+ * a step as it passes; its click (src/dsp/click.ts) is added to the
+ * output last. The output's loudness is measured all the while
  * (src/dsp/loudness.ts), its integrated from each Play, and told while
  * the page shows it, as is how far a compressor or a limiter it watches
  * turns things down. Nothing is allocated in process(): each report
@@ -101,6 +103,8 @@ class SynthProcessor extends AudioWorkletProcessor {
   readonly #mixer = new Mixer(sampleRate)
   /** The clock, and each track's loop on its lane */
   readonly #sequencer = new Sequencer(sampleRate)
+  /** The transport's click, which the sequencer starts on each beat */
+  readonly #click = new Click(sampleRate)
   readonly #step: { t: 'step'; step: number } = { t: 'step', step: -1 }
   /** The most voices a synth track plays, and the wheel: a new track's */
   #voices: number | undefined
@@ -181,6 +185,7 @@ class SynthProcessor extends AudioWorkletProcessor {
 
   constructor() {
     super()
+    this.#sequencer.click = this.#click
     this.port.onmessage = (event: MessageEvent<ToWorklet>) =>
       this.#receive(event.data)
   }
@@ -383,7 +388,7 @@ class SynthProcessor extends AudioWorkletProcessor {
         break
       case 'transport':
         if (message.playing) {
-          this.#sequencer.play()
+          this.#sequencer.play(message.countIn === true)
           // A playthrough's own integrated loudness
           this.#loudness.resetIntegrated()
         } else {
@@ -393,6 +398,9 @@ class SynthProcessor extends AudioWorkletProcessor {
         break
       case 'tempo':
         this.#sequencer.setTempo(message.tempo, message.swing)
+        break
+      case 'click':
+        this.#sequencer.clicking = message.on
         break
       case 'loop':
         this.#tracks
@@ -460,6 +468,8 @@ class SynthProcessor extends AudioWorkletProcessor {
     // One channel only (never asked for): the left, the right thrown away
     this.#mixer.render(parts, left, right ?? this.#spare, taps)
     this.#loudness.process(left, right ?? this.#spare, length)
+    // The click after the loudness is measured: heard, never counted
+    this.#click.render(left, right ?? this.#spare, length)
     if (meter.end(now())) {
       const report = this.#load
       report.load = meter.load

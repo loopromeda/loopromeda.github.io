@@ -1,3 +1,4 @@
+import { COUNT_IN_STEPS } from '../dsp/sequencer'
 import {
   KIT_PADS,
   clampPadNote,
@@ -20,6 +21,7 @@ import {
   fitSong,
   initSong,
   loopOf,
+  loopOn,
   playedNotes,
   type Loop,
   type Song,
@@ -239,9 +241,13 @@ export class Engine {
   readonly #songListeners = new Set<() => void>()
   /** The tempo and swing, and each track's loop, as the worklet has them */
   #sentTempo: { tempo: number; swing: number } | undefined
-  readonly #sentLoops = new Map<string, Loop>()
-  /** Whether the sequencer plays, and the step it last told of */
+  readonly #sentLoops = new Map<string, { loop: Loop; on: boolean }>()
+  /** Whether the click sounds each beat, and Play counts a bar in */
+  #click = false
+  #countIn = false
+  /** Whether the sequencer plays, counting in from its Play */
   #playing = false
+  #counted = false
   readonly #transportListeners = new Set<() => void>()
   #step = -1
   readonly #stepListeners = new Set<(step: number) => void>()
@@ -308,6 +314,7 @@ export class Engine {
         this.#post({ t: 'voices', count: this.#voices })
       }
       if (this.#wheel !== 0) this.#post({ t: 'wheel', value: this.#wheel })
+      if (this.#click) this.#post({ t: 'click', on: true })
       if (this.#glideListeners.size > 0) {
         this.#post({ t: 'watchGlides', on: true, track: this.#pick.track })
       }
@@ -422,14 +429,49 @@ export class Engine {
 
   /**
    * The sequencer plays every track's loop from the first step, the
-   * clock the audio thread's. Nothing before the audio has started.
+   * clock the audio thread's, counting a bar in first where the player
+   * asked for it (setCountIn); played again, it starts over. Nothing
+   * before the audio has started.
    */
   play(): void {
     if (!this.#node) return
-    this.#post({ t: 'transport', playing: true })
+    const countIn = this.#countIn
+    this.#post(
+      countIn
+        ? { t: 'transport', playing: true, countIn }
+        : { t: 'transport', playing: true }
+    )
+    this.#counted = countIn
+    // Before the audio thread tells of a step: the count's, or none
+    this.#setStep(countIn ? -COUNT_IN_STEPS : -1)
     if (this.#playing) return
     this.#playing = true
     for (const listener of this.#transportListeners) listener()
+  }
+
+  /**
+   * Whether the sequencer plays and is counting in: its step below 0, a
+   * bar of beats before the first
+   */
+  get countingIn(): boolean {
+    return this.#playing && this.#counted && this.#step < 0
+  }
+
+  /** Whether the click sounds each beat while the sequencer plays */
+  get click(): boolean {
+    return this.#click
+  }
+
+  /** The click on or off, from the next beat */
+  setClick(on: boolean): void {
+    if (on === this.#click) return
+    this.#click = on
+    this.#post({ t: 'click', on })
+  }
+
+  /** Whether Play counts a bar in, its beats clicked, before the first step */
+  setCountIn(on: boolean): void {
+    this.#countIn = on
   }
 
   /** The sequencer stops, its notes let go */
@@ -1060,8 +1102,8 @@ export class Engine {
   /**
    * Brings the worklet's song up to date: the tempo and the swing if
    * they moved, and each track's loop that is not the one last sent
-   * there, whole (the notes within its length). Nothing before the
-   * worklet exists; start() catches it up.
+   * there, whole (the notes within its length; none, put off). Nothing
+   * before the worklet exists; start() catches it up.
    */
   #syncSong(): void {
     if (!this.#node) return
@@ -1073,10 +1115,13 @@ export class Engine {
     }
     for (const { id } of this.#tracks) {
       const loop = loopOf(this.#song, id)
-      if (this.#sentLoops.get(id) === loop) continue
-      const notes = playedNotes(loop)
+      const on = loopOn(this.#song, id)
+      const sent = this.#sentLoops.get(id)
+      if (sent?.loop === loop && sent.on === on) continue
+      // A loop put off: its length, none of its notes
+      const notes = on ? playedNotes(loop) : []
       this.#post({ t: 'loop', track: id, steps: loop.steps, notes })
-      this.#sentLoops.set(id, loop)
+      this.#sentLoops.set(id, { loop, on })
     }
   }
 

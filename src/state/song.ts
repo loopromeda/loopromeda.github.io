@@ -6,10 +6,12 @@
  * stands on a step at a key (a kit's pad, a synth's note), for a length
  * in steps, at a velocity; one at most on a step and a key. The first loop
  * of a track is the one played and edited for now: more, and scenes and a
- * timeline over them, come with E. Plain data, never changed in place,
- * kept in localStorage.
+ * timeline over them, come with E. A track's loop may be put off
+ * (docs/plan/transport-and-midi.md, 1). Plain data, never changed in
+ * place, kept in localStorage.
  */
 import {
+  BAR_STEPS,
   MAX_STEPS,
   MAX_SWING,
   MAX_TEMPO,
@@ -18,7 +20,7 @@ import {
 } from '../dsp/sequencer'
 
 /** A bar's steps: sixteenths in four-four */
-export const BAR_STEPS = 16
+export { BAR_STEPS }
 
 /** The longest loop, in bars */
 export const MAX_BARS = MAX_STEPS / BAR_STEPS
@@ -60,6 +62,11 @@ export interface Song {
   readonly swing: number
   /** Each track's loops, by its id; a track with none plays nothing */
   readonly loops: Readonly<Record<string, readonly Loop[]>>
+  /**
+   * The tracks whose loop is off, by id: they play nothing of it, their
+   * keys still sounding (a mute silences both)
+   */
+  readonly off: Readonly<Record<string, true>>
 }
 
 /** A bar of nothing: what a track with no loop shows */
@@ -70,12 +77,26 @@ export function initLoop(): Loop {
 }
 
 export function initSong(): Song {
-  return { tempo: DEFAULT_TEMPO, swing: MIN_SWING, loops: {} }
+  return { tempo: DEFAULT_TEMPO, swing: MIN_SWING, loops: {}, off: {} }
 }
 
 /** The loop a track plays: its first, or a bar of nothing */
 export function loopOf(song: Song, track: string): Loop {
   return song.loops[track]?.[0] ?? EMPTY
+}
+
+/** Whether a track's loop plays: unless it was put off */
+export function loopOn(song: Song, track: string): boolean {
+  return song.off[track] !== true
+}
+
+/** The song with a track's loop on, or off */
+export function setLoopOn(song: Song, track: string, on: boolean): Song {
+  if (loopOn(song, track) === on) return song
+  const off: Record<string, true> = { ...song.off }
+  if (on) delete off[track]
+  else off[track] = true
+  return { ...song, off }
 }
 
 /** The loop's length in bars */
@@ -216,10 +237,18 @@ export function setSwing(song: Song, swing: number): Song {
 /** The song with the loops of the tracks there are, by their ids */
 export function fitSong(song: Song, ids: readonly string[]): Song {
   const kept = Object.keys(song.loops).filter((id) => ids.includes(id))
-  if (kept.length === Object.keys(song.loops).length) return song
+  const on = Object.keys(song.off).filter((id) => ids.includes(id))
+  const loopsKept = kept.length === Object.keys(song.loops).length
+  const offKept = on.length === Object.keys(song.off).length
+  if (loopsKept && offKept) return song
   return {
     ...song,
-    loops: Object.fromEntries(kept.map((id) => [id, song.loops[id] ?? []])),
+    loops: loopsKept
+      ? song.loops
+      : Object.fromEntries(kept.map((id) => [id, song.loops[id] ?? []])),
+    off: offKept
+      ? song.off
+      : Object.fromEntries(on.map((id) => [id, true as const])),
   }
 }
 
@@ -236,10 +265,15 @@ export function readSong(value: unknown): Song {
     const read = kept.map(readLoop)
     if (read.length > 0) loops[id] = read
   }
+  const off: Record<string, true> = {}
+  for (const [id, value] of Object.entries(record(given.off))) {
+    if (value === true) off[id] = true
+  }
   return {
     tempo: cleanTempo(given.tempo),
     swing: cleanSwing(given.swing),
     loops,
+    off,
   }
 }
 

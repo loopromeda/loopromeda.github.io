@@ -58,6 +58,10 @@ export interface AppSettings {
   readonly waveformTiming: boolean
   /** The screen stays on while the audio runs (src/wakeLock.ts) */
   readonly keepAwake: boolean
+  /** The transport's click sounds each beat while it plays */
+  readonly click: boolean
+  /** Play counts a bar of beats in before the first step */
+  readonly countIn: boolean
 }
 
 /** The whole synth at once, the lowest delay, everything shown */
@@ -71,6 +75,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   audioDetails: true,
   waveformTiming: true,
   keepAwake: true,
+  click: false,
+  countIn: false,
 }
 
 /** Where the settings are kept */
@@ -113,6 +119,8 @@ export function readSettings(storage?: SettingsStorage): AppSettings {
     audioDetails,
     waveformTiming,
     keepAwake,
+    click,
+    countIn,
   } = saved as {
     voices: unknown
     latency: unknown
@@ -123,6 +131,8 @@ export function readSettings(storage?: SettingsStorage): AppSettings {
     audioDetails: unknown
     waveformTiming: unknown
     keepAwake: unknown
+    click: unknown
+    countIn: unknown
   }
   return {
     voices: isVoiceLimit(voices) ? voices : DEFAULT_SETTINGS.voices,
@@ -144,6 +154,8 @@ export function readSettings(storage?: SettingsStorage): AppSettings {
         : DEFAULT_SETTINGS.waveformTiming,
     keepAwake:
       typeof keepAwake === 'boolean' ? keepAwake : DEFAULT_SETTINGS.keepAwake,
+    click: typeof click === 'boolean' ? click : DEFAULT_SETTINGS.click,
+    countIn: typeof countIn === 'boolean' ? countIn : DEFAULT_SETTINGS.countIn,
   }
 }
 
@@ -170,6 +182,8 @@ export function writeSettings(
         audioDetails: settings.audioDetails,
         waveformTiming: settings.waveformTiming,
         keepAwake: settings.keepAwake,
+        click: settings.click,
+        countIn: settings.countIn,
       })
     )
   } catch {

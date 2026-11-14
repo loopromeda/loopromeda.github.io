@@ -131,11 +131,14 @@ export type ToWorklet =
   /** Everything stops: all notes released, the sequencer with them */
   | { t: 'panic' }
   /**
-   * The sequencer plays from its first step, at the next block, or stops
-   * (its notes let go). The clock is the audio thread's (src/dsp/
-   * sequencer.ts); the page hears of each step as it passes.
+   * The sequencer plays from its first step, at the next block, or with
+   * countIn a bar of beats before it, or stops (its notes let go). The
+   * clock is the audio thread's (src/dsp/sequencer.ts); the page hears
+   * of each step as it passes, counted from -16 while it counts in.
    */
-  | { t: 'transport'; playing: boolean }
+  | { t: 'transport'; playing: boolean; countIn?: boolean }
+  /** The click sounds each beat while the sequencer plays, or not */
+  | { t: 'click'; on: boolean }
   /** Beats a minute, and the share of a pair of sixteenths the first takes */
   | { t: 'tempo'; tempo: number; swing: number }
   /**
@@ -234,8 +237,8 @@ export const LOUDNESS_REPORTS = 10
 
 /**
  * The step the sequencer last played, counted from its start (a loop's
- * own is it modulo the loop's length), each time one passes; -1 as it
- * stops
+ * own is it modulo the loop's length; below 0 while it counts in), each
+ * time one passes; -1 as it stops
  */
 export interface StepReport {
   readonly step: number

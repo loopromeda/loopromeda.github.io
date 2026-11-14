@@ -8,7 +8,9 @@ kit, then a step sequencer, under way:
 `docs/plan/effects-parts-sequencer.md`; tracks (a synth or a kit each,
 as many as are added), a sequence for each, then a song, under way,
 and projects (a session saved under a name):
-`docs/plan/tracks-and-song.md`. What real devices did:
+`docs/plan/tracks-and-song.md`; the transport on the tab rail, then
+MIDI (notes in, learn, clock out and in), under way:
+`docs/plan/transport-and-midi.md`. What real devices did:
 `docs/platform-notes.md`.
 
 ## Commands
@@ -77,9 +79,11 @@ src/dsp/      pure DSP (oscillators, envelopes, LFOs, filters, voices);
               for measuring; fastMath.ts the
               cheaper tanh and sine the voices call per sample;
               sequencer.ts the step sequencer's clock, counted in
-              frames, and a lane for each track playing its loop into
-              the track's strips, each note on its own frame (a
-              strip's queue of what starts and stops within a block)
+              frames (a bar counted in first, if asked), and a lane
+              for each track playing its loop into the track's
+              strips, each note on its own frame (a strip's queue of
+              what starts and stops within a block); click.ts the
+              transport's click, a blip on each beat
 src/worklet/  the AudioWorkletProcessor around src/dsp; own globals and
               tsconfig (tsconfig.worklet.json), loaded via ?worker&url;
               sound.ts loads a sound document onto the ChainSynth and
@@ -176,7 +180,11 @@ src/viz/      pure display math (scope trigger and decimation, envelope
 src/ui/       React components; SoundEditor.tsx the sound as tiles
               (editor.ts: their names, lines, pictograms and colours),
               with the kit its pads and its chain, or, switched to Mix,
-              the session's mix; the sound's Out and the
+              the session's mix, under its tab rail (Sound | Mix, then
+              the transport: Transport.tsx's Play, the position and
+              the tempo, whose popover holds the tempo, the swing, the
+              click, the count-in and each track's loop on or off);
+              the sound's Out and the
               mix's Master hold a view of the output (MasterViews.tsx:
               Scope.tsx's waveform, the spectrum, the spectrogram and
               its colours' key, the stereo, the meters; frames.ts
@@ -208,9 +216,9 @@ src/ui/       React components; SoundEditor.tsx the sound as tiles
               StepGrid.tsx, the picked track's loop a bar at a time
               (a tap puts a note or takes it away, a drag from one
               sets how hard and how long; RowNavigator.tsx a camera
-              over its rows), with Transport.tsx's Play,
-              tempo (and swing, a popover) and lights for the bar's
-              steps in its header, or in a row under a narrow one;
+              over its rows), with the lights for the bar's steps in
+              its header, or in a row under a narrow one (Play and the
+              tempo there too while the rail is put away);
               KeysNavigator.tsx moves the keys a white key at a
               time over C−1 to G9 (all of MIDI's notes), ModWheel.tsx the mod wheel at their
               left (the Wheel source) and its Route, PresetBrowser.tsx
