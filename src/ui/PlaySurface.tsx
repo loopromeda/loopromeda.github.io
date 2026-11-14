@@ -474,7 +474,7 @@ export function PlaySurface({
           the transport in it, under 52rem */}
       <div
         ref={headerRef}
-        className="@container flex h-11 shrink-0 items-center gap-3"
+        className="@container flex h-11 shrink-0 items-center gap-2"
       >
         {/* Held upright, the patch (start's last) takes the room the
             buttons leave */}
