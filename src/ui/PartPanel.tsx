@@ -268,12 +268,16 @@ interface View {
   /** A name of its own to give it, in the title's place: a track's */
   readonly naming?: Naming
   readonly chip: { look: Look; glyph?: string; mark?: string; add?: boolean }
-  /** A knob of a part, under its own label or another (→ IN 1) */
+  /**
+   * A knob of a part, under its own label or another (→ IN 1), its arc
+   * the view's colour or its own (a send's, its bus's)
+   */
   readonly knobs: readonly {
     part: string
     key: string
     hot?: string
     label?: string
+    color?: string
   }[]
   /**
    * After them, knobs of the session's mix: a bus's, an effect's; before
@@ -642,14 +646,14 @@ export function PartPanel({
                   )}
                 >
                   {view.mixFirst && mixKnobs}
-                  {view.knobs.map(({ part, key, hot, label }) => (
+                  {view.knobs.map(({ part, key, hot, label, color }) => (
                     <Knob
                       key={`${part} ${key}`}
                       engine={engine}
                       part={part}
                       knob={key}
                       label={label}
-                      color={view.color}
+                      color={color ?? view.color}
                       hot={hot}
                       onHold={(dest) => onRoute(part, dest)}
                     />
@@ -1145,10 +1149,12 @@ function sendsView(
       ? 'The kit’s level and balance, then its send to each bus'
       : 'Its level and balance, then a send to each bus',
     chip: { look: neutralLook(), glyph: GLYPHS.sends },
+    // Each send in its bus's colour, as the bus's row wears it
     knobs: mix.buses.map((bus) => ({
       part: SENDS,
       key: bus.id,
       label: `${busLetter(bus.id)} ${busName(bus)}`,
+      color: busLook(bus.id).ink,
     })),
     mixKnobs: [
       { part: strip, key: 'level' },
