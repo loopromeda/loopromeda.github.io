@@ -115,6 +115,13 @@ export interface SurfaceSettings {
    * takes their height (a phone folded shut has little to spare)
    */
   readonly hideControls: boolean
+  /**
+   * The keys, pads or steps hidden, with the mod wheel, their header left
+   * (and the transport's row under a narrow one): the controls take their
+   * height, for the mix and the knobs alone (ashon, 2026-11-14). Never
+   * with hideControls: each puts the other back
+   */
+  readonly hideSurface: boolean
   /** The mod wheel stands at the surface's left (ModWheel.tsx) */
   readonly wheel: boolean
 }
@@ -129,6 +136,7 @@ export const DEFAULT_SURFACE: SurfaceSettings = {
   scale: 'minor',
   seq: false,
   hideControls: false,
+  hideSurface: false,
   wheel: true,
 }
 
@@ -162,23 +170,28 @@ export function readSurface(storage?: SurfaceStorage): SurfaceSettings {
     return { ...DEFAULT_SURFACE }
   }
 
-  const { kind, root, scale, seq, hideControls, wheel } = saved as {
-    kind: unknown
-    root: unknown
-    scale: unknown
-    seq: unknown
-    hideControls: unknown
-    wheel: unknown
-  }
+  const { kind, root, scale, seq, hideControls, hideSurface, wheel } =
+    saved as {
+      kind: unknown
+      root: unknown
+      scale: unknown
+      seq: unknown
+      hideControls: unknown
+      hideSurface: unknown
+      wheel: unknown
+    }
+  const controlsAway =
+    typeof hideControls === 'boolean'
+      ? hideControls
+      : DEFAULT_SURFACE.hideControls
   return {
     kind: isKind(kind) ? kind : DEFAULT_SURFACE.kind,
     root: isRoot(root) ? root : DEFAULT_SURFACE.root,
     scale: isScaleId(scale) ? scale : DEFAULT_SURFACE.scale,
     seq: typeof seq === 'boolean' ? seq : DEFAULT_SURFACE.seq,
-    hideControls:
-      typeof hideControls === 'boolean'
-        ? hideControls
-        : DEFAULT_SURFACE.hideControls,
+    hideControls: controlsAway,
+    // Both away would leave nothing to play or edit: the controls win
+    hideSurface: hideSurface === true && !controlsAway,
     wheel: typeof wheel === 'boolean' ? wheel : DEFAULT_SURFACE.wheel,
   }
 }
@@ -202,6 +215,7 @@ export function writeSurface(
         scale: settings.scale,
         seq: settings.seq,
         hideControls: settings.hideControls,
+        hideSurface: settings.hideSurface,
         wheel: settings.wheel,
       })
     )

@@ -498,6 +498,22 @@ right, benchmark within budget.
         shown → hidden: 490×671 pads 6×2 of 73×78 px → 4×4 of 112×107,
         360×720 4×3 → 4×4, 930×566 pads 66 → 174 px tall, 844×390 8×1 and
         89 px of scroll → 8×2 and none.
+  - [x] The surface put away, 2026-11-14, asked for by ashon ("건반
+        패널도 숨길 수 있게 만들어 보면 어떨까? 믹스와 노브만 보고싶을 때가
+        있거든"): Hide surface, at the end of the transport's row (of the
+        header, where it holds the transport), hides the keys, pads or
+        steps and the mod wheel, and the octave controls with them; the
+        header and the transport stay, the bar's lights in the
+        navigator's place, and the editor takes the rest. Its arrows point
+        down, the surface sinking under its header, and up when it is
+        away; Hide controls' point up, the surface rising into their room.
+        Only one is away at a time: while either is, its own button alone
+        shows, to bring it back, and a choice in the surface's popover
+        brings the surface back. It is kept with the surface's settings
+        (`hideSurface`, false where both were kept away). Hidden, not
+        unmounted, so a finger still on a key lets it go. Checked in a
+        frame: at 412×860 the play surface, away, is its two rows, 96 px,
+        and the editor 497 px; at 820 wide, its header alone.
   - [x] A phone on its side (844×390) ran over and scrolled, by 89 px
         after the size pass (74 before it), unless the controls were put
         away. It no longer does, 2026-11-12, measured in a frame: the

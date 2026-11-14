@@ -118,6 +118,7 @@ describe('readSurface', () => {
       scale: 'dorian',
       seq: true,
       hideControls: true,
+      hideSurface: false,
       wheel: false,
     }
     const saved = storageWith(JSON.stringify({ ...good, kind: 'drums' }))
@@ -130,6 +131,20 @@ describe('readSurface', () => {
     expect(readSurface(seq)).toEqual({ ...good, seq: false })
     const xy = storageWith(JSON.stringify({ ...good, kind: 'xy' }))
     expect(readSurface(xy)).toEqual({ ...good, kind: 'xy' })
+  })
+
+  it('never keeps the surface and the controls both away', () => {
+    const away = { ...DEFAULT_SURFACE, hideSurface: true }
+    expect(readSurface(storageWith(JSON.stringify(away)))).toEqual(away)
+    const both = { ...away, hideControls: true }
+    expect(readSurface(storageWith(JSON.stringify(both)))).toEqual({
+      ...both,
+      hideSurface: false,
+    })
+    const odd = { ...away, hideSurface: 'yes' }
+    expect(readSurface(storageWith(JSON.stringify(odd)))).toEqual(
+      DEFAULT_SURFACE
+    )
   })
 
   it('defaults a root that is out of range or not a whole number', () => {
@@ -153,6 +168,7 @@ describe('readSurface', () => {
       scale: 'blues',
       seq: false,
       hideControls: false,
+      hideSurface: false,
       wheel: true,
     })
   })
@@ -167,10 +183,14 @@ describe('writeSurface', () => {
       scale: 'blues',
       seq: true,
       hideControls: true,
+      hideSurface: false,
       wheel: false,
     }
     writeSurface(storage, settings)
     expect(readSurface(storage)).toEqual(settings)
+    const away = { ...settings, hideControls: false, hideSurface: true }
+    writeSurface(storage, away)
+    expect(readSurface(storage)).toEqual(away)
   })
 
   it('keeps exactly the settings, with the version', () => {
@@ -181,6 +201,7 @@ describe('writeSurface', () => {
       scale: 'blues',
       seq: true,
       hideControls: true,
+      hideSurface: false,
       wheel: false,
     })
     expect(JSON.parse(storage.items.get(SURFACE_KEY) ?? 'null')).toEqual({
@@ -190,6 +211,7 @@ describe('writeSurface', () => {
       scale: 'blues',
       seq: true,
       hideControls: true,
+      hideSurface: false,
       wheel: false,
     })
   })

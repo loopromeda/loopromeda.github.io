@@ -78,6 +78,10 @@ const SEQ_SIZE = [
   'side:flex-[0_0_calc(var(--play-head,3.25rem)_+_clamp(7rem,100dvh_-_20rem,18rem))]',
 ].join(' ')
 
+/** Arrows in the 18 px box: up, what stands below rises; down, it sinks */
+const RISE = 'M5 8.5l4-4 4 4M5 13.5l4-4 4 4'
+const SINK = 'M5 4.5l4 4 4-4M5 9.5l4 4 4-4'
+
 /**
  * The sound's editor (its parts as tiles, the output shown in the
  * master's, the picked one's knobs under them), the keys or pads filling
@@ -92,7 +96,12 @@ const SEQ_SIZE = [
  * button opening the tempo and the swing, a popover too. The
  * master's views at size open over the controls (its panel opens them),
  * what is played on left there too. The last puts the controls away, for
- * a screen too short to play on under them. The mod
+ * a screen too short to play on under them; the one at the end of the
+ * transport's row (of the header, on a wide one) puts the keys away
+ * instead, for the mix and the knobs alone, their header and the
+ * transport left (ashon, 2026-11-14: "건반 패널도 숨길 수 있게 만들어 보면
+ * 어떨까? 믹스와 노브만 보고싶을 때가 있거든"). While either is away,
+ * only its own button shows, to bring it back. The mod
  * wheel stands at the keys' left (the surface's choices hide it); its
  * Route opens its routes in the editor's panel, bringing the controls
  * back for them. The
@@ -231,6 +240,8 @@ export function App({
   const projectRef = useRef<HTMLButtonElement>(null)
   // Put away, the controls still come back under a sheet: it needs room
   const controls = !surface.hideControls || covered
+  // The keys, pads or steps put away, their header left
+  const away = surface.hideSurface
   // Until the audio has run, the cover asks for the tap that starts it;
   // starting it again (a new latency) shows a note instead
   const [ran, setRan] = useState(false)
@@ -295,8 +306,28 @@ export function App({
       </div>
       <PlaySurface
         engine={engine}
-        className={controls ? (surface.seq ? SEQ_SIZE : KEYS_SIZE) : 'flex-1'}
+        className={
+          away
+            ? 'shrink-0'
+            : controls
+              ? surface.seq
+                ? SEQ_SIZE
+                : KEYS_SIZE
+              : 'flex-1'
+        }
         settings={surface}
+        away={away}
+        fold={
+          !surface.hideControls && (
+            <IconButton
+              label="Hide surface"
+              pressed={away}
+              onClick={() => changeSurface({ ...surface, hideSurface: !away })}
+              // Down: the keys sink under their header; up: they come back
+              path={away ? RISE : SINK}
+            />
+          )
+        }
         fullVelocity={settings.velocity === 'full'}
         kit={part === 'kit' ? names : undefined}
         beside={
@@ -345,22 +376,20 @@ export function App({
               open={sheet === 'surface'}
               onToggle={() => toggle('surface')}
             />
-            <IconButton
-              label="Hide controls"
-              pressed={surface.hideControls}
-              onClick={() =>
-                changeSurface({
-                  ...surface,
-                  hideControls: !surface.hideControls,
-                })
-              }
-              // Up: the surface rises into their room; down: they come back
-              path={
-                surface.hideControls
-                  ? 'M5 4.5l4 4 4-4M5 9.5l4 4 4-4'
-                  : 'M5 8.5l4-4 4 4M5 13.5l4-4 4 4'
-              }
-            />
+            {!away && (
+              <IconButton
+                label="Hide controls"
+                pressed={surface.hideControls}
+                onClick={() =>
+                  changeSurface({
+                    ...surface,
+                    hideControls: !surface.hideControls,
+                  })
+                }
+                // Up: the surface rises into their room; down: they come back
+                path={surface.hideControls ? SINK : RISE}
+              />
+            )}
           </>
         }
       />
@@ -385,7 +414,8 @@ export function App({
           settings={surface}
           kit={part === 'kit'}
           anchor={surfaceRef}
-          onChange={changeSurface}
+          // A choice of what to play on brings it back to play on
+          onChange={(next) => changeSurface({ ...next, hideSurface: false })}
           onClose={closeSheet}
         />
       )}

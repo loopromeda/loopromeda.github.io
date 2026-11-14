@@ -196,7 +196,12 @@ const sameFit = (a: Fit, b: Fit) =>
  * and `start` takes the room the rest leaves. `beside`
  * (the mod wheel) stands at the surface's left, outside what the keys,
  * pads and XY pad are fitted to. Given fullVelocity, every note plays at full
- * velocity, wherever a finger lands.
+ * velocity, wherever a finger lands. Given away, the surface and the wheel
+ * are hidden (not unmounted: a finger still holding a key lets it go),
+ * the octave controls with them, the header and the transport's row
+ * left, the bar's lights in the navigator's place; `fold`, the button
+ * that puts it away or brings it back, ends the transport's row, or a
+ * header wide enough to hold the transport.
  */
 export function PlaySurface({
   engine,
@@ -205,6 +210,8 @@ export function PlaySurface({
   transport,
   end,
   beside,
+  fold,
+  away = false,
   fullVelocity = false,
   className = 'flex-1',
   kit,
@@ -224,6 +231,10 @@ export function PlaySurface({
   end?: ReactNode
   /** At the surface's left, as tall */
   beside?: ReactNode
+  /** Puts the surface away: by the transport, at the end of its row */
+  fold?: ReactNode
+  /** The surface put away, its header (and transport's row) left */
+  away?: boolean
   fullVelocity?: boolean
   /** Its height in the page's column */
   className?: string
@@ -291,7 +302,8 @@ export function PlaySurface({
   const range = `${noteName(lowestNote)} – ${noteName(highestNote)}`
   // The navigator, for keys that do not reach C−1 to G9 at once
   const whites = whiteCount(fit.octaves)
-  const navigator = !kit && !seq && kind === 'keys' && whites < REACH_WHITES
+  const navigator =
+    !kit && !seq && !away && kind === 'keys' && whites < REACH_WHITES
   const notes = useMemo(
     () =>
       pads
@@ -309,14 +321,21 @@ export function PlaySurface({
     if (!surface || !header) return
     const observer = new ResizeObserver(() => {
       const { width, height } = surface.getBoundingClientRect()
-      const next = {
-        ...keysFit(width),
-        grid: padGrid(width, height),
-        kit: kitGrid(width, height, KIT_PADS),
-        xy: xyOctaves(width),
-        wide: header.getBoundingClientRect().width >= NAVIGATOR_IN_HEADER,
-      }
-      setFit((was) => (sameFit(was, next) ? was : next))
+      const wide = header.getBoundingClientRect().width >= NAVIGATOR_IN_HEADER
+      setFit((was) => {
+        // Put away, the surface keeps what it had room for
+        const next =
+          width > 0 && height > 0
+            ? {
+                ...keysFit(width),
+                grid: padGrid(width, height),
+                kit: kitGrid(width, height, KIT_PADS),
+                xy: xyOctaves(width),
+                wide,
+              }
+            : { ...was, wide }
+        return sameFit(was, next) ? was : next
+      })
     })
     observer.observe(surface)
     observer.observe(header)
@@ -474,7 +493,7 @@ export function PlaySurface({
           </>
         )}
         <div
-          hidden={kit !== undefined || seq}
+          hidden={kit !== undefined || seq || away}
           className="flex shrink-0 items-center gap-2"
         >
           <IconButton
@@ -491,7 +510,12 @@ export function PlaySurface({
             path="M7 4l5 5-5 5"
           />
         </div>
-        {end && <div className="flex shrink-0 items-center gap-2">{end}</div>}
+        {(end || (fit.wide && fold)) && (
+          <div className="flex shrink-0 items-center gap-2">
+            {end}
+            {fit.wide && fold}
+          </div>
+        )}
       </div>
       {!fit.wide && (
         <div className="flex h-11 shrink-0 items-center gap-2">
@@ -499,9 +523,10 @@ export function PlaySurface({
           {between(
             navigator ? 'h-7 min-w-0 flex-1' : 'mx-2 h-7 min-w-0 flex-1'
           )}
+          {fold}
         </div>
       )}
-      <div className="flex min-h-28 flex-1 gap-2">
+      <div hidden={away} className="flex min-h-28 flex-1 gap-2">
         {!seq && beside}
         <div ref={surfaceRef} className="relative min-w-0 flex-1">
           {seq ? (
