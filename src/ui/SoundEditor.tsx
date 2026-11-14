@@ -508,22 +508,19 @@ export function SoundEditor({
   // the panel or the bar, and showing it resizes nothing.
   return (
     <div className="relative isolate flex min-h-0 flex-1 flex-col [--dock:calc(7.75rem_+_var(--knob)_+_0.5rem)] [--knob:clamp(3rem,calc((100vw_-_4.5rem)/8.5),4.5rem)] side:[--dock:0px] side:[--knob:3rem] tall:[--knob:4.5rem]">
-      {/* The two panes, in a panel of their own over the card: the switch,
-          slim as a header row, and where the mix or the kit is shown,
-          what it is */}
+      {/* The two panes, in a panel of their own over the card, slim as a
+          header row: the switch at its left, the transport right after
+          it, within the thumb's reach (ashon: "플레이백 UI가 그냥 좌측에
+          붙어있는게 좋을 것 같네", after a while in the middle), the
+          rest at its right. Each end as far in from the side as from
+          the top and bottom (ashon: "상하여백과 우측 여백이 일치하게"):
+          4 px by the switch, 32 px tall, 6 px by the 28 px buttons */}
       <div
-        className={`mb-2 flex h-10 shrink-0 items-center gap-2 px-1 ${CARD}`}
+        className={`mb-2 flex h-10 shrink-0 items-center gap-2 pr-1.5 pl-1 ${CARD}`}
       >
         <PaneSwitch pane={pane} onPane={choosePane} />
         {transport !== undefined && (
           <div className="flex shrink-0 items-center gap-1.5">{transport}</div>
-        )}
-        {(pane === 'mix' || kitView) && (
-          <p className="min-w-0 truncate text-[11px] text-(--ink-500)">
-            {kitView
-              ? 'Each pad plays a preset as it is: make sounds in a synth.'
-              : 'The session’s mix: a preset keeps only its sound’s sends.'}
-          </p>
         )}
         {rail !== undefined && (
           <div className="ml-auto flex shrink-0 items-center gap-1.5">
