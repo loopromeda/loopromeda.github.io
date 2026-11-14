@@ -68,7 +68,6 @@ import {
   type Run,
 } from '../viz/threads'
 import {
-  MOD_LOOK,
   NEUTRAL_LOOK,
   PAD_TILE,
   addId,
@@ -84,6 +83,7 @@ import {
   mixLine,
   mixPartName,
   mixShapeKey,
+  modLook,
   modulated,
   pickedName,
   reachOf,
@@ -975,7 +975,7 @@ function Graph({
       const seam = at.middle - MARK / 2
       return {
         to: at.to,
-        color: MOD_LOOK.ink,
+        color: modLook().ink,
         marker: { x: seam, y: tile.offsetTop, w: MARK, h: tile.offsetHeight },
       }
     },
@@ -1000,7 +1000,7 @@ function Graph({
           engine={engine}
           drag={dragMod(mod)}
           label={tileLabel(sound, mod)}
-          look={MOD_LOOK}
+          look={modLook()}
           picked={picked === mod}
           member={source === mod}
           reach={reach.has(mod)}
@@ -1018,7 +1018,7 @@ function Graph({
         <Tile
           engine={engine}
           label="+"
-          look={MOD_LOOK}
+          look={modLook()}
           picked={picked === addId('modulator')}
           dashed="add"
           aria="Add a modulator"
@@ -2441,7 +2441,7 @@ function Tile({
   if (picked) shadow = `inset 0 0 0 2px ${look.ink}, 0 0 0 3px ${look.tint}`
   else if (member) shadow = `inset 0 0 0 1.5px ${look.ink}`
   if (!picked && reach)
-    shadow += `, 0 0 0 2px ${GROUND}, 0 0 0 3.5px ${MOD_LOOK.ink}`
+    shadow += `, 0 0 0 2px ${GROUND}, 0 0 0 3.5px ${modLook().ink}`
 
   const face: CSSProperties =
     dashed === undefined
@@ -2622,7 +2622,7 @@ function Tile({
         <span
           aria-hidden
           className="absolute top-[5px] right-[5px] size-1.5 rounded-full"
-          style={{ background: MOD_LOOK.ink }}
+          style={{ background: modLook().ink }}
         />
       )}
     </button>

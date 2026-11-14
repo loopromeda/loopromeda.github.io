@@ -12,6 +12,7 @@ import {
   outlineFill,
   outlinePath,
 } from './outline'
+import { palette } from './theme'
 
 /** Samples on screen: 21 ms at 48 kHz, about nine cycles of A4 */
 const WINDOW = 1024
@@ -32,7 +33,6 @@ const DIVISIONS = 8
 const BACKGROUND = '#0b0b10'
 const GRID = 'rgba(255, 255, 255, 0.06)'
 const AXIS = 'rgba(255, 255, 255, 0.14)'
-const TRACE = '#34d399'
 /** A picture under the trace: its area and its line, this opaque */
 const PICTURE_FILL = 0.08
 const PICTURE_LINE = 0.3
@@ -59,8 +59,9 @@ export interface ScopeStats {
  * - one opaque canvas (alpha: false), so nothing is blended under it
  * - the grid is pre-rendered once per size and blitted with one drawImage,
  *   which also stands in for clearing
- * - one path and one stroke() per frame; styles are set once per size, not
- *   per frame (a resize resets them)
+ * - one path and one stroke() per frame; the pen is set once per size, not
+ *   per frame (a resize resets them), the trace's colour aside: the
+ *   theme's accent, read as it draws
  * - wider than it is samples, a window is reduced to min/max per pixel
  *   column; narrower, it is a polyline through the samples
  * - nothing is allocated per frame: the buffers live as long as the canvas
@@ -203,6 +204,9 @@ export function Scope({
       ctx.drawImage(background, 0, 0)
       const middle = height / 2
       const gain = reach(height)
+      // The trace wears the theme: read as it draws, so a theme change
+      // shows on the next frame
+      ctx.strokeStyle = palette().accent
       ctx.beginPath()
       if (WINDOW >= 2 * width) {
         minMaxColumns(samples, start, WINDOW, width, mins, maxs)
@@ -246,10 +250,10 @@ export function Scope({
       canvas.height = height
       scale = nextScale
       sized = true
-      // A resize resets the context, so styles are set here, once per size
+      // A resize resets the context, so the pen is set here, once per
+      // size; the trace's colour is read as each frame draws
       ctx.lineWidth = 1.5 * scale
       ctx.lineJoin = 'round'
-      ctx.strokeStyle = TRACE
       mins = new Float32Array(width)
       maxs = new Float32Array(width)
       paintBackground()

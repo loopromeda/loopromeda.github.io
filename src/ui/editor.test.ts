@@ -21,10 +21,8 @@ import {
 } from '../state/sound/sound'
 import { EFFECT_KINDS, type EffectKind } from '../state/sound/kinds'
 import {
-  CHAIN_COLORS,
   FM_START,
   GLYPHS,
-  MOD_LOOK,
   NEUTRAL_LOOK,
   PAD_TILE,
   addId,
@@ -35,6 +33,7 @@ import {
   glyphOf,
   heardThrough,
   lookOf,
+  modLook,
   modulated,
   reachOf,
   shapeKey,
@@ -44,6 +43,7 @@ import {
   tileLine,
   toggleFm,
 } from './editor'
+import { DEFAULT_THEME, setThemeId } from './theme'
 
 /** Every knob of an effect kind at its default */
 function effectValues(kind: EffectKind): Record<string, number> {
@@ -74,8 +74,8 @@ describe('looks', () => {
       ink: '#ff8904',
       tint: 'rgba(255,137,4,0.16)',
     })
-    expect(lookOf(sound, 'c1').ink).toBe(CHAIN_COLORS[0])
-    expect(lookOf(sound, 'x2').ink).toBe(CHAIN_COLORS[0])
+    expect(lookOf(sound, 'c1').ink).toBe('#ff8904')
+    expect(lookOf(sound, 'x2').ink).toBe('#ff8904')
     expect(chainLook(3).ink).toBe('#f6339a')
   })
 
@@ -83,8 +83,20 @@ describe('looks', () => {
     const sound = busy()
     expect(lookOf(sound, 'i1')).toBe(NEUTRAL_LOOK)
     expect(lookOf(sound, AMP)).toBe(NEUTRAL_LOOK)
-    expect(lookOf(sound, 'm1')).toBe(MOD_LOOK)
+    expect(lookOf(sound, 'm1')).toEqual(modLook())
     expect(lookOf(sound, VOICE).ink).toBe('#d4d4d8')
+  })
+
+  it('follows the theme it is given', () => {
+    expect(chainLook(0).ink).toBe('#ff8904')
+    expect(modLook().ink).toBe('#38bdf8')
+    setThemeId('ember')
+    try {
+      expect(chainLook(0).ink).toBe('#fde047')
+      expect(modLook().ink).toBe('#a684ff')
+    } finally {
+      setThemeId(DEFAULT_THEME)
+    }
   })
 })
 

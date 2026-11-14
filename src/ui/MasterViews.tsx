@@ -21,6 +21,7 @@ import {
 import { scaleGradient } from '../viz/colourScale'
 import { outputTap, useFrames } from './frames'
 import { Scope, type ScopeStats } from './Scope'
+import { alpha, palette } from './theme'
 
 /**
  * The output's views (docs/plan/effects-parts-sequencer.md): what the
@@ -29,8 +30,9 @@ import { Scope, type ScopeStats } from './Scope'
  * (source). Each is an opaque canvas drawn every frame while the audio
  * runs (frames.ts), its output read once a frame for all of them
  * (OutputTap), nothing allocated per frame, a frame of silence after
- * silence not drawn. The output is drawn in emerald, as the scope draws
- * it; above 0 dB, going into the clip, in amber. The spectrogram's
+ * silence not drawn. The output is drawn in the theme's accent, as the
+ * scope draws it — read as it draws, so a theme switch shows on the next
+ * frame; above 0 dB, going into the clip, in amber. The spectrogram's
  * levels are drawn on the colour scale (src/viz/colourScale.ts).
  */
 
@@ -41,8 +43,6 @@ const named = (source: OutputSource) =>
 const BACKGROUND = '#0b0b10'
 const GRID = 'rgba(255, 255, 255, 0.06)'
 const AXIS = 'rgba(255, 255, 255, 0.14)'
-const TRACE = '#34d399'
-const TRACE_FILL = 'rgba(52, 211, 153, 0.22)'
 const PEAK_LINE = 'rgba(228, 228, 231, 0.45)'
 /** Going into the clip: amber-400 */
 const HOT = '#fbbf24'
@@ -350,6 +350,7 @@ export function Spectrum({
           quiet = !loud
           ctx.drawImage(background, 0, 0)
           if (!loud) return
+          const accent = palette().accent
           const step = width / columns.length
           const y = (db: number) =>
             dbToY(db, height, SPECTRUM_FLOOR, SPECTRUM_TOP)
@@ -360,13 +361,13 @@ export function Spectrum({
           }
           ctx.lineTo(width, height)
           ctx.closePath()
-          ctx.fillStyle = TRACE_FILL
+          ctx.fillStyle = alpha(accent, 0.22)
           ctx.fill()
           ctx.beginPath()
           for (let c = 0; c < columns.length; c++) {
             ctx.lineTo((c + 0.5) * step, y(columns[c] as number))
           }
-          ctx.strokeStyle = TRACE
+          ctx.strokeStyle = accent
           ctx.stroke()
           ctx.beginPath()
           for (let c = 0; c < peaks.length; c++) {
@@ -642,7 +643,6 @@ export function Vectorscope({
           paint(width, height, scale)
           ctx.lineWidth = scale
           ctx.lineJoin = 'round'
-          ctx.strokeStyle = TRACE
           ctx.globalAlpha = 1
           wasSilent = false
         },
@@ -662,6 +662,7 @@ export function Vectorscope({
           const silent = loudest < SILENCE
           if (silent && wasSilent) return
           wasSilent = silent
+          const accent = palette().accent
           ctx.drawImage(background, 0, 0)
           const value = left && right && !silent ? correlation(left, right) : 0
           if (left && right && !silent) {
@@ -669,6 +670,7 @@ export function Vectorscope({
             const cy = (height - bar) / 2
             const r = Math.max(1, Math.min(width, height - bar) / 2 - 2)
             const most = r
+            ctx.strokeStyle = accent
             ctx.beginPath()
             for (let i = from; i < left.length; i++) {
               const l = left[i] as number
@@ -685,7 +687,7 @@ export function Vectorscope({
             ctx.globalAlpha = 1
             if (bar > 0) {
               const at = ((value + 1) / 2) * width
-              ctx.fillStyle = value < 0 ? HOT : TRACE
+              ctx.fillStyle = value < 0 ? HOT : accent
               const w = Math.max(2, Math.round(bar))
               ctx.fillRect(Math.round(at - w / 2), height - bar, w, bar)
             }
@@ -828,6 +830,7 @@ export function Meters({
             : Math.max(1, Math.floor((width - gap) / 2))
           ctx.fillStyle = BACKGROUND
           ctx.fillRect(0, 0, width, height)
+          const accent = palette().accent
           sides.forEach((side, k) => {
             const x = k === 0 ? 0 : width - barW
             ctx.fillStyle = METER_TRACK
@@ -835,7 +838,7 @@ export function Meters({
             // The RMS, filled from the bottom, amber past 0 dB
             const top = Math.round(y(side.rms.level))
             ctx.globalAlpha = 0.6
-            ctx.fillStyle = TRACE
+            ctx.fillStyle = accent
             ctx.fillRect(
               x,
               Math.max(top, zero),
@@ -850,7 +853,7 @@ export function Meters({
             // The needle at the peak, and the tick where it was held
             const needle = Math.round(y(side.needle.level))
             const lineH = Math.max(1, Math.round(1.5 * scale))
-            ctx.fillStyle = side.needle.level > 0 ? HOT : TRACE
+            ctx.fillStyle = side.needle.level > 0 ? HOT : accent
             if (side.needle.level > METER_MIN_DB) {
               ctx.fillRect(x, needle, barW, lineH)
             }

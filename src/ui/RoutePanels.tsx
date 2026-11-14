@@ -12,16 +12,10 @@ import { addRoute, removePart, setRoute } from '../state/sound/edit'
 import { MAX_ROUTES } from '../state/sound/kinds'
 import { partDests, routesTo } from '../state/sound/knob'
 import { destOf, partName, sources, type Sound } from '../state/sound/sound'
-import { PANEL_BODY, SMALL_BUTTON, knobRow } from './controls'
-import {
-  GLYPHS,
-  MOD_COLOR,
-  MOD_LOOK,
-  addingTo,
-  destName,
-  glyphOf,
-} from './editor'
+import { PANEL_BODY, SMALL_CONFIRM, knobRow } from './controls'
+import { GLYPHS, addingTo, destName, glyphOf, modLook } from './editor'
 import { DepthKnob, Knob } from './Knob'
+import { palette } from './theme'
 
 /** A routing panel's tint over the dock's glass: sky at 5% */
 const ROUTING_TINT = 'rgba(56,189,248,0.05)'
@@ -207,7 +201,7 @@ export function RoutesInto({
                 engine={engine}
                 part={route.id}
                 knob={ROUTE_AMOUNT}
-                color={MOD_COLOR}
+                color={palette().modulator}
                 label={from}
                 format={(amount) => formatAmount(dest, amount)}
               />
@@ -262,7 +256,7 @@ export function RoutesInto({
                 type="button"
                 disabled={full || taken.has(source.id)}
                 onClick={() => add(source.id)}
-                style={{ boxShadow: `inset 0 0 0 1px ${MOD_LOOK.ring}` }}
+                style={{ boxShadow: `inset 0 0 0 1px ${modLook().ring}` }}
                 className="h-7 min-w-11 rounded-md px-2 text-[11px] font-semibold whitespace-nowrap text-sky-100 disabled:opacity-40"
               >
                 {source.label}
@@ -319,7 +313,7 @@ function Frame({
       // Tinted and ringed in sky while it routes, over the dock's glass
       style={{
         background: ROUTING_TINT,
-        boxShadow: `inset 0 0 0 1px ${MOD_LOOK.ring}`,
+        boxShadow: `inset 0 0 0 1px ${modLook().ring}`,
       }}
       className="flex min-h-[8.5rem] min-w-0 flex-col gap-2 rounded-xl p-2.5"
     >
@@ -330,7 +324,7 @@ function Frame({
           ref={doneRef}
           type="button"
           onClick={onClose}
-          className={`${SMALL_BUTTON} ml-auto bg-emerald-500/20 text-emerald-200`}
+          className={`${SMALL_CONFIRM} ml-auto`}
         >
           Done
         </button>
@@ -348,14 +342,14 @@ function Chip({ glyph }: { glyph: string }) {
       className="flex h-5 w-[26px] shrink-0 items-center justify-center rounded-[5px]"
       style={{
         background: '#1c1c23',
-        boxShadow: `inset 0 0 0 1.5px ${MOD_LOOK.ring}`,
+        boxShadow: `inset 0 0 0 1.5px ${modLook().ring}`,
       }}
     >
       <svg viewBox="0 0 18 12" width={15} height={10}>
         <path
           d={glyph}
           fill="none"
-          stroke={MOD_COLOR}
+          stroke={palette().modulator}
           strokeWidth={1.8}
           strokeLinecap="round"
           strokeLinejoin="round"

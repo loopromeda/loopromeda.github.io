@@ -31,8 +31,8 @@ import {
 } from '../state/sound/knob'
 import { FINE_ZONES, fineZone, type FineZone } from '../viz/fine'
 import { HOLD, KNOB_SIZE } from './controls'
-import { MOD_COLOR } from './editor'
 import { keepHeld } from './held'
+import { palette } from './theme'
 
 /** CSS pixels of vertical drag that sweep a knob from end to end */
 const TRAVEL = 160
@@ -208,7 +208,7 @@ export function DepthKnob({
           engine.edit((sound) => setDepth(sound, source, target, key, amount)),
         format: (amount) => (amount === 0 ? 'Off' : formatAmount(dest, amount)),
       }}
-      color={MOD_COLOR}
+      color={palette().modulator}
       hot={undefined}
     />
   )
@@ -625,7 +625,7 @@ function Dial({
         onContextMenu={menu}
         onKeyDown={key}
         style={{ '--tone': color } as CSSProperties}
-        className={`${KNOB_SIZE} relative aspect-square touch-none rounded-full outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 data-turning:bg-[color-mix(in_oklab,var(--tone)_18%,transparent)] data-turning:shadow-[0_0_0_1.5px_var(--tone)]`}
+        className={`${KNOB_SIZE} relative aspect-square touch-none rounded-full outline-none focus-visible:ring-2 focus-visible:ring-(--accent) data-turning:bg-[color-mix(in_oklab,var(--tone)_18%,transparent)] data-turning:shadow-[0_0_0_1.5px_var(--tone)]`}
       >
         <svg viewBox="0 0 48 48" className="block size-full" aria-hidden>
           <path
@@ -633,7 +633,7 @@ function Dial({
             d={REACH_ARC}
             pathLength={100}
             fill="none"
-            stroke={MOD_COLOR}
+            stroke={palette().modulator}
             strokeWidth={2}
             strokeLinecap="round"
             style={{ display: 'none' }}
@@ -674,7 +674,7 @@ function Dial({
         <span
           ref={badgeRef}
           aria-hidden
-          style={{ display: 'none', background: MOD_COLOR }}
+          style={{ display: 'none', background: palette().modulator }}
           className="absolute -top-0.5 -right-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full px-0.5 text-[9px] leading-none font-bold text-zinc-950"
         />
         {/* How finely it turns, in the gap at the foot of the arc */}

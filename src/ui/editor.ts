@@ -2,6 +2,9 @@
  * What the sound editor shows of a sound (docs/plan/sound-chains.md, The
  * editor), apart from React: each tile's name, line and pictogram, the
  * colours parts take, and the key of everything a redraw follows. Pure.
+ * The colours are values for the app's colour roles
+ * (docs/plan/sound-chains.md), and theme.ts is their bundle: the looks
+ * read it as they are called, so they follow the chosen theme.
  */
 import {
   BUS_IDS,
@@ -36,12 +39,7 @@ import {
   sendInput,
   type Sound,
 } from '../state/sound/sound'
-
-/** The chains' colours, A to D: orange-400, violet-400, lime-300, pink-500 */
-export const CHAIN_COLORS = ['#ff8904', '#a684ff', '#bbf451', '#f6339a']
-
-/** Modulation's colour, sky-400: a modulator, a route, a modulated tile */
-export const MOD_COLOR = '#38bdf8'
+import { palette } from './theme'
 
 /**
  * How a tile looks: its ring at rest, its ink (its glyph, and its ring
@@ -61,11 +59,23 @@ export const VOICE_LOOK: Look = {
   ink: '#d4d4d8',
   tint: 'rgba(161,161,170,0.12)',
 }
-export const MOD_LOOK: Look = look(MOD_COLOR, 0.6, 0.16)
 
-/** Chain index's look (A is 0), by its colour */
+/**
+ * A convention: the looks that follow the theme — chainLook, modLook and
+ * lookOf through them — are read while rendering only. App takes a theme
+ * change down in the settings' render, so the next render reads the new
+ * colours; module scope or a default argument would freeze them.
+ */
+
+/** Chain index's look (A is 0), by its place: the theme's four inks */
 export function chainLook(index: number): Look {
-  return look(CHAIN_COLORS[index % CHAIN_COLORS.length] as string, 0.6, 0.16)
+  // The palette's four chains, one per place: index % 4 is never short
+  return look(palette().chains[index % 4] as string, 0.6, 0.16)
+}
+
+/** Modulation's look: a modulator, a route, a modulated tile */
+export function modLook(): Look {
+  return look(palette().modulator, 0.6, 0.16)
 }
 
 /**
@@ -106,7 +116,7 @@ export function lookOf(sound: Sound, id: string): Look {
     case 'item':
       return chainLook(sound.chains.indexOf(found.chain))
     case 'modulator':
-      return MOD_LOOK
+      return modLook()
     default:
       return NEUTRAL_LOOK
   }

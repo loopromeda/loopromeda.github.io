@@ -14,7 +14,8 @@ import {
   wheelTurned,
   type Tap,
 } from '../viz/wheel'
-import { GLYPHS, MOD_COLOR, MOD_LOOK } from './editor'
+import { GLYPHS, modLook } from './editor'
+import { palette } from './theme'
 
 /** The arrow keys turn it this far, Page Up and Page Down this */
 const STEP = 0.05
@@ -162,7 +163,7 @@ export function ModWheel({
 
   const wheel = engine.wheel
   const percent = Math.round(wheel * 100)
-  const ink = routed ? MOD_COLOR : '#a1a1aa'
+  const ink = routed ? palette().modulator : '#a1a1aa'
   const style = { '--wheel': wheel, ...ridgesStyle(wheel) } as CSSProperties
   return (
     <div className="flex w-10 shrink-0 flex-col gap-1.5">
@@ -172,8 +173,8 @@ export function ModWheel({
         disabled={!onRoute}
         onClick={onRoute}
         style={{
-          background: MOD_LOOK.tint,
-          boxShadow: `inset 0 0 0 1.5px ${routed ? MOD_COLOR : MOD_LOOK.ring}`,
+          background: modLook().tint,
+          boxShadow: `inset 0 0 0 1.5px ${routed ? palette().modulator : modLook().ring}`,
         }}
         className="flex h-8 shrink-0 items-center justify-center rounded-[10px] disabled:opacity-40"
       >
@@ -181,7 +182,7 @@ export function ModWheel({
           <path
             d={GLYPHS.route}
             fill="none"
-            stroke={MOD_COLOR}
+            stroke={palette().modulator}
             strokeWidth={1.8}
             strokeLinecap="round"
             strokeLinejoin="round"

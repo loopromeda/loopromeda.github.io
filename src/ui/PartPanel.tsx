@@ -100,8 +100,6 @@ import {
 import {
   EFFECT_GLYPHS,
   GLYPHS,
-  MOD_COLOR,
-  MOD_LOOK,
   NEUTRAL_LOOK,
   PAD_TILE,
   VOICE_LOOK,
@@ -119,6 +117,7 @@ import {
   mixId,
   mixPartName,
   mixPartOf,
+  modLook,
   toggleFm,
   type Look,
 } from './editor'
@@ -128,6 +127,7 @@ import { FadeRow } from './FadeRow'
 import { Knob, MixKnob, NEUTRAL_ARC } from './Knob'
 import { ColourKey, MASTER_VIEWS, type MasterViewKind } from './MasterViews'
 import { Mutes } from './Mutes'
+import { palette } from './theme'
 import { knoblessDests, routesTo } from '../state/sound/knob'
 import { noteName } from '../viz/keyboard'
 
@@ -665,14 +665,14 @@ export function PartPanel({
                     >
                       <span
                         aria-hidden
-                        style={{ border: `1.5px dashed ${MOD_LOOK.ring}` }}
+                        style={{ border: `1.5px dashed ${modLook().ring}` }}
                         className={`${KNOB_SIZE} relative flex aspect-square items-center justify-center rounded-full`}
                       >
                         <svg viewBox="0 0 18 12" width={24} height={16}>
                           <path
                             d={GLYPHS.route}
                             fill="none"
-                            stroke={MOD_COLOR}
+                            stroke={palette().modulator}
                             strokeWidth={1.4}
                             strokeLinecap="round"
                             strokeLinejoin="round"
@@ -1015,8 +1015,8 @@ function Targets({
         type="button"
         onClick={() => onMap(source)}
         style={{
-          background: MOD_LOOK.tint,
-          boxShadow: `inset 0 0 0 1.5px ${MOD_COLOR}`,
+          background: modLook().tint,
+          boxShadow: `inset 0 0 0 1.5px ${palette().modulator}`,
         }}
         className={`${TALL_HIT} flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-[11px] font-semibold tracking-wider text-sky-100`}
       >
@@ -1024,7 +1024,7 @@ function Targets({
           <path
             d={GLYPHS.route}
             fill="none"
-            stroke={MOD_COLOR}
+            stroke={palette().modulator}
             strokeWidth={1.8}
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -1048,7 +1048,7 @@ function Targets({
                   ? onRoute(target.target, target.key)
                   : onMap(source, target.target)
               }
-              style={{ boxShadow: `inset 0 0 0 1.5px ${MOD_LOOK.ring}` }}
+              style={{ boxShadow: `inset 0 0 0 1.5px ${modLook().ring}` }}
               className={`${TALL_HIT} flex h-7 shrink-0 items-center rounded-md px-2.5 text-[11px] font-semibold whitespace-nowrap text-sky-100`}
             >
               {target.label}
@@ -1592,7 +1592,7 @@ function viewOf(
       return {
         title,
         kind: `${kind} · ${count === 0 ? 'routed nowhere yet' : count === 1 ? '1 route' : `${count} routes`}`,
-        chip: { look: MOD_LOOK, glyph: glyphOf(sound, picked) },
+        chip: { look: modLook(), glyph: glyphOf(sound, picked) },
         knobs: knobsOf(picked, MODULATOR_KINDS[found.part.kind].knobs),
         targets: {
           source: picked,
@@ -1822,7 +1822,7 @@ function addView(
     return {
       title: 'Add a modulator',
       kind: 'Into the rack',
-      chip: { look: MOD_LOOK, glyph: GLYPHS.plus, add: true },
+      chip: { look: modLook(), glyph: GLYPHS.plus, add: true },
       knobs: [],
       color: NEUTRAL_ARC,
       choices: (Object.keys(MODULATOR_KINDS) as ModulatorKind[]).map(
@@ -1830,7 +1830,7 @@ function addView(
           label: MODULATOR_KINDS[kind].label,
           hint: MODULATOR_HINTS[kind],
           glyph: KIND_GLYPHS[kind],
-          look: MOD_LOOK,
+          look: modLook(),
           add: room ? () => added((s) => addModulator(s, kind)) : undefined,
         })
       ),
