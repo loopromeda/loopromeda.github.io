@@ -41,9 +41,11 @@ Each builds on the last and is usable by itself.
   swing as before, then the click and the count-in, then each track with
   its loop on or off.
 - **The click** sounds each beat, the bar's first higher, on the audio
-  thread (`src/dsp/click.ts`), added to the output after the loudness is
-  measured, so it is heard and seen in the master's views but never
-  counted in its loudness. A device setting, as the count-in is.
+  thread (`src/dsp/click.ts`), on an output of its own wired straight to
+  the speakers: heard, but never in the master's views, its meters or
+  its loudness, as a studio's click goes to the monitors and not the
+  mix (ashon: "click 음은 마스터링 아웃풋 시각화에 안잡혀도 좋을 것
+  같은데"). A device setting, as the count-in is.
 - **The count-in** is a bar of clicks before the first step, whether
   the click is on or not: the steps count from −16 and the lanes fire
   from 0.

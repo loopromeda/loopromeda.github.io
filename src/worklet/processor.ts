@@ -7,6 +7,7 @@ import { Click } from '../dsp/click'
 import { KitTarget, Lane, Sequencer, SynthTarget } from '../dsp/sequencer'
 import {
   BENCH_MAX_VOICES,
+  CLICK_OUTPUT,
   GLIDE_REPORTS,
   LOUDNESS_REPORTS,
   PROCESSOR_NAME,
@@ -70,30 +71,29 @@ interface KitPlaying {
 type Playing = SynthPlaying | KitPlaying
 
 /**
- * The audio thread's shell around src/dsp's ChainSynth and the mix after
- * it (output.ts): messages in, stereo blocks out (the tracks' parts: a
- * synth's voices through its inserts and fader to its sends; a kit's
- * pads, each up to its amp, summed through the kit's chain (its inserts)
- * and fader to the kit's sends; the returns, the master, a soft clip on
- * each side last; after it each track's own sound, for its views), its
- * load (LoadMeter) out twice a second, and the notes still gliding while
- * the page watches them (an XY pad). The tracks are the session's
- * (src/state/tracks.ts), built as a layout names them: in the message's
- * handler, never in process(), so a track added may cost the audio a
- * block. Each pad is a synth of its own, of a few voices (PAD_VOICES), so
- * the pads' sounds never mix. A SoundPlayer for each sound keeps its
- * knobs and hands each change to its synth, and a synth track's to its
- * inserts and its sends, in their own terms; a pad's player has its
- * synth alone, its sound's inserts and sends unheard. The sequencer's
- * clock runs here too (src/dsp/sequencer.ts): each block it queues the
- * notes of the steps that fall within it on the tracks' strips, each on
- * its own frame, ahead of the mix rendering them, and the page hears of
- * a step as it passes; its click (src/dsp/click.ts) is added to the
- * output last. The output's loudness is measured all the while
- * (src/dsp/loudness.ts), its integrated from each Play, and told while
- * the page shows it, as is how far a compressor or a limiter it watches
- * turns things down. Nothing is allocated in process(): each report
- * goes out in one message object, reused (postMessage copies it).
+ * The audio thread's shell around src/dsp's ChainSynth and the mix after it
+ * (output.ts): messages in, stereo blocks out (the tracks' parts: a synth's
+ * voices through its inserts and fader to its sends; a kit's pads, each up to
+ * its amp, summed through the kit's chain (its inserts) and fader to the kit's
+ * sends; the returns, the master, a soft clip on each side last; after it each
+ * track's own sound, for its views; the click last), its load (LoadMeter) out
+ * twice a second, and the notes still gliding while the page watches them (an
+ * XY pad). The tracks are the session's (src/state/tracks.ts), built as a
+ * layout names them: in the message's handler, never in process(), so a track
+ * added may cost the audio a block. Each pad is a synth of its own, of a few
+ * voices (PAD_VOICES), so the pads' sounds never mix. A SoundPlayer for each
+ * sound keeps its knobs and hands each change to its synth, and a synth track's
+ * to its inserts and its sends, in their own terms; a pad's player has its
+ * synth alone, its sound's inserts and sends unheard. The sequencer's clock
+ * runs here too (src/dsp/sequencer.ts): each block it queues the notes of the
+ * steps that fall within it on the tracks' strips, each on its own frame, ahead
+ * of the mix rendering them, and the page hears of a step as it passes; its
+ * click (src/dsp/click.ts) goes out on an output of its own, the last, past the
+ * master's analysers. The output's loudness is measured all the while
+ * (src/dsp/loudness.ts), its integrated from each Play, and told while the page
+ * shows it, as is how far a compressor or a limiter it watches turns things
+ * down. Nothing is allocated in process(): each report goes out in one message
+ * object, reused (postMessage copies it).
  */
 class SynthProcessor extends AudioWorkletProcessor {
   /** The tracks as they play, by id */
@@ -105,6 +105,8 @@ class SynthProcessor extends AudioWorkletProcessor {
   readonly #sequencer = new Sequencer(sampleRate)
   /** The transport's click, which the sequencer starts on each beat */
   readonly #click = new Click(sampleRate)
+  /** Whether the click's output was written last block: cleared once */
+  #clicked = false
   readonly #step: { t: 'step'; step: number } = { t: 'step', step: -1 }
   /** The most voices a synth track plays, and the wheel: a new track's */
   #voices: number | undefined
@@ -468,8 +470,18 @@ class SynthProcessor extends AudioWorkletProcessor {
     // One channel only (never asked for): the left, the right thrown away
     this.#mixer.render(parts, left, right ?? this.#spare, taps)
     this.#loudness.process(left, right ?? this.#spare, length)
-    // The click after the loudness is measured: heard, never counted
-    this.#click.render(left, right ?? this.#spare, length)
+    // The click on an output of its own, which no analyser sees
+    const click = outputs[CLICK_OUTPUT]
+    const clickLeft = click?.[0]
+    const clicking = this.#click.sounding
+    if (clickLeft && (clicking || this.#clicked)) {
+      // Silence after it too, whatever the block's buffers held before
+      const clickRight = click[1] ?? this.#spare
+      clickLeft.fill(0, 0, length)
+      clickRight.fill(0, 0, length)
+      this.#click.render(clickLeft, clickRight, length)
+      this.#clicked = clicking
+    }
     if (meter.end(now())) {
       const report = this.#load
       report.load = meter.load

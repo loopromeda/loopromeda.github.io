@@ -1,9 +1,10 @@
 /**
- * The transport's click (docs/plan/transport-and-midi.md, 1): a short
- * sine blip on each beat, the bar's first a fifth higher, added to the
- * output after it is measured. One blip sounds at a time, a new one
- * cutting the last short. Allocates nothing: the sequencer starts it on
- * the frame its beat falls on, and it adds itself into the block.
+ * The transport's click (docs/plan/transport-and-midi.md, 1): a short sine blip
+ * on each beat, the bar's first a fifth higher, on an output of its own (the
+ * worklet's last), so the master's views, meters and loudness never see it. One
+ * blip sounds at a time, a new one cutting the last short. Allocates nothing:
+ * the sequencer starts it on the frame its beat falls on, and it adds itself
+ * into the block.
  */
 
 /** The blip's pitch, in Hz: a bar's first beat, and the others */

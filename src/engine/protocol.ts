@@ -27,6 +27,16 @@ export const PROCESSOR_NAME = 'loopromeda-synth'
  */
 export const TRACK_OUTPUTS = MAX_TRACKS
 
+/**
+ * The node's last output, after the tracks': the transport's click alone
+ * (src/dsp/click.ts), wired straight to the destination, so it is heard
+ * but never in the master's views, its meters or its loudness
+ */
+export const CLICK_OUTPUT = 1 + TRACK_OUTPUTS
+
+/** The node's stereo outputs: the master's, the tracks', the click's */
+export const OUTPUTS = CLICK_OUTPUT + 1
+
 /** A track as the audio thread builds it: its id and what plays it */
 export interface TrackLayout {
   readonly id: string

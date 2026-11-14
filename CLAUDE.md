@@ -94,7 +94,8 @@ src/worklet/  the AudioWorkletProcessor around src/dsp; own globals and
               part and a sequencer's lane for each track, by the
               track's id, and tells of each step as it passes, how far
               the compressor or limiter watched turns the sound down,
-              and how loud the output is; load.ts the
+              and how loud the output is; the click goes out on an
+              output of its own, the last; load.ts the
               share of its time the synth takes, for the status line
 src/sw/       the service worker (own globals, tsconfig.sw.json): keeps
               what the build ships for offline, a new version waiting
@@ -105,7 +106,8 @@ src/engine/   AudioContext lifecycle, unlock, node wiring; the sound,
               held here and edited, sent whole or as the knobs that
               moved; the session's mix, sent whole; the analysers on the
               output (each side, the waveform, the spectrum), the
-              master's and each track's own (the node's later outputs);
+              master's and each track's own (the node's later outputs),
+              never the click's (the last, straight to the speakers);
               the tracks, the one picked edited and played; the
               song, held here and edited, its tempo and each loop sent
               as it changes, the transport, and the step playing; the

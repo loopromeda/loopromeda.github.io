@@ -42,6 +42,8 @@ import {
 } from '../state/tracks'
 import processorUrl from '../worklet/processor.ts?worker&url'
 import {
+  CLICK_OUTPUT,
+  OUTPUTS,
   PROCESSOR_NAME,
   TRACK_OUTPUTS,
   type BenchReport,
@@ -292,17 +294,18 @@ export class Engine {
 
     try {
       await context.audioWorklet.addModule(processorUrl)
-      const outputs = 1 + TRACK_OUTPUTS
       const node = new AudioWorkletNode(context, PROCESSOR_NAME, {
         numberOfInputs: 0,
-        // The master, then each track's own: stereo, as the effects
-        // spread the voices (src/dsp/effects.ts)
-        numberOfOutputs: outputs,
-        outputChannelCount: Array.from({ length: outputs }, () => 2),
+        // The master, each track's own, then the click: stereo, as the
+        // effects spread the voices (src/dsp/effects.ts)
+        numberOfOutputs: OUTPUTS,
+        outputChannelCount: Array.from({ length: OUTPUTS }, () => 2),
       })
       node.port.onmessage = (event: MessageEvent<FromWorklet>) =>
         this.#receive(event.data)
       this.#taps = tap(context, node, 0, context.destination)
+      // Past the analysers: heard, never shown
+      node.connect(context.destination, CLICK_OUTPUT)
       this.#node = node
       // The worklet starts with no tracks: catch it up, ahead of any note
       this.#unsent()
