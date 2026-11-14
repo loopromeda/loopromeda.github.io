@@ -142,6 +142,12 @@ export const GLYPHS = {
   compressor: 'M1 11 L8 4 C9.5 2.6 11 2.4 17 1.5',
   limiter:
     'M1 1.5 H17 M1 10.5 C3 10.5 3.5 4 5.5 4 H12.5 C14.5 4 15 10.5 17 10.5',
+  // A tap on each side, the lower later; two waves of a little different
+  // lengths; a centre with the sides pushed out from it
+  haas: 'M1 4.5 H17 M4 4.5 V1.5 M1 10.5 H17 M11 10.5 V7.5',
+  doubler: 'M1 4 Q3.5 0.5 6 4 T11 4 T16 4 M1 9.5 Q4 6 7 9.5 T13 9.5',
+  width:
+    'M9 1.5 V10.5 M1.5 6 H6.5 M10.5 6 H16.5 M4 3.5 L1.5 6 L4 8.5 M14 3.5 L16.5 6 L14 8.5',
   // Bars of a meter, the master's
   master: 'M3 11 V6 M7 11 V2 M11 11 V4 M15 11 V8',
   // A path that forks, the sound's sends to the returns
@@ -173,6 +179,9 @@ export const EFFECT_GLYPHS: Record<EffectKind, string> = {
   eq: GLYPHS.eq,
   compressor: GLYPHS.compressor,
   limiter: GLYPHS.limiter,
+  haas: GLYPHS.haas,
+  doubler: GLYPHS.doubler,
+  width: GLYPHS.width,
 }
 
 /** The pictogram of the part id names, or '' for one with none (a chain) */
@@ -498,7 +507,9 @@ export function tileLine(sound: Sound, id: string): string {
 /**
  * An effect's line, from its knobs: a chorus's rate, a delay's time, a
  * reverb's decay; an EQ's boldest band (Low +3.0 dB), else its low cut,
- * else Flat; a compressor's threshold and ratio, a limiter's ceiling
+ * else Flat; a compressor's threshold and ratio, a limiter's ceiling; a
+ * Haas's time and the side it holds back (15 ms R), a doubler's detune
+ * (±9 ct), a width's
  */
 export function effectLine(effect: {
   readonly kind: EffectKind
@@ -518,6 +529,12 @@ export function effectLine(effect: {
       return `${shown('compressor', 'threshold', values)} ${shown('compressor', 'ratio', values)}`
     case 'limiter':
       return shown('limiter', 'ceiling', values)
+    case 'haas':
+      return `${shown('haas', 'time', values)} ${(values.side ?? 0) >= 0.5 ? 'L' : 'R'}`
+    case 'doubler':
+      return `±${Math.round(values.detune ?? 0)} ct`
+    case 'width':
+      return shown('width', 'width', values)
   }
 }
 

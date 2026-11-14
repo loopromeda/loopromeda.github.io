@@ -27,9 +27,12 @@ import {
   FX_CHORUS,
   FX_COMPRESSOR,
   FX_DELAY,
+  FX_DOUBLER,
   FX_EQ,
+  FX_HAAS,
   FX_LIMITER,
   FX_REVERB,
+  FX_WIDTH,
   INPUT_FM,
   INPUT_NOISE,
   INPUT_OSC,
@@ -182,6 +185,9 @@ for (const [name, kind] of [
   ['EQs', FX_EQ],
   ['compressors', FX_COMPRESSOR],
   ['limiters', FX_LIMITER],
+  ['Haas delays', FX_HAAS],
+  ['doublers', FX_DOUBLER],
+  ['widths', FX_WIDTH],
 ] as const) {
   test(`renders a full rack of ${name} well within a block`, async ({
     bench,

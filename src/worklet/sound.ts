@@ -20,6 +20,9 @@ import {
   FX_DELAY,
   FX_EQ,
   FX_LIMITER,
+  FX_HAAS,
+  FX_DOUBLER,
+  FX_WIDTH,
   FX_REVERB,
   INPUT_FM,
   INPUT_NOISE,
@@ -85,6 +88,9 @@ const EFFECT_KIND: Record<EffectKind, number> = {
   eq: FX_EQ,
   compressor: FX_COMPRESSOR,
   limiter: FX_LIMITER,
+  haas: FX_HAAS,
+  doubler: FX_DOUBLER,
+  width: FX_WIDTH,
 }
 const NOTE_SOURCE: Record<NoteSource, number> = {
   velocity: SOURCE_VELOCITY,
@@ -403,6 +409,21 @@ function setEffect(
       return
     case 'limiter':
       rack.setLimiter(k, value('gain'), value('ceiling'), value('release'))
+      return
+    case 'haas':
+      rack.setHaas(k, value('time'), value('side'), value('mix'))
+      return
+    case 'doubler':
+      rack.setDoubler(
+        k,
+        value('detune'),
+        value('time'),
+        value('spread'),
+        value('mix')
+      )
+      return
+    case 'width':
+      rack.setWidth(k, value('width'), value('mono'))
   }
 }
 

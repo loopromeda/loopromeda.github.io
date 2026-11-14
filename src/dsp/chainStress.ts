@@ -21,9 +21,12 @@ import {
   FX_CHORUS,
   FX_COMPRESSOR,
   FX_DELAY,
+  FX_DOUBLER,
   FX_EQ,
+  FX_HAAS,
   FX_LIMITER,
   FX_REVERB,
+  FX_WIDTH,
   MAX_CHAINS,
   MAX_BUSES,
   MAX_EFFECTS,
@@ -154,14 +157,15 @@ const HEAVIEST: readonly number[] = [FX_CHORUS, FX_REVERB]
 
 /**
  * A full rack: MAX_EFFECTS effects of kinds, in turn (FX_CHORUS to
- * FX_LIMITER), each with a Mix of 1/2, dry and wet both whole, so none
+ * FX_LAST), each with a Mix of 1/2, dry and wet both whole, so none
  * skips its dry or its wet. A delay is a ping-pong one, its feedback
  * high; a reverb long; an EQ moves every band and cuts the lows; a
- * compressor and a limiter work all the while. Unless asked for others,
- * the two heaviest kinds in turn, a chorus and a reverb
- * (chainSynth.bench.ts measures a full rack of each kind: on an M3,
- * 0.039 ms and 0.033 a block; a compressor's 0.015, an EQ's 0.009, a
- * limiter's 0.009 and a delay's 0.007).
+ * compressor and a limiter work all the while; a width makes its lows
+ * mono. Unless asked for others, the two heaviest kinds in turn, a
+ * chorus and a reverb (chainSynth.bench.ts measures a full rack of each
+ * kind: on an M3, 0.039 ms and 0.033 a block; a doubler's 0.027, a
+ * compressor's 0.015, an EQ's 0.009, a limiter's 0.009, a Haas delay's
+ * 0.007, a delay's 0.007 and a width's 0.005).
  */
 export function chainStressRack(
   sampleRate: number,
@@ -186,6 +190,10 @@ function fill(rack: EffectRack, kinds = HEAVIEST): void {
     else if (kind === FX_COMPRESSOR) {
       rack.setCompressor(k, -40, 4, 0.005, 0.1, 6, 0.5)
     } else if (kind === FX_LIMITER) rack.setLimiter(k, 12, -1, 0.05)
+    // The stereo tools working: the lows made mono, both paths read
+    else if (kind === FX_HAAS) rack.setHaas(k, 0.015, k % 2, 0.5)
+    else if (kind === FX_DOUBLER) rack.setDoubler(k, 12, 0.012, 1, 0.5)
+    else if (kind === FX_WIDTH) rack.setWidth(k, 1.4, 120)
     else rack.setReverb(k, 0.8, 4, 0.4, 0.5)
   }
 }

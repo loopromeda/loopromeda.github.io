@@ -26,13 +26,21 @@ export const INPUT_RING = 2
 export const ITEM_FILTER = 0
 export const ITEM_DRIVE = 1
 
-/** Effect kinds: a chorus, a delay, a reverb, then the mastering tools */
+/**
+ * Effect kinds: a chorus, a delay, a reverb, the mastering tools, then
+ * the stereo tools (numbered as they came, not as the editor lists them)
+ */
 export const FX_CHORUS = 0
 export const FX_DELAY = 1
 export const FX_REVERB = 2
 export const FX_EQ = 3
 export const FX_COMPRESSOR = 4
 export const FX_LIMITER = 5
+export const FX_HAAS = 6
+export const FX_DOUBLER = 7
+export const FX_WIDTH = 8
+/** The highest kind's number */
+export const FX_LAST = FX_WIDTH
 
 /** Modulator kinds */
 export const MOD_ENV = 0

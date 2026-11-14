@@ -1,10 +1,11 @@
 /**
  * The effects after the voices (docs/plan/effects-parts-sequencer.md): a
- * chorus, a delay and a reverb, and the mastering tools, an EQ, a
- * compressor and a limiter, each run once on the voices summed, in
- * stereo, in place. Up to MAX_EFFECTS stand in a row (EffectRack), each
- * slot playing the kind set on it, made the first time the slot is set
- * to it (a delay holds a megabyte of lines; most racks never play one).
+ * chorus, a delay and a reverb, the stereo tools, a Haas delay, a
+ * doubler and a width, and the mastering tools, an EQ, a compressor and
+ * a limiter, each run once on the voices summed, in stereo, in place.
+ * Up to MAX_EFFECTS stand in a row (EffectRack), each slot playing the
+ * kind set on it, made the first time the slot is set to it (a delay
+ * holds a megabyte of lines; most racks never play one).
  * A knob's change glides: a level or depth over the block it arrives in,
  * a time over a few tens of milliseconds. Allocates nothing in process.
  */
@@ -13,9 +14,13 @@ import {
   FX_CHORUS,
   FX_COMPRESSOR,
   FX_DELAY,
+  FX_DOUBLER,
   FX_EQ,
+  FX_HAAS,
+  FX_LAST,
   FX_LIMITER,
   FX_REVERB,
+  FX_WIDTH,
   MAX_EFFECTS,
 } from './slots'
 
@@ -443,6 +448,352 @@ export class Reverb {
     }
     this.#scale = scale
     for (let k = 0; k < LINES; k++) low[k] = flush(low[k] as number)
+  }
+}
+
+/** The longest a Haas delay holds one side back, in seconds */
+export const HAAS_MAX_TIME = 0.04
+/** How fast its time glides to a new one */
+const HAAS_GLIDE = 0.05
+
+/**
+ * A Haas delay: one side held back a few milliseconds (time, in
+ * seconds, up to HAAS_MAX_TIME), which the ear hears as the sound
+ * standing towards the other, wider than either; side 0 holds back the
+ * right, 1 the left. Mix 0..1 blends the side held back with itself as
+ * it was: at 1 it is only late, at 1/2 both, which combs. Changing the
+ * side glides over a block, the two sides' delays crossing.
+ */
+export class Haas {
+  readonly #left: Line
+  readonly #right: Line
+  /** The time in samples, gliding to the one set */
+  #time = 0
+  #timeGoal = 0
+  readonly #glide: number
+  readonly #sampleRate: number
+  /** How far the delay stands on the left: 0 the right's, 1 the left's */
+  readonly #side = new Ramp(0)
+  readonly #mix = new Ramp(1)
+  #fresh = true
+
+  constructor(sampleRate: number) {
+    this.#sampleRate = sampleRate
+    const most = HAAS_MAX_TIME * sampleRate + 2
+    this.#left = new Line(most)
+    this.#right = new Line(most)
+    this.#glide = 1 - Math.exp(-1 / (HAAS_GLIDE * sampleRate))
+    this.set(0.015, 0, 1)
+  }
+
+  set(time: number, side: number, mix: number): void {
+    const seconds = Math.min(Math.max(time, 0.0001), HAAS_MAX_TIME)
+    this.#timeGoal = Number.isFinite(seconds)
+      ? seconds * this.#sampleRate
+      : this.#timeGoal
+    this.#side.goal = side >= 0.5 ? 1 : 0
+    this.#mix.goal = clamp01(mix)
+  }
+
+  reset(): void {
+    this.#left.clear()
+    this.#right.clear()
+    this.#fresh = true
+  }
+
+  process(left: Float32Array, right: Float32Array, length: number): void {
+    if (this.#fresh) {
+      this.#fresh = false
+      this.#time = this.#timeGoal
+      this.#side.snap()
+      this.#mix.snap()
+    }
+    let side = this.#side.now
+    const sideStep = this.#side.step(length)
+    let mix = this.#mix.now
+    const mixStep = this.#mix.step(length)
+    const goal = this.#timeGoal
+    const glide = this.#glide
+    let time = this.#time
+    for (let i = 0; i < length; i++) {
+      time += (goal - time) * glide
+      const delay = time > 1 ? time : 1
+      const inL = left[i] as number
+      const inR = right[i] as number
+      this.#left.write(inL)
+      this.#right.write(inR)
+      const dry = dryLevel(mix)
+      const wet = wetLevel(mix)
+      // Each side as it is held back, then as much of that as it stands
+      const lateL = inL * dry + this.#left.read(delay + 1) * wet
+      const lateR = inR * dry + this.#right.read(delay + 1) * wet
+      left[i] = inL + (lateL - inL) * side
+      right[i] = inR + (lateR - inR) * (1 - side)
+      side += sideStep
+      mix += mixStep
+    }
+    this.#time = time
+  }
+}
+
+/**
+ * The doubler's window, in seconds: each path's delay sweeps over this
+ * much of it, one tap and then the other, as its pitch moves
+ */
+const DOUBLER_WINDOW = 0.03
+/** The share of a tap's cycle it takes to fade in, and again to fade out */
+const DOUBLER_FADE = 0.1
+/** The right path's delay against the left's: the two never line up */
+const DOUBLER_RIGHT = 1.5
+/** The longest delay the doubler is set to, in seconds */
+export const DOUBLER_MAX_TIME = 0.04
+/** How fast its delay glides to a new one */
+const DOUBLER_GLIDE = 0.05
+
+/**
+ * A doubler, two paths, a copy of each side: the left raised by detune
+ * cents and the right lowered as far (1 to 50, the two a little out of
+ * tune with each other as two takes are), each a little late (time, in
+ * seconds, the right half as late again), spread 0..1 from both in the
+ * middle to each on its own side, mixed with the sound as it was (mix
+ * 0..1). Each path shifts its pitch with a delay that sweeps: two taps
+ * half a cycle apart, one fading in as the other, about to jump back,
+ * fades out, so only one plays most of the time.
+ */
+export class Doubler {
+  readonly #sampleRate: number
+  readonly #left: Line
+  readonly #right: Line
+  readonly #window: number
+  /** How far each path's taps move through their cycle a sample */
+  #speed = 0
+  /** Each path's first tap, through its cycle; the second half a cycle on */
+  #phaseL = 0.25
+  #phaseR = 0.25
+  /** The left path's least delay in samples, gliding to the one set */
+  #time = 0
+  #timeGoal = 0
+  readonly #glide: number
+  readonly #spread = new Ramp(1)
+  readonly #mix = new Ramp(0.5)
+  #fresh = true
+
+  constructor(sampleRate: number) {
+    this.#sampleRate = sampleRate
+    this.#window = DOUBLER_WINDOW * sampleRate
+    const most =
+      (DOUBLER_MAX_TIME * DOUBLER_RIGHT +
+        DOUBLER_WINDOW * (0.5 + DOUBLER_FADE)) *
+        sampleRate +
+      2
+    this.#left = new Line(most)
+    this.#right = new Line(most)
+    this.#glide = 1 - Math.exp(-1 / (DOUBLER_GLIDE * sampleRate))
+    this.set(9, 0.012, 1, 0.5)
+  }
+
+  set(detune: number, time: number, spread: number, mix: number): void {
+    const cents = Number.isFinite(detune) ? Math.min(Math.abs(detune), 100) : 0
+    // A delay changing by d samples a sample plays at 1 - d times the pitch
+    this.#speed = (2 ** (cents / 1200) - 1) / this.#window
+    const seconds = Math.min(Math.max(time, 0.001), DOUBLER_MAX_TIME)
+    this.#timeGoal = Number.isFinite(seconds)
+      ? seconds * this.#sampleRate
+      : this.#timeGoal
+    this.#spread.goal = clamp01(spread)
+    this.#mix.goal = clamp01(mix)
+  }
+
+  reset(): void {
+    this.#left.clear()
+    this.#right.clear()
+    this.#phaseL = 0.25
+    this.#phaseR = 0.25
+    this.#fresh = true
+  }
+
+  process(left: Float32Array, right: Float32Array, length: number): void {
+    if (this.#fresh) {
+      this.#fresh = false
+      this.#time = this.#timeGoal
+      this.#spread.snap()
+      this.#mix.snap()
+    }
+    let spread = this.#spread.now
+    const spreadStep = this.#spread.step(length)
+    let mix = this.#mix.now
+    const mixStep = this.#mix.step(length)
+    const goal = this.#timeGoal
+    const glide = this.#glide
+    const window = this.#window
+    const speed = this.#speed
+    const reach = 0.5 + DOUBLER_FADE
+    let time = this.#time
+    let phaseL = this.#phaseL
+    let phaseR = this.#phaseR
+    for (let i = 0; i < length; i++) {
+      time += (goal - time) * glide
+      const inL = left[i] as number
+      const inR = right[i] as number
+      this.#left.write(inL)
+      this.#right.write(inR)
+      // The left's delay shortens through a cycle (its pitch up), the
+      // right's lengthens (down), each from its least
+      const leastL = 1 + time
+      const leastR = 1 + time * DOUBLER_RIGHT
+      let a = 0
+      let b = 0
+      for (let tap = 0; tap < 2; tap++) {
+        const pl =
+          tap === 0 ? phaseL : phaseL < 0.5 ? phaseL + 0.5 : phaseL - 0.5
+        const pr =
+          tap === 0 ? phaseR : phaseR < 0.5 ? phaseR + 0.5 : phaseR - 0.5
+        if (pl < reach) {
+          a += this.#left.read(leastL + window * (reach - pl)) * tapGain(pl)
+        }
+        if (pr < reach) {
+          b += this.#right.read(leastR + window * pr) * tapGain(pr)
+        }
+      }
+      // Spread: each path towards its own side
+      const near = 0.5 + 0.5 * spread
+      const far = 1 - near
+      const dry = dryLevel(mix)
+      const wet = wetLevel(mix)
+      left[i] = inL * dry + (a * near + b * far) * wet
+      right[i] = inR * dry + (b * near + a * far) * wet
+      phaseL += speed
+      if (phaseL >= 1) phaseL -= 1
+      phaseR += speed
+      if (phaseR >= 1) phaseR -= 1
+      spread += spreadStep
+      mix += mixStep
+    }
+    this.#time = time
+    this.#phaseL = phaseL
+    this.#phaseR = phaseR
+  }
+}
+
+/**
+ * A doubler's tap's level at phase p through its cycle: in over the first
+ * DOUBLER_FADE, whole to 1/2, out over DOUBLER_FADE more, then silent
+ * while its delay jumps back; with the tap half a cycle on, always 1
+ */
+function tapGain(p: number): number {
+  if (p < DOUBLER_FADE)
+    return 0.5 - 0.5 * sinCycles(0.25 + p / (2 * DOUBLER_FADE))
+  if (p < 0.5) return 1
+  const out = p - 0.5
+  return out < DOUBLER_FADE
+    ? 0.5 + 0.5 * sinCycles(0.25 + out / (2 * DOUBLER_FADE))
+    : 0
+}
+
+/** A width's lows go mono below this, or with it at this or lower, none */
+export const WIDTH_MONO_OFF = 20
+/** How long its corner takes to glide most of the way, in seconds */
+const WIDTH_GLIDE = 0.02
+
+/**
+ * A width: the sound split into what both sides share (mid) and what
+ * sets them apart (side), the side scaled by width (0 mono, 1 as it was,
+ * 2 twice as wide), and below mono hertz (off at WIDTH_MONO_OFF) the
+ * side taken away, a highpass of 12 dB an octave, so the lows stand in
+ * the middle whatever is wider above them.
+ */
+export class Width {
+  readonly #sampleRate: number
+  readonly #width = new Ramp(1)
+  /** The corner's log, where it goes and where it is */
+  #goal = Math.log(WIDTH_MONO_OFF)
+  #now = Math.log(WIDTH_MONO_OFF)
+  #b0 = 1
+  #b1 = 0
+  #b2 = 0
+  #a1 = 0
+  #a2 = 0
+  #s1 = 0
+  #s2 = 0
+  #fresh = true
+
+  constructor(sampleRate: number) {
+    this.#sampleRate = sampleRate
+    this.set(1, WIDTH_MONO_OFF)
+  }
+
+  set(width: number, mono: number): void {
+    this.#width.goal = Number.isFinite(width)
+      ? Math.min(Math.max(width, 0), 2)
+      : 1
+    const most = 0.45 * this.#sampleRate
+    const hertz = Number.isFinite(mono)
+      ? Math.min(Math.max(mono, 1), most)
+      : WIDTH_MONO_OFF
+    this.#goal = Math.log(hertz)
+  }
+
+  reset(): void {
+    this.#s1 = this.#s2 = 0
+    this.#fresh = true
+  }
+
+  process(left: Float32Array, right: Float32Array, length: number): void {
+    if (this.#fresh) {
+      this.#fresh = false
+      this.#width.snap()
+      this.#now = this.#goal
+      this.#design()
+    } else if (this.#now !== this.#goal) {
+      const gap = this.#goal - this.#now
+      if (Math.abs(gap) < 1e-4) this.#now = this.#goal
+      else {
+        this.#now +=
+          gap * (1 - Math.exp(-length / (WIDTH_GLIDE * this.#sampleRate)))
+      }
+      this.#design()
+    }
+    let width = this.#width.now
+    const widthStep = this.#width.step(length)
+    const mono = this.#now > Math.log(WIDTH_MONO_OFF) + 1e-6
+    const b0 = this.#b0
+    const b1 = this.#b1
+    const b2 = this.#b2
+    const a1 = this.#a1
+    const a2 = this.#a2
+    let s1 = this.#s1
+    let s2 = this.#s2
+    for (let i = 0; i < length; i++) {
+      const l = left[i] as number
+      const r = right[i] as number
+      const mid = (l + r) * 0.5
+      let side = (l - r) * 0.5
+      if (mono) {
+        const y = b0 * side + s1
+        s1 = b1 * side - a1 * y + s2
+        s2 = b2 * side - a2 * y
+        side = y
+      }
+      side *= width
+      left[i] = mid + side
+      right[i] = mid - side
+      width += widthStep
+    }
+    this.#s1 = flush(s1)
+    this.#s2 = flush(s2)
+  }
+
+  /** The highpass's coefficients from where its corner is now */
+  #design(): void {
+    const w0 = (2 * Math.PI * Math.exp(this.#now)) / this.#sampleRate
+    const cos = Math.cos(w0)
+    const alpha = Math.sin(w0) * Math.SQRT1_2
+    const a0 = 1 + alpha
+    this.#b0 = (1 + cos) / 2 / a0
+    this.#b1 = -(1 + cos) / a0
+    this.#b2 = (1 + cos) / 2 / a0
+    this.#a1 = (-2 * cos) / a0
+    this.#a2 = (1 - alpha) / a0
   }
 }
 
@@ -1001,6 +1352,9 @@ export class EffectRack {
   readonly #eq: (Equalizer | null)[] = []
   readonly #compressor: (Compressor | null)[] = []
   readonly #limiter: (Limiter | null)[] = []
+  readonly #haas: (Haas | null)[] = []
+  readonly #doubler: (Doubler | null)[] = []
+  readonly #width: (Width | null)[] = []
   readonly #slots: number
   readonly #kind: Int8Array
   #count = 0
@@ -1020,6 +1374,9 @@ export class EffectRack {
       this.#eq.push(null)
       this.#compressor.push(null)
       this.#limiter.push(null)
+      this.#haas.push(null)
+      this.#doubler.push(null)
+      this.#width.push(null)
     }
     this.#restAfter = Math.round(REST_AFTER * sampleRate)
     this.#quiet = this.#restAfter
@@ -1038,10 +1395,10 @@ export class EffectRack {
     this.#count = next
   }
 
-  /** Slot k plays kind (FX_CHORUS to FX_LIMITER), from silence */
+  /** Slot k plays kind (FX_CHORUS to FX_LAST), from silence */
   setKind(k: number, kind: number): void {
     if (!(k >= 0 && k < this.#count) || this.#kind[k] === kind) return
-    if (!(kind >= FX_CHORUS && kind <= FX_LIMITER)) return
+    if (!(kind >= FX_CHORUS && kind <= FX_LAST)) return
     this.#kind[k] = kind
     const rate = this.#sampleRate
     switch (kind) {
@@ -1060,8 +1417,17 @@ export class EffectRack {
       case FX_COMPRESSOR:
         made(this.#compressor, k, () => new Compressor(rate))
         return
-      default:
+      case FX_LIMITER:
         made(this.#limiter, k, () => new Limiter(rate))
+        return
+      case FX_HAAS:
+        made(this.#haas, k, () => new Haas(rate))
+        return
+      case FX_DOUBLER:
+        made(this.#doubler, k, () => new Doubler(rate))
+        return
+      default:
+        made(this.#width, k, () => new Width(rate))
     }
   }
 
@@ -1132,6 +1498,24 @@ export class EffectRack {
     this.#limiter[k]?.set(gain, ceiling, release)
   }
 
+  setHaas(k: number, time: number, side: number, mix: number): void {
+    this.#haas[k]?.set(time, side, mix)
+  }
+
+  setDoubler(
+    k: number,
+    detune: number,
+    time: number,
+    spread: number,
+    mix: number
+  ): void {
+    this.#doubler[k]?.set(detune, time, spread, mix)
+  }
+
+  setWidth(k: number, width: number, mono: number): void {
+    this.#width[k]?.set(width, mono)
+  }
+
   /**
    * The deepest slot k's compressor or limiter turned things down since
    * last asked, dB (0 or less); 0 for any other kind, and while it rests
@@ -1152,6 +1536,9 @@ export class EffectRack {
       this.#eq[k]?.reset()
       this.#compressor[k]?.reset()
       this.#limiter[k]?.reset()
+      this.#haas[k]?.reset()
+      this.#doubler[k]?.reset()
+      this.#width[k]?.reset()
     }
     this.#quiet = this.#restAfter
   }
@@ -1193,6 +1580,15 @@ export class EffectRack {
           break
         case FX_LIMITER:
           this.#limiter[k]?.process(left, right, length)
+          break
+        case FX_HAAS:
+          this.#haas[k]?.process(left, right, length)
+          break
+        case FX_DOUBLER:
+          this.#doubler[k]?.process(left, right, length)
+          break
+        case FX_WIDTH:
+          this.#width[k]?.process(left, right, length)
       }
     }
     let output = 0

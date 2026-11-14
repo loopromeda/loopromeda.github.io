@@ -57,11 +57,13 @@ src/dsp/      pure DSP (oscillators, envelopes, LFOs, filters, voices);
               in Slide for a note placed on the XY pad); slots.ts
               numbers the parts,
               sources and destinations; effects.ts the chorus, delay
-              and reverb, and the mastering tools (an EQ, a compressor,
-              a limiter), in stereo, in racks: a sound's inserts, the
-              kit's, a bus's, the master's; loudness.ts the output's
-              loudness as BS.1770 measures it (momentary, short-term,
-              integrated, in LUFS); output.ts a sound's strip
+              and reverb, the stereo tools (a Haas delay, a doubler
+              of two paths, a width) and the mastering tools (an EQ,
+              a compressor, a limiter), in stereo, in racks: a sound's
+              inserts, the kit's, a bus's, the master's; loudness.ts
+              the output's loudness as BS.1770 measures it
+              (momentary, short-term, integrated, in LUFS);
+              output.ts a sound's strip
               (its synth, inserts and sends), a part (a fader over
               strips: the synth's one; the kit's sixteen, a group
               summed through the kit's chain, its inserts and sends)

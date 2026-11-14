@@ -4,13 +4,17 @@ import {
   Chorus,
   Compressor,
   Delay,
+  Doubler,
   EQ_CUT_OFF,
   EffectRack,
   Equalizer,
+  Haas,
   Limiter,
   LIMITER_LOOKAHEAD,
   MAX_DELAY_TIME,
   Reverb,
+  WIDTH_MONO_OFF,
+  Width,
   compression,
   dbToGain,
   dryLevel,
@@ -20,9 +24,13 @@ import {
   FX_CHORUS,
   FX_COMPRESSOR,
   FX_DELAY,
+  FX_DOUBLER,
   FX_EQ,
+  FX_HAAS,
+  FX_LAST,
   FX_LIMITER,
   FX_REVERB,
+  FX_WIDTH,
 } from './slots'
 
 const SAMPLE_RATE = 48000
@@ -290,7 +298,7 @@ describe('EffectRack', () => {
     expect(rack.count).toBe(4)
     rack.count = 1
     rack.setKind(2, FX_REVERB)
-    rack.setKind(0, 7)
+    rack.setKind(0, FX_LAST + 1)
     const signal = sine(0.05, 440)
     const before = Float32Array.from(signal.left)
     run(rack, signal)
@@ -561,5 +569,185 @@ describe('EffectRack, the mastering tools', () => {
     // Asked of a slot that reduces nothing, or none: nothing
     expect(rack.takeReduction(0)).toBe(0)
     expect(rack.takeReduction(9)).toBe(0)
+  })
+})
+
+/** Where samples first stand above level, in samples, or -1 */
+function firstSample(samples: Float32Array, level: number): number {
+  for (let i = 0; i < samples.length; i++) {
+    if (Math.abs(samples[i] as number) > level) return i
+  }
+  return -1
+}
+
+/** A sine's frequency from its upward crossings, from to to (samples) */
+function frequency(samples: Float32Array, from: number, to: number) {
+  let first = -1
+  let last = -1
+  let count = 0
+  for (let i = from + 1; i < to; i++) {
+    const a = samples[i - 1] as number
+    const b = samples[i] as number
+    if (a <= 0 && b > 0) {
+      const at = i - 1 + a / (a - b)
+      if (first < 0) first = at
+      else count++
+      last = at
+    }
+  }
+  return (count * SAMPLE_RATE) / (last - first)
+}
+
+describe('Haas', () => {
+  it('holds the right back by its time, the left as it was', () => {
+    const haas = new Haas(SAMPLE_RATE)
+    haas.set(0.01, 0, 1)
+    const out = run(haas, impulse(0.05))
+    expect(firstSample(out.left, 0.5)).toBe(0)
+    expect(firstSample(out.right, 0.5)).toBe(480)
+    expect(loudest(out.right, 0, 480)).toBeLessThan(1e-6)
+  })
+
+  it('holds the left back instead, at side 1', () => {
+    const haas = new Haas(SAMPLE_RATE)
+    haas.set(0.02, 1, 1)
+    const out = run(haas, impulse(0.05))
+    expect(firstSample(out.left, 0.5)).toBe(960)
+    expect(firstSample(out.right, 0.5)).toBe(0)
+  })
+
+  it('passes the sound untouched at a Mix of 0', () => {
+    const haas = new Haas(SAMPLE_RATE)
+    haas.set(0.015, 0, 0)
+    const signal = sine(0.1, 440)
+    const before = Float32Array.from(signal.right)
+    run(haas, signal)
+    expect(signal.right).toEqual(before)
+  })
+})
+
+describe('Doubler', () => {
+  it('raises the left by its detune and lowers the right as far', () => {
+    const doubler = new Doubler(SAMPLE_RATE)
+    doubler.set(50, 0.01, 1, 1)
+    const out = run(doubler, sine(2.2, 1000))
+    const from = Math.round(0.1 * SAMPLE_RATE)
+    const to = out.left.length
+    const up = 1000 * 2 ** (50 / 1200)
+    expect(frequency(out.left, from, to)).toBeCloseTo(up, -0.5)
+    expect(frequency(out.right, from, to)).toBeCloseTo(2000 - up, -0.5)
+  })
+
+  it('keeps a steady level as one tap hands over to the other', () => {
+    const doubler = new Doubler(SAMPLE_RATE)
+    doubler.set(50, 0.01, 1, 1)
+    const out = run(doubler, sine(2.2, 1000))
+    // Over 20 ms windows across two seconds: no dip at a handover
+    const step = Math.round(0.02 * SAMPLE_RATE)
+    for (
+      let at = Math.round(0.1 * SAMPLE_RATE);
+      at + step < out.left.length;
+      at += step
+    ) {
+      expect(rms(out.left, at, at + step)).toBeGreaterThan(
+        0.2 * Math.SQRT1_2 * 0.7
+      )
+    }
+  })
+
+  it('puts both copies in the middle at a Spread of 0', () => {
+    const doubler = new Doubler(SAMPLE_RATE)
+    doubler.set(20, 0.01, 0, 0.5)
+    const out = run(doubler, sine(0.5, 300))
+    expect(out.left).toEqual(out.right)
+  })
+
+  it('passes the sound untouched at a Mix of 0', () => {
+    const doubler = new Doubler(SAMPLE_RATE)
+    doubler.set(20, 0.01, 1, 0)
+    const signal = sine(0.1, 440)
+    const before = Float32Array.from(signal.left)
+    run(doubler, signal)
+    expect(signal.left).toEqual(before)
+  })
+})
+
+describe('Width', () => {
+  /** seconds of a sine on the left alone */
+  function leftOnly(seconds: number, hertz: number) {
+    const out = sine(seconds, hertz)
+    out.right.fill(0)
+    return out
+  }
+
+  it('makes the sides one at 0', () => {
+    const width = new Width(SAMPLE_RATE)
+    width.set(0, WIDTH_MONO_OFF)
+    const signal = leftOnly(0.1, 440)
+    const level = rms(signal.left, 0, signal.left.length)
+    const out = run(width, signal)
+    for (let i = 0; i < out.left.length; i += 97) {
+      expect(out.right[i]).toBeCloseTo(out.left[i] as number, 6)
+    }
+    expect(rms(out.left, 0, out.left.length)).toBeCloseTo(level / 2, 6)
+  })
+
+  it('leaves the sound as it was at 1', () => {
+    const width = new Width(SAMPLE_RATE)
+    width.set(1, WIDTH_MONO_OFF)
+    const signal = leftOnly(0.1, 440)
+    const before = Float32Array.from(signal.left)
+    run(width, signal)
+    for (let i = 0; i < before.length; i += 97) {
+      expect(signal.left[i]).toBeCloseTo(before[i] as number, 6)
+      expect(signal.right[i]).toBeCloseTo(0, 6)
+    }
+  })
+
+  it('doubles what sets the sides apart at 2, and keeps what they share', () => {
+    const width = new Width(SAMPLE_RATE)
+    width.set(2, WIDTH_MONO_OFF)
+    const signal = leftOnly(0.1, 440)
+    const level = rms(signal.left, 0, signal.left.length)
+    const out = run(width, signal)
+    // Left alone: half shared, half apart; the apart half doubled
+    expect(rms(out.left, 0, out.left.length)).toBeCloseTo(level * 1.5, 6)
+    expect(rms(out.right, 0, out.right.length)).toBeCloseTo(level * 0.5, 6)
+  })
+
+  it('takes the difference away below its Mono corner, not above', () => {
+    const width = new Width(SAMPLE_RATE)
+    width.set(1, 200)
+    const low = run(width, leftOnly(1, 50))
+    const from = Math.round(0.5 * SAMPLE_RATE)
+    const to = low.left.length
+    // At 50 Hz the left alone comes out nearly the same both sides
+    const apart = (i: number) =>
+      ((low.left[i] as number) - (low.right[i] as number)) / 2
+    let sum = 0
+    for (let i = from; i < to; i++) sum += apart(i) ** 2
+    const side = Math.sqrt(sum / (to - from))
+    expect(db(side / ((0.2 * Math.SQRT1_2) / 2))).toBeLessThan(-20)
+    const high = new Width(SAMPLE_RATE)
+    high.set(1, 200)
+    const out = run(high, leftOnly(1, 4000))
+    expect(rms(out.right, from, to)).toBeLessThan(0.01)
+  })
+})
+
+describe('EffectRack, the stereo tools', () => {
+  it('plays a Haas, a doubler and a width set on its slots', () => {
+    const rack = new EffectRack(SAMPLE_RATE)
+    rack.count = 3
+    rack.setKind(0, FX_WIDTH)
+    rack.setKind(1, FX_DOUBLER)
+    rack.setKind(2, FX_HAAS)
+    rack.setWidth(0, 1, WIDTH_MONO_OFF)
+    rack.setDoubler(1, 20, 0.01, 1, 0)
+    rack.setHaas(2, 0.01, 0, 1)
+    const out = run(rack, impulse(0.05))
+    expect(firstSample(out.left, 0.5)).toBe(0)
+    expect(firstSample(out.right, 0.5)).toBe(480)
+    expect(rack.kindOf(1)).toBe(FX_DOUBLER)
   })
 })

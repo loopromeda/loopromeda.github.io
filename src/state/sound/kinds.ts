@@ -351,9 +351,11 @@ function seconds(
  * The effects a sound's inserts, a bus and the master are made of: each
  * runs on what reaches it summed, in stereo, in a row with the others
  * there. No route moves them, as a note's sources are each voice's own.
- * The last three are the mastering tools (src/dsp/effects.ts): an EQ, a
- * compressor and a limiter, which, last on the master, takes the soft
- * clip's place.
+ * In the editor's order (src/dsp/effects.ts): the chorus, the delay and
+ * the reverb; the stereo tools, a Haas delay (one side held back), a
+ * doubler (two detuned copies, apart) and a width; then the mastering
+ * tools, an EQ, a compressor and a limiter, which, last on the master,
+ * takes the soft clip's place.
  */
 export const EFFECT_KINDS = {
   chorus: {
@@ -467,6 +469,73 @@ export const EFFECT_KINDS = {
         unit: '%',
       },
       mix(0.3),
+    ],
+    dests: [],
+    refs: [],
+  },
+  haas: {
+    label: 'Haas',
+    knobs: [
+      seconds('time', 'Time', 0.001, 0.04, 0.015),
+      {
+        key: 'side',
+        label: 'Later',
+        min: 0,
+        max: 1,
+        default: 0,
+        curve: 'linear',
+        step: 1,
+        unit: '',
+        choices: ['Right', 'Left'],
+      },
+      mix(1),
+    ],
+    dests: [],
+    refs: [],
+  },
+  doubler: {
+    label: 'Doubler',
+    knobs: [
+      {
+        key: 'detune',
+        label: 'Detune',
+        min: 1,
+        max: 50,
+        default: 9,
+        curve: 'exponential',
+        step: 0,
+        unit: 'ct',
+      },
+      seconds('time', 'Delay', 0.002, 0.04, 0.012),
+      {
+        key: 'spread',
+        label: 'Spread',
+        min: 0,
+        max: 1,
+        default: 1,
+        curve: 'linear',
+        step: 0,
+        unit: '%',
+      },
+      mix(0.5),
+    ],
+    dests: [],
+    refs: [],
+  },
+  width: {
+    label: 'Width',
+    knobs: [
+      {
+        key: 'width',
+        label: 'Width',
+        min: 0,
+        max: 2,
+        default: 1,
+        curve: 'linear',
+        step: 0,
+        unit: '%',
+      },
+      { ...hertz('mono', 'Mono Below', 20, 500, 20), atMin: 'Off' },
     ],
     dests: [],
     refs: [],

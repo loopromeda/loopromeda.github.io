@@ -162,6 +162,17 @@ describe('tiles', () => {
     ).toBe('\u22121.0 dB')
   })
 
+  it('writes the stereo tools\u2019 lines from their knobs', () => {
+    const line = (kind: 'haas' | 'doubler' | 'width', values = {}) =>
+      effectLine({ kind, values: { ...effectValues(kind), ...values } })
+    // How much later, and which side
+    expect(line('haas')).toBe('15 ms R')
+    expect(line('haas', { side: 1 })).toBe('15 ms L')
+    // Each side detuned so far, one up and one down
+    expect(line('doubler')).toBe('\u00b19 ct')
+    expect(line('width', { width: 1.5 })).toBe('150%')
+  })
+
   it('shows where an input no chain takes is heard instead', () => {
     // IN 2 out of chain A, and IN 1's FM reading it
     let sound = setSend(busy(), 'c1', 'i2', 0)

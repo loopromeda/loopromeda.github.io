@@ -341,6 +341,9 @@ const EFFECT_HINTS: Record<EffectKind, string> = {
   eq: 'Lows to highs',
   compressor: 'Evens the level',
   limiter: 'Caps the peaks',
+  haas: 'One side later',
+  doubler: 'Detuned apart',
+  width: 'Narrow to wide',
 }
 
 const KIND_GLYPHS = {

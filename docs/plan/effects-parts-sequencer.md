@@ -117,6 +117,9 @@ part: voices → inserts → fader ─┬─ send A → Bus A: its effects → l
 | Chorus     | Rate 0.05–5 Hz (0.6), Depth (50%), Mix (50%)                                                                                                                  |
 | Delay      | Time 0.01–2 s (0.35), Feedback (40%), Tone (60%), Mode: Stereo or Ping-pong, Mix (30%)                                                                        |
 | Reverb     | Size (60%), Decay 0.2–10 s (2), Damp (50%), Mix (30%)                                                                                                         |
+| Haas       | Time 1–40 ms (15), Later: Right or Left, Mix (100%)                                                                                                           |
+| Doubler    | Detune 1–50 ct (9), Delay 2–40 ms (12), Spread (100%), Mix (50%)                                                                                              |
+| Width      | Width 0–200% (100%), Mono Below 20–500 Hz (Off at 20)                                                                                                         |
 | EQ         | Low Cut 10–500 Hz (Off at 10), Low ±15 dB (0), Low Freq 30–500 Hz (100), Mid ±15 dB (0), Mid Freq 150 Hz–8 kHz (1k), High ±15 dB (0), High Freq 2–16 kHz (8k) |
 | Compressor | Threshold −60–0 dB (−18), Ratio 1–20:1 (2), Attack 0.1–100 ms (10), Release 10 ms–2 s (150 ms), Makeup 0–24 dB (0), Mix (100%)                                |
 | Limiter    | Gain 0–24 dB (0), Ceiling −12–0 dB (−1), Release 10 ms–1 s (100 ms)                                                                                           |
@@ -305,6 +308,43 @@ Measured (M3 Max, `pnpm bench`), a full rack of four: compressors
 0.015 ms a block, EQs 0.009 (0.009 gliding), limiters 0.009; the
 loudness 0.009, all the while. The stress rack stays the chorus and
 the reverb, still the heaviest.
+
+### Stereo
+
+Asked for by ashon, 2026-11-13 ("스테레오 감을 추가할 때
+더블링/듀얼패스/하스이펙트 등을 넣기도 하는데 이런 효과도 넣어볼 수
+있을까?"): three more kinds, for an insert, a bus or the master like
+the rest, listed after the reverb and before the mastering tools
+(numbered after them, 6 to 8, so no session or preset reads its effects
+as others).
+
+- **Haas**: one side held back by Time, 1 to 40 ms, the other untouched,
+  so the sound seems to come from the side heard first and to stand
+  wider. Later picks the side; Mix blends that side's delay with
+  itself, wholly late at 100%. The time glides over about 50 ms, so it
+  turns without a click.
+- **Doubler**, the dual path: each side its own copy a little apart,
+  as a part played twice is. Each is a pitch shifter of two taps half a
+  cycle apart on a 30 ms window, the left Detune cents up, the right as
+  far down; each tap fades in over a tenth of its cycle and out over
+  another while the other is whole, so the jump back is never heard.
+  The right's least delay is half again the left's (Delay, 12 ms: 12
+  and 18), so the two never line up. Spread at 100% puts each path on
+  its side, at 0 both in the middle; Mix blends the pair with the dry.
+- **Width**: the sound as what both sides share (mid) and what sets them
+  apart (side), the side scaled by Width, 0 mono, 100% as it was, 200%
+  twice as wide, the mid untouched; Mono Below takes the side away under
+  its corner (a highpass of 12 dB an octave, Off at 20 Hz), so the lows
+  stand in the middle whatever is wider above them.
+- **In mono**, summed to one side as a phone's speaker or a club does,
+  a Width changes nothing (the mid is all that is left), but a Haas or
+  a doubler combs: a delay of 15 ms against the dry cuts notches
+  66.7 Hz apart. Kept short and the Mix low, or on a bus that is not
+  the only path, it holds up.
+
+Measured (M3 Max, `pnpm bench`), a full rack of four: doublers 0.027 ms
+a block (0.017 at the median), Haas delays 0.007, widths 0.005. The
+stress rack stays the chorus and the reverb.
 
 ### What the output looks like
 
