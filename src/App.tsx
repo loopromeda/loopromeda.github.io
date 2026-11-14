@@ -106,11 +106,12 @@ const SINK = 'M5 4.5l4 4 4-4M5 9.5l4 4 4-4'
  * Route opens its routes in the editor's panel, bringing the controls
  * back for them. The
  * settings (this device's: voices, latency, what the screen shows, and
- * what the browser offers) open from the status line's right end, in the
- * same place. Left of them the line names the project the session came
- * from: its button opens the projects, a popover above it, where what
- * plays (the tracks, the mix, the song) is saved under a name and a
- * project kept is opened in its place.
+ * what the browser offers) open from the tab rail's right end. Left of
+ * them its button names the project the session came from and opens the
+ * projects, a popover above it, where what plays (the tracks, the mix,
+ * the song) is saved under a name and a project kept is opened in its
+ * place. While the editor is put away, these two buttons stand at the
+ * status line's right end instead.
  *
  * A reload comes back to the same view: each sheet has an address
  * (pages.ts), the sound and the device's choices are kept, and the editor
@@ -241,6 +242,8 @@ export function App({
   const surfaceRef = useRef<HTMLButtonElement>(null)
   const tempoRef = useRef<HTMLButtonElement>(null)
   const projectRef = useRef<HTMLButtonElement>(null)
+  /** The same button on the editor's tab rail, which anchors the popover */
+  const projectRailRef = useRef<HTMLButtonElement>(null)
   // Put away, the controls still come back under a sheet: it needs room
   const controls = !surface.hideControls || covered
   // The keys, pads or steps put away, their header left
@@ -301,6 +304,18 @@ export function App({
               }
               onMaster={() => showSheet('master')}
               onPresets={() => showSheet('presets')}
+              rail={
+                <>
+                  <ProjectButton
+                    ref={projectRailRef}
+                    projects={projects}
+                    open={sheet === 'project'}
+                    onToggle={() => toggle('project')}
+                    rail
+                  />
+                  <SettingsButton rail onOpen={() => showSheet('settings')} />
+                </>
+              }
             />
           </div>
         </div>
@@ -430,7 +445,7 @@ export function App({
       {sheet === 'project' && (
         <ProjectBrowser
           projects={projects}
-          anchor={projectRef}
+          anchor={controls ? projectRailRef : projectRef}
           onClose={closeSheet}
         />
       )}
@@ -442,13 +457,19 @@ export function App({
         {offlineState === 'update' && (
           <UpdateButton onUpdate={offline.update} />
         )}
-        <ProjectButton
-          ref={projectRef}
-          projects={projects}
-          open={sheet === 'project'}
-          onToggle={() => toggle('project')}
-        />
-        <SettingsButton onOpen={() => showSheet('settings')} />
+        {/* The rail carries these while the editor is shown; the line
+            keeps them while it is put away */}
+        {!controls && (
+          <>
+            <ProjectButton
+              ref={projectRef}
+              projects={projects}
+              open={sheet === 'project'}
+              onToggle={() => toggle('project')}
+            />
+            <SettingsButton onOpen={() => showSheet('settings')} />
+          </>
+        )}
       </StatusBar>
       {/* Not over the cover: the page opened at #/settings shows them once
           the tap has started the audio */}

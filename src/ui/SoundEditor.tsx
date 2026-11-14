@@ -293,6 +293,7 @@ export function SoundEditor({
   scope,
   asked,
   voiceAsked,
+  rail,
   onMaster,
   onPresets,
 }: {
@@ -306,6 +307,11 @@ export function SoundEditor({
    * the voice's panel once (the same way as asked routes)
    */
   voiceAsked?: number
+  /**
+   * At the right end of the tab panel: the project and the settings,
+   * which the page supplies (App)
+   */
+  rail?: ReactNode
   /** Opens the master's views, large (#/master) */
   onMaster?: () => void
   /** Opens the presets' popover (#/presets), for a pad to map one */
@@ -507,6 +513,11 @@ export function SoundEditor({
               ? 'Each pad plays a preset as it is: make sounds in a synth.'
               : 'The session’s mix: a preset keeps only its sound’s sends.'}
           </p>
+        )}
+        {rail !== undefined && (
+          <div className="ml-auto flex shrink-0 items-center gap-1.5">
+            {rail}
+          </div>
         )}
       </div>
       <section

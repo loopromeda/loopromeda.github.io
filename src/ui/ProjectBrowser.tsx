@@ -23,6 +23,7 @@ import {
   SMALL_CONFIRM,
   SMALL_DANGER,
   SMALL_FIELD,
+  TALL_HIT,
 } from './controls'
 import { NEUTRAL_LOOK } from './editor'
 import { FadeRow } from './FadeRow'
@@ -33,25 +34,37 @@ import { usePlacement } from './placement'
 const FOLDER =
   'M2.5 5.5a1 1 0 0 1 1-1h3.5l1.5 2h6a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1z'
 
+/** On the status line: as small as the line, it answers a larger touch */
+const LINE =
+  'relative flex h-4 min-w-8 shrink-0 items-center justify-center gap-1 rounded text-zinc-400 before:absolute before:-top-2 before:right-0 before:-bottom-2 before:-left-1.5 aria-expanded:text-zinc-200'
+
+/** On the tab rail: the panel's 28 px class, its face lit when open */
+const RAIL = `${TALL_HIT} flex h-7 min-w-7 shrink-0 items-center justify-center gap-1 rounded-md bg-white/5 px-1.5 text-[11px] font-semibold text-zinc-400 aria-expanded:bg-white/10 aria-expanded:text-white`
+
 /**
- * On the status line, left of the settings: the project the session came
- * from, by name (a folder alone for none), with a dot once what plays is
- * no longer what it keeps. A tap opens the projects, a popover standing
- * on it (ProjectBrowser, which ref places), and closes it again. As small
- * as the line, it answers a larger touch, as the settings' button does:
- * up into the gap over the line and down into the page's margin, and no
- * further right than its own edge, where the settings' begins.
+ * At the right end of the editor's tab rail (rail), left of the settings
+ * — on the status line while the editor is put away: the project the
+ * session came from, by name (a folder alone for none), with a dot once
+ * what plays is no longer what it keeps. A tap opens the projects, a
+ * popover standing on it (ProjectBrowser, which ref places), and closes
+ * it again. On the line it is as small as the line yet answers a larger
+ * touch, as the settings' button does: up into the gap over the line and
+ * down into the page's margin, and no further right than its own edge,
+ * where the settings' begins.
  */
 export function ProjectButton({
   ref,
   projects,
   open,
   onToggle,
+  rail = false,
 }: {
   ref?: Ref<HTMLButtonElement>
   projects: Projects
   open: boolean
   onToggle: () => void
+  /** On the tab rail rather than the status line */
+  rail?: boolean
 }) {
   const { current, edited } = useSyncExternalStore(
     projects.subscribe,
@@ -70,7 +83,7 @@ export function ProjectButton({
           : `Project: ${current}${unsaved ? ', edited' : ''}`
       }
       onClick={onToggle}
-      className="relative flex h-4 min-w-8 shrink-0 items-center justify-center gap-1 rounded text-zinc-400 before:absolute before:-top-2 before:right-0 before:-bottom-2 before:-left-1.5 aria-expanded:text-zinc-200"
+      className={rail ? RAIL : LINE}
     >
       <svg
         width="15"
