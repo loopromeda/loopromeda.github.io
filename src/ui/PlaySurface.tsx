@@ -70,8 +70,9 @@ const OCTAVE: Readonly<Record<SurfaceKind, number>> = {
 /**
  * From this width of the header (CSS px) the transport and the keys'
  * navigator stand in it, between the patch and the arrows: room for the
- * navigator at its least (8rem), Play and the tempo, the arrows, the
- * buttons at the end and the patch's name, cut short. Under it, in a row
+ * navigator, Play and the tempo, the arrows, the buttons at the end and
+ * the patch's name at its least (its 6rem, PatchButton) — the beat lights
+ * give way to the name, and vanish before it does. Under it, in a row
  * of their own below, which a phone on its side has no height for.
  */
 const NAVIGATOR_IN_HEADER = 600
@@ -485,11 +486,7 @@ export function PlaySurface({
         {fit.wide && (
           <>
             <div className="flex shrink-0 items-center gap-2">{transport}</div>
-            {between(
-              navigator
-                ? 'ml-auto h-7 max-w-md min-w-32 flex-1'
-                : 'ml-auto h-7 max-w-md min-w-24 flex-1'
-            )}
+            {between('ml-auto h-7 max-w-md flex-1')}
           </>
         )}
         <div
