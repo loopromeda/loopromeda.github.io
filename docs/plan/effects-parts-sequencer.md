@@ -302,7 +302,27 @@ the panel when one of them is shown, and in the sheet's header. 90 is
 how they were, down to the analyser's floor, where a reverb's tail and
 the window's skirts 70 dB under the mix filled the picture; 70, the
 default, leaves out what a dense mix covers anyway; 50 shows only what
-stands out.
+stands out. The choice went on 2026-11-14, when the spectrogram took
+the colour scale (below) and ashon asked whether it was still needed
+("스펙트로그램에 컬러링이 되었는데 그래서 50 70 90 데시벨 같은
+기준선은 이제 없어도 되지 않나?"): the colours tell the levels apart
+that the range was there to spread, so both views reach 70 dB under
+their top, −80 dB, and the key kept on a device is left unread.
+
+The spectrogram's **colour scale**, 2026-11-14, asked for by ashon
+("스펙트로그램에서 데시벨 표현도 들어가야 하니 이 부분은 적절히
+컬러링을 넣어보는것은 어떨까? 컬러 스케일을 하나 만들어 두면
+좋겠네"; `src/viz/colourScale.ts`): from the views' background, for
+−80 dB and under, through indigo, blue, teal and the app's emerald to
+yellow and near white, for −10 dB. Each stop stands along it where its
+lightness (OKLab's L) puts it, and it is mixed in OKLab between them, so
+the lightness rises evenly with the level, the same step for every dB,
+while the hue turns: a level reads by its colour as well as by how
+light it is. Before, it was one hue, the background to emerald to
+white, where −40 and −30 differed only in lightness. A table of 256
+colours made once; a pixel's colour is a lookup. Its key, a bar of it
+from −80 to −10 dB with a tick every 10 dB, stands in the panel's row
+when the spectrogram is shown and at the lower left of the sheet's.
 
 Measured (M3 Max, `pnpm bench`), a full rack of four: compressors
 0.015 ms a block, EQs 0.009 (0.009 gliding), limiters 0.009; the
@@ -384,18 +404,20 @@ canvas drawn every frame while the audio runs:
 
 - **Scope**: the waveform, as before.
 - **Spectrum**: 20 Hz to 20 kHz on a logarithmic axis, its levels from
-  −10 dB down by the range chosen (Mastering, above), filled under its
-  line, a line of the peaks falling 18 dB a second over it. Below about
-  a kilohertz a bin spans several columns, and the columns between bins
+  −10 dB down to −80 (Mastering, above), filled under its line, a line
+  of the peaks falling 18 dB a second over it. Below about a kilohertz
+  a bin spans several columns, and the columns between bins
   read a monotone cubic through them (`levelAt`), round where straight
   lines cornered and never above a bin. A sine there shows the
   analyser's window (Blackman, fixed): a sidelobe each side about 60 dB
   under it, four bins off, a small hump apart from the peak at the low
   end, where the bins stand furthest apart.
-- **Spectrogram**: the spectrum over time, scrolling 40 px a second, a
-  line across at each decade and a line down each second, drawn into
-  the picture so that they scroll away with it (how long a tail rings
-  is counted in them); in the sheet the decades are named.
+- **Spectrogram**: the spectrum over time, scrolling 40 px a second,
+  its levels on the colour scale (Mastering, above), a line across at
+  each decade and a line down each second, drawn into the picture so
+  that they scroll away with it (how long a tail rings is counted in
+  them); in the sheet the decades and the colours are named, and where
+  it is wider than 16rem the lines' second too.
 - **Stereo**: a goniometer of the latest 1024 samples (mid up, side
   across) and the two sides' correlation, −1 to +1.
 - **Meters**: each side's RMS and peak going into the clip, recovered

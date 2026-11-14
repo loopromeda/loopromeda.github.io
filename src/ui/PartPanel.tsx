@@ -126,11 +126,7 @@ import { ConfirmDialog } from './ConfirmDialog'
 import { Loudness, Reduction } from './Dynamics'
 import { FadeRow } from './FadeRow'
 import { Knob, MixKnob, NEUTRAL_ARC } from './Knob'
-import {
-  MASTER_VIEWS,
-  SpectrumRangePicker,
-  type MasterViewKind,
-} from './MasterViews'
+import { ColourKey, MASTER_VIEWS, type MasterViewKind } from './MasterViews'
 import { Mutes } from './Mutes'
 import { knoblessDests, routesTo } from '../state/sound/knob'
 import { noteName } from '../viz/keyboard'
@@ -743,11 +739,10 @@ export function PartPanel({
                       </button>
                     ))}
                   </div>
-                  {(view.views.shown === 'spectrum' ||
-                    view.views.shown === 'spectrogram') && (
+                  {view.views.shown === 'spectrogram' && (
                     <>
                       <span aria-hidden className="mx-1 h-4 w-px bg-white/10" />
-                      <SpectrumRangePicker />
+                      <ColourKey />
                     </>
                   )}
                 </PanRow>

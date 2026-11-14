@@ -27,6 +27,7 @@ import {
   vectorPoint,
   xToHz,
 } from './master'
+import { scaleColour } from './colourScale'
 
 const SAMPLE_RATE = 48000
 const BINS = 2048
@@ -405,31 +406,26 @@ describe('spectrogramColour', () => {
     expect(Array.from(out.slice(4))).toEqual([11, 11, 16, 255])
   })
 
-  it('writes near white at t 1', () => {
+  it('writes the colour scale’s near white at t 1', () => {
     const out = new Uint8ClampedArray(4)
     spectrogramColour(MAX, MIN, MAX, out, 0)
-    expect(Array.from(out)).toEqual([236, 253, 245, 255])
+    expect(Array.from(out)).toEqual([253, 252, 225, 255])
   })
 
-  it('writes emerald at t 0.7', () => {
+  it('colours a level as the scale does at its place in the range', () => {
     const out = new Uint8ClampedArray(4)
-    spectrogramColour(MIN + 0.7 * (MAX - MIN), MIN, MAX, out, 0)
-    expect(Array.from(out)).toEqual([52, 211, 153, 255])
-  })
-
-  it('mixes linearly between the background and emerald', () => {
-    const out = new Uint8ClampedArray(4)
-    spectrogramColour(MIN + 0.5 * (MAX - MIN), MIN, MAX, out, 0)
-    const k = 0.5 / 0.7
-    expect(out[0]).toBe(Math.round(11 + (52 - 11) * k))
-    expect(out[1]).toBe(Math.round(11 + (211 - 11) * k))
-    expect(out[2]).toBe(Math.round(16 + (153 - 16) * k))
+    const scale = new Uint8ClampedArray(4)
+    for (const t of [0.2, 0.5, 0.75]) {
+      spectrogramColour(MIN + t * (MAX - MIN), MIN, MAX, out, 0)
+      scaleColour(t, scale, 0)
+      expect(Array.from(out)).toEqual(Array.from(scale))
+    }
   })
 
   it('clamps outside the range and takes -Infinity and NaN as t 0', () => {
     const hot = new Uint8ClampedArray(4)
     spectrogramColour(10, MIN, MAX, hot, 0)
-    expect(Array.from(hot)).toEqual([236, 253, 245, 255])
+    expect(Array.from(hot)).toEqual([253, 252, 225, 255])
     const dead = new Uint8ClampedArray(4)
     spectrogramColour(-Infinity, MIN, MAX, dead, 0)
     expect(Array.from(dead)).toEqual([11, 11, 16, 255])

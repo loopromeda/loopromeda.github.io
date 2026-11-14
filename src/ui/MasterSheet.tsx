@@ -3,26 +3,19 @@ import type { Engine } from '../engine/engine'
 import { CARD } from './controls'
 import { IconButton } from './IconButton'
 import { Loudness } from './Dynamics'
-import {
-  Meters,
-  Spectrogram,
-  Spectrum,
-  SpectrumRangePicker,
-  Vectorscope,
-} from './MasterViews'
+import { Meters, Spectrogram, Spectrum, Vectorscope } from './MasterViews'
 
 /**
  * The master's views at size, opened from its panel (#/master): the
  * spectrum with its decades and levels named, the spectrogram with its
- * decades named and a line down each second, the two
+ * decades and its colours named and a line down each second, the two
  * sides against each other with their correlation, and the levels going
  * into the clip with the highest peak named (or out of the limiter, one
- * last on the master), and over them the loudness, in LUFS, and how deep
- * the spectral views reach. The stereo stands under the
- * spectrum, or, where the views are broad (a phone or a fold on its
- * side), at their right, as tall as both. Like the presets it covers
- * the editor and leaves what is played on below it, so the output can be
- * watched while it is played.
+ * last on the master), and over them the loudness, in LUFS. The stereo
+ * stands under the spectrum, or, where the views are broad (a phone or a
+ * fold on its side), at their right, as tall as both. Like the presets
+ * it covers the editor and leaves what is played on below it, so the
+ * output can be watched while it is played.
  */
 export function MasterSheet({
   engine,
@@ -52,7 +45,6 @@ export function MasterSheet({
         >
           Master
         </h2>
-        <SpectrumRangePicker />
         <IconButton
           label="Close master"
           onClick={onClose}

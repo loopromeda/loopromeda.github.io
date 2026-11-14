@@ -158,7 +158,9 @@ src/viz/      pure display math (scope trigger and decimation, envelope
               place in kitGraph.ts, the mix's strip, bus rows and
               master in mixGraph.ts, the master's views (spectrum,
               spectrogram, stereo, meters) and the mastering tools'
-              readouts (a reduction, a loudness) in master.ts, and where a
+              readouts (a reduction, a loudness) in master.ts, the
+              colour scale the spectrogram's levels take in
+              colourScale.ts, and where a
               tile dragged goes in
               drop.ts, hit-testing, velocity and Slide from a touch's
               position, a knob turning finer as the finger strays
@@ -173,10 +175,10 @@ src/ui/       React components; SoundEditor.tsx the sound as tiles
               with the kit its pads and its chain, or, switched to Mix,
               the session's mix; the sound's Out and the
               mix's Master hold a view of the output (MasterViews.tsx:
-              Scope.tsx's waveform, the spectrum, the spectrogram, the
-              stereo, the meters, and how deep the spectral views
-              reach, kept on the device; frames.ts draws them a display frame
-              at a time, the output read once a frame), its filters,
+              Scope.tsx's waveform, the spectrum, the spectrogram and
+              its colours' key, the stereo, the meters; frames.ts
+              draws them a display frame at a time, the output read
+              once a frame), its filters,
               drives and modulators their pictures (Picture.tsx, drawn
               from outline.ts); MasterSheet.tsx all the views at size
               (#/master), with the loudness; Dynamics.tsx a

@@ -8,6 +8,7 @@
  */
 import { unSoftClip } from '../dsp/clip'
 import { ABSOLUTE_GATE } from '../dsp/loudness'
+import { scaleColour } from './colourScale'
 
 /** Lowest frequency on the spectrum's logarithmic axis, in Hz */
 export const SPECTRUM_MIN_HZ = 20
@@ -285,22 +286,10 @@ export function vectorPoint(
 }
 
 /**
- * One colour channel across the ramp stops: background to emerald over
- * t 0..0.7, emerald to near white over t 0.7..1.
- */
-function channel(low: number, mid: number, high: number, t: number): number {
-  if (t <= 0.7) return low + (mid - low) * (t / 0.7)
-  const k = (t - 0.7) / 0.3
-  return mid + (high - mid) * (k > 1 ? 1 : k)
-}
-
-/**
- * Writes an opaque RGBA colour for a level into out[at .. at + 3]: t is
- * (db - minDb) / (maxDb - minDb) clamped to 0..1, with -Infinity and
- * NaN giving 0, coloured from the background rgb(11, 11, 16) at t 0
- * through emerald rgb(52, 211, 153) at t 0.7 to near white
- * rgb(236, 253, 245) at t 1, linear in each channel between the stops,
- * with alpha 255.
+ * Writes an opaque RGBA colour for a level into out[at .. at + 3], on the
+ * colour scale (src/viz/colourScale.ts): t is (db - minDb) / (maxDb -
+ * minDb) clamped to 0..1, -Infinity and NaN giving 0, the background, and
+ * maxDb and over the scale's near white.
  */
 export function spectrogramColour(
   db: number,
@@ -309,12 +298,8 @@ export function spectrogramColour(
   out: Uint8ClampedArray,
   at: number
 ): void {
-  const raw = (db - minDb) / (maxDb - minDb)
-  const t = Number.isFinite(db) && raw > 0 ? (raw > 1 ? 1 : raw) : 0
-  out[at] = channel(11, 52, 236, t)
-  out[at + 1] = channel(11, 211, 253, t)
-  out[at + 2] = channel(16, 153, 245, t)
-  out[at + 3] = 255
+  const t = (db - minDb) / (maxDb - minDb)
+  scaleColour(Number.isFinite(db) ? t : 0, out, at)
 }
 
 /**
