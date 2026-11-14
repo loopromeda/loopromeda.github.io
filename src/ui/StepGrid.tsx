@@ -30,24 +30,20 @@ import {
   dragLength,
   dragVelocity,
   noteBox,
+  othersRows,
   rowsFit,
   shiftWindow,
 } from '../viz/steps'
 import { ConfirmDialog } from './ConfirmDialog'
 import { SMALL_BUTTON, TALL_HIT } from './controls'
 import { SmallIconButton } from './IconButton'
+import { RowNavigator } from './RowNavigator'
 
 /** The most rows a synth's grid shows: two octaves */
 const SYNTH_ROWS = 24
 
 /** The note a synth's grid starts at: C3, the octave under middle C */
 const SYNTH_FIRST = 48
-
-/** The rows the arrows move a synth's grid by: an octave */
-const SYNTH_SHIFT = 12
-
-/** And a kit's: a row of its pads */
-const KIT_SHIFT = 4
 
 const CELL = 'border-r border-b border-black/50 bg-white/[0.07]'
 const BEAT_CELL = 'border-r border-b border-black/50 bg-white/[0.12]'
@@ -99,9 +95,13 @@ interface Drag {
  * note there and a tap on a note takes it away; a finger dragged up or
  * down from a note sets its velocity (the fainter, the softer) and, on a
  * synth, sideways its length. A note put while the sequencer is stopped
- * is heard. Over the grid: the loop's bars (a tap shows one, the one
- * playing marked), a bar fewer or more, the rows shown moved down or up,
- * and Clear. A row's name at the left plays it, and picks a kit's pad.
+ * is heard. Over the grid: a bar fewer or more, the loop's bars (a tap
+ * shows one, the one playing marked and carried into sight, the row
+ * panned sideways when there are more of them than fit), and Clear. A
+ * camera at the grid's left frames the rows shown over the whole reach:
+ * a tap or a drag brings another part of it on screen. A row's name at
+ * the left plays it, and picks a kit's pad. A dot marks a row another
+ * track of the same kind plays.
  * The step playing is lit outside React, as the audio thread tells of
  * it; edits go to the engine, which sends the loop whole.
  */
@@ -126,6 +126,8 @@ export function StepGrid({
     [engine]
   )
   const loop = useSyncExternalStore(subscribe, engine.getLoop)
+  const song = useSyncExternalStore(subscribe, engine.getSong)
+  const tracks = useSyncExternalStore(subscribe, engine.getTracks)
   const picked = useSyncExternalStore(engine.subscribeSound, engine.getPad)
   const loopRef = useRef<Loop>(loop)
   useLayoutEffect(() => {
@@ -135,8 +137,22 @@ export function StepGrid({
   const bars = barsOf(loop)
   const [shown, setShown] = useState(0)
   const bar = Math.min(shown, bars - 1)
+  // The rows another track of the same kind plays in the bar shown
+  const kind = kit === undefined ? 'synth' : 'kit'
+  const others = useMemo(() => {
+    const playing = engine.getPick().track
+    const loops: Loop[] = []
+    for (const track of tracks) {
+      if (track.kind !== kind || track.id === playing) continue
+      const each = song.loops[track.id]?.[0]
+      if (each) loops.push(each)
+    }
+    return othersRows(loops, bar)
+  }, [engine, tracks, song, kind, bar])
   const total = kit ? kit.length : SYNTH_ROWS
   const high = kit ? kit.length - 1 : HIGHEST_NOTE
+  // All the rows the whole reach holds: a synth's 128 notes, a kit's pads
+  const reach = high - LOWEST_NOTE + 1
   const [fit, setFit] = useState(8)
   const rows = Math.min(fit, total)
   const [firsts, setFirsts] = useState({ synth: SYNTH_FIRST, kit: 0 })
@@ -152,7 +168,6 @@ export function StepGrid({
       const next = shiftWindow(first, by, rows, LOWEST_NOTE, high)
       return kit ? { ...was, kit: next } : { ...was, synth: next }
     })
-  const by = Math.min(rows, kit ? KIT_SHIFT : SYNTH_SHIFT)
 
   const gridRef = useRef<HTMLDivElement>(null)
   const headRef = useRef<HTMLDivElement>(null)
@@ -184,8 +199,11 @@ export function StepGrid({
       const playing = at < 0 ? -1 : Math.floor(at / COLUMNS)
       if (playing !== marked) {
         if (marked >= 0) chips.children[marked]?.removeAttribute('data-playing')
-        if (playing >= 0)
-          chips.children[playing]?.setAttribute('data-playing', '')
+        if (playing >= 0) {
+          const chip = chips.children[playing] as HTMLElement | undefined
+          chip?.setAttribute('data-playing', '')
+          chip?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+        }
         marked = playing
       }
       head.hidden = playing !== bar
@@ -317,25 +335,6 @@ export function StepGrid({
   return (
     <div className="absolute inset-0 flex flex-col gap-2">
       <div className="flex h-7 shrink-0 items-center gap-1.5">
-        <div
-          ref={barsRef}
-          role="group"
-          aria-label="Bar shown"
-          className="flex shrink-0 gap-1"
-        >
-          {Array.from({ length: bars }, (_, each) => (
-            <button
-              key={each}
-              type="button"
-              aria-pressed={each === bar}
-              aria-label={`Bar ${each + 1}`}
-              onClick={() => setShown(each)}
-              className={BAR}
-            >
-              {each + 1}
-            </button>
-          ))}
-        </div>
         <SmallIconButton
           label="A bar shorter"
           path="M4.5 9h9"
@@ -354,24 +353,31 @@ export function StepGrid({
             setShown(bars)
           }}
         />
+        <div
+          ref={barsRef}
+          role="group"
+          aria-label="Bar shown"
+          className="flex min-w-0 gap-1 overflow-x-auto overflow-y-hidden overscroll-x-contain [scrollbar-width:none]"
+        >
+          {Array.from({ length: bars }, (_, each) => (
+            <button
+              key={each}
+              type="button"
+              aria-pressed={each === bar}
+              aria-label={`Bar ${each + 1}`}
+              onClick={() => setShown(each)}
+              className={BAR}
+            >
+              {each + 1}
+            </button>
+          ))}
+        </div>
         <span
           aria-live="off"
           className="min-w-0 flex-1 truncate text-center font-mono text-[11px] text-zinc-300"
         >
           {hint}
         </span>
-        <SmallIconButton
-          label="Rows down"
-          path="M4.5 7l4.5 4.5L13.5 7"
-          disabled={first <= LOWEST_NOTE}
-          onClick={() => shift(-by)}
-        />
-        <SmallIconButton
-          label="Rows up"
-          path="M4.5 11L9 6.5l4.5 4.5"
-          disabled={first + rows > high}
-          onClick={() => shift(by)}
-        />
         <button
           type="button"
           disabled={loop.notes.length === 0}
@@ -383,6 +389,20 @@ export function StepGrid({
       </div>
 
       <div className="flex min-h-0 flex-1 gap-1">
+        {reach > rows && (
+          <RowNavigator
+            position={first}
+            rows={rows}
+            total={reach}
+            range={
+              kit
+                ? `pads ${first + 1} to ${first + rows}`
+                : `${noteName(first)} – ${noteName(first + rows - 1)}`
+            }
+            black={kit ? undefined : isBlack}
+            onMove={(to) => shift(to - first)}
+          />
+        )}
         <div
           style={template}
           className={`grid shrink-0 ${kit ? 'w-14' : 'w-9'}`}
@@ -394,7 +414,9 @@ export function StepGrid({
               <button
                 key={key}
                 type="button"
-                aria-label={`Play ${name}`}
+                aria-label={`Play ${name}${
+                  others.has(key) ? ', other tracks play here' : ''
+                }`}
                 onPointerDown={(event) => {
                   if (event.pointerType === 'mouse' && event.button !== 0) {
                     return
@@ -408,7 +430,7 @@ export function StepGrid({
                 onLostPointerCapture={(event) =>
                   engine.noteOff(event.pointerId)
                 }
-                className={
+                className={`relative ${
                   kit
                     ? key === picked
                       ? PICKED_LABEL
@@ -416,9 +438,15 @@ export function StepGrid({
                     : isBlack(key)
                       ? BLACK_LABEL
                       : LABEL
-                }
+                }`}
               >
                 <span className="truncate">{name}</span>
+                {others.has(key) && (
+                  <span
+                    aria-hidden
+                    className={`absolute top-1/2 size-1 -translate-y-1/2 rounded-full bg-sky-400 ${kit ? 'right-1' : 'left-1'}`}
+                  />
+                )}
               </button>
             )
           })}
