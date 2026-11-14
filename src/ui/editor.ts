@@ -37,6 +37,7 @@ import {
   partName,
   refLoops,
   sendInput,
+  type Effect,
   type Sound,
 } from '../state/sound/sound'
 import { groundOf, mode, palette, type Mode } from './theme'
@@ -348,15 +349,21 @@ export function mixPartName(mix: Mix, part: string): string {
     case 'effect': {
       const { effect, owner } = found
       const row = ownedBy(mix, owner) ?? []
-      const same = row.filter((each) => each.kind === effect.kind)
-      const label = EFFECT_KINDS[effect.kind].label
-      const kind =
-        same.length > 1 ? `${label} ${same.indexOf(effect) + 1}` : label
-      return `${ownerName(owner)} ${kind}`
+      return `${ownerName(owner)} ${effectInRow(row, effect)}`
     }
     default:
       return part
   }
+}
+
+/**
+ * An effect's name in its row: its kind's, numbered when the kind stands
+ * there more than once (Compressor 2)
+ */
+export function effectInRow(row: readonly Effect[], effect: Effect): string {
+  const same = row.filter((each) => each.kind === effect.kind)
+  const label = EFFECT_KINDS[effect.kind].label
+  return same.length > 1 ? `${label} ${same.indexOf(effect) + 1}` : label
 }
 
 /** A row of the mix's effects, short: Master, or a bus's letter */

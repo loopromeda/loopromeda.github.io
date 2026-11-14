@@ -167,9 +167,20 @@ export function App({
     offline.getSnapshot
   )
   const [sheet, setSheet] = useState<Sheet | null>(() => sheetOf(location.hash))
+  /**
+   * The master's views left open under the sheet shown, a popover or the
+   * settings opened from the tab rail over them: a step of history of its
+   * own (history.state.under), which Back closes, back to the views
+   */
+  const [masterUnder, setMasterUnder] = useState(
+    () => history.state?.under === 'master'
+  )
   // Back, Forward, or an address typed: the sheet it names
   useEffect(() => {
-    const follow = () => setSheet(sheetOf(location.hash))
+    const follow = () => {
+      setSheet(sheetOf(location.hash))
+      setMasterUnder(history.state?.under === 'master')
+    }
     window.addEventListener('popstate', follow)
     window.addEventListener('hashchange', follow)
     return () => {
@@ -179,8 +190,9 @@ export function App({
   }, [])
   /**
    * Opens a sheet at its address, a step of history that Back closes;
-   * another sheet takes its step. Closing goes back off the step, or, for
-   * a sheet the page was opened at, leaves its address.
+   * another sheet takes its step, but over the master's views a step of
+   * its own, so that closing it leaves them open. Closing goes back off
+   * the step, or, for a sheet the page was opened at, leaves its address.
    */
   const showSheet = useCallback((next: Sheet | null) => {
     const stepped = sheetOf(String(history.state?.sheet ?? '')) !== null
@@ -190,12 +202,17 @@ export function App({
       else {
         history.replaceState(null, '', base)
         setSheet(null)
+        setMasterUnder(false)
       }
       return
     }
-    if (stepped) history.replaceState({ sheet: next }, '', hashOf(next))
-    else history.pushState({ sheet: next }, '', hashOf(next))
+    const over = sheetOf(location.hash) === 'master' && next !== 'master'
+    const under = over ? 'master' : history.state?.under
+    const state = under === 'master' ? { sheet: next, under } : { sheet: next }
+    if (stepped && !over) history.replaceState(state, '', hashOf(next))
+    else history.pushState(state, '', hashOf(next))
     setSheet(next)
+    setMasterUnder(under === 'master')
   }, [])
   const closeSheet = useCallback(() => showSheet(null), [showSheet])
   const toggle = (which: Sheet) => showSheet(sheet === which ? null : which)
@@ -241,10 +258,11 @@ export function App({
     engine.setClick(next.click)
     engine.setCountIn(next.countIn)
   }
-  // The master's views open over the controls, which they cover; the
-  // presets and the surface popovers over the page, which stays as it is;
-  // the settings a dialog over everything
-  const covered = sheet === 'master'
+  // The master's views open over the controls, which they cover, under
+  // the tab rail; the presets and the surface popovers over the page,
+  // which stays as it is, and the rail's over the master's views; the
+  // settings a dialog over everything
+  const covered = sheet === 'master' || masterUnder
   const popover =
     sheet === 'tracks' ||
     sheet === 'presets' ||
@@ -298,59 +316,79 @@ export function App({
       <div
         className={`relative flex flex-col ${covered ? 'min-h-[min(22rem,50dvh)]' : 'min-h-0'} ${controls ? EDITOR_SIZE : ''}`}
         // A touch in the editor puts a popover away (one on the keys
-        // plays, the popover left open to try)
-        onPointerDownCapture={popover ? closeSheet : undefined}
+        // plays, the popover left open to try), but for its own button on
+        // the tab rail, whose tap closes it: put away first, the tap would
+        // open it again
+        onPointerDownCapture={
+          popover
+            ? (event) => {
+                const own =
+                  sheet === 'tempo'
+                    ? tempoRailRef
+                    : sheet === 'project'
+                      ? projectRailRef
+                      : undefined
+                if (own?.current?.contains(event.target as Node)) return
+                closeSheet()
+              }
+            : undefined
+        }
       >
-        <div inert={covered} className="flex min-h-0 flex-1 flex-col">
-          {/* Hidden, not unmounted: the editor keeps the tile picked */}
-          <div
-            id="controls"
-            hidden={!controls}
-            className="flex min-h-0 flex-1 flex-col"
-          >
-            <SoundEditor
-              engine={engine}
-              library={library}
-              asked={asked}
-              voiceAsked={voiceAsked}
-              scope={
-                settings.waveform
-                  ? { timing: settings.waveformTiming, onStats: onScopeStats }
-                  : undefined
-              }
-              onMaster={() => showSheet('master')}
-              onPresets={() => showSheet('presets')}
-              transport={
-                <>
-                  <PlayButton engine={engine} small />
-                  <Position engine={engine} />
-                  <TempoButton
-                    ref={tempoRailRef}
-                    engine={engine}
-                    open={sheet === 'tempo'}
-                    onToggle={() => toggle('tempo')}
-                    rail
-                  />
-                </>
-              }
-              rail={
-                <>
-                  <ProjectButton
-                    ref={projectRailRef}
-                    projects={projects}
-                    open={sheet === 'project'}
-                    onToggle={() => toggle('project')}
-                    rail
-                  />
-                  <SettingsButton rail onOpen={() => showSheet('settings')} />
-                </>
-              }
-            />
-          </div>
+        {/* Hidden, not unmounted: the editor keeps the tile picked */}
+        <div
+          id="controls"
+          hidden={!controls}
+          className="flex min-h-0 flex-1 flex-col"
+        >
+          <SoundEditor
+            engine={engine}
+            library={library}
+            asked={asked}
+            voiceAsked={voiceAsked}
+            scope={
+              settings.waveform
+                ? { timing: settings.waveformTiming, onStats: onScopeStats }
+                : undefined
+            }
+            onMaster={() => showSheet('master')}
+            onPresets={() => showSheet('presets')}
+            transport={
+              <>
+                <PlayButton engine={engine} small />
+                <Position engine={engine} />
+                <TempoButton
+                  ref={tempoRailRef}
+                  engine={engine}
+                  open={sheet === 'tempo'}
+                  onToggle={() => toggle('tempo')}
+                  rail
+                />
+              </>
+            }
+            rail={
+              <>
+                <ProjectButton
+                  ref={projectRailRef}
+                  projects={projects}
+                  open={sheet === 'project'}
+                  onToggle={() => toggle('project')}
+                  rail
+                />
+                <SettingsButton rail onOpen={() => showSheet('settings')} />
+              </>
+            }
+            sheet={
+              covered ? (
+                <MasterSheet
+                  engine={engine}
+                  onClose={closeSheet}
+                  topmost={sheet === 'master'}
+                />
+              ) : undefined
+            }
+            closeSheet={closeSheet}
+          />
         </div>
-        {sheet === 'master' && (
-          <MasterSheet engine={engine} onClose={closeSheet} />
-        )}
       </div>
       <PlaySurface
         engine={engine}

@@ -295,6 +295,8 @@ export function SoundEditor({
   voiceAsked,
   transport,
   rail,
+  sheet,
+  closeSheet,
   onMaster,
   onPresets,
 }: {
@@ -318,6 +320,14 @@ export function SoundEditor({
    * which the page supplies (App)
    */
   rail?: ReactNode
+  /**
+   * A sheet over the graph and the panel (the master's views), which the
+   * page supplies (App): the tab rail stays above it, to use (ashon,
+   * 2026-11-15: "마스터 화면에서는 탑레일이 전부 가려지는 문제"); a pane
+   * chosen on it closes the sheet (closeSheet), to show the pane
+   */
+  sheet?: ReactNode
+  closeSheet?: () => void
   /** Opens the master's views, large (#/master) */
   onMaster?: () => void
   /** Opens the presets' popover (#/presets), for a pad to map one */
@@ -408,6 +418,7 @@ export function SoundEditor({
   }
   /** Shows a pane, the routing of the other put away */
   const choosePane = (next: Pane) => {
+    if (sheet !== undefined) closeSheet?.()
     setPane(next)
     keep(PANE_KEY, next)
     setRouting(null)
@@ -529,6 +540,7 @@ export function SoundEditor({
         )}
       </div>
       <section
+        inert={sheet !== undefined}
         aria-label={
           pane === 'mix'
             ? 'The mix: the sound, the buses and the master'
@@ -570,6 +582,7 @@ export function SoundEditor({
       </section>
       <div
         ref={setDock}
+        inert={sheet !== undefined}
         className={`absolute inset-x-2 bottom-2 z-20 h-[calc(7.75rem_+_var(--knob))] max-h-[calc(100%-9.25rem)] min-h-0 side:top-14 side:bottom-2 side:right-2 side:left-auto side:h-auto side:max-h-none side:w-[clamp(22rem,36%,40rem)] tall:top-auto tall:left-2 tall:h-[calc(7.75rem_+_var(--knob))] tall:max-h-[calc(100%-9.25rem)] tall:w-auto ${panel ? `grid overflow-y-auto overscroll-contain ${DOCKED}` : 'pointer-events-none'}`}
       >
         {!panel && (
@@ -663,6 +676,12 @@ export function SoundEditor({
             />
           ))}
       </div>
+      {/* Under the rail (h-10 and its mb-2), over the dock (z-20) */}
+      {sheet !== undefined && (
+        <div className="absolute inset-x-0 top-12 bottom-0 z-30 flex flex-col">
+          {sheet}
+        </div>
+      )}
     </div>
   )
 }

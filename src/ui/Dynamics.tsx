@@ -13,6 +13,7 @@ import {
   KNOB_HEIGHT,
   KNOB_LABEL,
   KNOB_READOUT,
+  KNOB_SIZE,
   SMALL_ICON_BUTTON,
 } from './controls'
 
@@ -20,21 +21,13 @@ import {
 const REDUCTION_MARKS = [6, 12, 18]
 
 /**
- * How far the compressor or limiter at `at` turns the sound down, as the
- * audio thread reports it (Engine.watchReduction): a bar growing from
- * the right, REDUCTION_RANGE dB full, and the depth named (−3.2 dB). The
- * reports go straight onto the page, never through React.
+ * Shows how far the compressor or limiter at `at` turns the sound down, as
+ * the audio thread reports it (Engine.watchReduction), on the meter
+ * (meterRef), its fill (fillRef, scaled along `axis`, REDUCTION_RANGE dB
+ * full) and its text (textRef, −3.2 dB). The reports go straight onto the
+ * page, never through React.
  */
-export function Reduction({
-  engine,
-  at,
-  color,
-}: {
-  engine: Engine
-  at: EffectAt
-  /** The bar's colour: the knobs' arc */
-  color: string
-}) {
+function useReductionShown(engine: Engine, at: EffectAt, axis: 'X' | 'Y') {
   const meterRef = useRef<HTMLDivElement>(null)
   const fillRef = useRef<HTMLDivElement>(null)
   const textRef = useRef<HTMLSpanElement>(null)
@@ -47,7 +40,7 @@ export function Reduction({
       if (text === shown) return
       shown = text
       const fill = fillRef.current
-      if (fill) fill.style.transform = `scaleX(${reductionFill(db)})`
+      if (fill) fill.style.transform = `scale${axis}(${reductionFill(db)})`
       if (textRef.current) textRef.current.textContent = text
       meterRef.current?.setAttribute(
         'aria-valuenow',
@@ -60,7 +53,25 @@ export function Reduction({
       track === undefined ? { id } : { track, id },
       show
     )
-  }, [engine, track, id])
+  }, [engine, track, id, axis])
+  return { meterRef, fillRef, textRef }
+}
+
+/**
+ * How far the compressor or limiter at `at` turns the sound down: a bar
+ * growing from the right, and the depth named
+ */
+export function Reduction({
+  engine,
+  at,
+  color,
+}: {
+  engine: Engine
+  at: EffectAt
+  /** The bar's colour: the knobs' arc */
+  color: string
+}) {
+  const { meterRef, fillRef, textRef } = useReductionShown(engine, at, 'X')
 
   return (
     <div className="flex h-7 items-center gap-2.5">
@@ -95,6 +106,57 @@ export function Reduction({
         ref={textRef}
         className="w-[52px] shrink-0 text-right font-mono text-[11px] text-(--ink-200)"
       >
+        0 dB
+      </span>
+    </div>
+  )
+}
+
+/**
+ * The same as a knob's cell (the master's sheet stands it after its
+ * knobs): a face a knob's size, falling from the top as a desk's gain
+ * reduction meter does, its marks across it, named under it and its depth
+ * under that
+ */
+export function ReductionCell({
+  engine,
+  at,
+  color,
+}: {
+  engine: Engine
+  at: EffectAt
+  /** The fill's colour: the knobs' arc */
+  color: string
+}) {
+  const { meterRef, fillRef, textRef } = useReductionShown(engine, at, 'Y')
+  return (
+    <div className={`${KNOB_COLUMN} self-start`}>
+      <div
+        ref={meterRef}
+        role="meter"
+        aria-label="Gain reduction"
+        aria-valuemin={0}
+        aria-valuemax={REDUCTION_RANGE}
+        aria-valuenow={0}
+        aria-valuetext="0 dB"
+        className={`${KNOB_SIZE} relative aspect-square overflow-hidden rounded-[10px] bg-(--under)/25`}
+      >
+        <div
+          ref={fillRef}
+          className="absolute inset-0 origin-top"
+          style={{ background: color, transform: 'scaleY(0)' }}
+        />
+        {REDUCTION_MARKS.map((db) => (
+          <div
+            key={db}
+            aria-hidden
+            className="absolute inset-x-0 h-px bg-(--over)/10"
+            style={{ top: `${(db / REDUCTION_RANGE) * 100}%` }}
+          />
+        ))}
+      </div>
+      <span className={KNOB_LABEL}>Reduction</span>
+      <span ref={textRef} className={`${KNOB_READOUT} tabular-nums`}>
         0 dB
       </span>
     </div>

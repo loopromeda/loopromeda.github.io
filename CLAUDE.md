@@ -198,8 +198,10 @@ src/ui/       React components; SoundEditor.tsx the sound as tiles
               once a frame), its filters,
               drives and modulators their pictures (Picture.tsx, drawn
               from outline.ts); MasterSheet.tsx all the views at size
-              (#/master), with the loudness; Dynamics.tsx a
-              compressor's or limiter's gain reduction (in its panel,
+              (#/master), under the tab rail, with the loudness and the
+              master's knobs (its level, its effects', one added);
+              Dynamics.tsx a compressor's or limiter's gain reduction
+              (in its panel, in a knob's cell on the master's sheet,
               and rising over its tile) and the loudness (there, and in
               the master's knob row), drawn as the audio thread tells
               them;
