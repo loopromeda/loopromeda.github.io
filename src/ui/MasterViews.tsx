@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import type { Engine, OutputSource } from '../engine/engine'
 import { masterLimited } from '../state/mix'
 import {
@@ -710,14 +710,30 @@ export function Spectrogram({
   )
 }
 
+/** The correlation's bar under the vectorscope, CSS px */
+const CORRELATION_BAR = 4
+
+/**
+ * A side's name on the vectorscope, at its diagonal's upper end: hidden
+ * in a view under 6rem either way, whose circle has no room for it
+ */
+const SIDE_NAME =
+  'pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 font-mono text-[9px] leading-none text-(--ink-500) @max-[6rem]:hidden [@container(max-height:6rem)]:hidden'
+
 /**
  * The two sides against each other, a goniometer: the latest samples as
  * a line, mid up and side across (vectorPoint), so a sound the same on
  * both sides stands upright and a wide one spreads; the left's diagonal
- * leans up to the left, the right's up to the right. Under it, given
- * correlation, a bar from -1 (the sides opposed, which a phone's one
- * speaker cancels) to +1 (the same), its value over the bar's left end
- * (clear of a name its view may have at the top).
+ * leans up to the left, the right's up to the right, each named at its
+ * upper end, inside the circle (asked for by ashon, 2026-11-15: "차트에
+ * LR 표시도 있으면 좋을 것 같은데"), and only where it has room (as the
+ * spectrogram's colour key). A sample and its negative stand opposite
+ * through the middle, so each side's line runs on down past it: the
+ * lower half mirrors the upper, and across stands what the sides hold
+ * opposed. Under it, given correlation, a bar from -1 (the sides
+ * opposed, which a phone's one speaker cancels) to +1 (the same), its
+ * value over the bar's left end (clear of a name its view may have at
+ * the top).
  */
 export function Vectorscope({
   engine,
@@ -784,7 +800,7 @@ export function Vectorscope({
 
       return {
         resize(width, height, scale) {
-          bar = correlated ? Math.round(4 * scale) : 0
+          bar = correlated ? Math.round(CORRELATION_BAR * scale) : 0
           paint(width, height, scale)
           ctx.lineWidth = scale
           ctx.lineJoin = 'round'
@@ -851,13 +867,45 @@ export function Vectorscope({
     `${source}:${tone}`
   )
   return (
-    <div className={`relative overflow-hidden contain-strict ${className}`}>
+    <div
+      className={`relative overflow-hidden contain-strict [container-type:size] ${className}`}
+      // The circle as the canvas draws it (paint): its middle over the
+      // bar, its radius 2 px in from the shorter side; a side's name 9 px
+      // in along its diagonal from the circle
+      style={
+        {
+          '--scope-h': `calc(100cqh - ${correlated ? CORRELATION_BAR : 0}px)`,
+          '--scope-r': 'calc(min(100cqw, var(--scope-h)) / 2 - 2px)',
+          '--scope-o': 'calc((var(--scope-r) - 9px) * 0.7071)',
+        } as CSSProperties
+      }
+    >
       <canvas
         ref={canvasRef}
         role="img"
-        aria-label={`${named(source)} two sides against each other: mid up, side across`}
+        aria-label={`${named(source)} two sides against each other: mid up, side across, the left up to the left, the right up to the right`}
         className="block h-full w-full"
       />
+      <span
+        aria-hidden
+        className={SIDE_NAME}
+        style={{
+          left: 'calc(50cqw - var(--scope-o))',
+          top: 'calc(var(--scope-h) / 2 - var(--scope-o))',
+        }}
+      >
+        L
+      </span>
+      <span
+        aria-hidden
+        className={SIDE_NAME}
+        style={{
+          left: 'calc(50cqw + var(--scope-o))',
+          top: 'calc(var(--scope-h) / 2 - var(--scope-o))',
+        }}
+      >
+        R
+      </span>
       {correlated && (
         <span
           ref={readoutRef}
