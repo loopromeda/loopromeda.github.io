@@ -20,6 +20,7 @@ import {
 import { CARD, SMALL_BUTTON, SMALL_OPTION } from './controls'
 import { SmallIconButton } from './IconButton'
 import { PlatformChecks } from './PlatformChecks'
+import { THEMES } from './theme'
 
 /** Each latencyHint as the player picks it, lowest first */
 const LATENCY_LABELS: readonly { value: Latency; label: string }[] = [
@@ -149,6 +150,23 @@ export function SettingsDialog({
       </div>
 
       <div className="-mx-2.5 flex min-h-0 flex-col gap-3 overflow-y-auto overscroll-contain px-2.5">
+        <Group title="Look">
+          <Choice
+            label="Theme"
+            hint="The chains' colours, the modulation colour and the accent, together. The letters stay, so colour is never the only cue."
+            options={THEMES.map((theme) => ({
+              value: theme.id,
+              label: theme.name,
+              swatch: [
+                theme.palette.accent,
+                ...theme.palette.chains.slice(0, 3),
+              ],
+            }))}
+            value={settings.theme}
+            onChange={(theme) => set({ theme })}
+          />
+        </Group>
+
         <Group title="Performance">
           <Choice
             label="Voices"
@@ -291,7 +309,12 @@ function Choice<T extends string | number | boolean>({
 }: {
   label: string
   hint?: string
-  options: readonly { value: T; label: string }[]
+  options: readonly {
+    value: T
+    label: string
+    /** The theme's colours, as dots before the name */
+    readonly swatch?: readonly string[]
+  }[]
   value: T
   onChange: (value: T) => void
 }) {
@@ -317,6 +340,17 @@ function Choice<T extends string | number | boolean>({
             onClick={() => onChange(option.value)}
             className={SMALL_OPTION}
           >
+            {option.swatch && (
+              <span aria-hidden className="mr-1 flex items-center gap-0.5">
+                {option.swatch.map((colour) => (
+                  <span
+                    key={colour}
+                    className="size-2 rounded-full"
+                    style={{ background: colour }}
+                  />
+                ))}
+              </span>
+            )}
             {option.label}
           </button>
         ))}

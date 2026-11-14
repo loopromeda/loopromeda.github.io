@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { VOICE_COUNT } from '../dsp/chainSynth'
+import { THEME_IDS } from '../ui/theme'
 import {
   DEFAULT_SETTINGS,
   LATENCIES,
@@ -51,6 +52,7 @@ describe('the settings choices', () => {
     expect(VOICE_LIMITS).toContain(DEFAULT_SETTINGS.voices)
     expect(LATENCIES).toContain(DEFAULT_SETTINGS.latency)
     expect(VELOCITY_MODES).toContain(DEFAULT_SETTINGS.velocity)
+    expect(THEME_IDS).toContain(DEFAULT_SETTINGS.theme)
     expect(typeof DEFAULT_SETTINGS.waveform).toBe('boolean')
     expect(typeof DEFAULT_SETTINGS.audioDetails).toBe('boolean')
     expect(typeof DEFAULT_SETTINGS.waveformTiming).toBe('boolean')
@@ -85,6 +87,7 @@ describe('readSettings', () => {
       latency: 'playback',
       waveform: false,
       velocity: 'full',
+      theme: 'tidal',
       audioDetails: false,
       waveformTiming: false,
       keepAwake: false,
@@ -98,6 +101,8 @@ describe('readSettings', () => {
     })
     const velocity = storageWith(JSON.stringify({ ...good, velocity: 'soft' }))
     expect(readSettings(velocity)).toEqual({ ...good, velocity: 'touch' })
+    const theme = storageWith(JSON.stringify({ ...good, theme: 'neon' }))
+    expect(readSettings(theme)).toEqual({ ...good, theme: 'default' })
     const waveform = storageWith(JSON.stringify({ ...good, waveform: 'yes' }))
     expect(readSettings(waveform)).toEqual({ ...good, waveform: true })
     const awake = storageWith(JSON.stringify({ ...good, keepAwake: 'on' }))
@@ -128,6 +133,8 @@ describe('readSettings', () => {
       latency: 'balanced',
       waveform: false,
       velocity: 'full',
+      // Kept before the setting was there: its default
+      theme: 'default',
       audioDetails: false,
       waveformTiming: false,
       // Kept before the setting was there: its default
@@ -144,12 +151,19 @@ describe('writeSettings', () => {
       latency: 'balanced',
       waveform: false,
       velocity: 'full',
+      theme: 'ember',
       audioDetails: false,
       waveformTiming: true,
       keepAwake: false,
     }
     writeSettings(storage, settings)
     expect(readSettings(storage)).toEqual(settings)
+  })
+
+  it('reads back the theme it wrote', () => {
+    const storage = new FakeStorage()
+    writeSettings(storage, { ...DEFAULT_SETTINGS, theme: 'orchard' })
+    expect(readSettings(storage).theme).toBe('orchard')
   })
 
   it('keeps exactly the settings, with the version', () => {
@@ -159,6 +173,7 @@ describe('writeSettings', () => {
       latency: 'playback',
       waveform: false,
       velocity: 'full',
+      theme: 'tidal',
       audioDetails: true,
       waveformTiming: false,
       keepAwake: true,
@@ -169,6 +184,7 @@ describe('writeSettings', () => {
       latency: 'playback',
       waveform: false,
       velocity: 'full',
+      theme: 'tidal',
       audioDetails: true,
       waveformTiming: false,
       keepAwake: true,

@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -36,6 +37,7 @@ import { SoundEditor, type RoutesAsked } from './ui/SoundEditor'
 import { StatusBar } from './ui/StatusBar'
 import { SurfaceButton } from './ui/SurfaceButton'
 import { SurfacePicker } from './ui/SurfacePicker'
+import { palette, setThemeId } from './ui/theme'
 import { TrackButton, TrackPicker } from './ui/TrackPicker'
 import { PlayButton, TempoButton, TempoPicker } from './ui/Transport'
 import { UpdateButton } from './ui/UpdateButton'
@@ -216,6 +218,16 @@ export function App({
   // and shows the voice's panel (SoundEditor)
   const [voiceAsked, setVoiceAsked] = useState(0)
   const [settings, setSettings] = useState(() => readSettings(storage))
+  // The palette the tiles and the accent read: set as the settings are, so
+  // the first paint is already the chosen theme. Safe in the render: the
+  // palette is module state and the call is a no-op for the theme it is
+  // already on (src/ui/theme.ts)
+  setThemeId(settings.theme)
+  // The accent the controls read: before paint, so a theme switch never
+  // shows the old accent for a frame
+  useLayoutEffect(() => {
+    document.documentElement.style.setProperty('--accent', palette().accent)
+  }, [settings.theme])
   useEffect(() => {
     awake.want(settings.keepAwake && state === 'running')
   }, [awake, settings.keepAwake, state])

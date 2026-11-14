@@ -5,6 +5,9 @@
  * preset, so they are kept apart from the sound.
  */
 
+// theme.ts is pure data, so the state reading it is safe
+import { DEFAULT_THEME, isThemeId, type ThemeId } from '../ui/theme'
+
 /** Voice counts the player may limit the synth to; the last is VOICE_COUNT */
 export const VOICE_LIMITS = [4, 8, 12, 16] as const
 export type VoiceLimit = (typeof VOICE_LIMITS)[number]
@@ -32,6 +35,11 @@ export interface AppSettings {
    * full: every note at full velocity
    */
   readonly velocity: VelocityMode
+  /**
+   * The app's colour roles — the chains, the modulation colour, the
+   * accent — as one theme (src/ui/theme.ts)
+   */
+  readonly theme: ThemeId
   /** The status line shows sample rate, block and latency */
   readonly audioDetails: boolean
   /** The waveform shows what a frame costs to draw */
@@ -46,6 +54,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   latency: 'interactive',
   waveform: true,
   velocity: 'touch',
+  theme: DEFAULT_THEME,
   audioDetails: true,
   waveformTiming: true,
   keepAwake: true,
@@ -86,6 +95,7 @@ export function readSettings(storage?: SettingsStorage): AppSettings {
     latency,
     waveform,
     velocity,
+    theme,
     audioDetails,
     waveformTiming,
     keepAwake,
@@ -94,6 +104,7 @@ export function readSettings(storage?: SettingsStorage): AppSettings {
     latency: unknown
     waveform: unknown
     velocity: unknown
+    theme: unknown
     audioDetails: unknown
     waveformTiming: unknown
     keepAwake: unknown
@@ -104,6 +115,7 @@ export function readSettings(storage?: SettingsStorage): AppSettings {
     waveform:
       typeof waveform === 'boolean' ? waveform : DEFAULT_SETTINGS.waveform,
     velocity: isVelocityMode(velocity) ? velocity : DEFAULT_SETTINGS.velocity,
+    theme: isThemeId(theme) ? theme : DEFAULT_SETTINGS.theme,
     audioDetails:
       typeof audioDetails === 'boolean'
         ? audioDetails
@@ -135,6 +147,7 @@ export function writeSettings(
         latency: settings.latency,
         waveform: settings.waveform,
         velocity: settings.velocity,
+        theme: settings.theme,
         audioDetails: settings.audioDetails,
         waveformTiming: settings.waveformTiming,
         keepAwake: settings.keepAwake,
