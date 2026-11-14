@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import type { Loop } from '../state/song'
 import {
   COLUMNS,
   DRAG_SLOP,
@@ -9,6 +10,7 @@ import {
   dragLength,
   dragVelocity,
   noteBox,
+  othersRows,
   rowsFit,
   shiftWindow,
 } from './steps'
@@ -130,5 +132,33 @@ describe('shiftWindow', () => {
   it('stays put where every row is shown', () => {
     expect(shiftWindow(0, 4, 16, 0, 15)).toBe(0)
     expect(shiftWindow(0, 4, 20, 0, 15)).toBe(0)
+  })
+})
+
+describe('rows other tracks play', () => {
+  const other = (steps: number, ...notes: [number, number][]): Loop => ({
+    steps,
+    notes: notes.map(([step, key]) => ({
+      step,
+      key,
+      length: 1,
+      velocity: 1,
+    })),
+  })
+
+  it('marks the keys of the notes in the bar shown', () => {
+    const rows = othersRows([other(16, [0, 60], [4, 64])], 0)
+    expect([...rows]).toEqual([60, 64])
+  })
+
+  it('wraps each loop’s own length under the bar', () => {
+    expect([...othersRows([other(16, [3, 48])], 1)]).toEqual([48])
+    expect([...othersRows([other(32, [4, 48], [20, 52])], 0)]).toEqual([48])
+    expect([...othersRows([other(32, [4, 48], [20, 52])], 1)]).toEqual([52])
+  })
+
+  it('marks nothing without notes', () => {
+    expect(othersRows([other(0)], 0).size).toBe(0)
+    expect(othersRows([], 3).size).toBe(0)
   })
 })

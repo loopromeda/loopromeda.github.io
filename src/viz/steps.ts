@@ -7,6 +7,7 @@
  * across and down) where a place is meant, so the same numbers draw the
  * notes and hit-test touches. Pure math, no DOM.
  */
+import type { Loop } from '../state/song'
 
 /** The steps across the grid: a bar of sixteenths */
 export const COLUMNS = 16
@@ -137,6 +138,27 @@ export function shiftWindow(
   high: number
 ): number {
   return within(first + by, low, Math.max(low, high - rows + 1))
+}
+
+/**
+ * The rows of the grid another track plays in the bar shown: the keys of
+ * the notes whose step falls in it, each loop's own length wrapped under
+ * the bar (a two-bar loop shows its second bar under the second bar; a
+ * one-bar loop shows its whole round under every bar).
+ */
+export function othersRows(others: readonly Loop[], bar: number): Set<number> {
+  const rows = new Set<number>()
+  for (const loop of others) {
+    if (loop.steps <= 0) continue
+    const within = new Set<number>()
+    for (let i = 0; i < COLUMNS; i++) {
+      within.add((bar * COLUMNS + i) % loop.steps)
+    }
+    for (const note of loop.notes) {
+      if (within.has(note.step)) rows.add(note.key)
+    }
+  }
+  return rows
 }
 
 function within(value: number, low: number, high: number): number {
