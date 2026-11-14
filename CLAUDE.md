@@ -244,7 +244,9 @@ src/ui/       React components; SoundEditor.tsx the sound as tiles
               place, a project's file out and in; #/project),
               SettingsDialog.tsx, a modal dialog, holds the settings
               (the theme in Dropdown.tsx, the app's own select),
-              Measure CPU and the browser's checks; theme.ts the
+              Measure CPU and the browser's checks; Splash.tsx the
+              name a moment as the page opens, and the first tap
+              anywhere starting audio held back; theme.ts the
               colour roles and the themes that give them values, in
               the dark and the light, appearance.ts setting them and
               the mode (index.css's tokens) on the page; pages.ts gives each

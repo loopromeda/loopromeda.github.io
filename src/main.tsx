@@ -215,7 +215,8 @@ if (import.meta.env.DEV) {
 
 // Audio starts as the page loads where the browser's autoplay rules allow
 // it (Chrome's: an installed app, a site the user has played on); one held
-// suspended waits for the cover's tap (App.tsx), which resumes it
+// suspended waits for the first tap anywhere (ui/Splash.tsx), which
+// resumes it
 void engine.start()
 
 createRoot(root).render(

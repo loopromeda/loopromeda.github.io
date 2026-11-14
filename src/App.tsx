@@ -31,6 +31,7 @@ import { ProjectBrowser, ProjectButton } from './ui/ProjectBrowser'
 import type { ScopeStats } from './ui/Scope'
 import { SettingsButton } from './ui/SettingsButton'
 import { SettingsDialog } from './ui/SettingsDialog'
+import { Splash, useStartOnTouch } from './ui/Splash'
 import { ModWheel } from './ui/ModWheel'
 import { SoundEditor, type RoutesAsked } from './ui/SoundEditor'
 import { StatusBar } from './ui/StatusBar'
@@ -123,9 +124,10 @@ const SINK = 'M5 4.5l4 4 4-4M5 9.5l4 4 4-4'
  * A reload comes back to the same view: each sheet has an address
  * (pages.ts), the sound and the device's choices are kept, and the editor
  * keeps its tile picked. The audio starts with the page where the browser
- * lets it (main.tsx); where it holds it back for a tap (iOS always), a
- * cover over it all takes the tap. Only a failure to start has a page of
- * its own.
+ * lets it (main.tsx), the name shown a moment as it opens (Splash.tsx);
+ * where the browser holds it back for a tap (iOS always), the first tap
+ * anywhere starts it, unasked. Only a failure to start has a page of its
+ * own.
  *
  * While the audio runs, the screen stays on (awake, unless the settings
  * turn it off). A newer version of the site, once saved for offline,
@@ -282,10 +284,14 @@ export function App({
   const controls = !surface.hideControls || covered
   // The keys, pads or steps put away, their header left
   const away = surface.hideSurface
-  // Until the audio has run, the cover asks for the tap that starts it;
-  // starting it again (a new latency) shows a note instead
+  // Until the audio has run, the first tap anywhere starts it; starting
+  // it again (a new latency) shows a note over it all instead
   const [ran, setRan] = useState(false)
   if (state === 'running' && !ran) setRan(true)
+  useStartOnTouch(engine, !ran && state !== 'failed')
+  // The name as the page opens, until the worklet has loaded
+  const [splash, setSplash] = useState(true)
+  const hideSplash = useCallback(() => setSplash(false), [])
 
   // The audio could not start: what the browser offers, and why
   if (state === 'failed') {
@@ -547,9 +553,9 @@ export function App({
           </>
         )}
       </StatusBar>
-      {/* Not over the cover: the page opened at #/settings shows them once
-          the tap has started the audio */}
-      {sheet === 'settings' && ran && (
+      {/* Not under the splash: the page opened at #/settings shows them
+          once it has gone */}
+      {sheet === 'settings' && !splash && (
         <SettingsDialog
           engine={engine}
           platform={platform}
@@ -562,28 +568,12 @@ export function App({
           onBench={onBench}
         />
       )}
-      {!ran ? (
-        <button
-          type="button"
-          // Enter or Space starts it from a keyboard
-          autoFocus
-          disabled={state === 'starting'}
-          // A click, not pointerdown: on touch screens only the click
-          // counts as the user activation iOS needs to start audio
-          onClick={() => void engine.start()}
-          // Focused, its pill wears the ring, not the screen's edge
-          className="group fixed inset-0 z-20 flex flex-col items-center justify-center gap-5 bg-(--scrim) px-8 outline-none"
-        >
-          <span className="text-3xl font-semibold tracking-tight">
-            Loopromeda
-          </span>
-          <span
-            className={`w-full max-w-xs rounded-xl bg-(--accent) px-6 py-4 text-lg font-semibold text-(--on-colour) group-focus-visible:ring-2 group-focus-visible:ring-(--accent) group-focus-visible:ring-offset-2 group-focus-visible:ring-offset-(--bg) ${state === 'starting' ? 'opacity-50' : ''}`}
-          >
-            {state === 'starting' ? 'Starting…' : 'Tap to start audio'}
-          </span>
-        </button>
-      ) : state === 'starting' ? (
+      {splash ? (
+        <Splash
+          ready={state !== 'idle' && state !== 'starting'}
+          onGone={hideSplash}
+        />
+      ) : !ran ? null : state === 'starting' ? (
         <p className="fixed inset-0 z-20 flex items-center justify-center bg-(--scrim) px-8 text-lg">
           Starting the audio again…
         </p>

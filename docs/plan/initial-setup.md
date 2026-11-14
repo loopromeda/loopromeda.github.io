@@ -163,7 +163,14 @@ https://loopromeda.github.io/ starts its audio, and ci and deploy pass.
       `#/settings`, `src/ui/pages.ts`; Back closes it), the picked tile is
       kept for the tab (sessionStorage). The tap stays: no browser lets a
       page start audio without one. The browser checks moved to Settings,
-      under Browser; only a failed start has a page of its own.
+      under Browser; only a failed start has a page of its own. Since
+      2026-11-15 (ashon: a splash a moment, then the instrument) no
+      cover: the name stands as the page opens, at least 0.9 s and
+      until the worklet has loaded, and fades into the instrument;
+      where the audio is held back, the first tap anywhere starts it,
+      unasked (a note asking for it was taken away: ashon found it
+      unneeded) (`src/ui/Splash.tsx`). That first touch may sound late
+      or not at all.
 - [x] iOS: feature-detect and set `navigator.audioSession.type = 'playback'` so the
       silent switch doesn't mute us — written, untested until an iPhone tries it
 - [ ] Fallback if that is not enough: silent looping `<audio>` unmute trick
