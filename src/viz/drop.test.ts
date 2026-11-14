@@ -56,7 +56,7 @@ describe('an item dropped', () => {
     expect(itemDrop(geometry, 'x1', 250, 20, 6)).toEqual({
       chain: 'c1',
       to: 1,
-      marker: { x: 242, y: 8, w: 3, h: 44 },
+      marker: { x: 250, y: 8, w: 3, h: 44 },
     })
     // Beside itself it stays
     expect(itemDrop(geometry, 'x1', 130, 20, 6)).toBeUndefined()
@@ -67,7 +67,7 @@ describe('an item dropped', () => {
     expect(itemDrop(geometry, 'x1', 130, 80, 6)).toEqual({
       chain: 'c2',
       to: 0,
-      marker: { x: 116, y: 58, w: 3, h: 44 },
+      marker: { x: 124, y: 58, w: 3, h: 44 },
     })
     // Below the rows, and in the gap between them nearer the second
     expect(itemDrop(geometry, 'x1', 400, 300, 6)?.chain).toBe('c2')
@@ -90,7 +90,7 @@ describe('a chain dropped', () => {
     expect(chainDrop(geometry, 'c1', 90)).toEqual({
       to: 1,
       marker: {
-        x: 80,
+        x: 88,
         y: 103.5,
         w: (geometry.chains[0]?.row.w ?? 0) - 3,
         h: 3,

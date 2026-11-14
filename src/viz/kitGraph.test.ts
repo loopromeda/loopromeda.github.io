@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Box } from './graph'
 import { KIT_GRAPH, kitGeometry } from './kitGraph'
+import { THREAD } from './threads'
 
 const g = KIT_GRAPH
 const right = (box: Box) => box.x + box.w
@@ -54,8 +55,8 @@ describe('kitGeometry', () => {
       effects: boxes,
       add,
       out,
-      fxJoints,
-      outJoint,
+      fxStitches,
+      outStitch,
       width,
     } = kitGeometry(effects(2), 4)
     const first = boxes[0]?.box
@@ -81,12 +82,28 @@ describe('kitGeometry', () => {
       h: block.h,
     })
     expect(width).toBe(right(out) + g.end)
-    // Each joint in the middle of the seam before its tile
-    expect(fxJoints).toEqual([
-      right(block) + g.seam / 2,
-      right(first as Box) + g.fxSeam / 2,
+    // The thread at the block's middle, from inside each tile's edge to
+    // inside the next's, over the "+" into the out
+    const y = block.y + block.h / 2
+    const inset = THREAD.inset
+    expect(fxStitches).toEqual([
+      {
+        from: { x: right(block) - inset, y },
+        to: { x: (first as Box).x + inset, y },
+      },
+      {
+        from: { x: right(first as Box) - inset, y },
+        to: { x: (second as Box).x + inset, y },
+      },
     ])
-    expect(outJoint).toBe(out.x - g.fxSeam / 2)
+    expect(outStitch).toEqual({
+      from: { x: right(second as Box) - inset, y },
+      to: { x: out.x + inset, y },
+    })
+    // With no effects, straight from the block
+    const bare = kitGeometry([], 4)
+    expect(bare.fxStitches).toEqual([])
+    expect(bare.outStitch.from.x).toBe(right(bare.block) - inset)
   })
 
   it('has no "+" once the chain is full', () => {

@@ -463,18 +463,53 @@ the same height, so the keys under them stay put.
 - **Mix** (`src/viz/mixGraph.ts`): the sound's strip (Synth) at the left,
   as tall as the buses beside it (two rows at least), under its name,
   its fader's level and its sends the sound's own view and meter, as
-  the Out has them, a peg on the seam
-  to each as long as its send (the strips since 2026-11-13 as below); each bus a row, as a chain is, in its
-  letter's colour (the chains' colours, A orange, B violet, C lime, D
-  pink, so that a letter wears one colour in either view): a head with
-  its letter and level, its effects after it and a "+" filling the row
-  to the longest; each bus's level a peg on the bus down the seam after
-  the rows, into the master's effects, as tall as the strip, and the
-  **Master**, which fills the rest with its name over the output's
-  view and wider meters. The level pegs join the master's row, as a
-  sound's chains join its amp: no joint of its own there, which stood
-  on the middle bus's peg. Under the rows "+ Bus" (until every letter
-  has one), and "+ FX" under the master's effects.
+  the Out has them (the strips since 2026-11-13 as below); each bus a
+  row, as a chain is, in its letter's colour (the chains' colours, A
+  orange, B violet, C lime, D pink, so that a letter wears one colour in
+  either view): a head with its letter and level, its effects after it
+  and a "+" filling the row to the longest; then the master's effects,
+  as tall as the strip, and the **Master**, which fills the rest with
+  its name over the output's view and wider meters. Under the rows
+  "+ Bus" (until every letter has one), and "+ FX" under the master's
+  effects. Since 2026-11-14 threads join them, as they join a sound's
+  tiles (`sound-chains.md`, Threads): from each track's strip, a hole for
+  each bus it sends to down its right edge in their order, to each bus's
+  head, as thick as its send. At first only the track played had them,
+  and a send of nothing showed faintly; ashon asked the same day for
+  those to go and for every track's to show ("믹스에서는 샌드가 0인것은
+  안보여도 좋을 것 같고 다른 인풋이 어디랑 연결되어있는지 잘 보이면
+  좋겠어"). Threads from many strips into a few heads would tangle in
+  one seam, so each bus has a lane of its own down it, 4 px from the
+  next, the bus whose threads reach furthest nearest the strips. A
+  thread bends about its bus's lane as a sound's threads bend across
+  their seam, an S of two cubic Béziers, each half leaving its hole level
+  and turning over half the height, but with its middle upright on the
+  lane, so that threads into one bus run down its lane together and
+  apart from another's ("믹스에서도 꺾인선보다 곡선으로"; drawn first as
+  a run down the lane with turns no rounder than the seam's width, they
+  still read as corners: "베지어 기반으로 잘 조정해 봐"). Along each
+  bus's row a thread runs over its "+", into the master's first effect
+  or the master at the row's own middle, the last run as thick as the
+  bus's level, and on through the master's effects. They replace a peg
+  on the seam to each bus, as long as its send, and a bus down the seam
+  after the rows with each bus's level a peg on it. The seam between the
+  strips and the heads is 12 px (was 4), 16 with four buses for their
+  lanes; on a 412 px phone the mix of icons below is 389 px (393 with
+  four buses), in a frame of 396. A bus's head lights its threads, every
+  track's into it and its row's, and dims the other buses'; a strip
+  picked lights its threads and dims the other tracks'; a thread tapped
+  plays its track and picks its bus. Every strip's view and the Master's
+  stand clear of their holes.
+- **Icons**, 2026-11-13, asked for by ashon ("작은 모바일 화면에서
+  믹스에서 코러스 딜레이 리버브 이런 부분들을 아이콘으로 만들고 사각형
+  블록으로"): a frame narrower than the mix at rest makes every effect
+  in it, on a bus or the master, a block of its pictogram alone, 44 px
+  wide (a touch's width; as tall as its row), its name left to the
+  label for the ear and to its panel. Nothing widens then, and the
+  master takes what is left. On a 412 px phone (a frame of 396) two
+  effects on a row and the Master now fit, where the mix was 413 wide
+  and panned; three or more on a row still pan. A frame wide enough for
+  the tiles at rest names them again.
 - **Panels**: the Out and the strip open the same panel (named Out in
   the Sound, Synth in the Mix): the strip's fader, Level and Balance, the
   mix's, first, then a send to each bus, the sound's, and the view of
@@ -644,7 +679,7 @@ B): the Part switch below is now the track's button and its popover
   (`kitChainOf`, through `setSound`): a pad's sound is its preset's.
   The Mix stands the two parts' strips one over the other (Synth, Kit)
   at the left of the buses, faders alone, each with its own view and
-  meter; the one played shows its sends by its pegs. Tapping the
+  meter; each shows its sends by its threads (Mix, above). Tapping the
   other one plays it.
 - **The strips' views**, 2026-11-13, asked for by ashon ("믹스
   탭에서도 신스나 키트 부분에 시각화가 하단에 올 수 있게"): two strips
@@ -656,8 +691,9 @@ B): the Part switch below is now the track's button and its popover
   one line (`Tile`'s `inline`), its view and meter under them, as the
   Master's are. At rest with one or two buses each strip is 72 × 62;
   measured in a frame 412 × 640, a strip 72 × 67, its view 52 × 40 (was
-  10 wide); in one 900 × 600, 108 × 106, its view 88 × 79. The played strip's bars of its sends went, the
-  pegs showing them, for the view to have the room.
+  10 wide); in one 900 × 600, 108 × 106, its view 88 × 79. The played
+  strip's bars of its sends went, the pegs (now the threads) showing
+  them, for the view to have the room.
 
 ## 3. The sequencer
 

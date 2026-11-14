@@ -135,7 +135,9 @@ as a graph of flat tiles, flowing left to right.
   slots tall, or three fifths of its width: past that it stands in the
   rows' middle and a bus down the seam takes every row to it; a chain's
   items and its "+" likewise stand at most two slots tall, in the row's
-  middle, the head keeping the row's height for the pegs). Modulators sit
+  middle, and since 2026-11-14 the head with them: it kept the row's
+  height for the pegs, and ashon saw it need not once threads bent into
+  it). Modulators sit
   in a rack above, the voice at its end (since 2026-11-12 at its start,
   over the inputs whose pitch it sets; from md up, and on a phone on its
   side, the rack is a column at the graph's left, which has width to
@@ -147,9 +149,36 @@ as a graph of flat tiles, flowing left to right.
   is flat, outlined by a ring; picked, its ring is heavier and it takes a
   tint. A dashed "+" fills a row's free place; a longer chain pans the
   graph right.
-- **Pegs.** The joints between tiles carry pegs: an input's send into a
-  chain (tap to set it), the chain's level before the amp. A peg's
-  length is its level.
+- **Threads**, since 2026-11-14, in place of the pegs that stood on the
+  seams (a pill as long as its level: an input's send into a chain, the
+  chain's level before the amp). ashon asked on 2026-11-13 for the
+  connections drawn as stitching ("바느질한 듯한 표현"): an input's way
+  to each chain it feeds seen as one path, then for a hole for each,
+  aligned down the edge ("각 버스별로 하나씩, 세로로 잘 정렬되면"),
+  and for solid thread over a running stitch ("실 모양은 점선보다
+  실선으로"), chosen on a storyboard. A thread runs under the tiles and
+  comes up at each seam (`src/viz/threads.ts`): a run from a hole 5 px
+  inside one tile's edge to a hole 5 px inside the next's, straight where
+  the two stand level, an S bending in the seam where they do not. A
+  tile that sends to several has a hole for each down its edge, 12 px
+  apart about its middle and in their order, in each one's colour, so
+  that no two threads cross; a head takes a hole for each input that
+  feeds it. A send's thread, a chain's last run (its level, into the amp
+  or onto the bus) and a read's are as thick and as strong as what they
+  carry, 1 px and 35% for nothing to 3 px and full for all; the stitches
+  between a chain's items, and after the amp, are 2 px. The seam an
+  input's threads bend across, before the heads, is 12 px (it was 4):
+  the storyboard's 14 made a sound of one item 398 px wide, 2 px more
+  than a 412 px phone's frame, so it panned. Each send's and read's
+  thread has a tap target of 44 × 28 px about its middle, picking as its
+  peg did. Picking a chain's head lights its threads from its inputs to
+  the amp, the rest of the chains' and the inputs' dimmed to a quarter;
+  picking an input lights its own, the other inputs' dimmed; an item
+  lights the runs on either side of it. A "+" in a row has its label at
+  its foot, out of the thread's way, and the Out's view stands clear of
+  its hole. In the session's mix the same threads run from every track
+  to the buses it sends to, each bus's in a lane of its own, and along
+  each bus into the master (`effects-parts-sequencer.md`, Mix).
 - **Crossing.** An input is drawn once and stretches over neighbouring
   chains it feeds; where it cannot, a dashed copy of it stands in that
   chain's row (`src/viz/graph.ts` lays this out). Tapping a copy picks
@@ -157,13 +186,13 @@ as a graph of flat tiles, flowing left to right.
 - **Links.** An input that another reads (its FM, a side of a ring)
   stands in a column left of the inputs, beside the inputs that read it,
   as an input stands beside the chains it feeds: one tile over readers
-  next to one another, a peg on the seam to each, a dashed copy beside
-  readers apart from those (`src/viz/graph.ts`). An FM's peg is as long
-  as the reader's FM, a ring's full. One that feeds a chain stands in the
+  next to one another, a thread to each, a dashed copy beside readers
+  apart from those (`src/viz/graph.ts`). An FM's thread is as thick as
+  the reader's FM, a ring's full. One that feeds a chain stands in the
   inputs' column, a copy of it beside its readers; one that feeds none
   stands only there. What a source reads stands a column further left. A
   ring takes two slots in the inputs' column, one beside each side.
-  Tapped, an FM's peg picks the input read, its knob for the reader
+  Tapped, an FM's thread picks the input read, its knob for the reader
   marked; a ring's picks the ring. Either side edits the link: the reader
   picks its FM source and sets its FM, as before, and the input read
   turns itself on as any other oscillator's FM ("FM →", next to its
@@ -178,19 +207,21 @@ as a graph of flat tiles, flowing left to right.
   editable from both sides. Under its readers, one source used by three
   stood three times down the column, and ashon asked for it left of them
   instead, pegged to each.
-- **Colour by chain.** A chain's head, items, pegs, copies and knobs
+- **Colour by chain.** A chain's head, items, threads, copies and knobs
   take its colour, A to D in a fixed order: orange-400, violet-400,
-  lime-300, pink-500. Inputs carry a dot in the colour of each chain
-  they feed. Inputs, the amp, the voice and their knobs are neutral;
-  modulators are sky, which on a knob only ever means a route. The
+  lime-300, pink-500. Inputs carried a dot in the colour of each chain
+  they feed, until the holes down their edge showed it (2026-11-14).
+  Inputs, the amp, the voice and their knobs are neutral; modulators
+  are sky, which on a knob only ever means a route. The
   colours were chosen against the ones the app already gives a job
   (emerald accent, sky modulation, red errors, amber status) with the
   dataviz palette checks on the tile face (#1c1c23), any two chains:
   ΔE 22 at worst for normal vision, 14 for protanopia and deuteranopia,
   contrast 4.7:1 at least. They are lighter than a chart's band on
-  purpose: rings, pegs and 6 px dots, not fills. Letters stay, so colour
-  is never the only cue. A fifth colour would fail those checks: more
-  chains than four would want letters on neutral tiles.
+  purpose: rings, pegs and 6 px dots (now threads), not fills. Letters
+  stay, so colour is never the only cue. A fifth colour would fail
+  those checks: more chains than four would want letters on neutral
+  tiles.
 - **The amp** takes the graph's spare width and holds the output
   waveform, which stood above the editor until 2026-11-11: on a phone
   the editor, the keys and the status line did not fit under it (ashon,
@@ -304,7 +335,7 @@ as a graph of flat tiles, flowing left to right.
      rather than in step 5 (a version 1 file or session converts as it
      is read). The editor redraws only when the sound's shape changes
      (`shapeKey` in `src/ui/editor.ts`); a knob turned redraws itself, a
-     tile's line and a peg.
+     tile's line and a thread.
    - 4b, routes and outlines done 2026-11-11. Routing takes the panel's
      place (`src/ui/RoutePanels.tsx`), two ways. Holding a knob (a touch
      kept still 450 ms, a right click, or Enter) shows the routes into

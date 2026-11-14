@@ -31,7 +31,7 @@ import {
   mixValue,
   stripId,
 } from '../state/mix'
-import { MAX_TRACKS, trackName, tracksKey } from '../state/tracks'
+import { MAX_TRACKS, trackName, tracksKey, type Track } from '../state/tracks'
 import {
   AMP,
   SENDS,
@@ -52,7 +52,21 @@ import {
 } from '../viz/graph'
 import { noteName } from '../viz/keyboard'
 import { kitGeometry } from '../viz/kitGraph'
-import { mixGeometry, type EffectBox, type MixPeg } from '../viz/mixGraph'
+import {
+  mixGeometry,
+  mixSends,
+  type EffectBox,
+  type MixThread,
+} from '../viz/mixGraph'
+import {
+  lanePath,
+  runMiddle,
+  runPath,
+  THREAD,
+  threadOpacity,
+  threadWidth,
+  type Run,
+} from '../viz/threads'
 import {
   MOD_LOOK,
   NEUTRAL_LOOK,
@@ -213,8 +227,8 @@ interface Picking {
   readonly output: number
   readonly picked: string
   /**
-   * Picks id, showing the panel if hidden; a chain's peg picks the chain
-   * with the input it is for
+   * Picks id, showing the panel if hidden; a send's thread picks the
+   * chain with the input it is for
    */
   readonly pick: (id: string, input?: string) => void
   /** Picks the tile held to be dragged, leaving the panel as it is */
@@ -240,17 +254,21 @@ interface Picking {
  * returns, the master), the panel then the mix's; each keeps its tile
  * picked, and the two ask the card for the same height, so the keys
  * under it stay put. The sound's sends are turned in either: the Out's
- * panel and the mix's strip's are the same. Tapping a tile picks it; a
- * peg between an input and a chain picks the chain, its knob for that
- * input lit, and one between an input and the oscillator
- * whose FM reads it picks the input, its knob for that FM lit. The panel
+ * panel and the mix's strip's are the same. Tapping a tile picks it; the
+ * thread between an input and a chain picks the chain, its knob for that
+ * input lit, and one between an input and the oscillator whose FM reads
+ * it picks the input, its knob for that FM lit (threads.ts: a tap target
+ * 44 by 28 about the middle of each). Picking a chain's head lights its
+ * threads, from its inputs to the amp, and dims the rest of the chains'
+ * and the inputs' to a quarter; picking an input lights its own and dims
+ * the other inputs'; a bus's head does as a chain's in the mix. The panel
  * stands over the graph's card and hides (its header's last button),
  * showing the canvas under it, the tiles as they were; a bar where it
  * stood brings it back, and so does picking a tile.
  *
  * It redraws when the sound's shape changes (shapeKey: a part added, an
  * input feeding a chain, a wave changed); a knob turning redraws only the
- * knob and the line or peg that shows it.
+ * knob and the line or thread that shows it.
  *
  * The panel turns to routing in two ways (RoutePanels.tsx). Holding a
  * knob shows the routes into it. A modulator's Route shows the picked
@@ -1014,6 +1032,20 @@ function Graph({
     for (const item of chain.items) chainOf.set(item.id, c)
   })
   const isChain = (id: string) => sound.chains.some((chain) => chain.id === id)
+  /** The chain picked whole (its head), or the input: its threads lit */
+  const whole = isChain(picked) ? picked : undefined
+  const input = sound.inputs.some((each) => each.id === picked)
+    ? picked
+    : undefined
+  /** How an input's thread shows: lit, or dim beside a chain or another's */
+  const fromInput = (lit: boolean, focused: boolean): Shown =>
+    focused
+      ? 'focus'
+      : lit
+        ? 'lit'
+        : whole !== undefined || input !== undefined
+          ? 'dim'
+          : undefined
   const contentRef = useRef<HTMLDivElement>(null)
   const markerRef = useRef<HTMLSpanElement>(null)
   const drag = useTileDrag<Place>({
@@ -1113,7 +1145,7 @@ function Graph({
             key={tile.input}
             engine={engine}
             label={tileLabel(sound, tile.input)}
-            // A source's column has no room for a line: its pegs say
+            // A source's column has no room for a line: its threads say
             // where it goes
             line={
               tile.box.h >= 60 && tile.column === 0 ? tile.input : undefined
@@ -1123,7 +1155,6 @@ function Graph({
             picked={picked === tile.input}
             reach={reach.has(tile.input)}
             routed={routed.has(tile.input)}
-            dots={feeds.map((c) => chainLook(c).ink)}
             aria={`${partName(sound, tile.input)}, ${inputLine(sound, tile.input)}${
               feeds.length > 0
                 ? `, into ${feeds.map(chainLetter).join(' and ')}`
@@ -1138,7 +1169,7 @@ function Graph({
       })}
 
       {geometry.bus && (
-        // Down the seam before the amp, under the chains' level pegs
+        // Down the seam before the amp, where the chains' levels land
         <span
           aria-hidden
           className="pointer-events-none absolute z-[2] w-0.5 rounded-full"
@@ -1157,12 +1188,16 @@ function Graph({
         const letter = chainLetter(c)
         const member = picked === chain.id
         // Each seam's neighbours: the head or an item, then an item or
-        // the amp; a seam lights when either side is picked
+        // the amp; a seam lights when either side is picked, and the
+        // whole row with the head, the rest dim beside another's
         const parts = [chain.id, ...chain.items.map((item) => item.id), AMP]
-        const lit = (k: number) =>
+        const shown = (k: number): Shown =>
           member || picked === parts[k] || picked === parts[k + 1]
-        const cy = row.row.y + row.row.h / 2
-        const last = row.joints.length - 1
+            ? 'lit'
+            : whole !== undefined
+              ? 'dim'
+              : undefined
+        const last = row.stitches.length - 1
         return (
           <div key={chain.id} className="contents">
             <Tile
@@ -1209,31 +1244,32 @@ function Graph({
                 picked={picked === addId(chain.id)}
                 member={member}
                 dashed="add"
+                foot
                 aria={`Add an item to chain ${letter}`}
                 onClick={() => pick(addId(chain.id))}
                 style={place(row.add)}
               />
             )}
-            {row.joints.slice(0, last).map((x, k) => (
-              <Joint
-                key={x}
+            {row.stitches.slice(0, last).map((run, k) => (
+              <Thread
+                key={k}
                 row={chain.id}
-                x={x}
-                y={cy}
-                height={18}
-                look={look}
-                lit={lit(k)}
+                run={run}
+                color={look.ink}
+                shown={shown(k)}
               />
             ))}
-            <LevelJoint
-              engine={engine}
-              chain={chain.id}
-              row={chain.id}
-              x={row.joints[last] ?? 0}
-              y={cy}
-              look={look}
-              lit={lit(last)}
-            />
+            {row.stitches[last] && (
+              <LevelThread
+                engine={engine}
+                chain={chain.id}
+                run={row.stitches[last]}
+                look={look}
+                shown={shown(last)}
+                // Onto the bus, where it stands: no hole there
+                end={!geometry.bus}
+              />
+            )}
           </div>
         )
       })}
@@ -1254,16 +1290,18 @@ function Graph({
       {geometry.effects.map(({ effect, box }, k) => {
         // Its seam lights when it or the tile before it is picked
         const before = k === 0 ? AMP : sound.effects[k - 1]?.id
-        const x = geometry.fxJoints[k] ?? box.x
+        const run = geometry.fxStitches[k]
         return (
           <div key={effect} className="contents">
-            <Joint
-              x={x}
-              y={box.y + box.h / 2}
-              height={18}
-              look={NEUTRAL_LOOK}
-              lit={picked === effect || picked === before}
-            />
+            {run && (
+              <Thread
+                run={run}
+                color={NEUTRAL_LOOK.ink}
+                shown={
+                  picked === effect || picked === before ? 'lit' : undefined
+                }
+              />
+            )}
             <Tile
               engine={engine}
               label={tileLabel(sound, effect)}
@@ -1279,14 +1317,14 @@ function Graph({
           </div>
         )
       })}
-      <Joint
-        x={geometry.outJoint}
-        y={geometry.out.y + geometry.out.h / 2}
-        height={18}
-        look={NEUTRAL_LOOK}
-        lit={
+      <Thread
+        run={geometry.outStitch}
+        color={NEUTRAL_LOOK.ink}
+        shown={
           picked === SENDS ||
           picked === (sound.effects[sound.effects.length - 1]?.id ?? AMP)
+            ? 'lit'
+            : undefined
         }
       />
       <Tile
@@ -1295,6 +1333,7 @@ function Graph({
         text={<SendsLine engine={engine} across={geometry.out.h >= 60} />}
         look={NEUTRAL_LOOK}
         picked={picked === SENDS}
+        clear="left"
         aria="Out: the sound’s level and balance in the mix, and what it sends to each bus"
         onClick={() => pick(SENDS)}
         style={place(geometry.out)}
@@ -1347,37 +1386,37 @@ function Graph({
         />
       )}
 
-      {geometry.reads.map((peg) => (
-        <ReadPeg
-          key={`${peg.from}>${peg.to}`}
+      {geometry.reads.map((read) => (
+        <ReadThread
+          key={`${read.from}>${read.to}`}
           engine={engine}
-          peg={peg}
-          lit={picked === peg.from || picked === peg.to}
-          focused={picked === peg.from && focus === peg.to}
+          read={read}
+          shown={fromInput(
+            picked === read.from || picked === read.to,
+            picked === read.from && focus === read.to
+          )}
           // FM: the input read, its knob for the reader marked; a ring's
           // side has no amount of its own, so the ring
           onClick={() =>
-            peg.as === 'FM' ? pick(peg.from, peg.to) : pick(peg.to)
+            read.as === 'FM' ? pick(read.from, read.to) : pick(read.to)
           }
         />
       ))}
-      {geometry.pegs.map((peg) => {
-        const c = chainOf.get(peg.chain) ?? 0
-        return (
-          <SendPeg
-            key={`${peg.input}>${peg.chain}`}
-            engine={engine}
-            input={peg.input}
-            chain={peg.chain}
-            x={peg.x}
-            y={peg.y}
-            look={chainLook(c)}
-            lit={picked === peg.input || picked === peg.chain}
-            focused={picked === peg.chain && focus === peg.input}
-            onClick={() => pick(peg.chain, peg.input)}
-          />
-        )
-      })}
+      {geometry.sends.map((send) => (
+        <SendThread
+          key={`${send.input}>${send.chain}`}
+          engine={engine}
+          input={send.input}
+          chain={send.chain}
+          run={send.run}
+          look={chainLook(chainOf.get(send.chain) ?? 0)}
+          shown={fromInput(
+            picked === send.input || picked === send.chain,
+            picked === send.chain && focus === send.input
+          )}
+          onClick={() => pick(send.chain, send.input)}
+        />
+      ))}
       <Marker ref={markerRef} />
     </Frame>
   )
@@ -1437,7 +1476,6 @@ function KitGraph({
     room.h || undefined
   )
   const showView = scope !== undefined && geometry.out.w >= GRAPH.outW
-  const middle = geometry.block.y + geometry.block.h / 2
   /** The kit played, whose chain this is */
   const track = engine.getTrack().id
   const last = sound.effects[sound.effects.length - 1]?.id ?? PAD_TILE
@@ -1496,15 +1534,18 @@ function KitGraph({
       })}
       {geometry.effects.map(({ effect, box }, k) => {
         const before = k === 0 ? PAD_TILE : sound.effects[k - 1]?.id
+        const run = geometry.fxStitches[k]
         return (
           <div key={effect} className="contents">
-            <Joint
-              x={geometry.fxJoints[k] ?? box.x}
-              y={middle}
-              height={18}
-              look={NEUTRAL_LOOK}
-              lit={picked === effect || picked === before}
-            />
+            {run && (
+              <Thread
+                run={run}
+                color={NEUTRAL_LOOK.ink}
+                shown={
+                  picked === effect || picked === before ? 'lit' : undefined
+                }
+              />
+            )}
             <Tile
               engine={engine}
               label={tileLabel(sound, effect)}
@@ -1530,14 +1571,13 @@ function KitGraph({
           aria="Add an effect to the kit, after every pad"
           onClick={() => pick(addId('effect'))}
           style={place(geometry.add)}
+          foot
         />
       )}
-      <Joint
-        x={geometry.outJoint}
-        y={middle}
-        height={18}
-        look={NEUTRAL_LOOK}
-        lit={picked === SENDS || picked === last}
+      <Thread
+        run={geometry.outStitch}
+        color={NEUTRAL_LOOK.ink}
+        shown={picked === SENDS || picked === last ? 'lit' : undefined}
       />
       <Tile
         engine={engine}
@@ -1545,6 +1585,7 @@ function KitGraph({
         text={<SendsLine engine={engine} across={geometry.out.h >= 60} />}
         look={NEUTRAL_LOOK}
         picked={picked === SENDS}
+        clear="left"
         aria="Kit Out: the kit’s level and balance in the mix, and what it sends to each bus"
         onClick={() => pick(SENDS)}
         style={place(geometry.out)}
@@ -1568,13 +1609,17 @@ function KitGraph({
  * The session's mix, laid out by mixGeometry: the tracks' strips, down
  * one column as a sound's inputs are, each its track's name and level on
  * a line over its own output's view and meter, and under them a "+" for
- * another track (more tracks than the frame is tall for pan down); the
- * track played's sends pegs on the seam to the buses, as long as each
- * (its sends' bars are the Out's: the view has the strip); each bus a row,
- * its letter's head, its effects and its "+"; each bus's level a peg on
- * the bus down the seam into the master's effects and the master, which
- * holds the output's view and its meters, wider. A strip makes its track
- * the one played and picks its sends, a send's peg its bus.
+ * another track (more tracks than the frame is tall for pan down); each
+ * bus a row, its letter's head, its effects and its "+"; the master's
+ * effects and the master, which holds the output's view and its meters,
+ * wider. Threads join them: from each track's strip to the head of each
+ * bus it sends anything to, as thick as the send, down that bus's lane
+ * (its sends' bars are the Out's: the view has the strip), and along each
+ * bus's row into the master, the last run as thick as the bus's level. A
+ * strip makes its track the one played and picks its sends, lighting its
+ * threads and dimming the other tracks'; a send's thread makes its track
+ * the one played and picks its bus; a bus's head lights its threads, the
+ * tracks' to it and its row's, and dims the other buses'.
  */
 function MixGraph({
   engine,
@@ -1605,45 +1650,61 @@ function MixGraph({
   const showView = scope !== undefined && geometry.master.w >= GRAPH.outW
   const strip = picked === SENDS
   const master = mixId(MASTER)
-  const line = (style: CSSProperties) => (
-    <span
-      aria-hidden
-      className="pointer-events-none absolute z-[2] rounded-full"
-      style={{ background: NEUTRAL_LOOK.ring, ...style }}
-    />
+  /** The bus picked whole (its head): its threads lit, the others' dim */
+  const whole = mix.buses.find((bus) => mixId(bus.id) === picked)?.id
+  /** The buses each track sends anything to, by place, live */
+  const sending = useSyncExternalStore(engine.subscribeSound, () =>
+    engine
+      .getTracks()
+      .map((track) =>
+        engine
+          .getMix()
+          .buses.filter((bus) => (sendsOf(track)[bus.id] ?? 0) > 0)
+          .map((bus) => bus.id)
+          .join(' ')
+      )
+      .join('|')
   )
-  /**
-   * A row's effects, each with the joint before it (at joints, unless
-   * none), lit with it or the tile before it: the first's is before
-   */
-  const effects = (
-    row: readonly EffectBox[],
-    joints: readonly (number | undefined)[],
-    before: string,
-    where: string,
-    look: Look
-  ) =>
-    row.map(({ effect, box }, k) => {
+  const threads = mixSends(
+    geometry,
+    sending.split('|').map((buses) => (buses ? buses.split(' ') : []))
+  ).map((thread) => {
+    const lit =
+      (strip && thread.strip === output) || picked === mixId(thread.bus)
+    const shown: Shown = lit
+      ? 'lit'
+      : strip || (whole !== undefined && whole !== thread.bus)
+        ? 'dim'
+        : undefined
+    return { ...thread, shown }
+  })
+  // The lit over the rest, where they share a lane
+  threads.sort((a, b) => Number(a.shown === 'lit') - Number(b.shown === 'lit'))
+  /** How a thread of bus's shows: lit, or dim beside another's */
+  const shown = (bus: string, lit: boolean): Shown =>
+    lit ? 'lit' : whole !== undefined && whole !== bus ? 'dim' : undefined
+  /** What the buses' threads come into: the master's first effect, or it */
+  const into = mixId(geometry.masterEffects[0]?.effect ?? MASTER)
+  /** A row's effects' tiles */
+  const effects = (row: readonly EffectBox[], where: string, look: Look) =>
+    row.map(({ effect, box }) => {
       const id = mixId(effect)
-      const previous = k === 0 ? before : mixId(row[k - 1]?.effect ?? '')
       const found = findMixPart(mix, effect)
       const kind = found?.type === 'effect' ? found.effect.kind : 'chorus'
       return (
         <div key={effect} className="contents">
-          {joints[k] !== undefined && (
-            <Joint
-              x={joints[k]}
-              y={box.y + box.h / 2}
-              height={18}
-              look={look}
-              lit={picked === id || picked === previous}
-            />
-          )}
           <Tile
             engine={engine}
             label={effectTile(kind)}
-            text={<MixLine engine={engine} part={effect} />}
-            glyph={box.h >= 60 ? EFFECT_GLYPHS[kind] : undefined}
+            text={
+              geometry.icons ? undefined : (
+                <MixLine engine={engine} part={effect} />
+              )
+            }
+            glyph={
+              geometry.icons || box.h >= 60 ? EFFECT_GLYPHS[kind] : undefined
+            }
+            icon={geometry.icons}
             look={look}
             picked={picked === id}
             aria={`${mixPartName(mix, effect)}, ${where}`}
@@ -1654,7 +1715,11 @@ function MixGraph({
         </div>
       )
     })
-  const lastMaster = geometry.masterEffects[geometry.masterEffects.length - 1]
+  /** The master's row, its effects then it, by id */
+  const stages = [
+    ...geometry.masterEffects.map(({ effect }) => mixId(effect)),
+    master,
+  ]
   return (
     <Frame
       frameRef={frameRef}
@@ -1664,13 +1729,6 @@ function MixGraph({
       width={geometry.width}
       height={geometry.height}
     >
-      {geometry.bus &&
-        line({
-          left: geometry.bus.x - 1,
-          top: geometry.bus.y,
-          width: 2,
-          height: geometry.bus.h,
-        })}
       {geometry.strips.map((box, k) => {
         // The track played's strip carries its sends; another's, tapped,
         // makes its track the one played
@@ -1688,6 +1746,8 @@ function MixGraph({
             inline
             look={NEUTRAL_LOOK}
             picked={played && strip}
+            // Its sends' holes down its right edge
+            clear="right"
             aria={
               track.kind === 'kit'
                 ? `${name}, a kit: its pads summed through its chain, at its level and balance, sent to each bus`
@@ -1734,6 +1794,14 @@ function MixGraph({
           picked === id ||
           picked === mixAddId(bus.id) ||
           bus.effects.some((effect) => picked === mixId(effect.id))
+        // Each run's neighbours: the head or an effect, then an effect or
+        // what the buses come into; a run lights when either is picked
+        const parts = [id, ...bus.effects.map((effect) => mixId(effect.id))]
+        const lit = (k: number) =>
+          picked === id ||
+          picked === parts[k] ||
+          picked === (parts[k + 1] ?? into)
+        const last = row.stitches.length - 1
         return (
           <div key={bus.id} className="contents">
             <Tile
@@ -1747,7 +1815,7 @@ function MixGraph({
               onClick={() => pick(id)}
               style={place(row.head)}
             />
-            {effects(row.effects, row.joints, id, `on bus ${letter}`, look)}
+            {effects(row.effects, `on bus ${letter}`, look)}
             {row.add && (
               <Tile
                 engine={engine}
@@ -1756,37 +1824,50 @@ function MixGraph({
                 picked={picked === mixAddId(bus.id)}
                 member={member}
                 dashed="add"
+                foot
                 aria={`Add an effect to bus ${letter}`}
                 onClick={() => pick(mixAddId(bus.id))}
                 style={place(row.add)}
               />
             )}
+            {row.stitches.slice(0, last).map((run, k) => (
+              <Thread
+                key={k}
+                run={run}
+                color={look.ink}
+                shown={shown(bus.id, lit(k))}
+              />
+            ))}
+            {row.stitches[last] && (
+              <BusLevelThread
+                engine={engine}
+                bus={bus.id}
+                run={row.stitches[last]}
+                shown={shown(bus.id, lit(last) || picked === master)}
+              />
+            )}
           </div>
         )
       })}
-      {effects(
-        geometry.masterEffects,
-        // The first stands after the buses' seam, their levels joining it
-        [undefined, ...geometry.masterJoints],
-        '',
-        'on the master',
-        NEUTRAL_LOOK
-      )}
-      {lastMaster && (
-        <Joint
-          x={geometry.masterJoints[geometry.masterJoints.length - 1] ?? 0}
-          y={geometry.master.y + geometry.master.h / 2}
-          height={18}
-          look={NEUTRAL_LOOK}
-          lit={picked === master || picked === mixId(lastMaster.effect)}
+      {effects(geometry.masterEffects, 'on the master', NEUTRAL_LOOK)}
+      {geometry.masterStitches.map((run, k) => (
+        <Thread
+          key={k}
+          run={run}
+          color={NEUTRAL_LOOK.ink}
+          shown={
+            picked === stages[k] || picked === stages[k + 1] ? 'lit' : undefined
+          }
         />
-      )}
+      ))}
       <Tile
         engine={engine}
         label="Master"
         text={<MixLine engine={engine} part={MASTER} />}
         look={NEUTRAL_LOOK}
         picked={picked === master}
+        // The buses' holes down its left edge
+        clear="left"
         aria="Master: every bus, through its effects, then the soft clip"
         onClick={() => pick(master)}
         style={place(geometry.master)}
@@ -1826,21 +1907,16 @@ function MixGraph({
           style={place(geometry.addMaster)}
         />
       )}
-      {geometry.sends.map((peg) => (
-        <MixSendPeg
-          key={peg.bus}
+      {threads.map((thread) => (
+        <MixSendThread
+          key={`${thread.strip}>${thread.bus}`}
           engine={engine}
-          peg={peg}
-          lit={strip || picked === mixId(peg.bus)}
-          onClick={() => pick(mixId(peg.bus))}
-        />
-      ))}
-      {geometry.levels.map((peg) => (
-        <BusLevel
-          key={peg.bus}
-          engine={engine}
-          peg={peg}
-          lit={picked === mixId(peg.bus) || picked === master}
+          thread={thread}
+          onClick={() => {
+            const track = tracks[thread.strip]
+            if (track && thread.strip !== output) engine.pickTrack(track.id)
+            pick(mixId(thread.bus))
+          }}
         />
       ))}
     </Frame>
@@ -2001,248 +2077,315 @@ function SendsLine({
   )
 }
 
-/** A pill's length for a level 0..1: 10 px at none, 28 at full */
-const pegLength = (level: number) => 10 + 18 * level
-/** A pill's opacity for a level, unless lit */
-const pegOpacity = (level: number) => 0.35 + 0.65 * level
+/**
+ * How a thread shows beside what is picked: lit with it (focused, the
+ * knob for it lit in the panel), dim beside another lit whole, or as it
+ * is (undefined)
+ */
+type Shown = 'lit' | 'focus' | 'dim' | undefined
 
-/** A pill on a seam, cut from the ground; it glows when lit */
-function pillStyle(look: Look, lit: boolean, ring = false): CSSProperties {
+/** How strongly a seam's stitch shows, unless lit or dim */
+const STITCH_OPACITY = 0.8
+/** Room around a thread's run for its holes and its glow */
+const THREAD_PAD = 8
+
+/**
+ * A thread's run across a seam (threads.ts), in an SVG of its own just
+ * big enough, over the tiles: width wide and opacity strong, a seam's
+ * stitch unless given, with a hole at either end (none at the end on a
+ * bus), an S across the seam or along a lane down it; lit, full and
+ * glowing, focused the more; dim, at a quarter. Marked
+ * with the chain whose row it moves with, when that is dragged.
+ */
+function Thread({
+  run,
+  lane,
+  color,
+  width = THREAD.stitch,
+  opacity = STITCH_OPACITY,
+  shown,
+  row,
+  end = true,
+}: {
+  run: Run
+  /** Where it turns down the seam, if it keeps to a lane (lanePath) */
+  lane?: number
+  color: string
+  width?: number
+  opacity?: number
+  shown: Shown
+  row?: string
+  end?: boolean
+}) {
+  const left = Math.min(run.from.x, run.to.x) - THREAD_PAD
+  const top = Math.min(run.from.y, run.to.y) - THREAD_PAD
+  const glow =
+    shown === 'focus'
+      ? `drop-shadow(0 0 2px ${color}) drop-shadow(0 0 5px ${color})`
+      : shown === 'lit'
+        ? `drop-shadow(0 0 3px ${color})`
+        : undefined
+  return (
+    <svg
+      aria-hidden
+      data-row={row}
+      width={Math.abs(run.to.x - run.from.x) + 2 * THREAD_PAD}
+      height={Math.abs(run.to.y - run.from.y) + 2 * THREAD_PAD}
+      className="pointer-events-none absolute z-[3] overflow-visible"
+      style={{
+        left,
+        top,
+        opacity:
+          shown === 'dim' ? THREAD.dim : shown === undefined ? opacity : 1,
+        filter: glow,
+      }}
+    >
+      <path
+        d={
+          lane === undefined
+            ? runPath(run, left, top)
+            : lanePath(run, lane, left, top)
+        }
+        fill="none"
+        stroke={color}
+        strokeWidth={width}
+        strokeLinecap="round"
+      />
+      <circle
+        cx={run.from.x - left}
+        cy={run.from.y - top}
+        r={THREAD.hole}
+        fill={color}
+      />
+      {end && (
+        <circle
+          cx={run.to.x - left}
+          cy={run.to.y - top}
+          r={THREAD.hole}
+          fill={color}
+        />
+      )}
+    </svg>
+  )
+}
+
+/** A run's tap target: THREAD.hitW by hitH about its middle */
+function hitAbout(run: Run): Box {
+  const { x, y } = runMiddle(run)
   return {
-    background: look.ink,
-    boxShadow: `0 0 0 2px ${GROUND}${ring ? `, 0 0 0 4px ${look.ink}` : lit ? `, 0 0 10px ${look.ink}` : ''}`,
+    x: x - THREAD.hitW / 2,
+    y: y - THREAD.hitH / 2,
+    w: THREAD.hitW,
+    h: THREAD.hitH,
   }
 }
 
-/**
- * A read's peg, on the seam between an input read and its reader: as long
- * as the reader's FM (a ring's side, full), as a send's peg is as long as
- * its send. Tapped, it picks as onClick says.
- */
-function ReadPeg({
-  engine,
-  peg,
-  lit,
-  focused,
+/** A thread's tap target, over it at box */
+function ThreadHit({
+  box,
+  label,
   onClick,
 }: {
-  engine: Engine
-  peg: GraphGeometry['reads'][number]
-  lit: boolean
-  focused: boolean
+  box: Box
+  label: string
   onClick: () => void
 }) {
-  const level = useLive(engine, (sound) =>
-    peg.as === 'FM'
-      ? (sound.inputs.find((input) => input.id === peg.to)?.values.fm ?? 0)
-      : 1
-  )
-  const sound = engine.getSound()
-  const from = partName(sound, peg.from)
-  const to = partName(sound, peg.to)
-  const label =
-    peg.as === 'FM'
-      ? `${from} into ${to}'s FM, ${Math.round(level * 100)}%. Tap to set it.`
-      : `${from} into ${to}, a side of its ring`
   return (
     <button
       type="button"
       aria-label={label}
       onClick={onClick}
-      className="absolute z-[3] flex h-11 w-5 items-center justify-center"
-      style={{ left: peg.x - 10, top: peg.y - 22 }}
-    >
-      <span
-        className="block w-2 rounded"
-        style={{
-          height: pegLength(level),
-          opacity: lit || focused ? 1 : pegOpacity(level),
-          ...pillStyle(NEUTRAL_LOOK, lit, focused),
-        }}
-      />
-    </button>
-  )
-}
-
-/** The joint between two tiles of a chain */
-function Joint({
-  row,
-  x,
-  y,
-  height,
-  look,
-  lit,
-}: {
-  /** The chain whose row it moves with, if it stands in one */
-  row?: string
-  x: number
-  y: number
-  height: number
-  look: Look
-  lit: boolean
-}) {
-  return (
-    <span
-      aria-hidden
-      data-row={row}
-      className="pointer-events-none absolute z-[3] w-2 rounded"
-      style={{
-        left: x - 4,
-        top: y - height / 2,
-        height,
-        opacity: lit ? 1 : 0.8,
-        ...pillStyle(look, lit),
-      }}
+      className="absolute z-[3] rounded-md"
+      style={place(box)}
     />
   )
 }
 
-/** The joint before the amp: as long as the chain's level */
-function LevelJoint({
-  engine,
-  chain,
-  row,
-  x,
-  y,
-  look,
-  lit,
-}: {
-  engine: Engine
-  chain: string
-  /** The chain whose row it moves with */
-  row: string
-  x: number
-  y: number
-  look: Look
-  lit: boolean
-}) {
-  const level = useLive(engine, (sound) => {
-    return sound.chains.find((each) => each.id === chain)?.values.level ?? 0
-  })
-  const height = pegLength(level)
-  return (
-    <span
-      aria-hidden
-      data-row={row}
-      className="pointer-events-none absolute z-[3] w-2 rounded"
-      style={{
-        left: x - 4,
-        top: y - height / 2,
-        height,
-        opacity: lit ? 1 : pegOpacity(level),
-        ...pillStyle(look, lit),
-      }}
-    />
-  )
-}
+/** A thread as thick and as strong as level, 0 to 1 */
+const carrying = (level: number) => ({
+  width: threadWidth(level),
+  opacity: threadOpacity(level),
+})
 
 /**
- * The part played's send to a bus, its peg: as long as the send; a tap
- * picks the bus
+ * An input's send to a chain, its thread: as thick and as strong as the
+ * send; a tap picks the chain, its knob for the input lit
  */
-function MixSendPeg({
-  engine,
-  peg,
-  lit,
-  onClick,
-}: {
-  engine: Engine
-  peg: MixPeg
-  lit: boolean
-  onClick: () => void
-}) {
-  const level = useLive(engine, (sound) => sound.sends[peg.bus] ?? 0)
-  return (
-    <button
-      type="button"
-      aria-label={`The part played into bus ${peg.bus.toUpperCase()}, ${Math.round(level * 100)}%. Tap to set it.`}
-      onClick={onClick}
-      className="absolute z-[3] flex h-11 w-5 items-center justify-center"
-      style={{ left: peg.x - 10, top: peg.y - 22 }}
-    >
-      <span
-        className="block w-2 rounded"
-        style={{
-          height: pegLength(level),
-          opacity: lit ? 1 : pegOpacity(level),
-          ...pillStyle(busLook(peg.bus), lit),
-        }}
-      />
-    </button>
-  )
-}
-
-/** A bus's level, its peg on the bus into the master: as long as it */
-function BusLevel({
-  engine,
-  peg,
-  lit,
-}: {
-  engine: Engine
-  peg: MixPeg
-  lit: boolean
-}) {
-  const level = useLiveMix(engine, peg.bus, 'level')
-  const height = pegLength(level)
-  return (
-    <span
-      aria-hidden
-      className="pointer-events-none absolute z-[3] w-2 rounded"
-      style={{
-        left: peg.x - 4,
-        top: peg.y - height / 2,
-        height,
-        opacity: lit ? 1 : pegOpacity(level),
-        ...pillStyle(busLook(peg.bus), lit),
-      }}
-    />
-  )
-}
-
-/** A send's peg: as long as the send; a tap picks its chain */
-function SendPeg({
+function SendThread({
   engine,
   input,
   chain,
-  x,
-  y,
+  run,
   look,
-  lit,
-  focused,
+  shown,
   onClick,
 }: {
   engine: Engine
   input: string
   chain: string
-  x: number
-  y: number
+  run: Run
   look: Look
-  lit: boolean
-  focused: boolean
+  shown: Shown
   onClick: () => void
 }) {
   const level = useLive(engine, (sound) => {
     return sound.chains.find((each) => each.id === chain)?.sends[input] ?? 0
   })
   const sound = engine.getSound()
-  const label = `${partName(sound, input)} into ${partName(sound, chain)}, ${Math.round(level * 100)}%. Tap to set it.`
   return (
-    <button
-      type="button"
-      aria-label={label}
-      onClick={onClick}
-      className="absolute z-[3] flex h-11 w-5 items-center justify-center"
-      style={{ left: x - 10, top: y - 22 }}
-    >
-      <span
-        className="block w-2 rounded"
-        style={{
-          height: pegLength(level),
-          opacity: lit || focused ? 1 : pegOpacity(level),
-          ...pillStyle(look, lit, focused),
-        }}
+    <>
+      <Thread run={run} color={look.ink} shown={shown} {...carrying(level)} />
+      <ThreadHit
+        box={hitAbout(run)}
+        label={`${partName(sound, input)} into ${partName(sound, chain)}, ${Math.round(level * 100)}%. Tap to set it.`}
+        onClick={onClick}
       />
-    </button>
+    </>
+  )
+}
+
+/**
+ * A read's thread, from the input read to its reader: as thick and as
+ * strong as the reader's FM (a ring's side, full), as a send's is as its
+ * send. Tapped, it picks as onClick says.
+ */
+function ReadThread({
+  engine,
+  read,
+  shown,
+  onClick,
+}: {
+  engine: Engine
+  read: GraphGeometry['reads'][number]
+  shown: Shown
+  onClick: () => void
+}) {
+  const level = useLive(engine, (sound) =>
+    read.as === 'FM'
+      ? (sound.inputs.find((input) => input.id === read.to)?.values.fm ?? 0)
+      : 1
+  )
+  const sound = engine.getSound()
+  const from = partName(sound, read.from)
+  const to = partName(sound, read.to)
+  return (
+    <>
+      <Thread
+        run={read.run}
+        color={NEUTRAL_LOOK.ink}
+        shown={shown}
+        {...carrying(level)}
+      />
+      <ThreadHit
+        box={hitAbout(read.run)}
+        label={
+          read.as === 'FM'
+            ? `${from} into ${to}'s FM, ${Math.round(level * 100)}%. Tap to set it.`
+            : `${from} into ${to}, a side of its ring`
+        }
+        onClick={onClick}
+      />
+    </>
+  )
+}
+
+/**
+ * A chain's last run, into the amp (or onto the bus): as thick and as
+ * strong as the chain's level; it moves with the chain's row
+ */
+function LevelThread({
+  engine,
+  chain,
+  run,
+  look,
+  shown,
+  end,
+}: {
+  engine: Engine
+  chain: string
+  run: Run
+  look: Look
+  shown: Shown
+  end: boolean
+}) {
+  const level = useLive(engine, (sound) => {
+    return sound.chains.find((each) => each.id === chain)?.values.level ?? 0
+  })
+  return (
+    <Thread
+      run={run}
+      row={chain}
+      color={look.ink}
+      shown={shown}
+      end={end}
+      {...carrying(level)}
+    />
+  )
+}
+
+/** What a track sends to each bus: a synth's sound's, a kit's chain's */
+const sendsOf = (track: Track) =>
+  track.kind === 'synth' ? track.sound.sends : track.chain.sends
+
+/**
+ * A track's send to a bus, its thread down the bus's lane: as thick and
+ * as strong as the send, live; a tap makes the track the one played and
+ * picks the bus
+ */
+function MixSendThread({
+  engine,
+  thread,
+  onClick,
+}: {
+  engine: Engine
+  thread: MixThread & { readonly shown: Shown }
+  onClick: () => void
+}) {
+  const { strip, bus } = thread
+  const level = useSyncExternalStore(engine.subscribeSound, () => {
+    const track = engine.getTracks()[strip]
+    return track ? (sendsOf(track)[bus] ?? 0) : 0
+  })
+  const track = engine.getTracks()[strip]
+  const name = track ? trackName(track, strip) : 'A track'
+  return (
+    <>
+      <Thread
+        run={thread.run}
+        lane={thread.lane}
+        color={busLook(bus).ink}
+        shown={thread.shown}
+        {...carrying(level)}
+      />
+      <ThreadHit
+        box={thread.hit}
+        label={`${name} into bus ${bus.toUpperCase()}, ${Math.round(level * 100)}%. Tap to set it.`}
+        onClick={onClick}
+      />
+    </>
+  )
+}
+
+/** A bus's last run, into the master: as thick and as strong as its level */
+function BusLevelThread({
+  engine,
+  bus,
+  run,
+  shown,
+}: {
+  engine: Engine
+  bus: string
+  run: Run
+  shown: Shown
+}) {
+  const level = useLiveMix(engine, bus, 'level')
+  return (
+    <Thread
+      run={run}
+      color={busLook(bus).ink}
+      shown={shown}
+      {...carrying(level)}
+    />
   )
 }
 
@@ -2257,7 +2400,10 @@ function SendPeg({
  * label in a tall tile (two slots and up), its line and the area under
  * it; behind the label in a short one, the area alone, so that no line
  * runs through the letters. Either way it stands 3 px inside the tile's
- * edges, its corners rounded as the tile's.
+ * edges, its corners rounded as the tile's. An icon is its pictogram
+ * alone, larger, its name left to its label for the ear. A "+" a thread
+ * runs over (a row's) has its label at its foot, out of the thread's way,
+ * and a view a thread comes into stands clear of its holes.
  */
 function Tile({
   engine,
@@ -2272,19 +2418,21 @@ function Tile({
   member = false,
   reach = false,
   routed = false,
-  dots,
   dashed,
+  foot = false,
   aria,
   onClick,
   style,
   className = '',
   small = false,
   aside: view,
+  clear,
   picture,
   stacked = false,
   inline = false,
   text,
   reduction,
+  icon = false,
 }: {
   engine: Engine
   drag?: DragProps
@@ -2301,8 +2449,9 @@ function Tile({
   member?: boolean
   reach?: boolean
   routed?: boolean
-  dots?: readonly string[]
   dashed?: 'add' | 'copy'
+  /** Its label at its foot: a row's "+", a thread running over its middle */
+  foot?: boolean
   aria: string
   onClick: () => void
   style?: CSSProperties
@@ -2314,6 +2463,11 @@ function Tile({
    * (or inline), beside it in a short one
    */
   aside?: ReactNode
+  /**
+   * The edge whose holes the view stands clear of, under the label: a
+   * thread's holes, THREAD.inset inside it
+   */
+  clear?: 'left' | 'right'
   /** The part whose picture fills the tile: a filter's response, a drive's */
   picture?: string
   /** Its picture under its label however tall it is: a modulator's block */
@@ -2327,6 +2481,8 @@ function Tile({
   text?: ReactNode
   /** A compressor's or limiter's: how far it turns down, rising over it */
   reduction?: EffectAt
+  /** Its pictogram alone, for a tile too narrow for words: a mix's effect */
+  icon?: boolean
 }) {
   const height = typeof style?.height === 'number' ? style.height : 26
   const width = typeof style?.width === 'number' ? style.width : Infinity
@@ -2384,7 +2540,20 @@ function Tile({
         }
 
   let content: ReactNode
-  if (mark !== undefined) {
+  if (icon && pictogram) {
+    content = (
+      <svg viewBox="0 0 18 12" width={26} height={17} aria-hidden>
+        <path
+          d={pictogram}
+          fill="none"
+          stroke={look.ink}
+          strokeWidth={1.6}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    )
+  } else if (mark !== undefined) {
     content = (
       <>
         <span
@@ -2442,17 +2611,6 @@ function Tile({
                 (line !== undefined && <Line engine={engine} id={line} />)}
             </span>
           )}
-          {dots && dots.length > 0 && (
-            <span aria-hidden className="mt-[3px] flex gap-[3px]">
-              {dots.map((color, k) => (
-                <span
-                  key={k}
-                  className="size-1.5 rounded-full"
-                  style={{ background: color }}
-                />
-              ))}
-            </span>
-          )}
         </span>
       </>
     )
@@ -2477,7 +2635,9 @@ function Tile({
             ? tall && !inline
               ? 'flex-col justify-start gap-1 px-[3px] pt-2.5 pb-[3px]'
               : 'flex-col justify-start gap-[3px] px-[3px] pt-1.5 pb-[3px]'
-            : `justify-center ${column ? 'flex-col gap-1 px-1' : 'gap-[7px] px-1.5'}`
+            : foot
+              ? 'flex-col justify-end px-1 pb-1'
+              : `justify-center ${column ? 'flex-col gap-1 px-1' : 'gap-[7px] px-1.5'}`
       } ${picked ? 'z-[2]' : 'z-[1]'} ${className}`}
     >
       {reduction && (
@@ -2506,7 +2666,13 @@ function Tile({
         content
       )}
       {viewUnder && (
-        <span className="flex min-h-0 w-full flex-1 gap-1">{view}</span>
+        <span
+          className={`flex min-h-0 w-full flex-1 gap-1 ${
+            clear === 'left' ? 'pl-1.5' : clear === 'right' ? 'pr-1.5' : ''
+          }`}
+        >
+          {view}
+        </span>
       )}
       {picture !== undefined && under && (
         <Picture

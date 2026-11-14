@@ -5,7 +5,9 @@
  * its inserts after it in a row, and the sound's out last, its sends to
  * the session's returns (docs/plan/effects-parts-sequencer.md; the mix
  * after it is laid out by mixGraph.ts). Measured in slots, one input tile
- * tall, which the screen turns into pixels. Pure math, no DOM.
+ * tall, which the screen turns into pixels. Threads join them
+ * (threads.ts): from each input to each chain it feeds, along each chain
+ * to the amp, and on to the out. Pure math, no DOM.
  *
  * An input is drawn once, and stretches over neighbouring chains it feeds.
  * Where it cannot, a dashed copy of it stands in that chain's row instead:
@@ -16,13 +18,15 @@
  * An input that another reads (as its FM, a side of its ring) stands in a
  * column left of the inputs, beside the inputs that read it, as an input
  * stands beside the chains it feeds: one tile over readers next to one
- * another, a peg on the seam to each, a dashed copy beside readers apart
+ * another, a thread to each, a dashed copy beside readers apart
  * from those. An input that feeds a chain stands in the inputs' column,
  * a copy of it beside its readers; one that feeds none stands only there.
  * What a source reads stands in a column left of it, and so on. A reader
  * of two (a ring) shares its slots between them, and in the inputs'
  * column takes two slots for it.
  */
+
+import { across, holes, THREAD, type Point, type Run } from './threads'
 
 /** What the layout reads of a sound: its inputs and chains, in order */
 export interface GraphSound {
@@ -68,7 +72,7 @@ export interface InputTile {
   readonly readers: readonly string[]
 }
 
-/** A send's peg: input feeds chain beside this slot */
+/** A send: input feeds chain beside this slot */
 export interface SendPeg {
   readonly input: string
   readonly chain: string
@@ -76,9 +80,9 @@ export interface SendPeg {
 }
 
 /**
- * An input read by another, as its FM or a side of its ring: the peg on
- * the seam right of the source's column, in the middle of the share of
- * the reader's slots it stands beside (from first, slots tall)
+ * An input read by another, as its FM or a side of its ring: across the
+ * seam right of the source's column, into the middle of the share of the
+ * reader's slots it stands beside (from first, slots tall)
  */
 export interface ReadPeg {
   readonly from: string
@@ -105,7 +109,7 @@ export interface GraphLayout {
 }
 
 /** A run of chains by index, first to last, both included */
-type Run = readonly [number, number]
+type Span = readonly [number, number]
 
 /** A source wanted beside a share of a reader's tile */
 interface Want {
@@ -125,7 +129,7 @@ export function graphLayout(sound: GraphSound): GraphLayout {
   // Seam k lies between chains k and k + 1: the input that stretches
   // across it, if any. Inputs claim seams in their order.
   const seams: (string | null)[] = chains.slice(1).map(() => null)
-  const home = new Map<string, Run>()
+  const home = new Map<string, Span>()
   for (const input of inputs) {
     const runs: [number, number][] = []
     let run: [number, number] | null = null
@@ -150,7 +154,7 @@ export function graphLayout(sound: GraphSound): GraphLayout {
     }
     // The longest run is drawn, the earliest of those as long; the
     // chains of the others take copies
-    let best: Run | undefined
+    let best: Span | undefined
     for (const one of runs) {
       if (!best || one[1] - one[0] > best[1] - best[0]) best = one
     }
@@ -384,14 +388,21 @@ export interface ChainBoxes {
   readonly chain: string
   /** The whole row, head to the amp */
   readonly row: Box
-  /** Its head, as tall as the row: its letter and level */
+  /**
+   * Its head, its letter and level: as tall as its items, in the row's
+   * middle (as tall as the row until 2026-11-14, for the pegs on its seam)
+   */
   readonly head: Box
   /** At most two slots tall, in the row's middle */
   readonly items: readonly { readonly item: string; readonly box: Box }[]
   /** The dashed "+" after its items, unless it holds all it may: as tall */
   readonly add: Box | undefined
-  /** The seams between its tiles, head to amp: each one's centre */
-  readonly joints: readonly number[]
+  /**
+   * The thread's runs across its seams, from its head to the amp, over
+   * its "+": the last its level's, into the amp, or onto the bus where
+   * the amp stands short of the rows
+   */
+  readonly stitches: readonly Run[]
 }
 
 export interface GraphGeometry {
@@ -406,29 +417,32 @@ export interface GraphGeometry {
   readonly amp: Box
   /** The sound's out, after the inserts: as tall as the amp, at its y */
   readonly out: Box
-  /** The seam before the out, after the amp or the last insert */
-  readonly outJoint: number
+  /** The run into the out, from the amp or the last insert */
+  readonly outStitch: Run
   /**
    * When the amp stands shorter than the rows, the bus down the seam
    * before it, from the first row's middle to the last's: every chain's
-   * level peg stands on it
+   * level run ends on it
    */
   readonly bus:
     { readonly x: number; readonly y: number; readonly h: number } | undefined
-  /** Each send's peg, on the seam between the inputs and the chains */
-  readonly pegs: readonly (SendPeg & {
-    readonly x: number
-    readonly y: number
-  })[]
-  /** Each read's peg, on the seam right of its source's column */
-  readonly reads: readonly (ReadPeg & {
-    readonly x: number
-    readonly y: number
-  })[]
+  /**
+   * Each send's run, across the seam between the inputs and the chains:
+   * from its hole down the input's right edge (one for each chain it
+   * stands beside, in their order) to its hole down the head's left edge
+   * (one for each input that feeds the chain, in theirs)
+   */
+  readonly sends: readonly (SendPeg & { readonly run: Run })[]
+  /**
+   * Each read's run, across the seam right of its source's column: from
+   * its hole down the source's right edge (one for each reader beside it)
+   * into the reader's left edge, at the middle of its share of it
+   */
+  readonly reads: readonly (ReadPeg & { readonly run: Run })[]
   /** The inserts after the amp, in their order: as tall as it, at its y */
   readonly effects: readonly { readonly effect: string; readonly box: Box }[]
-  /** The seams after the amp, between it and the inserts: each centre */
-  readonly fxJoints: readonly number[]
+  /** The runs after the amp: into each insert, from the amp or the last */
+  readonly fxStitches: readonly Run[]
   /**
    * The dashed "+ Input", "+ Chain" and "+ FX", under the rows, unless
    * full: "+ FX" under the amp and the inserts
@@ -442,7 +456,8 @@ export interface GraphGeometry {
  * The editor drawn on the design canvas, in pixels: a slot is a tile 44
  * tall (a touch's height; the canvas drew 39, before the waveform moved
  * into the amp and left the graph more room) with 6 between slots; inputs
- * stand in a column 68 wide, 4 before the chains; a chain's head is 36 and
+ * stand in a column 68 wide, 12 before the chains, where their threads
+ * bend (THREAD.gap; 4 while pegs stood on it); a chain's head is 36 and
  * each item 60, 3 apart; the amp, 52 wide, stands after the longest
  * chain and its "+", which is 44 wide at least; the out after the amp
  * and its inserts, 96 wide at least.
@@ -466,8 +481,10 @@ export interface GraphGeometry {
  * the out's width, whichever is more: past that it stands in their
  * middle, and a bus down the seam takes every row to it. A chain's items
  * and its "+" stand as tall as its row up to two slots, and in its
- * middle past that; its head keeps the row's height, every input's peg
- * on it. Each column of sources is 52 wide, 4 before the next, and the
+ * middle past that, and its head with them (ashon, 2026-11-14: kept the
+ * row's height for the pegs, it need not, the threads bending into its
+ * holes). Each column of sources is 52 wide, 12 before the next
+ * (its threads bend there too), and the
  * inputs' column moves right past them. The inserts stand after the amp
  * as items do after a head, as wide as items at rest and as tall as the
  * amp, and the out after them, as tall too. Their "+" stands in the "+"
@@ -481,7 +498,7 @@ export const GRAPH = {
   inputX: 8,
   sourceW: 52,
   inputW: 68,
-  inputGap: 4,
+  inputGap: THREAD.gap,
   headW: 36,
   itemW: 60,
   seam: 3,
@@ -679,7 +696,7 @@ export function graphGeometry(
   const columnX = (k: number) =>
     k === 0 ? inputsX : inputsX - k * (w.source + g.inputGap)
 
-  const chains: ChainBoxes[] = layout.rows.map((row, c) => {
+  const chains: Omit<ChainBoxes, 'stitches'>[] = layout.rows.map((row, c) => {
     const items = sound.chains[c]?.items ?? []
     const y = slotY(row.first)
     const h = tall(row.slots)
@@ -690,20 +707,15 @@ export function graphGeometry(
       box: { x: itemsX + k * itemPitch, y: itemY, w: w.item, h: itemH },
     }))
     const addX = itemsX + items.length * itemPitch
-    const joints = [
-      ...boxes.map(({ box }) => box.x - g.seam / 2),
-      ampX - g.seam / 2,
-    ]
     return {
       chain: row.chain,
       row: { x: headX, y, w: ampX - headX, h },
-      head: { x: headX, y, w: g.headW, h },
+      head: { x: headX, y: itemY, w: g.headW, h: itemH },
       items: boxes,
       add:
         items.length < limits.items
           ? { x: addX, y: itemY, w: ampX - g.seam - addX, h: itemH }
           : undefined,
-      joints,
     }
   })
 
@@ -716,16 +728,57 @@ export function graphGeometry(
       h: tall(tile.slots),
     },
   }))
-  const pegs = layout.pegs.map((peg) => ({
-    ...peg,
-    x: (inputsX + w.input + headX) / 2,
-    y: slotY(peg.slot) + slot / 2,
-  }))
-  const reads = layout.reads.map((peg) => ({
-    ...peg,
-    x: columnX(peg.column) + w.source + g.inputGap / 2,
-    y: slotY(peg.first) + tall(peg.slots) / 2,
-  }))
+  const sends = layout.pegs.map((peg) => {
+    // Its hole down the edge of the input's tile beside the chain
+    const tile = inputs.find(
+      (each) =>
+        each.column === 0 &&
+        each.input === peg.input &&
+        each.chains.includes(peg.chain)
+    )
+    const c = layout.rows.findIndex((row) => row.chain === peg.chain)
+    const head = chains[c]?.head
+    const from = tile
+      ? (holes(tile.box, 'right', tile.chains.length)[
+          tile.chains.indexOf(peg.chain)
+        ] as Point)
+      : { x: inputsX + w.input - THREAD.inset, y: slotY(peg.slot) + slot / 2 }
+    // Into the head, a hole for each input that feeds it, in their order
+    const into = layout.pegs.filter((each) => each.chain === peg.chain)
+    const to = head
+      ? (holes(head, 'left', into.length)[into.indexOf(peg)] as Point)
+      : { x: headX + THREAD.inset, y: from.y }
+    return { ...peg, run: { from, to } }
+  })
+  /** The input's tile in column that stands beside slots from first on */
+  const tileAt = (input: string, column: number, first: number, n: number) =>
+    inputs.find(
+      (tile) =>
+        tile.input === input &&
+        tile.column === column &&
+        tile.first <= first + 1e-9 &&
+        first + n <= tile.first + tile.slots + 1e-9
+    )
+  const reads = layout.reads.map((peg) => {
+    const source = tileAt(peg.from, peg.column, peg.first, peg.slots)
+    const y = slotY(peg.first) + tall(peg.slots) / 2
+    // A hole for each reader the source's tile stands beside, in order
+    const out = source
+      ? layout.reads.filter(
+          (each) =>
+            each.from === peg.from &&
+            each.column === peg.column &&
+            tileAt(each.from, each.column, each.first, each.slots) === source
+        )
+      : [peg]
+    const from = source
+      ? (holes(source.box, 'right', out.length)[out.indexOf(peg)] as Point)
+      : { x: columnX(peg.column) + w.source - THREAD.inset, y }
+    return {
+      ...peg,
+      run: { from, to: { x: columnX(peg.column - 1) + THREAD.inset, y } },
+    }
+  })
 
   const addY = slotY(slotsOf(layout))
   const addInput =
@@ -759,28 +812,47 @@ export function graphGeometry(
     sound.effects.length < limits.effects
       ? { x: ampX, y: addY, w: outX - g.seam - ampX, h: g.addRow }
       : undefined
-  const middle = (row: ChainBoxes) => row.row.y + row.row.h / 2
+  const middle = (row: { readonly row: Box }) => row.row.y + row.row.h / 2
   const firstRow = chains[0]
   const endRow = chains[chains.length - 1]
   const busTop = firstRow ? middle(firstRow) : 0
   const busEnd = endRow ? middle(endRow) : 0
+  const bus =
+    ampH < span && busEnd > busTop
+      ? { x: ampX - g.seam / 2, y: busTop, h: busEnd - busTop }
+      : undefined
+  const amp = { x: ampX, y: ampY, w: w.amp, h: ampH }
+  const out = { x: outX, y: ampY, w: outW, h: ampH }
+  // Along each row, over its "+", into the amp or onto the bus
+  const rows = chains.map((row) => {
+    const y = middle(row)
+    const tiles = [row.head, ...row.items.map(({ box }) => box)]
+    const stitches = tiles.map((tile, k) => {
+      const next = tiles[k + 1]
+      if (next) return across(tile, next, y)
+      const from = { x: tile.x + tile.w - THREAD.inset, y }
+      return { from, to: { x: bus ? bus.x : ampX + THREAD.inset, y } }
+    })
+    return { ...row, stitches }
+  })
+  const ampY2 = ampY + ampH / 2
+  const stages = [amp, ...effects.map(({ box }) => box)]
   return {
     width: outX + outW + g.end,
     height: bottom + g.end,
     rest: heightAt(layout, g.slot),
     inputs,
-    chains,
-    amp: { x: ampX, y: ampY, w: w.amp, h: ampH },
-    out: { x: outX, y: ampY, w: outW, h: ampH },
-    outJoint: outX - g.seam / 2,
-    bus:
-      ampH < span && busEnd > busTop
-        ? { x: ampX - g.seam / 2, y: busTop, h: busEnd - busTop }
-        : undefined,
-    pegs,
+    chains: rows,
+    amp,
+    out,
+    outStitch: across(stages[stages.length - 1] ?? amp, out, ampY2),
+    bus,
+    sends,
     reads,
     effects,
-    fxJoints: effects.map(({ box }) => box.x - g.seam / 2),
+    fxStitches: effects.map(({ box }, k) =>
+      across(stages[k] ?? amp, box, ampY2)
+    ),
     addInput,
     addChain,
     addEffect,

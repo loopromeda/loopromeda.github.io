@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { MIX_GRAPH, mixGeometry, type MixGraphMix } from './mixGraph'
+import {
+  MIX_GRAPH,
+  mixGeometry,
+  mixSends,
+  stripGap,
+  type MixGraphMix,
+} from './mixGraph'
 
 const LIMITS = { buses: 4, effects: 4 }
 
@@ -28,46 +34,98 @@ describe('mixGeometry', () => {
     const [dry, delay] = geometry.buses
     expect(dry).toEqual({
       bus: 'a',
-      head: { x: 96, y: 8, w: 36, h: 44 },
+      head: { x: 104, y: 8, w: 36, h: 44 },
       effects: [],
       // The "+" fills the row to the longest
-      add: { x: 135, y: 8, w: 107, h: 44 },
-      joints: [],
+      add: { x: 143, y: 8, w: 107, h: 44 },
+      // Its level's, over the "+" into the master
+      stitches: [{ from: { x: 135, y: 30 }, to: { x: 259, y: 30 } }],
     })
     expect(delay).toEqual({
       bus: 'b',
-      head: { x: 96, y: 58, w: 36, h: 44 },
-      effects: [{ effect: 'e1', box: { x: 135, y: 58, w: 60, h: 44 } }],
-      add: { x: 198, y: 58, w: 44, h: 44 },
-      joints: [133.5],
+      head: { x: 104, y: 58, w: 36, h: 44 },
+      effects: [{ effect: 'e1', box: { x: 143, y: 58, w: 60, h: 44 } }],
+      add: { x: 206, y: 58, w: 44, h: 44 },
+      stitches: [
+        { from: { x: 135, y: 80 }, to: { x: 148, y: 80 } },
+        { from: { x: 198, y: 80 }, to: { x: 259, y: 80 } },
+      ],
     })
-    expect(geometry.master).toEqual({ x: 246, y: 8, w: 96, h: 144 })
-    expect([geometry.width, geometry.height]).toEqual([350, 196])
+    expect(geometry.master).toEqual({ x: 254, y: 8, w: 96, h: 144 })
+    expect([geometry.width, geometry.height]).toEqual([358, 196])
     expect(geometry.rest).toBe(196)
   })
 
-  it('pegs each send before its bus, each level on the bus after', () => {
+  it('threads a track to each bus it sends to, each bus into the master', () => {
     const geometry = mixGeometry(FIRST, LIMITS)
-    expect(geometry.sends).toEqual([
-      { bus: 'a', x: 94, y: 30 },
-      { bus: 'b', x: 94, y: 80 },
-      { bus: 'c', x: 94, y: 130 },
+    // A hole for each bus down the strip's edge, in their order, about
+    // its middle, into each head's middle, down each bus's lane: A's, the
+    // longest, nearest the strip, then C's, then B's, none crossing
+    expect(mixSends(geometry, [['a', 'b', 'c']])).toEqual([
+      {
+        strip: 0,
+        bus: 'a',
+        run: { from: { x: 87, y: 86 }, to: { x: 109, y: 30 } },
+        lane: 94,
+        hit: { x: 80, y: 80, w: 24, h: 12 },
+      },
+      {
+        strip: 0,
+        bus: 'b',
+        run: { from: { x: 87, y: 98 }, to: { x: 109, y: 80 } },
+        lane: 102,
+        hit: { x: 80, y: 92, w: 24, h: 12 },
+      },
+      {
+        strip: 0,
+        bus: 'c',
+        run: { from: { x: 87, y: 110 }, to: { x: 109, y: 130 } },
+        lane: 98,
+        hit: { x: 80, y: 104, w: 24, h: 12 },
+      },
     ])
-    expect(geometry.levels.map(({ x, y }) => [x, y])).toEqual([
-      [244, 30],
-      [244, 80],
-      [244, 130],
+    // None to a bus it sends nothing to: one, in the strip's middle, down
+    // the seam's, its target a touch tall
+    expect(mixSends(geometry, [['b']])).toEqual([
+      {
+        strip: 0,
+        bus: 'b',
+        run: { from: { x: 87, y: 98 }, to: { x: 109, y: 80 } },
+        lane: 98,
+        hit: { x: 80, y: 84, w: 24, h: 28 },
+      },
     ])
-    // The bus from the first's middle to the last's, into the master's
-    expect(geometry.bus).toEqual({ x: 244, y: 30, h: 100 })
-    // No joint into the master: the levels join it
-    expect(geometry.masterJoints).toEqual([])
+    expect(mixSends(geometry, [[]])).toEqual([])
+    // Each bus's level into the master at its own row's middle
+    expect(
+      geometry.buses.map(({ stitches }) => stitches[stitches.length - 1]?.to)
+    ).toEqual([
+      { x: 259, y: 30 },
+      { x: 259, y: 80 },
+      { x: 259, y: 130 },
+    ])
+    // None between the master's effects with none
+    expect(geometry.masterStitches).toEqual([])
+    // None from a place with no strip, nor to a bus not there
+    expect(mixSends(geometry, [[], ['a']])).toEqual([])
+    expect(mixSends(geometry, [['e']])).toEqual([])
+  })
+
+  it('widens the seam for four buses’ lanes', () => {
+    expect([1, 2, 3, 4].map(stripGap)).toEqual([12, 12, 12, 16])
+    const four = mixGeometry(mixOf({ a: [], b: [], c: [], d: [] }), LIMITS)
+    expect(four.buses[0]?.head.x).toBe(8 + 84 + 16)
+    const sends = mixSends(four, [['a', 'b', 'c', 'd']])
+    // Four lanes, 4 apart about the seam's middle, 2 inside its edges
+    expect(sends.map(({ lane }) => lane).sort((p, q) => p - q)).toEqual([
+      94, 98, 102, 106,
+    ])
   })
 
   it('puts "+ Bus" under the rows and "+ FX" under the master’s', () => {
     const geometry = mixGeometry(FIRST, LIMITS)
-    expect(geometry.addBus).toEqual({ x: 96, y: 158, w: 146, h: 30 })
-    expect(geometry.addMaster).toEqual({ x: 246, y: 158, w: 44, h: 30 })
+    expect(geometry.addBus).toEqual({ x: 104, y: 158, w: 146, h: 30 })
+    expect(geometry.addMaster).toEqual({ x: 254, y: 158, w: 44, h: 30 })
     const full = mixGeometry(
       mixOf({ a: [], b: [], c: [], d: ['1', '2', '3', '4'] }, [
         '5',
@@ -84,22 +142,27 @@ describe('mixGeometry', () => {
     expect(full.buses[0]?.add?.w).toBe(4 * 63 - 3)
   })
 
-  it('stands the master’s effects before it, a joint before each', () => {
+  it('stands the master’s effects before it, threaded through', () => {
     const geometry = mixGeometry(mixOf({ a: [] }, ['e1', 'e2']), LIMITS)
     // One bus: it stands in the middle of the two rows the master is tall
     expect(geometry.master.h).toBe(94)
     expect(geometry.strips[0]?.h).toBe(94 + 6 + 30)
     expect(geometry.buses[0]?.head.y).toBe(33)
-    expect(geometry.bus).toBeUndefined()
-    // Its level on the seam, at the first effect's middle: no joint there
-    expect(geometry.levels[0]).toEqual({ bus: 'a', x: 181, y: 55 })
-    expect(geometry.masterEffects).toEqual([
-      { effect: 'e1', box: { x: 183, y: 8, w: 60, h: 94 } },
-      { effect: 'e2', box: { x: 246, y: 8, w: 60, h: 94 } },
+    // Its level into the first effect, at its row's middle
+    expect(geometry.buses[0]?.stitches).toEqual([
+      { from: { x: 135, y: 55 }, to: { x: 196, y: 55 } },
     ])
-    expect(geometry.masterJoints).toEqual([244.5, 307.5])
-    expect(geometry.master.x).toBe(309)
-    expect(geometry.addMaster).toMatchObject({ x: 183, w: 123 })
+    expect(geometry.masterEffects).toEqual([
+      { effect: 'e1', box: { x: 191, y: 8, w: 60, h: 94 } },
+      { effect: 'e2', box: { x: 254, y: 8, w: 60, h: 94 } },
+    ])
+    // On through the second and into the master, at their middle
+    expect(geometry.masterStitches).toEqual([
+      { from: { x: 246, y: 55 }, to: { x: 259, y: 55 } },
+      { from: { x: 309, y: 55 }, to: { x: 322, y: 55 } },
+    ])
+    expect(geometry.master.x).toBe(317)
+    expect(geometry.addMaster).toMatchObject({ x: 191, w: 123 })
   })
 
   it('stands the tracks in one column, a "+" for another under it', () => {
@@ -123,8 +186,19 @@ describe('mixGeometry', () => {
       { x: 8, y: 83, w: 84, h: 69 },
     ])
     expect(two.addTrack).toEqual(one.addTrack)
-    expect(two.buses[0]?.head.x).toBe(96)
-    expect(two.sends[0]?.x).toBe(94)
+    expect(two.buses[0]?.head.x).toBe(104)
+    // Each strip's holes about its own middle; the lanes by how far each
+    // bus's threads run, A's and C's as far, in the buses' order
+    const sends = mixSends(two, [
+      ['a', 'c'],
+      ['a', 'b'],
+    ])
+    expect(sends.map((t) => [t.strip, t.bus, t.run.from.y, t.lane])).toEqual([
+      [0, 'a', 36.5, 94],
+      [0, 'c', 48.5, 98],
+      [1, 'a', 111.5, 94],
+      [1, 'b', 123.5, 102],
+    ])
     expect([two.width, two.height]).toEqual([rest.width, rest.height])
     // Three stand taller than the rows at rest: the mix grows down, the
     // rows and the master with it
@@ -178,7 +252,10 @@ describe('mixGeometry', () => {
     expect(eight.height).toBe(8 + 8 * 68 - 6 + 8)
     expect(eight.master.h).toBe(502)
     expect(eight.buses[0]?.head).toMatchObject({ y: 8 + 207, h: 88 })
-    expect(eight.sends[0]?.y).toBe(eight.levels[0]?.y)
+    // The last: its thread turns up to the head's middle
+    const [send] = mixSends(eight, [[], [], [], [], [], [], [], ['a']])
+    expect(send?.run.from).toEqual({ x: 87, y: 8 + 7 * 68 + 31 })
+    expect(send?.run.to.y).toBe(eight.buses[0]?.stitches[0]?.from.y)
     // As wide as with one track
     expect(eight.width).toBe(mixGeometry(mixOf({ a: [] }), LIMITS).width)
   })
@@ -186,10 +263,10 @@ describe('mixGeometry', () => {
   it('has no bus to join with none, the strip two rows tall', () => {
     const geometry = mixGeometry(mixOf({}), LIMITS)
     expect(geometry.buses).toEqual([])
-    expect(geometry.levels).toEqual([])
+    expect(mixSends(geometry, [['a']])).toEqual([])
     expect(geometry.strips[0]?.h).toBe(94 + 6 + 30)
     // A head, a seam and the least "+" wide
-    expect(geometry.addBus).toMatchObject({ x: 96, w: 36 + 3 + 44 })
+    expect(geometry.addBus).toMatchObject({ x: 104, w: 36 + 3 + 44 })
   })
 
   it('widens the tiles with the frame, the master the rest', () => {
@@ -205,8 +282,30 @@ describe('mixGeometry', () => {
     expect(wide.strips[0]?.w).toBe(MIX_GRAPH.stripW * MIX_GRAPH.stretch)
     expect(wide.buses[1]?.effects[0]?.box.w).toBe(120)
     expect(wide.master.x + wide.master.w + MIX_GRAPH.end).toBe(2000)
-    // Too narrow: everything at rest, and the frame pans
-    expect(mixGeometry(FIRST, LIMITS, 200)).toEqual(mixGeometry(FIRST, LIMITS))
+    expect(wide.icons).toBe(false)
+  })
+
+  it('makes the effects icons in a frame too narrow for them', () => {
+    // At rest, 484 wide: two effects on A, none on B, one on the master
+    const mix = mixOf({ a: ['e1', 'e2'], b: [] }, ['e3'])
+    const rest = mixGeometry(mix, LIMITS)
+    expect(rest.icons).toBe(false)
+    expect(rest.width).toBe(8 + 84 + 12 + 36 + 3 + 2 * 63 + 44 + 4 + 63 + 104)
+    // A phone's: every effect 44 wide, the master the rest of the frame
+    const phone = mixGeometry(mix, LIMITS, 440)
+    expect(phone.icons).toBe(true)
+    expect(phone.buses[0]?.effects.map(({ box }) => box.x)).toEqual([143, 190])
+    expect(phone.buses[0]?.effects[1]?.box.w).toBe(MIX_GRAPH.iconW)
+    expect(phone.buses[0]?.add).toMatchObject({ x: 237, w: 44 })
+    expect(phone.masterEffects[0]?.box).toMatchObject({ x: 285, w: 44 })
+    expect(phone.strips[0]?.w).toBe(MIX_GRAPH.stripW)
+    expect(phone.master).toMatchObject({ x: 332, w: 440 - 332 - 8 })
+    // Narrower still: the icons stay, and the frame pans
+    const narrow = mixGeometry(mix, LIMITS, 300)
+    expect(narrow.icons).toBe(true)
+    expect(narrow.width).toBe(332 + 96 + 8)
+    // Wide enough for the tiles at rest: words again
+    expect(mixGeometry(mix, LIMITS, rest.width).icons).toBe(false)
   })
 
   it('grows the rows with a taller frame, up to twice their height', () => {

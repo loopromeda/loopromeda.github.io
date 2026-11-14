@@ -5,9 +5,12 @@
  * row, as the play surface stands them (pads.ts); after the block the
  * kit's chain, as a sound's inserts stand after its amp (graph.ts): its
  * effects in a row, as tall as the block, a "+" after them while the
- * chain has room, and the kit's out filling the rest. Pure math, no DOM.
+ * chain has room, and the kit's out filling the rest. A thread joins them
+ * (threads.ts) at the block's middle: out of the block, through each
+ * effect, over the "+" and into the out. Pure math, no DOM.
  */
 import type { Box } from './graph'
+import { across, type Run } from './threads'
 
 /**
  * The kit in pixels at rest: a pad 48 wide and 36 tall (a name of two
@@ -48,12 +51,13 @@ export interface KitGeometry {
   /** The pads' block, around them all */
   readonly block: Box
   readonly effects: readonly { readonly effect: string; readonly box: Box }[]
-  /** Each effect's joint, before it: the seam's middle */
-  readonly fxJoints: readonly number[]
+  /** The thread's run into each effect, from the block or the one before */
+  readonly fxStitches: readonly Run[]
   /** The "+", while the chain holds fewer than its most */
   readonly add: Box | undefined
   readonly out: Box
-  readonly outJoint: number
+  /** Its run into the out, from the last effect or the block, over the "+" */
+  readonly outStitch: Run
 }
 
 /**
@@ -116,9 +120,7 @@ export function kitGeometry(
     h: blockH,
   }
   let x = block.x + block.w + g.seam
-  const fxJoints: number[] = []
-  const boxes = effects.map(({ id }, k) => {
-    fxJoints.push(x - (k === 0 ? g.seam : g.fxSeam) / 2)
+  const boxes = effects.map(({ id }) => {
     const box: Box = { x, y: g.top, w: fxW, h: blockH }
     x += fxW + g.fxSeam
     return { effect: id, box }
@@ -128,11 +130,12 @@ export function kitGeometry(
     add = { x, y: g.top, w: addW, h: blockH }
     x += addW + g.fxSeam
   }
-  const outJoint = x - (effects.length === 0 && !adding ? g.seam : g.fxSeam) / 2
   const least = Math.floor(g.outW * share)
   const outW = Math.max(least, (fill ?? 0) - g.end - x)
   const out: Box = { x, y: g.top, w: outW, h: blockH }
   const height = g.top + blockH + g.end
+  const middle = g.top + blockH / 2
+  const stages = [block, ...boxes.map(({ box }) => box)]
   return {
     width: x + outW + g.end,
     height,
@@ -140,9 +143,11 @@ export function kitGeometry(
     pads,
     block,
     effects: boxes,
-    fxJoints,
+    fxStitches: boxes.map(({ box }, k) =>
+      across(stages[k] ?? block, box, middle)
+    ),
     add,
     out,
-    outJoint,
+    outStitch: across(stages[stages.length - 1] ?? block, out, middle),
   }
 }

@@ -153,10 +153,13 @@ src/state/    params.ts: the knob schema and the old parameters;
 src/viz/      pure display math (scope trigger and decimation, envelope
               and LFO outlines, filter response, drive curve, keyboard
               and pad grid geometry, the sound editor's input column
-              (and left of it what each input reads, pegged to it) and
-              chain rows in graph.ts, the kit's pads and chain in its
-              place in kitGraph.ts, the mix's strip, bus rows and
-              master in mixGraph.ts, the master's views (spectrum,
+              (and left of it what each input reads) and chain rows in
+              graph.ts, the kit's pads and chain in its place in
+              kitGraph.ts, the mix's strip, bus rows and master in
+              mixGraph.ts (its effects icons in a frame too narrow for
+              their names), the threads stitched between their tiles
+              (a hole for each, a run across each seam) in threads.ts,
+              the master's views (spectrum,
               spectrogram, stereo, meters) and the mastering tools'
               readouts (a reduction, a loudness) in master.ts, the
               colour scale the spectrogram's levels take in
