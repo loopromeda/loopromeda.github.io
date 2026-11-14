@@ -973,6 +973,17 @@ describe('roomBeside', () => {
     )
   })
 
+  it('leaves the tiles the whole width for no bar down the frame', () => {
+    const dock = { left: 250, top: 0, right: 400, bottom: 330 }
+    // The dock 10 in from the frame's right: none of that kept clear
+    expect(roomBeside(frame, dock, 12, 0)).toEqual({
+      w: 400,
+      h: 300,
+      right: 172,
+      bottom: 0,
+    })
+  })
+
   it('keeps the tiles clear of the whole dock across the frame', () => {
     const dock = { left: 0, top: 200, right: 420, bottom: 330 }
     expect(roomBeside(frame, dock, 12, 44)).toEqual(roomBeside(frame, dock, 12))

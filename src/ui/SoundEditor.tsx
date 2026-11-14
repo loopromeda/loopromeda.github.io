@@ -85,7 +85,6 @@ import {
   mixShapeKey,
   modLook,
   modulated,
-  pickedName,
   reachOf,
   shapeKey,
   stillKitPicked,
@@ -145,12 +144,12 @@ const DOCK_GAP = 0
 /** How far in the dock stands from the card's edges (2) */
 const DOCK_INSET = 8
 /**
- * The bar the hidden panel leaves in the dock: beside the graph its width
- * (w-11), under it its height (h-9)
+ * The bar the panel leaves in the dock when it closes, beside the graph:
+ * none (ashon, 2026-11-15: "노브 패널은 접을 필요없이, 닫고 열도록"),
+ * the tiles the frame's whole width
  */
-const BAR_BESIDE = 44
-const BAR_UNDER = 36
-/** The panel, or its bar, standing over the graph's card: raised */
+const BAR_BESIDE = 0
+/** The panel standing over the graph's card: raised */
 const DOCKED = RAISED
 
 /** Where a tile dragged goes: its index, and the chain an item goes into */
@@ -441,18 +440,6 @@ export function SoundEditor({
     keep(KIT_PICKED_KEY, id)
     if (!panel) show(true)
   }
-  const shownName =
-    pane === 'mix'
-      ? mixed === SENDS
-        ? trackName(engine.getTrack(), output)
-        : pickedName(sound, mix, mixed)
-      : !kitView
-        ? pickedName(sound, mix, picked)
-        : kitPicked === PAD_TILE
-          ? padName(library.snapshot.pads[engine.getPad()], engine.getPad())
-          : kitPicked === addId('effect')
-            ? 'Add to the kit'
-            : `Kit ${pickedName(sound, mix, kitPicked)}`
   const picking: Picking = {
     engine,
     sound,
@@ -510,13 +497,14 @@ export function SoundEditor({
   // leaves them (roomBeside), so hiding the panel moves nothing else. The
   // editor asks the page for the same height either way (--dock, what the
   // graph's frame asks besides its own), so the keys under it stay put
-  // too. Hidden, the dock keeps its place and holds only a bar at its
-  // bottom, or at its right beside (the panel's own side: a short screen
-  // has no height for a bar). Under the graph the tiles keep clear of the
-  // whole dock, the canvas they leave showing where the panel stood when
-  // it hides; beside it, only of the bar, the panel standing over the
-  // last of them, shown. Either way the frame pans them out from under
-  // the panel or the bar, and showing it resizes nothing.
+  // too. The panel closes (its header's last button) and opens again on
+  // a tile tapped, no bar left to fold it into (ashon, 2026-11-15: "노브
+  // 패널은 접을 필요없이, 닫고 열도록"): closed, the dock keeps its place,
+  // empty. Under the graph the tiles keep clear of the whole dock, the
+  // canvas they leave showing where the panel stood when it closes;
+  // beside it they take the whole width, the panel standing over the
+  // last of them, open. The frame pans them out from under the panel,
+  // and opening it resizes nothing.
   return (
     <div className="relative isolate flex min-h-0 flex-1 flex-col [--dock:calc(7.75rem_+_var(--knob)_+_0.5rem)] [--knob:clamp(3rem,calc((100vw_-_4.5rem)/8.5),4.5rem)] side:[--dock:0px] side:[--knob:3rem] tall:[--knob:4.5rem]">
       {/* The two panes, in a panel of their own over the card, slim as a
@@ -585,41 +573,6 @@ export function SoundEditor({
         inert={sheet !== undefined}
         className={`absolute inset-x-2 bottom-2 z-20 h-[calc(7.75rem_+_var(--knob))] max-h-[calc(100%-9.25rem)] min-h-0 side:top-14 side:bottom-2 side:right-2 side:left-auto side:h-auto side:max-h-none side:w-[clamp(22rem,36%,40rem)] tall:top-auto tall:left-2 tall:h-[calc(7.75rem_+_var(--knob))] tall:max-h-[calc(100%-9.25rem)] tall:w-auto ${panel ? `grid overflow-y-auto overscroll-contain ${DOCKED}` : 'pointer-events-none'}`}
       >
-        {!panel && (
-          <button
-            type="button"
-            aria-label={`Show the knobs: ${shownName}`}
-            onClick={() => show(true)}
-            className={`pointer-events-auto absolute inset-x-0 bottom-0 flex h-9 items-center gap-2 px-3 text-left side:inset-x-auto side:inset-y-0 side:right-0 side:h-auto side:w-11 side:justify-center side:px-0 tall:inset-x-0 tall:top-auto tall:h-9 tall:w-auto tall:justify-start tall:px-3 ${DOCKED}`}
-          >
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 18 18"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-              className="shrink-0 text-(--ink-300) side:-rotate-90 tall:rotate-0"
-            >
-              <path d="M4 11l5-5 5 5" />
-            </svg>
-            <span
-              aria-hidden
-              className="text-xs font-semibold text-(--ink-200) side:hidden tall:inline"
-            >
-              Show the knobs
-            </span>
-            <span
-              aria-hidden
-              className="min-w-0 truncate text-[11px] text-(--ink-400) side:hidden tall:inline"
-            >
-              {shownName}
-            </span>
-          </button>
-        )}
         {panel &&
           (pane === 'mix' ? (
             <PartPanel
@@ -630,7 +583,7 @@ export function SoundEditor({
               focus={undefined}
               onRoute={route}
               onMap={map}
-              onHide={() => show(false)}
+              onClose={() => show(false)}
               onMaster={onMaster}
               inMix
             />
@@ -644,7 +597,7 @@ export function SoundEditor({
               focus={undefined}
               onRoute={() => undefined}
               onMap={() => undefined}
-              onHide={() => show(false)}
+              onClose={() => show(false)}
               onMaster={onMaster}
               onPresets={onPresets}
             />
@@ -671,7 +624,7 @@ export function SoundEditor({
               focus={picked === chosen ? focus : undefined}
               onRoute={route}
               onMap={map}
-              onHide={() => show(false)}
+              onClose={() => show(false)}
               onMaster={onMaster}
             />
           ))}
@@ -740,7 +693,7 @@ function useRoom(
         right: at.left + element.clientWidth,
         bottom: at.top + element.clientHeight,
       }
-      // Beside, the tiles keep clear of the panel's bar, shown or hidden
+      // Beside, the tiles take the whole width, the panel open or closed
       const next = roomBeside(
         frame,
         dock?.getBoundingClientRect(),
@@ -770,8 +723,7 @@ function useRoom(
 /**
  * The frame both panes' tiles stand in: at rest it asks the card for the
  * taller of the two (rest), so that showing one or the other moves
- * nothing under them; it pans the tiles out from under the panel over it,
- * or from under its bar with the panel hidden.
+ * nothing under them; it pans the tiles out from under the panel over it.
  */
 function Frame({
   frameRef,
@@ -792,9 +744,8 @@ function Frame({
   contentRef?: RefObject<HTMLDivElement | null>
   children: ReactNode
 }) {
-  /** How far past the tiles the frame pans, of reach the dock covers */
-  const clear = (reach: number, bar: number) =>
-    reach > 0 ? (docked ? reach : Math.min(reach, bar + DOCK_GAP)) : 0
+  /** How far past the tiles the frame pans: all the panel covers, open */
+  const clear = (reach: number) => (docked && reach > 0 ? reach : 0)
   return (
     <div
       ref={frameRef}
@@ -806,15 +757,14 @@ function Frame({
       style={{ '--rest': `${rest}px` } as CSSProperties}
       className="relative min-h-0 grow basis-[calc(min(var(--rest),22rem,45dvh)_+_var(--dock,0px))] overflow-auto overscroll-contain side:min-w-0 side:basis-0"
     >
-      {/* Room to pan the tiles out from under the panel over the frame,
-          or from under its bar with the panel hidden */}
+      {/* Room to pan the tiles out from under the panel over the frame */}
       {(room.right > 0 || room.bottom > 0) && (
         <span
           aria-hidden
           className="pointer-events-none absolute size-px"
           style={{
-            left: width + clear(room.right, BAR_BESIDE) - 1,
-            top: height + clear(room.bottom, BAR_UNDER) - 1,
+            left: width + clear(room.right) - 1,
+            top: height + clear(room.bottom) - 1,
           }}
         />
       )}
@@ -879,9 +829,8 @@ function OutputAside({
  * spectrum, the spectrogram or the two sides, as its panel chooses) and
  * its meters under its name and the sound's sends to the mix's buses.
  * The frame takes the room the page leaves it, up to a cap, the tiles
- * what the panel's dock over it leaves of that (beside, what its bar
- * leaves, the panel standing over the last of them), and it pans what it
- * cannot show.
+ * what the panel's dock over it leaves of that (beside, all of it, the
+ * panel standing over the last of them), and it pans what it cannot show.
  */
 function Graph({
   engine,
@@ -904,10 +853,7 @@ function Graph({
   scope: OutputViews | undefined
   /** The panel's dock, over the frame: the tiles keep to what it leaves */
   dock: HTMLElement | null
-  /**
-   * Whether the panel is in it: the frame pans the tiles from under it,
-   * or with the panel hidden from under its bar
-   */
+  /** Whether the panel is in it: the frame pans the tiles from under it */
   docked: boolean
 }) {
   const frameRef = useRef<HTMLDivElement>(null)

@@ -237,31 +237,31 @@ as a graph of flat tiles, flowing left to right.
   into depths from it. Its header moves the part a place either way
   (arrows) and removes it, asking first in a dialog (since 2026-11-12,
   ashon: the "⋯" menu that held them spelled out, and a removal
-  confirmed). Its last button hides it, the graph taking its room to
-  show more chains (ashon, 2026-11-12): a bar under the graph, or a
-  narrow column beside it from md, brings it back, as picking a tile
-  does; a tile held to be dragged leaves it hidden. Since 2026-11-12 it
-  stands over the graph's card, not beside it: the tiles keep to the
-  room it leaves them (`roomBeside` in `src/viz/graph.ts`) and the
-  editor asks the page for the same height whether it shows or not, so
-  hiding it shows the canvas under it and moves neither the tiles nor
-  the keys. Hidden, it had given the keys and the tiles its room, both
-  growing, and ashon asked for them to keep their size, the panel over
-  the canvas. Hidden, it leaves a bar, and the graph pans its last
-  tiles out from under it as from under the panel (ashon, 2026-11-12:
-  on a phone on its side the bar hid the amp). Beside the graph the
-  tiles keep clear of the bar only, the panel shown or hidden, and the
-  panel stands over the last of them, the graph panning them out
-  (ashon, 2026-11-12: the canvas left for the panel on a phone on its
-  side was room wasted, and the tiles should not resize as it shows);
-  under the graph they keep clear of the whole dock. Its card face lets a
-  little through, the canvas under it
-  blurred (since 2026-11-12: ashon asked for a blur, a hue and a grain,
-  then found the knobs lost on that busier glass and kept the blur
-  alone).
+  confirmed). Its last button, a cross, closes it, and a tile tapped
+  opens it again; a tile held to be dragged leaves it closed. Until
+  2026-11-15 the button folded it away (ashon, 2026-11-12: for the
+  graph to show more chains) into a bar under the graph, or a narrow
+  column beside it from md, which brought it back; then ashon asked for
+  it to close and open instead ("노브 패널은 접을 필요없이, 닫고
+  열도록"), and the bar went. Since 2026-11-12 it stands over the
+  graph's card, not beside it: the tiles keep to the room it leaves
+  them (`roomBeside` in `src/viz/graph.ts`) and the editor asks the
+  page for the same height whether it shows or not, so closing it
+  shows the canvas under it and moves neither the tiles nor the keys.
+  Before that, hidden, it had given the keys and the tiles its room,
+  both growing, and ashon asked for them to keep their size, the panel
+  over the canvas. Beside the graph the tiles take its whole width,
+  the panel open or closed, and the panel stands over the last of
+  them, the graph panning them out (ashon, 2026-11-12: the canvas left
+  for the panel on a phone on its side was room wasted, and the tiles
+  should not resize as it shows; they kept clear of its bar while it
+  had one); under the graph they keep clear of the whole dock. Its card
+  face lets a little through, the canvas under it blurred (since
+  2026-11-12: ashon asked for a blur, a hue and a grain, then found the
+  knobs lost on that busier glass and kept the blur alone).
 - **Margins.** In the editor's card everything stands 8 px from the
   card's edges, and its blocks 8 px apart: the rack (a row or a column),
-  the graph's tiles, and the panel or its bar, which stands in from the
+  the graph's tiles, and the panel, which stands in from the
   card's edges as well rather than flush with them (since 2026-11-12,
   ashon: "전체 UI 배치 부분도 여백을 깔끔하게 정돈해 줘"; the tiles had
   stood 6 from the top, the rack 12 above them, the panel 20 past

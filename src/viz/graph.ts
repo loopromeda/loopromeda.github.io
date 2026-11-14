@@ -947,10 +947,11 @@ export interface Room {
  * from the dock's top, one down its height its right from the dock's
  * left, and gap more is kept clear before either. One that covers
  * nothing of it leaves it all, and so does no dock. Given bar, the width
- * of the bar at a dock's right edge (the panel's, hidden), the tiles of a
- * frame with a dock down it keep clear of that bar only, the panel shown
- * or not, and stand under the rest: the frame pans them out from under it
- * (right). Across, they keep clear of the whole dock. A dock stood inset
+ * of a bar at a dock's right edge, the tiles of a frame with a dock down
+ * it keep clear of that bar only, and stand under the rest: the frame
+ * pans them out from under it (right). A bar of 0 (the panel's, which
+ * leaves none when it closes) keeps nothing clear, the tiles the frame's
+ * whole width. Across, they keep clear of the whole dock. A dock stood inset
  * in from the frame's sides (the card's margin) is across it or down it
  * still, and what it leaves between it and the frame's edge is covered.
  */
@@ -986,7 +987,11 @@ export function roomBeside(
     const right = from(dock.left)
     if (right === 0) return whole
     const kept =
-      bar === undefined ? right : from(Math.max(dock.right - bar, dock.left))
+      bar === undefined
+        ? right
+        : bar > 0
+          ? from(Math.max(dock.right - bar, dock.left))
+          : 0
     return { w: w - kept, h, right, bottom: 0 }
   }
   return whole

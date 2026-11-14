@@ -371,17 +371,6 @@ function ownerName(owner: MixOwner): string {
   return owner === MASTER ? 'Master' : busLetter(owner)
 }
 
-/** The name of what id picks: a part's (partName), or the mix's Bus B */
-export function pickedName(sound: Sound, mix: Mix, id: string): string {
-  const part = mixPartOf(id)
-  if (part !== undefined) return mixPartName(mix, part)
-  const adding = mixAddingTo(id)
-  if (adding === 'bus') return 'Add a bus'
-  if (adding === 'track') return 'Add a track'
-  if (adding !== undefined) return 'Add an effect'
-  return partName(sound, id)
-}
-
 /**
  * A mix tile's line, from its knobs: a strip's level, a bus's and the
  * master's, an effect's (effectLine)

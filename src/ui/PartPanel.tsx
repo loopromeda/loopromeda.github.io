@@ -162,7 +162,7 @@ const LOUDNESS_SPAN = 2
 
 /** The actions' pictures, in an 18×18 box */
 const ICONS = {
-  // Arrows move a part; the bar under a chevron puts the panel away
+  // Arrows move a part; a cross closes the panel
   left: 'M14 9H4M8 5L4 9l4 4',
   right: 'M4 9h10M10 5l4 4-4 4',
   up: 'M9 14V4M5 8l4-4 4 4',
@@ -170,7 +170,7 @@ const ICONS = {
   remove: 'M3.5 5h11M7.5 5V3.5h3V5M5 5l.8 9.5h6.4L13 5M7.8 8v4M10.2 8v4',
   // A pencil: a track's name
   rename: 'M3.5 14.5l.8-3.3 7.4-7.4 2.5 2.5-7.4 7.4zM10.2 5.3l2.5 2.5',
-  hide: 'M4 4l5 5 5-5M4 14h10',
+  close: 'M4.5 4.5l9 9M13.5 4.5l-9 9',
   // Corners pulled out: the master's views, large
   open: 'M10.5 3.5h4v4M14.5 3.5l-4.5 4.5M7.5 14.5h-4v-4M3.5 14.5L8 10',
 } as const
@@ -369,11 +369,12 @@ const KIND_GLYPHS = {
 /**
  * The panel under the graph: the knobs of the tile picked, in its chain's
  * colour; for a "+", the kinds it adds. Its header moves the part a place
- * either way and removes it (asked first: ConfirmDialog), and hides the
- * panel (onHide), the graph taking its room. An input picks the chains it
- * feeds here, an oscillator its FM source, a ring its two inputs. From
- * the other side, an input is turned on as another oscillator's FM, and
- * how much is set, here too: a knob for each oscillator its FM reads it.
+ * either way and removes it (asked first: ConfirmDialog), and closes the
+ * panel (onClose), a tile tapped opening it again. An input picks the
+ * chains it feeds here, an oscillator its FM source, a ring its two
+ * inputs. From the other side, an input is turned on as another
+ * oscillator's FM, and how much is set, here too: a knob for each
+ * oscillator its FM reads it.
  */
 export function PartPanel({
   engine,
@@ -385,7 +386,7 @@ export function PartPanel({
   focus,
   onRoute,
   onMap,
-  onHide,
+  onClose,
   viewOf: outputView,
   chooseView,
   onMaster,
@@ -414,8 +415,8 @@ export function PartPanel({
   onRoute: (target: string, key: string) => void
   /** Routes from source into the tiles picked, starting at target */
   onMap: (source: string, target?: string) => void
-  /** Hides the panel, for the graph to have its room */
-  onHide: () => void
+  /** Closes the panel, for the graph to be seen whole */
+  onClose: () => void
 }) {
   /** An output's views, as its panel chooses them */
   const views = (source: OutputSource) => ({
@@ -552,18 +553,14 @@ export function PartPanel({
               <ActionIcon path={action.icon} />
             </button>
           ))}
-          {/* Down, the way the panel goes; beside the graph, to the right */}
           <button
             type="button"
-            aria-label="Hide the knobs"
-            title="Hide the knobs"
-            onClick={onHide}
+            aria-label="Close the knobs"
+            title="Close"
+            onClick={onClose}
             className={`${ACTION_BUTTON} ml-1`}
           >
-            <ActionIcon
-              path={ICONS.hide}
-              className="side:-rotate-90 tall:rotate-0"
-            />
+            <ActionIcon path={ICONS.close} />
           </button>
         </span>
       </div>
