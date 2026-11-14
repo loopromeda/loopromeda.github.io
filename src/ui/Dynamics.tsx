@@ -7,7 +7,14 @@ import {
   reductionFill,
   reductionText,
 } from '../viz/master'
-import { BUTTON } from './controls'
+import {
+  BUTTON,
+  KNOB_COLUMN,
+  KNOB_HEIGHT,
+  KNOB_LABEL,
+  KNOB_READOUT,
+  SMALL_ICON_BUTTON,
+} from './controls'
 
 /** The reduction meter's marks, dB under 0: its quarters */
 const REDUCTION_MARKS = [6, 12, 18]
@@ -152,19 +159,22 @@ export function TileReduction({
   )
 }
 
-/** The loudness's three windows, as the reports name them */
+/**
+ * The loudness's three windows, as the reports name them, and as a
+ * loudness meter letters them (EBU R 128's M, S and I) where narrow
+ */
 const WINDOWS = [
-  { key: 'momentary', label: 'Momentary' },
-  { key: 'shortTerm', label: 'Short-term' },
-  { key: 'integrated', label: 'Integrated' },
+  { key: 'momentary', label: 'Momentary', short: 'M' },
+  { key: 'shortTerm', label: 'Short-term', short: 'S' },
+  { key: 'integrated', label: 'Integrated', short: 'I' },
 ] as const
 
 /**
- * How loud the output is, in LUFS (BS.1770), as the audio thread measures
- * it (Engine.watchLoudness): the last 400 ms, the last 3 s, and all of it
- * since a Play or Reset, gated. Straight onto the page, as the meters are.
+ * The three windows' texts, written straight onto their spans (the refs
+ * returned, one a window) as the audio thread reports them
+ * (Engine.watchLoudness), as the meters are
  */
-export function Loudness({ engine }: { engine: Engine }) {
+function useLoudnessTexts(engine: Engine) {
   const textRefs = useRef<(HTMLSpanElement | null)[]>([])
 
   useEffect(() => {
@@ -179,6 +189,20 @@ export function Loudness({ engine }: { engine: Engine }) {
       })
     })
   }, [engine])
+
+  return textRefs
+}
+
+/** What Reset says it does */
+const RESET_LABEL = 'Measure the integrated loudness again from now'
+
+/**
+ * How loud the output is, in LUFS (BS.1770), as the audio thread measures
+ * it: the last 400 ms, the last 3 s, and all of it since a Play or Reset,
+ * gated. Straight onto the page, as the meters are.
+ */
+export function Loudness({ engine }: { engine: Engine }) {
+  const textRefs = useLoudnessTexts(engine)
 
   return (
     <div role="group" aria-label="Loudness" className="flex items-center gap-2">
@@ -210,12 +234,84 @@ export function Loudness({ engine }: { engine: Engine }) {
       </div>
       <button
         type="button"
-        aria-label="Measure the integrated loudness again from now"
+        aria-label={RESET_LABEL}
         onClick={() => engine.resetLoudness()}
         className={BUTTON}
       >
         Reset
       </button>
+    </div>
+  )
+}
+
+/** Reset's picture, 18 by 18: an arrow coming round to start again */
+const RESET_ICON = 'M4.5 9a4.5 4.5 0 1 0 1.4-3.3M5.9 2.9v2.8h2.8'
+
+/**
+ * The loudness in the master's panel, in its knob row beside its Level
+ * and its views (asked for by ashon, 2026-11-15: "마스터에서 아래쪽에
+ * LUFS 부분도 노브쪽에 정보 패널 형태로 잘 정리해 보면 좋겠어"): a face a
+ * knob's height across the columns it spans (className), the three
+ * windows side by side (lettered where narrow) and Reset at its end,
+ * named under it as a knob is, the unit read under the name.
+ */
+export function LoudnessCell({
+  engine,
+  className = '',
+}: {
+  engine: Engine
+  className?: string
+}) {
+  const textRefs = useLoudnessTexts(engine)
+
+  return (
+    <div className={`${KNOB_COLUMN} w-full self-start ${className}`}>
+      <div
+        role="group"
+        aria-label="Loudness, LUFS"
+        className={`${KNOB_HEIGHT} flex w-full items-center gap-1 rounded-[10px] bg-(--under)/25 pr-1 pl-2`}
+      >
+        <div className="@container grid min-w-0 flex-1 grid-cols-3 gap-1">
+          {WINDOWS.map(({ key, label, short }, i) => (
+            <div key={key} className="flex min-w-0 flex-col">
+              <span className="truncate text-[10px] leading-tight text-(--ink-500)">
+                <span className="@max-[11.5rem]:sr-only">{label}</span>
+                <span aria-hidden className="hidden @max-[11.5rem]:inline">
+                  {short}
+                </span>
+              </span>
+              <span
+                ref={(span) => {
+                  textRefs.current[i] = span
+                }}
+                className="truncate font-mono text-[13px] leading-tight text-(--ink-100)"
+              >
+                –
+              </span>
+            </div>
+          ))}
+        </div>
+        <button
+          type="button"
+          aria-label={RESET_LABEL}
+          title="Reset"
+          onClick={() => engine.resetLoudness()}
+          className={SMALL_ICON_BUTTON}
+        >
+          <svg viewBox="0 0 18 18" width={14} height={14} aria-hidden>
+            <path
+              d={RESET_ICON}
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={1.6}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </button>
+      </div>
+      <span className={KNOB_LABEL}>Loudness</span>
+      <span className={KNOB_READOUT}>LUFS</span>
     </div>
   )
 }

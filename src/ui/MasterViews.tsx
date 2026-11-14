@@ -97,23 +97,51 @@ const KEY_TICKS = Array.from(
  * The spectrogram's key: the mode's colour scale in a bar from the
  * spectral views' floor, the background's colour, to their top, near
  * white (near black in the light), the two named at its ends and a tick
- * under it at every 10 dB between
+ * under it at every 10 dB between. Fitted to a tile (fit), the bar runs
+ * across it, 8rem at most (ashon: "너무 아래에 쫙 펼쳐져 있는데"), and
+ * its ends are named under it (asked for by ashon, 2026-11-15:
+ * "스펙트로그램에서의 legend는 시각화 안에 들어가도 좋을 것 같아").
  */
-export function ColourKey({ className = '' }: { className?: string }) {
+export function ColourKey({
+  className = '',
+  fit = false,
+}: {
+  className?: string
+  fit?: boolean
+}) {
   const light = mode() === 'light'
+  const label = `The spectrogram’s colours: ${SPECTRUM_FLOOR} dB ${light ? 'light' : 'dark'}, ${SPECTRUM_TOP} dB ${light ? 'near black' : 'near white'}`
+  const gradient = SCALES[light ? 'light' : 'dark'].gradient('to right')
+  if (fit) {
+    return (
+      <span
+        role="img"
+        aria-label={label}
+        className={`flex flex-col gap-0.5 font-mono text-[9px] leading-none text-(--ink-500) ${className}`}
+      >
+        <span
+          aria-hidden
+          className="h-1.5 w-full rounded-full ring-1 ring-(--lift-3)"
+          style={{ background: gradient }}
+        />
+        <span aria-hidden className="flex justify-between gap-1">
+          <span>{SPECTRUM_FLOOR}</span>
+          <span>{SPECTRUM_TOP} dB</span>
+        </span>
+      </span>
+    )
+  }
   return (
     <span
       role="img"
-      aria-label={`The spectrogram’s colours: ${SPECTRUM_FLOOR} dB ${light ? 'light' : 'dark'}, ${SPECTRUM_TOP} dB ${light ? 'near black' : 'near white'}`}
+      aria-label={label}
       className={`flex shrink-0 items-center gap-1 font-mono text-[9px] leading-none text-(--ink-500) ${className}`}
     >
       <span aria-hidden>{SPECTRUM_FLOOR}</span>
       <span
         aria-hidden
         className="relative h-1.5 w-20 rounded-full ring-1 ring-(--lift-3)"
-        style={{
-          background: SCALES[light ? 'light' : 'dark'].gradient('to right'),
-        }}
+        style={{ background: gradient }}
       >
         {KEY_TICKS.map((db) => (
           <span
@@ -444,8 +472,12 @@ export function Spectrum({
  * rings is counted in them. Labelled, the decades are named in the DOM
  * over it, and its colours (ColourKey) at its lower left, over the
  * oldest of the lowest notes; where it is wider than 16rem, the lines'
- * second is named at its lower right. In silence it scrolls the last
- * sound away, then rests, its lines where they were.
+ * second is named at its lower right. In a tile, unlabelled, its colours
+ * are keyed across its foot instead (ColourKey's fit), where it is 6rem
+ * wide or more: a narrower one (a phone's tiles) has no room to spare
+ * for it (ashon: "렌더링 영역이 작으면 legend는 그냥 제거해도 좋을 것
+ * 같아"). In silence it scrolls the last sound away, then rests, its
+ * lines where they were.
  */
 export function Spectrogram({
   engine,
@@ -568,7 +600,7 @@ export function Spectrogram({
   )
   return (
     <div
-      className={`relative overflow-hidden contain-strict ${labelled ? '@container' : ''} ${className}`}
+      className={`@container relative overflow-hidden contain-strict ${className}`}
     >
       <canvas
         ref={canvasRef}
@@ -593,8 +625,13 @@ export function Spectrogram({
           </span>
         </span>
       )}
-      {labelled && (
+      {labelled ? (
         <ColourKey className="pointer-events-none absolute bottom-1 left-1 rounded bg-(--bg)/75 px-1 pt-0.5 pb-1.5" />
+      ) : (
+        <ColourKey
+          fit
+          className="pointer-events-none absolute bottom-1 left-1 w-[calc(100%-0.5rem)] max-w-32 rounded bg-(--bg)/75 px-1 py-0.5 @max-[6rem]:hidden"
+        />
       )}
     </div>
   )

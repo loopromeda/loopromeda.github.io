@@ -177,6 +177,14 @@ export const GLYPHS = {
     'M9 1.5 V10.5 M1.5 6 H6.5 M10.5 6 H16.5 M4 3.5 L1.5 6 L4 8.5 M14 3.5 L16.5 6 L14 8.5',
   // Bars of a meter, the master's
   master: 'M3 11 V6 M7 11 V2 M11 11 V4 M15 11 V8',
+  // The views of an output (MasterViews): a wave over its line; a
+  // spectrum's hump falling away to the highs; a spectrogram's rows,
+  // each lit in runs; a vectorscope's diamond, a lens of sound in it
+  scope: 'M1 6 H17 M1 6 C3 0 6 0 9 6 S15 12 17 6',
+  spectrum: 'M1 11 C2.5 11 3 3 5.5 3 C8 3 8.5 7 10.5 7 S14 6 15 9 L17 11',
+  spectrogram: 'M1 2.5 H8 M11 2.5 H17 M1 6 H4 M7 6 H14 M3 9.5 H12 M15 9.5 H17',
+  stereo:
+    'M9 1 L15.5 6 L9 11 L2.5 6 Z M9 3.5 C10.4 5 10.4 7 9 8.5 C7.6 7 7.6 5 9 3.5',
   // A path that forks, the sound's sends to the returns
   sends: 'M1 6 H7 L11 2 H17 M7 6 L11 10 H17',
   plus: 'M9 2 V10 M5 6 H13',

@@ -191,18 +191,21 @@ src/ui/       React components; SoundEditor.tsx the sound as tiles
               the sound's Out and the
               mix's Master hold a view of the output (MasterViews.tsx:
               Scope.tsx's waveform, the spectrum, the spectrogram and
-              its colours' key, the stereo, the meters; frames.ts
+              its colours' key within it, the stereo, the meters; frames.ts
               draws them a display frame at a time, the output read
               once a frame), its filters,
               drives and modulators their pictures (Picture.tsx, drawn
               from outline.ts); MasterSheet.tsx all the views at size
               (#/master), with the loudness; Dynamics.tsx a
               compressor's or limiter's gain reduction (in its panel,
-              and rising over its tile) and the loudness, drawn as the
-              audio thread tells them;
+              and rising over its tile) and the loudness (there, and in
+              the master's knob row), drawn as the audio thread tells
+              them;
               PartPanel.tsx the
               picked tile's knobs, adds and moves (ConfirmDialog.tsx asks
-              before a removal);
+              before a removal), after an output's knobs
+              OutputCells.tsx's cells, each a knob's size: its track's
+              Mute and Solo, and the views its tiles show;
               RoutePanels.tsx routing in the panel's place: the routes into
               a knob held, or a source's depths on the tiles picked;
               tileDrag.ts holds a tile and drags it to a new place; Knob.tsx
@@ -211,7 +214,8 @@ src/ui/       React components; SoundEditor.tsx the sound as tiles
               picks the track played, a popover on its button, and adds
               one (a track is renamed, moved and removed on its strip in
               the Mix); Mutes.tsx a track's Mute and Solo, in its
-              strip's panel, the Out tile's and the tracks' popover,
+              strip's panel (a cell of its knob row), the Out tile's
+              and the tracks' popover,
               and what the strip is for them; PlaySurface.tsx plays
               notes on Keys.tsx, Pads.tsx or XyPad.tsx, or the kit on
               KitPads.tsx (hands.ts: who

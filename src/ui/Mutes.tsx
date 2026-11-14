@@ -6,7 +6,14 @@ import {
   stripState,
   type StripState,
 } from '../state/mix'
-import { MUTE_FACE, SMALL_BUTTON_SHAPE, SOLO_FACE } from './controls'
+import {
+  KNOB_COLUMN,
+  KNOB_LABEL,
+  KNOB_READOUT,
+  KNOB_SIZE,
+  MUTE_FACE,
+  SOLO_FACE,
+} from './controls'
 
 /**
  * A track's Mute and Solo (src/state/mix.ts): the two toggles, where a
@@ -40,29 +47,32 @@ function useFlag(engine: Engine, place: number, flag: 'mute' | 'solo') {
 }
 
 /** In a list's row: a 28 px square in a touch 36 wide, the row's height */
-const SMALL = 'group flex h-11 w-9 shrink-0 items-center justify-center'
-const SMALL_SHAPE =
-  'flex size-7 items-center justify-center rounded-md font-mono text-[11px] font-semibold'
-const SMALL_MUTE = `${SMALL_SHAPE} bg-(--lift) text-(--ink-400) group-aria-pressed:bg-(--warn)/20 group-aria-pressed:text-(--warn-ink)`
-const SMALL_SOLO = `${SMALL_SHAPE} bg-(--lift) text-(--ink-400) group-aria-pressed:bg-(--ok)/20 group-aria-pressed:text-(--ok-ink)`
+const ROW = 'group flex h-11 w-9 shrink-0 items-center justify-center'
+const LETTER =
+  'flex items-center justify-center rounded-md font-mono text-[11px] font-semibold'
+const ROW_MUTE = `${LETTER} size-7 bg-(--lift) text-(--ink-400) group-aria-pressed:bg-(--warn)/20 group-aria-pressed:text-(--warn-ink)`
+const ROW_SOLO = `${LETTER} size-7 bg-(--lift) text-(--ink-400) group-aria-pressed:bg-(--ok)/20 group-aria-pressed:text-(--ok-ink)`
+/** In a panel's cell (OutputCells): half its height, by its word */
+const CELL =
+  'flex min-h-0 flex-1 items-center justify-center rounded-md text-[11px] font-semibold tracking-wider'
 
 /**
- * Mute and Solo for the track at place, named name: two toggles side by
- * side, 28 px buttons by their words (a touch 44 px tall), or small, an
- * M and an S for a list's row. Muted, nothing of the track goes on to
- * its sends, though it plays on in time; soloed, only the tracks soloed
- * are heard; a track both is muted.
+ * Mute and Solo for the track at place, named name: two toggles, an M
+ * and an S side by side in a list's row, or by their words one over the
+ * other in a panel's cell (where).
+ * Muted, nothing of the track goes on to its sends, though it plays on in
+ * time; soloed, only the tracks soloed are heard; a track both is muted.
  */
 export function Mutes({
   engine,
   place,
   name,
-  small = false,
+  where,
 }: {
   engine: Engine
   place: number
   name: string
-  small?: boolean
+  where: 'row' | 'cell'
 }) {
   const mute = useFlag(engine, place, 'mute')
   const solo = useFlag(engine, place, 'solo')
@@ -71,20 +81,20 @@ export function Mutes({
       word: 'Mute',
       on: mute,
       set: setStripMute,
-      face: MUTE_FACE,
-      smallFace: SMALL_MUTE,
+      cell: MUTE_FACE,
+      row: ROW_MUTE,
     },
     {
       word: 'Solo',
       on: solo,
       set: setStripSolo,
-      face: SOLO_FACE,
-      smallFace: SMALL_SOLO,
+      cell: SOLO_FACE,
+      row: ROW_SOLO,
     },
   ]
   return (
     <>
-      {toggles.map(({ word, on, set, face, smallFace }) => (
+      {toggles.map(({ word, on, set, cell, row }) => (
         <button
           key={word}
           type="button"
@@ -92,10 +102,10 @@ export function Mutes({
           aria-label={`${word} ${name}`}
           title={word}
           onClick={() => engine.setMix(set(engine.getMix(), place, !on))}
-          className={small ? SMALL : `${SMALL_BUTTON_SHAPE} ${face}`}
+          className={where === 'row' ? ROW : `${CELL} ${cell}`}
         >
-          {small ? (
-            <span aria-hidden className={smallFace}>
+          {where === 'row' ? (
+            <span aria-hidden className={row}>
               {word[0]}
             </span>
           ) : (
@@ -104,5 +114,44 @@ export function Mutes({
         </button>
       ))}
     </>
+  )
+}
+
+/** What a cell reads under Mute and Solo: the strip's state, short */
+const CELL_WORDS: Record<StripState, string> = {
+  on: 'On',
+  mute: 'Muted',
+  solo: 'Soloed',
+  off: 'Silent',
+}
+
+/**
+ * Mute and Solo for the track at place in a cell of its panel's knob row
+ * (OutputCells), a knob's size, one over the other, and under them, as
+ * under a knob, Track and what it is: on, muted, soloed, or silent while
+ * another is soloed (which neither toggle shows)
+ */
+export function MutesCell({
+  engine,
+  place,
+  name,
+}: {
+  engine: Engine
+  place: number
+  name: string
+}) {
+  const state = useStripState(engine, place)
+  return (
+    <div className={`${KNOB_COLUMN} self-start`}>
+      <div
+        role="group"
+        aria-label="Heard"
+        className={`${KNOB_SIZE} flex aspect-square flex-col gap-1`}
+      >
+        <Mutes engine={engine} place={place} name={name} where="cell" />
+      </div>
+      <span className={KNOB_LABEL}>Track</span>
+      <span className={KNOB_READOUT}>{CELL_WORDS[state]}</span>
+    </div>
   )
 }

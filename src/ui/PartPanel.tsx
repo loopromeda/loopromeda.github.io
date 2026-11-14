@@ -94,7 +94,6 @@ import {
   SMALL_CONFIRM,
   SMALL_FIELD,
   SMALL_ICON_BUTTON,
-  SMALL_OPTION,
   TALL_HIT,
 } from './controls'
 import {
@@ -122,11 +121,12 @@ import {
   type Look,
 } from './editor'
 import { ConfirmDialog } from './ConfirmDialog'
-import { Loudness, Reduction } from './Dynamics'
+import { LoudnessCell, Reduction } from './Dynamics'
 import { FadeRow } from './FadeRow'
 import { Knob, MixKnob, neutralArc } from './Knob'
-import { ColourKey, MASTER_VIEWS, type MasterViewKind } from './MasterViews'
-import { Mutes } from './Mutes'
+import type { MasterViewKind } from './MasterViews'
+import { MutesCell } from './Mutes'
+import { OutputCells } from './OutputCells'
 import { palette } from './theme'
 import { knoblessDests, routesTo } from '../state/sound/knob'
 import { noteName } from '../viz/keyboard'
@@ -153,6 +153,12 @@ interface Action {
   /** Asked first, with this said of what goes with it */
   readonly confirm?: string
 }
+
+/**
+ * The columns the loudness spans in a knob row (col-span-2): two, as
+ * ashon asked ("LUFS는 2 칸 정도를 잡도록"), four being wide
+ */
+const LOUDNESS_SPAN = 2
 
 /** The actions' pictures, in an 18×18 box */
 const ICONS = {
@@ -287,13 +293,14 @@ interface View {
   readonly mixFirst?: boolean
   /**
    * The views of an output, the one its tiles show (the sound's in the
-   * Out and the mix's strip, the master's in the Master) chosen in a row
+   * Out and the mix's strip, the master's in the Master), chosen in a
+   * cell after the knobs (OutputCells)
    */
   readonly views?: {
     readonly shown: MasterViewKind
     readonly choose: (view: MasterViewKind) => void
   }
-  /** Before the views, in their row: a track's Mute and Solo (Mutes) */
+  /** Before the views, a cell of their own: a track's Mute and Solo */
   readonly mutes?: ReactNode
   /** The knobs' arc: a chain's colour on its own parts, else neutral */
   readonly color: string
@@ -311,7 +318,10 @@ interface View {
   readonly note?: string
   /** Under the knobs: how far a compressor or a limiter turns it down */
   readonly reduction?: EffectAt
-  /** Under the knobs: how loud the output is (the master's) */
+  /**
+   * After the knobs, across LOUDNESS_SPAN columns: how loud the output
+   * is (the master's)
+   */
   readonly loudness?: boolean
   readonly choices?: readonly Choice[]
   readonly choiceNote?: string
@@ -428,7 +438,7 @@ export function PartPanel({
           output,
           engine.getPart(),
           inMix ? trackStrip(engine, (id) => setNamed(id)) : undefined,
-          <Mutes
+          <MutesCell
             engine={engine}
             place={output}
             name={trackName(engine.getTrack(), output)}
@@ -642,7 +652,10 @@ export function PartPanel({
                   className={knobRow(
                     view.knobs.length +
                       (view.knobless?.length ?? 0) +
-                      (view.mixKnobs?.length ?? 0)
+                      (view.mixKnobs?.length ?? 0) +
+                      (view.views ? 1 : 0) +
+                      (view.views && view.mutes ? 1 : 0) +
+                      (view.loudness ? LOUDNESS_SPAN : 0)
                   )}
                 >
                   {view.mixFirst && mixKnobs}
@@ -695,6 +708,12 @@ export function PartPanel({
                       </span>
                     </button>
                   ))}
+                  {view.views && (
+                    <OutputCells mutes={view.mutes} {...view.views} />
+                  )}
+                  {view.loudness && (
+                    <LoudnessCell engine={engine} className="col-span-2" />
+                  )}
                 </div>
               ) : (
                 view.note && (
@@ -710,52 +729,8 @@ export function PartPanel({
                   color={view.color}
                 />
               )}
-              {view.loudness && <Loudness engine={engine} />}
               {view.targets && (
                 <Targets {...view.targets} onRoute={onRoute} onMap={onMap} />
-              )}
-              {view.views && (
-                <PanRow>
-                  {view.mutes && (
-                    <div
-                      role="group"
-                      aria-label="Heard"
-                      className="flex shrink-0 items-center gap-1.5"
-                    >
-                      {view.mutes}
-                      <span
-                        aria-hidden
-                        className="mx-1 h-4 w-px bg-(--lift-2)"
-                      />
-                    </div>
-                  )}
-                  <div
-                    role="group"
-                    aria-label="The output shows"
-                    className="flex shrink-0 items-center gap-1.5"
-                  >
-                    {MASTER_VIEWS.map(({ view: kind, label }) => (
-                      <button
-                        key={kind}
-                        type="button"
-                        aria-pressed={view.views?.shown === kind}
-                        onClick={() => view.views?.choose(kind)}
-                        className={`${SMALL_OPTION} shrink-0`}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                  {view.views.shown === 'spectrogram' && (
-                    <>
-                      <span
-                        aria-hidden
-                        className="mx-1 h-4 w-px bg-(--lift-2)"
-                      />
-                      <ColourKey />
-                    </>
-                  )}
-                </PanRow>
               )}
             </>
           ))}

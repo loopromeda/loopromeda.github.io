@@ -135,7 +135,7 @@ export const SMALL_SELECT =
   'select-chevron h-7 min-w-0 truncate rounded-md bg-(--over)/8 pr-6 pl-2.5 text-[11px] font-semibold text-(--ink-200)'
 
 /**
- * Columns for one to seven knobs, written out for Tailwind to find:
+ * Columns for one to eight knobs, written out for Tailwind to find:
  * across the panel, or 9rem each in the row a tall screen gives it
  */
 const KNOB_COLUMNS = [
@@ -146,6 +146,7 @@ const KNOB_COLUMNS = [
   'grid-cols-5 tall:grid-cols-[repeat(5,9rem)]',
   'grid-cols-6 tall:grid-cols-[repeat(6,9rem)]',
   'grid-cols-7 tall:grid-cols-[repeat(7,9rem)]',
+  'grid-cols-8 tall:grid-cols-[repeat(8,9rem)]',
 ] as const
 
 /**
@@ -154,14 +155,17 @@ const KNOB_COLUMNS = [
  * the row under the graph on a tall screen, where that would scatter
  * them, each column is 9rem from the left. Every knob is the size
  * KNOB_SIZE gives its row's width, whatever the row holds: knobs match
- * from part to part. Seven (a chain's level and six inputs) stand in one
- * row too, a little smaller, rather than leave one alone under six; past
- * seven they wrap.
+ * from part to part. Seven (a chain's level and six inputs) or eight (a
+ * strip's fader and four sends, then its Mute and Solo and its views,
+ * OutputCells) stand in one row too, a little smaller, rather than leave
+ * one or two alone under six; past eight they wrap.
  */
 export function knobRow(count: number): string {
-  const columns = KNOB_COLUMNS[Math.min(Math.max(count, 1), 7) - 1]
-  const seven = count >= 7 ? ' [--knob-columns:7]' : ''
-  return `@container grid ${columns} justify-items-center gap-x-1 gap-y-2${seven}`
+  const many = Math.min(Math.max(count, 1), KNOB_COLUMNS.length)
+  const columns = KNOB_COLUMNS[many - 1]
+  // Written out, for Tailwind to find
+  const narrow = { 7: ' [--knob-columns:7]', 8: ' [--knob-columns:8]' }[many]
+  return `@container grid ${columns} justify-items-center gap-x-1 gap-y-2${narrow ?? ''}`
 }
 
 /**
@@ -174,10 +178,26 @@ export const PANEL_BODY = 'my-auto flex flex-col gap-2'
 
 /**
  * A knob's width in a knobRow: --knob, or a sixth of the row (less five
- * gaps) where six would not fit; a seventh in a row of seven
- * (--knob-columns). The panel sets --knob with its height (SoundEditor):
- * 48 px beside the graph, up to 72 px under it on a tall screen held
- * upright, 72 px in a tall screen's row; 48 px elsewhere.
+ * gaps) where six would not fit; a seventh in a row of seven, an eighth
+ * in a row of eight (--knob-columns). The panel sets --knob with its
+ * height (SoundEditor): 48 px beside the graph, up to 72 px under it on a
+ * tall screen held upright, 72 px in a tall screen's row; 48 px
+ * elsewhere.
  */
 export const KNOB_SIZE =
   'w-[min(var(--knob,3rem),calc((100cqw_-_(var(--knob-columns,6)_-_1)_*_0.25rem)/var(--knob-columns,6)))]'
+
+/** A knob's height in a knobRow, as KNOB_SIZE its width: a cell's face */
+export const KNOB_HEIGHT =
+  'h-[min(var(--knob,3rem),calc((100cqw_-_(var(--knob-columns,6)_-_1)_*_0.25rem)/var(--knob-columns,6)))]'
+
+/**
+ * What stands under a knob's face, and under a cell a knob's size in its
+ * row (OutputCells): its name, then what it reads
+ */
+export const KNOB_LABEL =
+  'text-[11px] leading-tight whitespace-nowrap text-(--ink-400)'
+export const KNOB_READOUT =
+  'font-mono text-[11px] leading-tight whitespace-nowrap text-(--ink-200)'
+/** A knob's column, or a cell's: its face, its name, what it reads */
+export const KNOB_COLUMN = 'flex min-w-0 flex-col items-center gap-0.5'

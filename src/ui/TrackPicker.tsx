@@ -150,7 +150,7 @@ export function TrackPicker({
                 engine={engine}
                 place={k}
                 name={trackName(track, k)}
-                small
+                where="row"
               />
             </li>
           )
