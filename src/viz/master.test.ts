@@ -13,7 +13,7 @@ import {
   hzToX,
   levelAt,
   levelsOf,
-  lighten,
+  blendTowards,
   lufsText,
   reductionFill,
   reductionText,
@@ -27,7 +27,7 @@ import {
   vectorPoint,
   xToHz,
 } from './master'
-import { scaleColour } from './colourScale'
+import { SCALES } from './colourScale'
 
 const SAMPLE_RATE = 48000
 const BINS = 2048
@@ -396,19 +396,20 @@ describe('vectorPoint', () => {
 })
 
 describe('spectrogramColour', () => {
+  const DARK = SCALES.dark
   const MIN = -60
   const MAX = 0
 
   it('writes the background at t 0, at the given offset only', () => {
     const out = new Uint8ClampedArray(8).fill(9)
-    spectrogramColour(MIN, MIN, MAX, out, 4)
+    spectrogramColour(MIN, MIN, MAX, DARK, out, 4)
     expect(Array.from(out.slice(0, 4))).toEqual([9, 9, 9, 9])
     expect(Array.from(out.slice(4))).toEqual([11, 11, 16, 255])
   })
 
   it('writes the colour scale’s near white at t 1', () => {
     const out = new Uint8ClampedArray(4)
-    spectrogramColour(MAX, MIN, MAX, out, 0)
+    spectrogramColour(MAX, MIN, MAX, DARK, out, 0)
     expect(Array.from(out)).toEqual([253, 252, 225, 255])
   })
 
@@ -416,29 +417,36 @@ describe('spectrogramColour', () => {
     const out = new Uint8ClampedArray(4)
     const scale = new Uint8ClampedArray(4)
     for (const t of [0.2, 0.5, 0.75]) {
-      spectrogramColour(MIN + t * (MAX - MIN), MIN, MAX, out, 0)
-      scaleColour(t, scale, 0)
+      spectrogramColour(MIN + t * (MAX - MIN), MIN, MAX, DARK, out, 0)
+      DARK.colour(t, scale, 0)
       expect(Array.from(out)).toEqual(Array.from(scale))
     }
   })
 
   it('clamps outside the range and takes -Infinity and NaN as t 0', () => {
     const hot = new Uint8ClampedArray(4)
-    spectrogramColour(10, MIN, MAX, hot, 0)
+    spectrogramColour(10, MIN, MAX, DARK, hot, 0)
     expect(Array.from(hot)).toEqual([253, 252, 225, 255])
     const dead = new Uint8ClampedArray(4)
-    spectrogramColour(-Infinity, MIN, MAX, dead, 0)
+    spectrogramColour(-Infinity, MIN, MAX, DARK, dead, 0)
     expect(Array.from(dead)).toEqual([11, 11, 16, 255])
     const broken = new Uint8ClampedArray(4)
-    spectrogramColour(NaN, MIN, MAX, broken, 0)
+    spectrogramColour(NaN, MIN, MAX, DARK, broken, 0)
     expect(Array.from(broken)).toEqual([11, 11, 16, 255])
+  })
+
+  it('writes the light scale in the light: its ground, then near black', () => {
+    const out = new Uint8ClampedArray(8)
+    spectrogramColour(MIN, MIN, MAX, SCALES.light, out, 0)
+    spectrogramColour(MAX, MIN, MAX, SCALES.light, out, 4)
+    expect(Array.from(out)).toEqual([233, 233, 238, 255, 30, 14, 51, 255])
   })
 
   it('always writes an opaque alpha', () => {
     const out = new Uint8ClampedArray(12)
-    spectrogramColour(-45, MIN, MAX, out, 0)
-    spectrogramColour(-18, MIN, MAX, out, 4)
-    spectrogramColour(0, MIN, MAX, out, 8)
+    spectrogramColour(-45, MIN, MAX, DARK, out, 0)
+    spectrogramColour(-18, MIN, MAX, DARK, out, 4)
+    spectrogramColour(0, MIN, MAX, DARK, out, 8)
     expect([out[3], out[7], out[11]]).toEqual([255, 255, 255])
   })
 })
@@ -492,14 +500,20 @@ describe('the spectrogram’s grid', () => {
     expect(spectrogramRows([10, 30000], height)).toHaveLength(0)
   })
 
-  it('lightens a pixel towards white, its alpha kept', () => {
+  it('blends a pixel towards white, its alpha kept', () => {
     const data = new Uint8ClampedArray([0, 100, 255, 255])
-    lighten(data, 0, 0)
+    blendTowards(data, 0, 0, 255)
     expect(Array.from(data)).toEqual([0, 100, 255, 255])
-    lighten(data, 0, 0.5)
+    blendTowards(data, 0, 0.5, 255)
     expect(Array.from(data)).toEqual([128, 178, 255, 255])
-    lighten(data, 0, 1)
+    blendTowards(data, 0, 1, 255)
     expect(Array.from(data)).toEqual([255, 255, 255, 255])
+  })
+
+  it('blends a pixel towards black, as a line in the light', () => {
+    const data = new Uint8ClampedArray([200, 100, 0, 255])
+    blendTowards(data, 0, 0.5, 0)
+    expect(Array.from(data)).toEqual([100, 50, 0, 255])
   })
 
   it('ticks once a period of columns, without drifting', () => {

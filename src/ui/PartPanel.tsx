@@ -100,9 +100,9 @@ import {
 import {
   EFFECT_GLYPHS,
   GLYPHS,
-  NEUTRAL_LOOK,
+  neutralLook,
   PAD_TILE,
-  VOICE_LOOK,
+  voiceLook,
   addingTo,
   busLook,
   chainLetter,
@@ -124,7 +124,7 @@ import {
 import { ConfirmDialog } from './ConfirmDialog'
 import { Loudness, Reduction } from './Dynamics'
 import { FadeRow } from './FadeRow'
-import { Knob, MixKnob, NEUTRAL_ARC } from './Knob'
+import { Knob, MixKnob, neutralArc } from './Knob'
 import { ColourKey, MASTER_VIEWS, type MasterViewKind } from './MasterViews'
 import { Mutes } from './Mutes'
 import { palette } from './theme'
@@ -171,7 +171,7 @@ const ICONS = {
 
 /** A header's small square button, and the one that removes */
 const ACTION_BUTTON = SMALL_ICON_BUTTON
-const REMOVE_BUTTON = `${TALL_HIT} flex size-7 shrink-0 items-center justify-center rounded-md bg-red-500/15 text-red-200`
+const REMOVE_BUTTON = `${TALL_HIT} flex size-7 shrink-0 items-center justify-center rounded-md bg-(--danger)/15 text-(--danger-ink)`
 /**
  * A row of buttons that pans sideways when long (FadeRow): it runs to the
  * panel's edges, its buttons stood in from them as far as the panel's
@@ -864,9 +864,9 @@ function padView(
   return {
     title: padName(current, pad),
     kind: preset ? `${name} · ${category}${mine ? ', mine' : ''}` : 'No preset',
-    chip: { look: NEUTRAL_LOOK, mark: String(pad + 1) },
+    chip: { look: neutralLook(), mark: String(pad + 1) },
     knobs: [],
-    color: NEUTRAL_ARC,
+    color: neutralArc(),
     body: (
       <>
         <PanRow role="group" aria-label={`${category} presets for ${name}`}>
@@ -974,13 +974,13 @@ function Feeds({
               style={
                 into.on
                   ? {
-                      background: NEUTRAL_LOOK.tint,
-                      boxShadow: `inset 0 0 0 1.5px ${NEUTRAL_LOOK.ink}`,
-                      color: NEUTRAL_LOOK.ink,
+                      background: neutralLook().tint,
+                      boxShadow: `inset 0 0 0 1.5px ${neutralLook().ink}`,
+                      color: neutralLook().ink,
                     }
                   : {
-                      border: `1.5px dashed ${NEUTRAL_LOOK.ring}`,
-                      color: '#a1a1aa',
+                      border: `1.5px dashed ${neutralLook().ring}`,
+                      color: 'var(--ink-400)',
                     }
               }
             >
@@ -1024,7 +1024,7 @@ function Targets({
           background: modLook().tint,
           boxShadow: `inset 0 0 0 1.5px ${palette().modulator}`,
         }}
-        className={`${TALL_HIT} flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-[11px] font-semibold tracking-wider text-sky-100`}
+        className={`${TALL_HIT} flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-[11px] font-semibold tracking-wider text-(--mod-ink)`}
       >
         <svg viewBox="0 0 18 12" width={15} height={10} aria-hidden>
           <path
@@ -1055,7 +1055,7 @@ function Targets({
                   : onMap(source, target.target)
               }
               style={{ boxShadow: `inset 0 0 0 1.5px ${modLook().ring}` }}
-              className={`${TALL_HIT} flex h-7 shrink-0 items-center rounded-md px-2.5 text-[11px] font-semibold whitespace-nowrap text-sky-100`}
+              className={`${TALL_HIT} flex h-7 shrink-0 items-center rounded-md px-2.5 text-[11px] font-semibold whitespace-nowrap text-(--mod-ink)`}
             >
               {target.label}
             </button>
@@ -1144,7 +1144,7 @@ function sendsView(
     kind: kit
       ? 'The kit’s level and balance, then its send to each bus'
       : 'Its level and balance, then a send to each bus',
-    chip: { look: NEUTRAL_LOOK, glyph: GLYPHS.sends },
+    chip: { look: neutralLook(), glyph: GLYPHS.sends },
     knobs: mix.buses.map((bus) => ({
       part: SENDS,
       key: bus.id,
@@ -1157,7 +1157,7 @@ function sendsView(
     mixFirst: true,
     views,
     mutes,
-    color: NEUTRAL_ARC,
+    color: neutralArc(),
     note:
       mix.buses.length === 0
         ? 'The mix has no bus: add one there to hear the sound.'
@@ -1266,7 +1266,7 @@ function mixView(
           part: effect.id,
           key,
         })),
-        color: owner === MASTER ? NEUTRAL_ARC : look.ink,
+        color: owner === MASTER ? neutralArc() : look.ink,
         reduction: reduces(effect.kind) ? { id: effect.id } : undefined,
         actions: [
           { label: 'Move left', icon: ICONS.left, run: move(-1) },
@@ -1290,12 +1290,12 @@ function mixView(
         kind: masterLimited(mix)
           ? 'Every bus, through its effects, the limiter last'
           : 'Every bus, through its effects, then the soft clip',
-        chip: { look: NEUTRAL_LOOK, glyph: GLYPHS.master },
+        chip: { look: neutralLook(), glyph: GLYPHS.master },
         knobs: [],
         mixKnobs: [{ part: MASTER, key: 'level' }],
         loudness: true,
         views,
-        color: NEUTRAL_ARC,
+        color: neutralArc(),
         actions: onMaster
           ? [{ label: 'Open the views', icon: ICONS.open, run: onMaster }]
           : undefined,
@@ -1314,22 +1314,22 @@ function addTrackView(count: number, add: (kind: PartKind) => void): View {
     kind: room
       ? `Track ${count + 1} of ${MAX_TRACKS} at most`
       : `${MAX_TRACKS} tracks at most`,
-    chip: { look: NEUTRAL_LOOK, glyph: GLYPHS.plus, add: true },
+    chip: { look: neutralLook(), glyph: GLYPHS.plus, add: true },
     knobs: [],
-    color: NEUTRAL_ARC,
+    color: neutralArc(),
     choices: [
       {
         label: 'Synth',
         hint: 'One sound, on keys',
         glyph: GLYPHS.saw,
-        look: NEUTRAL_LOOK,
+        look: neutralLook(),
         add: room ? () => add('synth') : undefined,
       },
       {
         label: 'Kit',
         hint: '16 pads of presets',
         glyph: GLYPHS.pads,
-        look: NEUTRAL_LOOK,
+        look: neutralLook(),
         add: room ? () => add('kit') : undefined,
       },
     ],
@@ -1398,7 +1398,7 @@ function addBusView(
       : 'Every letter has its bus',
     chip: { look, glyph: GLYPHS.plus, add: true },
     knobs: [],
-    color: NEUTRAL_ARC,
+    color: neutralArc(),
     choices: [
       {
         label: 'Dry',
@@ -1441,7 +1441,7 @@ function addMixEffectView(
         : 'First on the bus',
     chip: { look, glyph: GLYPHS.plus, add: true },
     knobs: [],
-    color: onMaster ? NEUTRAL_ARC : look.ink,
+    color: onMaster ? neutralArc() : look.ink,
     choices: EFFECT_KIND_ORDER.map((kind) => ({
       label: EFFECT_KINDS[kind].label,
       hint: EFFECT_HINTS[kind],
@@ -1491,20 +1491,20 @@ function viewOf(
     return {
       title: 'Amp',
       kind: 'Each voice’s envelope, velocity and pan',
-      chip: { look: NEUTRAL_LOOK, glyph: GLYPHS.env },
+      chip: { look: neutralLook(), glyph: GLYPHS.env },
       knobs: knobsOf(AMP, AMP_SPEC.knobs),
       knobless: knoblessOf(AMP),
-      color: NEUTRAL_ARC,
+      color: neutralArc(),
     }
   }
   if (picked === VOICE) {
     return {
       title: 'Voice',
       kind: 'Mode and glide',
-      chip: { look: VOICE_LOOK, mark: 'V' },
+      chip: { look: voiceLook(), mark: 'V' },
       knobs: knobsOf(VOICE, VOICE_SPEC.knobs),
       knobless: knoblessOf(VOICE),
-      color: NEUTRAL_ARC,
+      color: neutralArc(),
     }
   }
 
@@ -1610,7 +1610,7 @@ function viewOf(
             via: route.source !== picked,
           })),
         },
-        color: NEUTRAL_ARC,
+        color: neutralArc(),
         actions: [
           { label: 'Move earlier', icon: ICONS.left, run: move(-1) },
           { label: 'Move later', icon: ICONS.right, run: move(1) },
@@ -1632,9 +1632,9 @@ function viewOf(
       return {
         title: kit ? `Kit ${title}` : title,
         kind: `${EFFECT_HINTS[kind]} · ${kit ? 'on the kit, after every pad’s amp' : 'after the amp'}`,
-        chip: { look: NEUTRAL_LOOK, glyph: EFFECT_GLYPHS[kind] },
+        chip: { look: neutralLook(), glyph: EFFECT_GLYPHS[kind] },
         knobs: knobsOf(picked, EFFECT_KINDS[kind].knobs),
-        color: NEUTRAL_ARC,
+        color: neutralArc(),
         reduction: reduces(kind)
           ? { track: engine.getTrack().id, id: picked }
           : undefined,
@@ -1692,13 +1692,13 @@ function viewOf(
           part: target.id,
           key: 'fm',
           label: `→ ${partName(sound, target.id)}`,
-          hot: focus === target.id ? NEUTRAL_LOOK.ink : undefined,
+          hot: focus === target.id ? neutralLook().ink : undefined,
         }))
       const base = {
         title,
         kind: INPUT_KINDS[part.kind].label,
-        chip: { look: NEUTRAL_LOOK, glyph: glyphOf(sound, picked) },
-        color: NEUTRAL_ARC,
+        chip: { look: neutralLook(), glyph: glyphOf(sound, picked) },
+        color: neutralArc(),
         feeds: feeding,
         through: heardThrough(sound, picked),
         fm: targets.map((target) => ({
@@ -1765,9 +1765,9 @@ function viewOf(
       return {
         title,
         kind: '',
-        chip: { look: NEUTRAL_LOOK },
+        chip: { look: neutralLook() },
         knobs: [],
-        color: NEUTRAL_ARC,
+        color: neutralArc(),
       }
   }
 }
@@ -1786,14 +1786,14 @@ function addView(
     return {
       title: 'Add an input',
       kind: 'A new tile in the first column',
-      chip: { look: NEUTRAL_LOOK, glyph: GLYPHS.plus, add: true },
+      chip: { look: neutralLook(), glyph: GLYPHS.plus, add: true },
       knobs: [],
-      color: NEUTRAL_ARC,
+      color: neutralArc(),
       choices: (Object.keys(INPUT_KINDS) as InputKind[]).map((kind) => ({
         label: INPUT_KINDS[kind].label,
         hint: INPUT_HINTS[kind],
         glyph: KIND_GLYPHS[kind],
-        look: NEUTRAL_LOOK,
+        look: neutralLook(),
         add: room ? () => added((s) => addInput(s, kind)) : undefined,
       })),
       choiceNote: into
@@ -1809,7 +1809,7 @@ function addView(
       kind: 'A new row',
       chip: { look, glyph: GLYPHS.plus, add: true },
       knobs: [],
-      color: NEUTRAL_ARC,
+      color: neutralArc(),
       choices: [
         {
           label: `Chain ${chainLetter(next)}`,
@@ -1830,7 +1830,7 @@ function addView(
       kind: 'Into the rack',
       chip: { look: modLook(), glyph: GLYPHS.plus, add: true },
       knobs: [],
-      color: NEUTRAL_ARC,
+      color: neutralArc(),
       choices: (Object.keys(MODULATOR_KINDS) as ModulatorKind[]).map(
         (kind) => ({
           label: MODULATOR_KINDS[kind].label,
@@ -1853,14 +1853,14 @@ function addView(
         : kit
           ? 'After every pad’s amp'
           : 'After the amp',
-      chip: { look: NEUTRAL_LOOK, glyph: GLYPHS.plus, add: true },
+      chip: { look: neutralLook(), glyph: GLYPHS.plus, add: true },
       knobs: [],
-      color: NEUTRAL_ARC,
+      color: neutralArc(),
       choices: EFFECT_KIND_ORDER.map((kind) => ({
         label: EFFECT_KINDS[kind].label,
         hint: EFFECT_HINTS[kind],
         glyph: EFFECT_GLYPHS[kind],
-        look: NEUTRAL_LOOK,
+        look: neutralLook(),
         add: room ? () => added((s) => addEffect(s, kind)) : undefined,
       })),
       choiceNote: kit
@@ -1872,7 +1872,7 @@ function addView(
   const found = findPart(sound, adding)
   const chain = found?.type === 'chain' ? found : undefined
   const letter = chain ? chainLetter(chain.index) : ''
-  const look = chain ? chainLook(chain.index) : NEUTRAL_LOOK
+  const look = chain ? chainLook(chain.index) : neutralLook()
   const last = chain?.part.items[chain.part.items.length - 1]
   const room = chain !== undefined && chain.part.items.length < MAX_ITEMS
   return {
@@ -1880,7 +1880,7 @@ function addView(
     kind: last ? `After ${partName(sound, last.id)}` : 'First in the chain',
     chip: { look, glyph: GLYPHS.plus, add: true },
     knobs: [],
-    color: NEUTRAL_ARC,
+    color: neutralArc(),
     choices: (Object.keys(ITEM_KINDS) as ItemKind[]).map((kind) => ({
       label: ITEM_KINDS[kind].label,
       hint: ITEM_HINTS[kind],
@@ -1922,7 +1922,7 @@ function RefPicker({
         const to = event.target.value || null
         engine.edit((sound) => setRef(sound, input, refName, to))
       }}
-      className="select-chevron h-7 max-w-28 min-w-0 truncate rounded-md bg-white/[0.08] pr-6 pl-2.5 text-[11px] font-semibold text-(--ink-200)"
+      className="select-chevron h-7 max-w-28 min-w-0 truncate rounded-md bg-(--over)/8 pr-6 pl-2.5 text-[11px] font-semibold text-(--ink-200)"
     >
       <option value="">{label}: none</option>
       {sound.inputs.map((other) => (

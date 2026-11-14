@@ -21,7 +21,8 @@
  *
  * Cards (CARD) and the waveform round at 12 px. Labels are semibold and spaced;
  * what is named or typed (a preset, a note range) is 13 px. Disabled is
- * 40% opaque everywhere, pressed or chosen is white at 10%.
+ * 40% opaque everywhere, pressed or chosen is --lift-2 (white at 10%, black
+ * at 9% in the light).
  *
  * Rings belong to the graph's tiles and the parts' chips, in their part's
  * colour, and to states (picked, keyboard focus). Cards and the controls
@@ -32,11 +33,12 @@
  */
 
 /**
- * A card's face: the sound's graph and the sheets that open over it stand
- * on it, and the graph's tiles are cut from it. The editor's panel, over
- * the graph, stands on glass instead (index.css), this face let through.
+ * A card's face, as a CSS value (index.css's --panel, in either mode):
+ * the sound's graph and the sheets that open over it stand on it, and
+ * the graph's tiles are cut from it. The editor's panel, over the graph,
+ * stands on glass instead (index.css), this face let through.
  */
-export const CARD_FACE = '#16161c'
+export const CARD_FACE = 'var(--panel)'
 
 /** A card: CARD_FACE, rounded at 12 px, no ring */
 export const CARD = 'rounded-xl bg-(--panel)'
@@ -47,7 +49,7 @@ export const CARD = 'rounded-xl bg-(--panel)'
  * it blurred, with a shadow and a faint ring to stand it off them.
  */
 export const RAISED =
-  'glass rounded-xl shadow-[0_0_24px_rgba(0,0,0,0.6)] ring-1 ring-(--lift-2)'
+  'glass rounded-xl shadow-[0_0_24px_var(--shadow)] ring-1 ring-(--lift-2)'
 
 export const BUTTON_SHAPE =
   'flex h-11 shrink-0 items-center justify-center gap-2 rounded-[10px] px-3.5 text-xs font-semibold tracking-wider whitespace-nowrap disabled:opacity-40'
@@ -56,14 +58,14 @@ export const BUTTON_SHAPE =
 export const BUTTON = `${BUTTON_SHAPE} bg-(--lift) text-(--ink-200) aria-pressed:bg-(--lift-2)`
 
 /** A 44 px button that deletes */
-export const BUTTON_DANGER = `${BUTTON_SHAPE} bg-red-500/20 text-red-200`
+export const BUTTON_DANGER = `${BUTTON_SHAPE} bg-(--danger)/20 text-(--danger-ink)`
 
 /** A 44 px button that confirms: a form's submit */
 export const BUTTON_CONFIRM = `${BUTTON_SHAPE} bg-(--accent)/20 text-(--accent)`
 
 /** An option's face: dim, lit when chosen (aria-pressed) */
 const OPTION_FACE =
-  'bg-(--lift) text-(--ink-400) aria-pressed:bg-(--lift-2) aria-pressed:text-white'
+  'bg-(--lift) text-(--ink-400) aria-pressed:bg-(--lift-2) aria-pressed:text-(--ink-0)'
 
 /** One of a row of 44 px options, the chosen one aria-pressed */
 export const OPTION = `${BUTTON_SHAPE} ${OPTION_FACE}`
@@ -73,9 +75,9 @@ export const OPTION = `${BUTTON_SHAPE} ${OPTION_FACE}`
  * on: amber for what is silenced, emerald for what alone is heard
  */
 export const MUTE_FACE =
-  'bg-white/5 text-zinc-400 aria-pressed:bg-amber-400/20 aria-pressed:text-amber-200'
+  'bg-(--lift) text-(--ink-400) aria-pressed:bg-(--warn)/20 aria-pressed:text-(--warn-ink)'
 export const SOLO_FACE =
-  'bg-white/5 text-zinc-400 aria-pressed:bg-emerald-400/20 aria-pressed:text-emerald-200'
+  'bg-(--lift) text-(--ink-400) aria-pressed:bg-(--ok)/20 aria-pressed:text-(--ok-ink)'
 
 /**
  * An option as wide as its cell in a grid of them, all of one size: its
@@ -109,13 +111,13 @@ export const SMALL_BUTTON_SHAPE = `${TALL_HIT} flex h-7 shrink-0 items-center ju
 export const SMALL_BUTTON = `${SMALL_BUTTON_SHAPE} bg-(--lift) text-(--ink-200) aria-pressed:bg-(--lift-2)`
 
 /** A 28 px button that deletes */
-export const SMALL_DANGER = `${SMALL_BUTTON_SHAPE} bg-red-500/15 text-red-200`
+export const SMALL_DANGER = `${SMALL_BUTTON_SHAPE} bg-(--danger)/15 text-(--danger-ink)`
 
 /** A 28 px button that confirms: a panel's form's submit */
 export const SMALL_CONFIRM = `${SMALL_BUTTON_SHAPE} bg-(--accent)/20 text-(--accent)`
 
 /** One of a row of 28 px options, the chosen one aria-pressed */
-export const SMALL_OPTION = `${SMALL_BUTTON_SHAPE} bg-(--lift) text-(--ink-400) aria-pressed:bg-(--lift-2) aria-pressed:text-white`
+export const SMALL_OPTION = `${SMALL_BUTTON_SHAPE} bg-(--lift) text-(--ink-400) aria-pressed:bg-(--lift-2) aria-pressed:text-(--ink-0)`
 
 /** A 28 px square button holding a 14 px icon: a panel header's action */
 export const SMALL_ICON_BUTTON = `${TALL_HIT} flex size-7 shrink-0 items-center justify-center rounded-md bg-(--lift) text-(--ink-200) disabled:opacity-30 aria-pressed:bg-(--lift-2)`
@@ -126,7 +128,7 @@ export const SMALL_FIELD =
 
 /** A 28 px select in a panel, the option chosen in its label's type */
 export const SMALL_SELECT =
-  'select-chevron h-7 min-w-0 truncate rounded-md bg-white/[0.08] pr-6 pl-2.5 text-[11px] font-semibold text-(--ink-200)'
+  'select-chevron h-7 min-w-0 truncate rounded-md bg-(--over)/8 pr-6 pl-2.5 text-[11px] font-semibold text-(--ink-200)'
 
 /**
  * Columns for one to seven knobs, written out for Tailwind to find:

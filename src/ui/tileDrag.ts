@@ -202,7 +202,7 @@ export function useTileDrag<T extends Spot>(
     g.grabY = grab.y
     for (const element of g.moving) {
       element.style.zIndex = '10'
-      element.style.filter = 'drop-shadow(0 6px 10px rgba(0,0,0,0.6))'
+      element.style.filter = 'drop-shadow(0 6px 10px var(--shadow))'
     }
     if (!g.mouse) {
       navigator.vibrate?.(10)

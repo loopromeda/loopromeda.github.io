@@ -13,7 +13,7 @@ import type { Library } from '../state/library'
 import { VOICE } from '../state/sound/sound'
 import { MAX_TRACKS, kindLabel, trackName, type Track } from '../state/tracks'
 import { OPTION, RAISED } from './controls'
-import { NEUTRAL_LOOK, tileLine } from './editor'
+import { neutralLook, tileLine } from './editor'
 import { SmallIconButton } from './IconButton'
 import { Mutes, STATE_WORDS, useStripState } from './Mutes'
 import { usePlacement } from './placement'
@@ -58,7 +58,7 @@ export function TrackButton({
       {state !== 'on' && (
         <span
           aria-hidden
-          className={`size-1.5 shrink-0 rounded-full ${state === 'solo' ? 'bg-emerald-400' : 'bg-amber-400'}`}
+          className={`size-1.5 shrink-0 rounded-full ${state === 'solo' ? 'bg-(--ok)' : 'bg-(--warn)'}`}
         />
       )}
       <span className="truncate">{name}</span>
@@ -171,7 +171,7 @@ export function TrackPicker({
           className="flex h-5 w-[26px] shrink-0 items-center justify-center rounded-[5px] font-mono text-[11px] font-semibold text-(--ink-200)"
           style={{
             background: 'var(--tile)',
-            boxShadow: `inset 0 0 0 1.5px ${NEUTRAL_LOOK.ring}`,
+            boxShadow: `inset 0 0 0 1.5px ${neutralLook().ring}`,
           }}
         >
           {tracks.length}
@@ -208,7 +208,7 @@ export function TrackPicker({
                       engine.pickTrack(track.id)
                       onClose()
                     }}
-                    className="flex h-11 min-w-0 flex-1 items-center gap-2.5 rounded-lg px-2.5 text-left text-[13px] text-(--ink-300) aria-[current]:bg-(--lift-2) aria-[current]:text-white"
+                    className="flex h-11 min-w-0 flex-1 items-center gap-2.5 rounded-lg px-2.5 text-left text-[13px] text-(--ink-300) aria-[current]:bg-(--lift-2) aria-[current]:text-(--ink-0)"
                   >
                     <span className="w-3 shrink-0 text-center font-mono text-[11px] text-(--ink-500)">
                       {k + 1}

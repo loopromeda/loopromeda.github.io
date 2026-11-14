@@ -88,6 +88,7 @@ describe('readSettings', () => {
       waveform: false,
       velocity: 'full',
       theme: 'tidal',
+      appearance: 'light',
       audioDetails: false,
       waveformTiming: false,
       keepAwake: false,
@@ -103,6 +104,8 @@ describe('readSettings', () => {
     expect(readSettings(velocity)).toEqual({ ...good, velocity: 'touch' })
     const theme = storageWith(JSON.stringify({ ...good, theme: 'neon' }))
     expect(readSettings(theme)).toEqual({ ...good, theme: 'default' })
+    const appearance = storageWith(JSON.stringify({ ...good, appearance: 1 }))
+    expect(readSettings(appearance)).toEqual({ ...good, appearance: 'dark' })
     const waveform = storageWith(JSON.stringify({ ...good, waveform: 'yes' }))
     expect(readSettings(waveform)).toEqual({ ...good, waveform: true })
     const awake = storageWith(JSON.stringify({ ...good, keepAwake: 'on' }))
@@ -135,6 +138,8 @@ describe('readSettings', () => {
       velocity: 'full',
       // Kept before the setting was there: its default
       theme: 'default',
+      // Kept before the setting was there: the app's home
+      appearance: 'dark',
       audioDetails: false,
       waveformTiming: false,
       // Kept before the setting was there: its default
@@ -152,6 +157,7 @@ describe('writeSettings', () => {
       waveform: false,
       velocity: 'full',
       theme: 'ember',
+      appearance: 'system',
       audioDetails: false,
       waveformTiming: true,
       keepAwake: false,
@@ -174,6 +180,7 @@ describe('writeSettings', () => {
       waveform: false,
       velocity: 'full',
       theme: 'tidal',
+      appearance: 'light',
       audioDetails: true,
       waveformTiming: false,
       keepAwake: true,
@@ -185,6 +192,7 @@ describe('writeSettings', () => {
       waveform: false,
       velocity: 'full',
       theme: 'tidal',
+      appearance: 'light',
       audioDetails: true,
       waveformTiming: false,
       keepAwake: true,

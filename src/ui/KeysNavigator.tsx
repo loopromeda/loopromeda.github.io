@@ -27,7 +27,7 @@ const ReachKeys = memo(function ReachKeys() {
   return (
     <div
       aria-hidden="true"
-      className="absolute inset-0 overflow-hidden rounded-md bg-black/40"
+      className="absolute inset-0 overflow-hidden rounded-md bg-(--well)"
     >
       {reachLayout().map((key) => (
         <div
@@ -38,14 +38,14 @@ const ReachKeys = memo(function ReachKeys() {
           }}
           className={
             key.black
-              ? 'absolute top-0 h-[58%] rounded-b-[1px] bg-(--bg)'
+              ? 'absolute top-0 h-[58%] rounded-b-[1px] bg-(--key-black)'
               : 'absolute inset-y-0 bg-(--key)'
           }
         />
       ))}
       <div
         style={{ left: at(whitesAbove(MIDDLE_C) + 0.5) }}
-        className="absolute bottom-[3px] size-1 -translate-x-1/2 rounded-full bg-zinc-400"
+        className="absolute bottom-[3px] size-1 -translate-x-1/2 rounded-full bg-(--ink-400)"
       />
     </div>
   )
@@ -154,17 +154,17 @@ export function KeysNavigator({
       >
         <div
           style={{ width: at(position) }}
-          className="absolute inset-y-0 left-0 bg-black/55"
+          className="absolute inset-y-0 left-0 bg-(--veil)"
         />
         <div
           style={{ left: at(position + whites) }}
-          className="absolute inset-y-0 right-0 bg-black/55"
+          className="absolute inset-y-0 right-0 bg-(--veil)"
         />
       </div>
       <div
         aria-hidden="true"
         style={{ left: at(position), width: at(whites) }}
-        className="pointer-events-none absolute inset-y-0 rounded-[5px] bg-(--accent)/10 shadow-[0_0_0_1.5px_var(--accent)]"
+        className="pointer-events-none absolute inset-y-0 rounded-[5px] bg-(--secondary)/10 shadow-[0_0_0_1.5px_var(--secondary)]"
       />
     </div>
   )

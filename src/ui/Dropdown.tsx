@@ -149,7 +149,7 @@ export function Dropdown<T extends string | number>({
         aria-describedby={hintId}
         aria-controls={open ? `${id}-list` : undefined}
         onClick={() => setOpen((was) => !was)}
-        className={`group flex h-7 min-w-28 items-center gap-1.5 rounded-md bg-white/[0.08] py-0 pr-2 pl-2.5 text-[11px] font-semibold text-(--ink-200) outline-none ${TALL_HIT} hover:bg-(--lift-2) focus-visible:bg-(--lift-2) aria-expanded:bg-(--lift-2)`}
+        className={`group flex h-7 min-w-28 items-center gap-1.5 rounded-md bg-(--over)/8 py-0 pr-2 pl-2.5 text-[11px] font-semibold text-(--ink-200) outline-none ${TALL_HIT} hover:bg-(--lift-2) focus-visible:bg-(--lift-2) aria-expanded:bg-(--lift-2)`}
       >
         {chosen?.swatch && <Dots colours={chosen.swatch} />}
         <span className="min-w-0 truncate">{chosen?.label ?? '—'}</span>

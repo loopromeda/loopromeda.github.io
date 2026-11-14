@@ -1,13 +1,22 @@
 import { describe, expect, it } from 'vitest'
-import { oklab, SCALE_STOPS, scaleColour, scaleGradient } from './colourScale'
+import { oklab, SCALES, type ColourScale, type ScaleStop } from './colourScale'
 
-type Stop = (typeof SCALE_STOPS)[number]
+const DARK = SCALES.dark
+const LIGHT = SCALES.light
+const SCALE_STOPS = DARK.stops
+type Stop = ScaleStop
 
-/** The colour at t along the scale, as #rrggbb */
-function hexAt(t: number): string {
+/** The colour at t along a scale (the dark's), as #rrggbb */
+function hexAt(t: number, scale: ColourScale = DARK): string {
   const out = new Uint8ClampedArray(4)
-  scaleColour(t, out, 0)
+  scale.colour(t, out, 0)
   return `#${Array.from(out.slice(0, 3), (v) => v.toString(16).padStart(2, '0')).join('')}`
+}
+
+/** A colour's hue in OKLab, degrees */
+const hueOf = (hex: string) => {
+  const [, a, b] = oklab(hex)
+  return ((Math.atan2(b, a) * 180) / Math.PI + 360) % 360
 }
 
 describe('oklab', () => {
@@ -31,7 +40,7 @@ describe('oklab', () => {
   })
 })
 
-describe('the colour scale', () => {
+describe('the dark colour scale', () => {
   it('runs from the views’ background to near white', () => {
     expect(hexAt(0)).toBe('#0b0b10')
     expect(hexAt(1)).toBe('#fdfce1')
@@ -87,18 +96,55 @@ describe('the colour scale', () => {
     expect(hexAt(NaN)).toBe('#0b0b10')
     expect(hexAt(7)).toBe('#fdfce1')
     const out = new Uint8ClampedArray(12).fill(9)
-    scaleColour(0.5, out, 4)
+    DARK.colour(0.5, out, 4)
     expect(Array.from(out.slice(0, 4))).toEqual([9, 9, 9, 9])
     expect(out[7]).toBe(255)
     expect(Array.from(out.slice(8))).toEqual([9, 9, 9, 9])
   })
 
   it('writes the scale as a CSS gradient of seventeen steps', () => {
-    const css = scaleGradient('to right')
+    const css = DARK.gradient('to right')
     expect(css.startsWith('linear-gradient(to right, rgb(11 11 16) 0%,')).toBe(
       true
     )
     expect(css.endsWith(', rgb(253 252 225) 100%)')).toBe(true)
     expect(css.match(/rgb\(/g)).toHaveLength(17)
+  })
+})
+
+describe('the light colour scale', () => {
+  it('runs from the light views’ background to near black', () => {
+    expect(hexAt(0, LIGHT)).toBe('#e9e9ee')
+    expect(hexAt(1, LIGHT)).toBe('#1e0e33')
+    expect(LIGHT.stops[0]?.at).toBe(0)
+    expect(LIGHT.stops[LIGHT.stops.length - 1]?.at).toBe(1)
+  })
+
+  it('grows evenly darker along it', () => {
+    const first = oklab('#e9e9ee')[0]
+    const last = oklab('#1e0e33')[0]
+    let before = 2
+    for (let i = 0; i <= 255; i++) {
+      const t = i / 255
+      const [L] = oklab(hexAt(t, LIGHT))
+      expect(L).toBeLessThan(before)
+      expect(Math.abs(L - (first + (last - first) * t))).toBeLessThan(0.006)
+      before = L
+    }
+  })
+
+  it('meets the dark scale’s hues the other way round', () => {
+    const [, yellow, emerald, teal, blue, indigo] = LIGHT.stops.map((s) =>
+      hueOf(hexAt(s.at, LIGHT))
+    )
+    expect(yellow).toBeGreaterThan(95)
+    expect(yellow).toBeLessThan(125)
+    expect(emerald).toBeGreaterThan(150)
+    expect(emerald).toBeLessThan(175)
+    expect(teal).toBeGreaterThan(180)
+    expect(teal).toBeLessThan(210)
+    expect(blue).toBeGreaterThan(235)
+    expect(blue).toBeLessThan(265)
+    expect(indigo).toBeGreaterThan(275)
   })
 })

@@ -5,13 +5,13 @@ import type { Engine, EngineSnapshot, EngineState } from '../engine/engine'
 const RENDER_QUANTUM = 128
 
 const DOT: Readonly<Record<EngineState, string>> = {
-  idle: 'bg-zinc-500',
-  starting: 'bg-zinc-500',
-  running: 'bg-emerald-400',
-  suspended: 'bg-amber-400',
-  interrupted: 'bg-amber-400',
-  closed: 'bg-red-400',
-  failed: 'bg-red-400',
+  idle: 'bg-(--ink-500)',
+  starting: 'bg-(--ink-500)',
+  running: 'bg-(--ok)',
+  suspended: 'bg-(--warn)',
+  interrupted: 'bg-(--warn)',
+  closed: 'bg-(--danger)',
+  failed: 'bg-(--danger)',
 }
 
 /**
@@ -49,8 +49,8 @@ function DspLoad({ engine }: { engine: Engine }) {
         ? `The synth took ${percent}% of each block's time over the last half second; ${report.voices} ${report.voices === 1 ? 'voice' : 'voices'} sounding`
         : "The synth's share of each block's time"
       const load = report?.load ?? 0
-      span.classList.toggle('text-amber-400', load >= BUSY && load < FULL)
-      span.classList.toggle('text-red-400', load >= FULL)
+      span.classList.toggle('text-(--warn)', load >= BUSY && load < FULL)
+      span.classList.toggle('text-(--danger)', load >= FULL)
     }
     show()
     return engine.subscribeLoad(show)

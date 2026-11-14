@@ -9,10 +9,10 @@ import {
 import type { Hands } from './hands'
 
 const PAD =
-  'relative flex min-w-0 items-end overflow-hidden rounded-lg p-2 text-[11px] leading-tight font-medium shadow-[inset_0_-3px_0_rgb(0_0_0/0.25)] data-pressed:bg-[#1e6a55] data-pressed:text-emerald-100 data-pressed:shadow-[inset_0_3px_0_#34d399]'
+  'relative flex min-w-0 items-end overflow-hidden rounded-lg p-2 text-[11px] leading-tight font-medium shadow-[inset_0_-3px_0_color-mix(in_oklab,var(--under)_25%,transparent)] data-pressed:bg-(--key-held) data-pressed:text-(--ink-0) data-pressed:shadow-[inset_0_3px_0_var(--accent)]'
 const OTHER_PAD = `${PAD} bg-(--key) text-(--ink-400)`
 /** The pad picked, its sound in the editor: ringed, its name brighter */
-const PICKED_PAD = `${PAD} bg-(--key) text-(--ink-100) outline-2 -outline-offset-2 outline-(--accent)/80`
+const PICKED_PAD = `${PAD} bg-(--key) text-(--ink-100) outline-2 -outline-offset-2 outline-(--secondary)/80`
 
 /**
  * The kit's pads (src/state/kit.ts), names[k] on pad k and marks[k], if

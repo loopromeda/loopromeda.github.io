@@ -12,7 +12,7 @@ import type { Engine } from '../engine/engine'
 import { setSwing, setTempo } from '../state/song'
 import { COLUMNS } from '../viz/steps'
 import { ICON_BUTTON, RAISED } from './controls'
-import { NEUTRAL_LOOK } from './editor'
+import { neutralLook } from './editor'
 import { IconButton, SmallIconButton } from './IconButton'
 import { usePlacement } from './placement'
 
@@ -158,7 +158,7 @@ export function TempoPicker({
           className="flex h-5 w-[26px] shrink-0 items-center justify-center rounded-[5px] text-(--ink-200)"
           style={{
             background: 'var(--tile)',
-            boxShadow: `inset 0 0 0 1.5px ${NEUTRAL_LOOK.ring}`,
+            boxShadow: `inset 0 0 0 1.5px ${neutralLook().ring}`,
           }}
         >
           <svg

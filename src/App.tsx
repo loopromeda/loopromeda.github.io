@@ -1,7 +1,6 @@
 import {
   useCallback,
   useEffect,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -37,7 +36,7 @@ import { SoundEditor, type RoutesAsked } from './ui/SoundEditor'
 import { StatusBar } from './ui/StatusBar'
 import { SurfaceButton } from './ui/SurfaceButton'
 import { SurfacePicker } from './ui/SurfacePicker'
-import { palette, setThemeId } from './ui/theme'
+import { useTheme } from './ui/appearance'
 import { TrackButton, TrackPicker } from './ui/TrackPicker'
 import { PlayButton, TempoButton, TempoPicker } from './ui/Transport'
 import { UpdateButton } from './ui/UpdateButton'
@@ -218,16 +217,9 @@ export function App({
   // and shows the voice's panel (SoundEditor)
   const [voiceAsked, setVoiceAsked] = useState(0)
   const [settings, setSettings] = useState(() => readSettings(storage))
-  // The palette the tiles and the accent read: set as the settings are, so
-  // the first paint is already the chosen theme. Safe in the render: the
-  // palette is module state and the call is a no-op for the theme it is
-  // already on (src/ui/theme.ts)
-  setThemeId(settings.theme)
-  // The accent the controls read: before paint, so a theme switch never
-  // shows the old accent for a frame
-  useLayoutEffect(() => {
-    document.documentElement.style.setProperty('--accent', palette().accent)
-  }, [settings.theme])
+  // The theme in its mode: what the tiles, the canvases and the tokens
+  // read, set as the settings are, so the first paint is already it
+  useTheme(settings.theme, settings.appearance)
   useEffect(() => {
     awake.want(settings.keepAwake && state === 'running')
   }, [awake, settings.keepAwake, state])
@@ -273,13 +265,13 @@ export function App({
         <div className="w-full max-w-xs">
           <PlatformChecks platform={platform} />
         </div>
-        <p className="max-w-xs text-center text-sm break-words text-red-400 select-text">
+        <p className="max-w-xs text-center text-sm break-words text-(--danger) select-text">
           {snapshot.error}
         </p>
         <button
           type="button"
           onClick={() => location.reload()}
-          className="w-full max-w-xs rounded-xl bg-(--accent) px-6 py-4 text-lg font-semibold text-black"
+          className="w-full max-w-xs rounded-xl bg-(--accent) px-6 py-4 text-lg font-semibold text-(--on-colour)"
         >
           Reload
         </button>
@@ -508,19 +500,19 @@ export function App({
           // counts as the user activation iOS needs to start audio
           onClick={() => void engine.start()}
           // Focused, its pill wears the ring, not the screen's edge
-          className="group fixed inset-0 z-20 flex flex-col items-center justify-center gap-5 bg-black/80 px-8 outline-none"
+          className="group fixed inset-0 z-20 flex flex-col items-center justify-center gap-5 bg-(--scrim) px-8 outline-none"
         >
           <span className="text-3xl font-semibold tracking-tight">
             Loopromeda
           </span>
           <span
-            className={`w-full max-w-xs rounded-xl bg-(--accent) px-6 py-4 text-lg font-semibold text-black group-focus-visible:ring-2 group-focus-visible:ring-(--accent) group-focus-visible:ring-offset-2 group-focus-visible:ring-offset-black ${state === 'starting' ? 'opacity-50' : ''}`}
+            className={`w-full max-w-xs rounded-xl bg-(--accent) px-6 py-4 text-lg font-semibold text-(--on-colour) group-focus-visible:ring-2 group-focus-visible:ring-(--accent) group-focus-visible:ring-offset-2 group-focus-visible:ring-offset-(--bg) ${state === 'starting' ? 'opacity-50' : ''}`}
           >
             {state === 'starting' ? 'Starting…' : 'Tap to start audio'}
           </span>
         </button>
       ) : state === 'starting' ? (
-        <p className="fixed inset-0 z-20 flex items-center justify-center bg-black/80 px-8 text-lg">
+        <p className="fixed inset-0 z-20 flex items-center justify-center bg-(--scrim) px-8 text-lg">
           Starting the audio again…
         </p>
       ) : (
@@ -530,7 +522,7 @@ export function App({
             onClick={() =>
               state === 'closed' ? location.reload() : void engine.resume()
             }
-            className="fixed inset-0 z-20 bg-black/80 px-8 text-lg"
+            className="fixed inset-0 z-20 bg-(--scrim) px-8 text-lg"
           >
             Audio is {state}.
             <br />

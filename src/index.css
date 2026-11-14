@@ -97,31 +97,131 @@ body {
   color: var(--ink);
 }
 
-/* The accent role's colour: the theme's (ui/theme.ts), put here by the
-   page (App). This value is the Default theme's, for the first paint */
+/*
+ * The roles' colours: the theme's (ui/theme.ts) in the page's mode, put
+ * here by the page (App). These values are the Default theme's in the
+ * dark, for the first paint
+ */
 :root {
-  --accent: #34d399;
+  --accent: #34d399; /* focus, the playhead, the go button, a note */
+  --secondary: #34d399; /* what is picked or current */
+  --modulator: #38bdf8; /* modulation: a route, its source, its depth */
 }
 
-/* The surfaces and inks: dark is their home (3b gives the light
-   values). A token is the colour itself — never put /opacity on top */
+/*
+ * The surfaces and inks, in the dark: the app's home. A token is the
+ * colour itself, so a share of it is color-mix's (Tailwind's /opacity
+ * on a token); the light below gives each its value in the light
+ * (data-mode, set by App from the settings' appearance)
+ */
 :root {
+  color-scheme: dark;
   --bg: #0b0b10; /* the page, the wells that match it */
   --panel: #16161c; /* cards, the rail, the dock, the glass */
   --tile: #1c1c23; /* a tile's face, a popover */
   --key: #2a2a31; /* a key or pad at rest */
+  --key-black: #111116; /* a black key at rest */
   --ink: #e7e7ee; /* the page's own text */
+  --ink-0: #ffffff; /* what is chosen, at its brightest */
   --ink-100: #f4f4f5; /* zinc's ladder, rung by rung */
   --ink-200: #e4e4e7;
   --ink-300: #d4d4d8;
   --ink-400: #a1a1aa;
   --ink-500: #71717a;
   --ink-600: #52525b;
+  --over: #ffffff; /* what lifts off a surface, at a share of it */
   --lift: rgb(255 255 255 / 0.05); /* a control at rest */
   --lift-2: rgb(255 255 255 / 0.1); /* pressed, a hairline ring */
   --lift-3: rgb(255 255 255 / 0.15);
   --lift-4: rgb(255 255 255 / 0.3);
   --well: rgb(0 0 0 / 0.4); /* where a field sits */
+  --under: #000000; /* what sinks under a surface: a lip, a seam */
+  --veil: rgb(0 0 0 / 0.55); /* over what lies outside a view */
+  --scrim: rgb(0 0 0 / 0.8); /* over the page, under a word to it */
+  --backdrop: rgb(0 0 0 / 0.7); /* under a dialog */
+  --shadow: rgb(0 0 0 / 0.6); /* under what stands raised */
+  --on-colour: #000000; /* a label on a role's colour: the accent */
+  --ok: #34d399; /* what went well: emerald */
+  --warn: #fbbf24; /* what to mind: amber */
+  --danger: #f87171; /* what failed, what deletes: red */
+  --ok-ink: #a7f3d0; /* each as a label on a share of itself */
+  --warn-ink: #fde68a;
+  --danger-ink: #fecaca;
+}
+
+/*
+ * What the roles' colours make of the surfaces, in either mode: a key or
+ * a pad held, the accent mixed into it, its edge the accent; a black key
+ * held, more of it; the pads' root, a breath of it; a label in the
+ * modulation colour, the ink tinted with it
+ */
+:root {
+  --key-held: color-mix(in oklab, var(--accent) 40%, var(--key));
+  --key-black-held: color-mix(in oklab, var(--accent) 60%, var(--key-black));
+  --key-black-edge: color-mix(in oklab, var(--accent) 60%, #ffffff);
+  --key-root: color-mix(in oklab, var(--accent) 15%, var(--key));
+  --mod-ink: color-mix(in oklab, var(--modulator) 25%, var(--ink-100));
+}
+
+/*
+ * The light: zinc's ladder the other way up, what lifts darkening, and
+ * the surfaces as the dark's are, rising toward white from the page
+ * through the cards to the tiles and the keys
+ */
+:root[data-mode='light'] {
+  color-scheme: light;
+  --bg: #e9e9ee;
+  --panel: #f5f5f8;
+  --tile: #ffffff;
+  --key: #ffffff;
+  --key-black: #2e2e35;
+  --ink: #18181b;
+  --ink-0: #09090b;
+  --ink-100: #18181b;
+  --ink-200: #27272a;
+  --ink-300: #3f3f46;
+  --ink-400: #52525b;
+  --ink-500: #71717a;
+  --ink-600: #a1a1aa;
+  --over: #000000;
+  --lift: rgb(0 0 0 / 0.05);
+  --lift-2: rgb(0 0 0 / 0.09);
+  --lift-3: rgb(0 0 0 / 0.14);
+  --lift-4: rgb(0 0 0 / 0.28);
+  --well: rgb(0 0 0 / 0.06);
+  --under: #a1a1aa;
+  --veil: rgb(255 255 255 / 0.6);
+  --scrim: rgb(233 233 238 / 0.88);
+  --backdrop: rgb(24 24 27 / 0.35);
+  --shadow: rgb(0 0 0 / 0.16);
+  --on-colour: #ffffff;
+  --ok: #047857;
+  --warn: #b45309;
+  --danger: #dc2626;
+  --ok-ink: #065f46;
+  --warn-ink: #92400e;
+  --danger-ink: #b91c1c;
+}
+
+/*
+ * light:, for what the tokens cannot say alone: a colour of its own (the
+ * other tracks' sky) a deeper shade in the light
+ */
+@custom-variant light (&:where([data-mode='light'], [data-mode='light'] *));
+
+/*
+ * Standalone on iOS the status bar's letters are white whatever is under
+ * them (index.html), so in the light a strip of the dark stands under
+ * them, the height of the bar; elsewhere the inset is 0 and so is it
+ */
+:root[data-mode='light'] body::before {
+  content: '';
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: 60;
+  height: env(safe-area-inset-top);
+  background: #0b0b10;
+  pointer-events: none;
 }
 
 /*
@@ -139,6 +239,11 @@ body {
   background-size: 0.625rem 0.375rem;
 }
 
+/* The chevron in the light: zinc-600, as the light's --ink-400 */
+:root[data-mode='light'] .select-chevron {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%2352525b' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+
 /*
  * Frosted glass, for what stands over the sound's graph (the editor's
  * panel, SoundEditor.tsx): the card face, letting a little through, and
@@ -154,6 +259,6 @@ body {
   @supports not (
     (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))
   ) {
-    background-color: rgb(22 22 28);
+    background-color: var(--panel);
   }
 }

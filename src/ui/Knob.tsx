@@ -32,7 +32,7 @@ import {
 import { FINE_ZONES, fineZone, type FineZone } from '../viz/fine'
 import { HOLD, KNOB_SIZE } from './controls'
 import { keepHeld } from './held'
-import { palette } from './theme'
+import { ground, palette } from './theme'
 
 /** CSS pixels of vertical drag that sweep a knob from end to end */
 const TRAVEL = 160
@@ -86,8 +86,8 @@ const REACH_ARC = arcAt(REACH_RADIUS)
 
 const clamp01 = (n: number) => (n < 0 ? 0 : n > 1 ? 1 : n)
 
-/** A knob's arc where nothing colours it: zinc-300 */
-export const NEUTRAL_ARC = '#d4d4d8'
+/** A knob's arc where nothing colours it: zinc-300 (zinc-700 in the light) */
+export const neutralArc = () => ground().quiet
 
 /**
  * Counts the fine drags under way, on any knob, on the document: while
@@ -142,7 +142,7 @@ export function Knob({
   engine,
   part,
   knob,
-  color = NEUTRAL_ARC,
+  color = neutralArc(),
   hot,
   onHold,
   label,
@@ -224,7 +224,7 @@ export function MixKnob({
   engine,
   part,
   knob,
-  color = NEUTRAL_ARC,
+  color = neutralArc(),
 }: {
   engine: Engine
   part: string
@@ -647,7 +647,7 @@ function Dial({
             stroke="currentColor"
             strokeWidth={4}
             strokeLinecap="round"
-            className="text-white/10"
+            className="text-(--over)/10"
           />
           <path
             ref={arcRef}
@@ -658,7 +658,7 @@ function Dial({
             strokeWidth={4}
             strokeLinecap="round"
           />
-          <circle cx={CENTER} cy={CENTER} r={12} className="fill-zinc-800" />
+          <circle cx={CENTER} cy={CENTER} r={12} className="fill-(--key)" />
           <line
             ref={pointerRef}
             x1={CENTER}
@@ -668,21 +668,21 @@ function Dial({
             stroke="currentColor"
             strokeWidth={2.5}
             strokeLinecap="round"
-            className="text-zinc-100"
+            className="text-(--ink-100)"
           />
         </svg>
         <span
           ref={badgeRef}
           aria-hidden
           style={{ display: 'none', background: palette().modulator }}
-          className="absolute -top-0.5 -right-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full px-0.5 text-[9px] leading-none font-bold text-zinc-950"
+          className="absolute -top-0.5 -right-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full px-0.5 text-[9px] leading-none font-bold text-(--on-colour)"
         />
         {/* How finely it turns, in the gap at the foot of the arc */}
         <span
           ref={tagRef}
           aria-hidden
           style={{ display: 'none', background: color }}
-          className="absolute bottom-0 left-1/2 -translate-x-1/2 rounded-full px-1 py-px text-[9px] leading-none font-bold text-zinc-950"
+          className="absolute bottom-0 left-1/2 -translate-x-1/2 rounded-full px-1 py-px text-[9px] leading-none font-bold text-(--on-colour)"
         />
       </div>
       {/* The line from the knob to a finger turning it finely, over all */}

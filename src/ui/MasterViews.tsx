@@ -9,7 +9,7 @@ import {
   dbToY,
   holdPeaks,
   hzToX,
-  lighten,
+  blendTowards,
   spectrogramColour,
   spectrogramRows,
   spectrumColumns,
@@ -18,10 +18,10 @@ import {
   unclippedLevels,
   type Levels,
 } from '../viz/master'
-import { scaleGradient } from '../viz/colourScale'
+import { SCALES } from '../viz/colourScale'
 import { outputTap, useFrames } from './frames'
 import { Scope, type ScopeStats } from './Scope'
-import { alpha, palette } from './theme'
+import { alpha, groundOf, mode, palette, type Mode } from './theme'
 
 /**
  * The output's views (docs/plan/effects-parts-sequencer.md): what the
@@ -40,18 +40,30 @@ import { alpha, palette } from './theme'
 const named = (source: OutputSource) =>
   source === 'master' ? 'The output’s' : 'The sound’s'
 
-const BACKGROUND = '#0b0b10'
-const GRID = 'rgba(255, 255, 255, 0.06)'
-const AXIS = 'rgba(255, 255, 255, 0.14)'
-const PEAK_LINE = 'rgba(228, 228, 231, 0.45)'
-/** Going into the clip: amber-400 */
-const HOT = '#fbbf24'
-const TRACK = '#1c1c23'
 /**
- * A meter's track: the views' black, a breath lighter, so that the two
- * sides still show apart in silence
+ * The views' colours in a mode (src/ui/theme.ts's ground): their ground,
+ * the grid's lines and the axis, the spectrum's peak line, going into
+ * the clip (amber), a meter's empty track (a tile's face), and a meter's
+ * track drawn in silence: the ground, a breath lifted, so that the two
+ * sides still show apart
  */
-const METER_TRACK = 'rgba(255, 255, 255, 0.03)'
+function viewColours(tone: Mode) {
+  const { page, tile, over, neutral, hot } = groundOf(tone)
+  const n = Number.parseInt(neutral.slice(1), 16)
+  return {
+    background: page,
+    grid: `rgba(${over}, 0.06)`,
+    axis: `rgba(${over}, 0.14)`,
+    peak: `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, 0.45)`,
+    hot,
+    track: tile,
+    meterTrack: `rgba(${over}, 0.03)`,
+    /** The spectrogram's lines: a grey, white or black (blendTowards) */
+    line: tone === 'light' ? 0 : 255,
+    lineColour: (share: number) => `rgba(${over}, ${share})`,
+    scale: SCALES[tone],
+  }
+}
 
 /**
  * The spectrum's top, dB as the analyser reads it: a full-scale sine
@@ -75,9 +87,6 @@ const SPECTRUM_RANGE = 70
 /** The spectral views' floor, dB: darkest there, nothing under it */
 const SPECTRUM_FLOOR = SPECTRUM_TOP - SPECTRUM_RANGE
 
-/** The colour scale left to right, for its key */
-const SCALE_GRADIENT = scaleGradient('to right')
-
 /** The key's ticks: every 10 dB between the floor and the top */
 const KEY_TICKS = Array.from(
   { length: SPECTRUM_RANGE / 10 - 1 },
@@ -85,27 +94,31 @@ const KEY_TICKS = Array.from(
 )
 
 /**
- * The spectrogram's key: the colour scale in a bar from the spectral
- * views' floor, the background's colour, to their top, near white, the
- * two named at its ends and a tick under it at every 10 dB between
+ * The spectrogram's key: the mode's colour scale in a bar from the
+ * spectral views' floor, the background's colour, to their top, near
+ * white (near black in the light), the two named at its ends and a tick
+ * under it at every 10 dB between
  */
 export function ColourKey({ className = '' }: { className?: string }) {
+  const light = mode() === 'light'
   return (
     <span
       role="img"
-      aria-label={`The spectrogram’s colours: ${SPECTRUM_FLOOR} dB dark, ${SPECTRUM_TOP} dB near white`}
-      className={`flex shrink-0 items-center gap-1 font-mono text-[9px] leading-none text-zinc-500 ${className}`}
+      aria-label={`The spectrogram’s colours: ${SPECTRUM_FLOOR} dB ${light ? 'light' : 'dark'}, ${SPECTRUM_TOP} dB ${light ? 'near black' : 'near white'}`}
+      className={`flex shrink-0 items-center gap-1 font-mono text-[9px] leading-none text-(--ink-500) ${className}`}
     >
       <span aria-hidden>{SPECTRUM_FLOOR}</span>
       <span
         aria-hidden
-        className="relative h-1.5 w-20 rounded-full ring-1 ring-white/15"
-        style={{ background: SCALE_GRADIENT }}
+        className="relative h-1.5 w-20 rounded-full ring-1 ring-(--lift-3)"
+        style={{
+          background: SCALES[light ? 'light' : 'dark'].gradient('to right'),
+        }}
       >
         {KEY_TICKS.map((db) => (
           <span
             key={db}
-            className="absolute top-full mt-px h-0.5 w-px bg-zinc-500"
+            className="absolute top-full mt-px h-0.5 w-px bg-(--ink-500)"
             style={{
               left: `${((db - SPECTRUM_FLOOR) / SPECTRUM_RANGE) * 100}%`,
             }}
@@ -129,8 +142,9 @@ const LEVELS = [-20, -40, -60, -80]
 /** How fast the spectrogram scrolls, CSS pixels a second */
 const SCROLL = 40
 /**
- * The spectrogram's grid, white at these opacities: a line across at
- * each decade, as the spectrum's, and a line down each second
+ * The spectrogram's grid, white at these opacities (black in the light):
+ * a line across at each decade, as the spectrum's, and a line down each
+ * second
  */
 const DECADE_LINE = 0.16
 const SECOND_LINE = 0.1
@@ -272,6 +286,9 @@ export function Spectrum({
   labelled?: boolean
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  // Drawn again in the other mode (useFrames' key)
+  const tone = mode()
+  const colours = viewColours(tone)
   useFrames(
     engine,
     canvasRef,
@@ -288,7 +305,7 @@ export function Spectrum({
         background.height = height
         const bg = background.getContext('2d', { alpha: false })
         if (!bg) return
-        bg.fillStyle = BACKGROUND
+        bg.fillStyle = colours.background
         bg.fillRect(0, 0, width, height)
         bg.lineWidth = 1
         const lines = (hz: readonly number[], style: string) => {
@@ -301,9 +318,9 @@ export function Spectrum({
           }
           bg.stroke()
         }
-        lines(MINOR, GRID)
-        lines(DECADES, AXIS)
-        bg.strokeStyle = GRID
+        lines(MINOR, colours.grid)
+        lines(DECADES, colours.axis)
+        bg.strokeStyle = colours.grid
         bg.beginPath()
         for (const db of LEVELS) {
           if (db <= SPECTRUM_FLOOR) continue
@@ -373,12 +390,12 @@ export function Spectrum({
           for (let c = 0; c < peaks.length; c++) {
             ctx.lineTo((c + 0.5) * step, y(peaks[c] as number))
           }
-          ctx.strokeStyle = PEAK_LINE
+          ctx.strokeStyle = colours.peak
           ctx.stroke()
         },
       }
     },
-    String(source)
+    `${source}:${tone}`
   )
   return (
     <div className={`relative overflow-hidden contain-strict ${className}`}>
@@ -393,7 +410,7 @@ export function Spectrum({
           {DECADES.map((hz) => (
             <span
               key={hz}
-              className="absolute bottom-0.5 ml-1 font-mono text-[9px] leading-none text-zinc-500"
+              className="absolute bottom-0.5 ml-1 font-mono text-[9px] leading-none text-(--ink-500)"
               style={{ left: `${hzToX(hz, 100)}%` }}
             >
               {hz < 1000 ? hz : `${hz / 1000}k`}
@@ -402,7 +419,7 @@ export function Spectrum({
           {LEVELS.filter((db) => db > SPECTRUM_FLOOR).map((db) => (
             <span
               key={db}
-              className="absolute left-1 mt-0.5 font-mono text-[9px] leading-none text-zinc-600"
+              className="absolute left-1 mt-0.5 font-mono text-[9px] leading-none text-(--ink-600)"
               style={{
                 top: `${dbToY(db, 100, SPECTRUM_FLOOR, SPECTRUM_TOP)}%`,
               }}
@@ -442,6 +459,9 @@ export function Spectrogram({
   labelled?: boolean
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  // Drawn again in the other mode (useFrames' key)
+  const tone = mode()
+  const colours = viewColours(tone)
   useFrames(
     engine,
     canvasRef,
@@ -472,13 +492,13 @@ export function Spectrogram({
           ticks.reset(period)
           // Empty, its lines drawn: the decades across, the seconds back
           // from the right edge
-          ctx.fillStyle = BACKGROUND
+          ctx.fillStyle = colours.background
           ctx.fillRect(0, 0, width, height)
-          ctx.fillStyle = `rgba(255, 255, 255, ${DECADE_LINE})`
+          ctx.fillStyle = colours.lineColour(DECADE_LINE)
           for (let k = 0; k < decades.length; k++) {
             ctx.fillRect(0, decades[k] as number, width, 1)
           }
-          ctx.fillStyle = `rgba(255, 255, 255, ${SECOND_LINE})`
+          ctx.fillStyle = colours.lineColour(SECOND_LINE)
           for (let x = width - 1; x >= 0; x -= period) {
             ctx.fillRect(Math.round(x), 0, 1, height)
           }
@@ -512,17 +532,29 @@ export function Spectrogram({
           const data = column.data
           for (let y = 0; y < height; y++) {
             const db = rows[height - 1 - y] as number
-            spectrogramColour(db, SPECTRUM_FLOOR, SPECTRUM_TOP, data, y * 4)
+            spectrogramColour(
+              db,
+              SPECTRUM_FLOOR,
+              SPECTRUM_TOP,
+              colours.scale,
+              data,
+              y * 4
+            )
           }
           for (let k = 0; k < decades.length; k++) {
-            lighten(data, (decades[k] as number) * 4, DECADE_LINE)
+            blendTowards(
+              data,
+              (decades[k] as number) * 4,
+              DECADE_LINE,
+              colours.line
+            )
           }
           ctx.drawImage(canvas, -shift, 0)
           for (let k = 0; k < shift; k++) {
             if (ticks.next()) {
               second.data.set(data)
               for (let at = 0; at < second.data.length; at += 4) {
-                lighten(second.data, at, SECOND_LINE)
+                blendTowards(second.data, at, SECOND_LINE, colours.line)
               }
               ctx.putImageData(second, width - shift + k, 0)
             } else {
@@ -532,7 +564,7 @@ export function Spectrogram({
         },
       }
     },
-    String(source)
+    `${source}:${tone}`
   )
   return (
     <div
@@ -549,20 +581,20 @@ export function Spectrogram({
           {DECADES.map((hz) => (
             <span
               key={hz}
-              className="absolute left-1 -translate-y-full pb-0.5 font-mono text-[9px] leading-none text-zinc-500"
+              className="absolute left-1 -translate-y-full pb-0.5 font-mono text-[9px] leading-none text-(--ink-500)"
               style={{ top: `${100 - hzToX(hz, 100)}%` }}
             >
               {hz < 1000 ? hz : `${hz / 1000}k`}
             </span>
           ))}
           {/* Where the key leaves room for it */}
-          <span className="absolute right-1.5 bottom-1 font-mono text-[9px] leading-none text-zinc-600 @max-[16rem]:hidden">
+          <span className="absolute right-1.5 bottom-1 font-mono text-[9px] leading-none text-(--ink-600) @max-[16rem]:hidden">
             lines 1 s apart
           </span>
         </span>
       )}
       {labelled && (
-        <ColourKey className="pointer-events-none absolute bottom-1 left-1 rounded bg-[#0b0b10]/75 px-1 pt-0.5 pb-1.5" />
+        <ColourKey className="pointer-events-none absolute bottom-1 left-1 rounded bg-(--bg)/75 px-1 pt-0.5 pb-1.5" />
       )}
     </div>
   )
@@ -589,6 +621,9 @@ export function Vectorscope({
   correlated?: boolean
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  // Drawn again in the other mode (useFrames' key)
+  const tone = mode()
+  const colours = viewColours(tone)
   const readoutRef = useRef<HTMLSpanElement>(null)
   useFrames(
     engine,
@@ -608,13 +643,13 @@ export function Vectorscope({
         background.height = height
         const bg = background.getContext('2d', { alpha: false })
         if (!bg) return
-        bg.fillStyle = BACKGROUND
+        bg.fillStyle = colours.background
         bg.fillRect(0, 0, width, height)
         const cx = width / 2
         const cy = (height - bar) / 2
         const r = Math.max(1, Math.min(width, height - bar) / 2 - 2 * scale)
         bg.lineWidth = 1
-        bg.strokeStyle = GRID
+        bg.strokeStyle = colours.grid
         bg.beginPath()
         bg.arc(cx, cy, r, 0, 2 * Math.PI)
         // The sides' diagonals: L up to the left, R up to the right
@@ -624,15 +659,15 @@ export function Vectorscope({
         bg.moveTo(cx + d, cy - d)
         bg.lineTo(cx - d, cy + d)
         bg.stroke()
-        bg.strokeStyle = AXIS
+        bg.strokeStyle = colours.axis
         bg.beginPath()
         bg.moveTo(Math.round(cx) + 0.5, cy - r)
         bg.lineTo(Math.round(cx) + 0.5, cy + r)
         bg.stroke()
         if (bar > 0) {
-          bg.fillStyle = TRACK
+          bg.fillStyle = colours.track
           bg.fillRect(0, height - bar, width, bar)
-          bg.fillStyle = AXIS
+          bg.fillStyle = colours.axis
           bg.fillRect(Math.round(cx), height - bar, 1, bar)
         }
       }
@@ -687,7 +722,7 @@ export function Vectorscope({
             ctx.globalAlpha = 1
             if (bar > 0) {
               const at = ((value + 1) / 2) * width
-              ctx.fillStyle = value < 0 ? HOT : accent
+              ctx.fillStyle = value < 0 ? colours.hot : accent
               const w = Math.max(2, Math.round(bar))
               ctx.fillRect(Math.round(at - w / 2), height - bar, w, bar)
             }
@@ -703,7 +738,7 @@ export function Vectorscope({
         },
       }
     },
-    String(source)
+    `${source}:${tone}`
   )
   return (
     <div className={`relative overflow-hidden contain-strict ${className}`}>
@@ -716,7 +751,7 @@ export function Vectorscope({
       {correlated && (
         <span
           ref={readoutRef}
-          className="pointer-events-none absolute bottom-2 left-1 font-mono text-[9px] leading-none text-zinc-500"
+          className="pointer-events-none absolute bottom-2 left-1 font-mono text-[9px] leading-none text-(--ink-500)"
         />
       )}
     </div>
@@ -752,6 +787,9 @@ export function Meters({
   readout?: boolean
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  // Drawn again in the other mode (useFrames' key)
+  const tone = mode()
+  const colours = viewColours(tone)
   const textRef = useRef<HTMLSpanElement>(null)
   useFrames(
     engine,
@@ -828,12 +866,12 @@ export function Meters({
           const barW = single
             ? width
             : Math.max(1, Math.floor((width - gap) / 2))
-          ctx.fillStyle = BACKGROUND
+          ctx.fillStyle = colours.background
           ctx.fillRect(0, 0, width, height)
           const accent = palette().accent
           sides.forEach((side, k) => {
             const x = k === 0 ? 0 : width - barW
-            ctx.fillStyle = METER_TRACK
+            ctx.fillStyle = colours.meterTrack
             ctx.fillRect(x, 0, barW, height)
             // The RMS, filled from the bottom, amber past 0 dB
             const top = Math.round(y(side.rms.level))
@@ -846,25 +884,25 @@ export function Meters({
               height - Math.max(top, zero)
             )
             if (top < zero) {
-              ctx.fillStyle = HOT
+              ctx.fillStyle = colours.hot
               ctx.fillRect(x, top, barW, zero - top)
             }
             ctx.globalAlpha = 1
             // The needle at the peak, and the tick where it was held
             const needle = Math.round(y(side.needle.level))
             const lineH = Math.max(1, Math.round(1.5 * scale))
-            ctx.fillStyle = side.needle.level > 0 ? HOT : accent
+            ctx.fillStyle = side.needle.level > 0 ? colours.hot : accent
             if (side.needle.level > METER_MIN_DB) {
               ctx.fillRect(x, needle, barW, lineH)
             }
             const held = Math.round(y(side.needle.peak))
-            ctx.fillStyle = side.needle.peak > 0 ? HOT : PEAK_LINE
+            ctx.fillStyle = side.needle.peak > 0 ? colours.hot : colours.peak
             if (side.needle.peak > METER_MIN_DB) {
               ctx.fillRect(x, held, barW, Math.max(1, Math.round(scale)))
             }
           })
           // 0 dB: full scale, past which the clip is driven hard
-          ctx.fillStyle = AXIS
+          ctx.fillStyle = colours.axis
           ctx.fillRect(0, zero, width, Math.max(1, Math.round(scale)))
           if (text && now - lastText > 200) {
             lastText = now
@@ -886,7 +924,7 @@ export function Meters({
         },
       }
     },
-    String(source)
+    `${source}:${tone}`
   )
   return (
     <div className={`flex min-h-0 flex-col items-stretch gap-1 ${className}`}>
@@ -905,7 +943,7 @@ export function Meters({
       {readout && (
         <span
           ref={textRef}
-          className="shrink-0 text-center font-mono text-[9px] leading-none whitespace-nowrap text-zinc-400"
+          className="shrink-0 text-center font-mono text-[9px] leading-none whitespace-nowrap text-(--ink-400)"
         />
       )}
     </div>

@@ -45,10 +45,10 @@ const SYNTH_ROWS = 24
 /** The note a synth's grid starts at: C3, the octave under middle C */
 const SYNTH_FIRST = 48
 
-const CELL = 'border-r border-b border-black/50 bg-white/[0.07]'
-const BEAT_CELL = 'border-r border-b border-black/50 bg-white/[0.12]'
-const BLACK_CELL = 'border-r border-b border-black/50 bg-white/[0.03]'
-const BLACK_BEAT_CELL = 'border-r border-b border-black/50 bg-white/[0.07]'
+const CELL = 'border-r border-b border-(--under)/50 bg-(--over)/7'
+const BEAT_CELL = 'border-r border-b border-(--under)/50 bg-(--over)/12'
+const BLACK_CELL = 'border-r border-b border-(--under)/50 bg-(--over)/3'
+const BLACK_BEAT_CELL = 'border-r border-b border-(--under)/50 bg-(--over)/7'
 
 /** A note's face within its box: its start marked at its left */
 const NOTE =
@@ -57,7 +57,7 @@ const NOTE =
 const HELD_NOTE = 'absolute inset-px rounded-r-[3px] bg-(--accent)'
 
 /** A bar's chip: the bar shown pressed, the bar playing marked under it */
-const BAR = `${TALL_HIT} flex size-7 shrink-0 items-center justify-center rounded-md bg-(--lift) font-mono text-[11px] font-semibold text-(--ink-400) aria-pressed:bg-(--lift-2) aria-pressed:text-white data-playing:shadow-[inset_0_-2px_0_var(--accent)]`
+const BAR = `${TALL_HIT} flex size-7 shrink-0 items-center justify-center rounded-md bg-(--lift) font-mono text-[11px] font-semibold text-(--ink-400) aria-pressed:bg-(--lift-2) aria-pressed:text-(--ink-0) data-playing:shadow-[inset_0_-2px_0_var(--accent)]`
 
 const LABEL =
   'flex min-h-0 min-w-0 items-center justify-end rounded-sm pr-1 font-mono text-[10px] leading-none text-(--ink-400) active:bg-(--lift-2)'
@@ -66,7 +66,7 @@ const BLACK_LABEL =
 const PAD_LABEL =
   'flex min-h-0 min-w-0 items-center rounded-sm px-1 text-left text-[10px] leading-none text-(--ink-400) active:bg-(--lift-2)'
 const PICKED_LABEL =
-  'flex min-h-0 min-w-0 items-center rounded-sm px-1 text-left text-[10px] leading-none text-(--accent) active:bg-(--lift-2)'
+  'flex min-h-0 min-w-0 items-center rounded-sm px-1 text-left text-[10px] leading-none text-(--secondary) active:bg-(--lift-2)'
 
 /** A finger on the grid: the note it holds, and what it had as it took it */
 interface Drag {
@@ -444,7 +444,7 @@ export function StepGrid({
                 {others.has(key) && (
                   <span
                     aria-hidden
-                    className={`absolute top-1/2 size-1 -translate-y-1/2 rounded-full bg-sky-400 ${kit ? 'right-1' : 'left-1'}`}
+                    className={`absolute top-1/2 size-1 -translate-y-1/2 rounded-full bg-sky-400 light:bg-sky-600 ${kit ? 'right-1' : 'left-1'}`}
                   />
                 )}
               </button>

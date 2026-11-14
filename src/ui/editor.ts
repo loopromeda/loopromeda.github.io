@@ -39,7 +39,7 @@ import {
   sendInput,
   type Sound,
 } from '../state/sound/sound'
-import { palette } from './theme'
+import { groundOf, mode, palette, type Mode } from './theme'
 
 /**
  * How a tile looks: its ring at rest, its ink (its glyph, and its ring
@@ -51,13 +51,14 @@ export interface Look {
   readonly tint: string
 }
 
-/** Inputs and the amp, shared by every chain: zinc-200 */
-export const NEUTRAL_LOOK: Look = look('#e4e4e7', 0.4, 0.12)
-/** The voice, quieter still: zinc-400 rings, zinc-300 ink */
-export const VOICE_LOOK: Look = {
-  ring: 'rgba(161,161,170,0.4)',
-  ink: '#d4d4d8',
-  tint: 'rgba(161,161,170,0.12)',
+/** Inputs and the amp, every chain's: zinc-200, zinc-800 in the light */
+export function neutralLook(): Look {
+  return NEUTRAL_LOOKS[mode()]
+}
+
+/** The voice, quieter still: zinc-400 rings, zinc-300 ink (and the light's) */
+export function voiceLook(): Look {
+  return VOICE_LOOKS[mode()]
 }
 
 /**
@@ -85,7 +86,23 @@ export function modLook(): Look {
  */
 export function busLook(id: string): Look {
   const index = (BUS_IDS as readonly string[]).indexOf(id)
-  return index < 0 ? NEUTRAL_LOOK : chainLook(index)
+  return index < 0 ? neutralLook() : chainLook(index)
+}
+
+/** A look in each mode, made once: neutralLook's and voiceLook's */
+const NEUTRAL_LOOKS: Readonly<Record<Mode, Look>> = {
+  dark: look(groundOf('dark').neutral, 0.4, 0.12),
+  light: look(groundOf('light').neutral, 0.4, 0.12),
+}
+const VOICE_LOOKS: Readonly<Record<Mode, Look>> = {
+  dark: {
+    ...look(groundOf('dark').dim, 0.4, 0.12),
+    ink: groundOf('dark').quiet,
+  },
+  light: {
+    ...look(groundOf('light').dim, 0.4, 0.12),
+    ink: groundOf('light').quiet,
+  },
 }
 
 function look(hex: string, ring: number, tint: number): Look {
@@ -108,7 +125,7 @@ export function chainLetter(index: number): string {
  * modulation's for a modulator, neutral for the rest
  */
 export function lookOf(sound: Sound, id: string): Look {
-  if (id === VOICE) return VOICE_LOOK
+  if (id === VOICE) return voiceLook()
   const found = findPart(sound, id)
   switch (found?.type) {
     case 'chain':
@@ -118,7 +135,7 @@ export function lookOf(sound: Sound, id: string): Look {
     case 'modulator':
       return modLook()
     default:
-      return NEUTRAL_LOOK
+      return neutralLook()
   }
 }
 

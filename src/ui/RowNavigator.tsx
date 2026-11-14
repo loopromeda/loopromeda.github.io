@@ -122,7 +122,7 @@ export function RowNavigator({
     >
       <div
         aria-hidden="true"
-        className="absolute inset-0 overflow-hidden rounded-md bg-black/40"
+        className="absolute inset-0 overflow-hidden rounded-md bg-(--well)"
       >
         {Array.from({ length: total }, (_, k) => (
           <div
@@ -133,7 +133,7 @@ export function RowNavigator({
             }}
             className={
               black && black(k)
-                ? 'absolute inset-x-0 bg-(--bg)'
+                ? 'absolute inset-x-0 bg-(--key-black)'
                 : 'absolute inset-x-0 bg-(--key)'
             }
           />
@@ -149,7 +149,7 @@ export function RowNavigator({
         {black && total > 60 && (
           <div
             style={{ bottom: at(60, total) }}
-            className="absolute left-1/2 size-1 -translate-x-1/2 rounded-full bg-zinc-400"
+            className="absolute left-1/2 size-1 -translate-x-1/2 rounded-full bg-(--ink-400)"
           />
         )}
       </div>
@@ -159,17 +159,17 @@ export function RowNavigator({
       >
         <div
           style={{ height: `calc(100% - ${at(position + rows, total)})` }}
-          className="absolute inset-x-0 top-0 bg-black/55"
+          className="absolute inset-x-0 top-0 bg-(--veil)"
         />
         <div
           style={{ height: at(position, total) }}
-          className="absolute inset-x-0 bottom-0 bg-black/55"
+          className="absolute inset-x-0 bottom-0 bg-(--veil)"
         />
       </div>
       <div
         aria-hidden="true"
         style={{ bottom: at(position, total), height: at(rows, total) }}
-        className="pointer-events-none absolute inset-x-0 rounded-[5px] bg-(--accent)/10 shadow-[0_0_0_1.5px_var(--accent)]"
+        className="pointer-events-none absolute inset-x-0 rounded-[5px] bg-(--secondary)/10 shadow-[0_0_0_1.5px_var(--secondary)]"
       />
     </div>
   )

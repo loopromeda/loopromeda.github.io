@@ -12,7 +12,7 @@ import {
   outlineFill,
   outlinePath,
 } from './outline'
-import { palette } from './theme'
+import { ground, mode, palette } from './theme'
 
 /** Samples on screen: 21 ms at 48 kHz, about nine cycles of A4 */
 const WINDOW = 1024
@@ -30,9 +30,9 @@ const MAX_SCALE = 2
 /** Vertical grid lines split the window into 128-sample divisions */
 const DIVISIONS = 8
 
-const BACKGROUND = '#0b0b10'
-const GRID = 'rgba(255, 255, 255, 0.06)'
-const AXIS = 'rgba(255, 255, 255, 0.14)'
+/** The grid's lines and the axis: what lifts off the ground, at these */
+const GRID = 0.06
+const AXIS = 0.14
 /** A picture under the trace: its area and its line, this opaque */
 const PICTURE_FILL = 0.08
 const PICTURE_LINE = 0.3
@@ -84,7 +84,7 @@ export function Scope({
   onStats,
   className = '',
   picture,
-  pictureColor = '#e4e4e7',
+  pictureColor,
 }: {
   engine: Engine
   /** The output it shows: the master's unless another is named */
@@ -96,8 +96,11 @@ export function Scope({
   className?: string
   /** The part whose picture lies under the trace */
   picture?: string
+  /** The picture's colour: the ground's neutral ink unless given */
   pictureColor?: string
 }) {
+  // The canvas is drawn again in the other mode: its ground, its grid
+  const tone = mode()
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const readoutRef = useRef<HTMLSpanElement>(null)
   // The latest callback, without restarting the loop when it changes
@@ -139,11 +142,12 @@ export function Scope({
 
     const paintBackground = () => {
       const { width, height } = canvas
+      const { page, over, neutral } = ground()
       background.width = width
       background.height = height
       const bg = background.getContext('2d', { alpha: false })
       if (!bg) return
-      bg.fillStyle = BACKGROUND
+      bg.fillStyle = page
       bg.fillRect(0, 0, width, height)
       if (shownPicture !== '') {
         // Scaled into place as a path, so the line keeps its width
@@ -155,8 +159,8 @@ export function Scope({
         area.addPath(new Path2D(outlineFill(shownPicture)), place)
         const line = new Path2D()
         line.addPath(new Path2D(shownPicture), place)
-        bg.fillStyle = pictureColor
-        bg.strokeStyle = pictureColor
+        bg.fillStyle = pictureColor ?? neutral
+        bg.strokeStyle = pictureColor ?? neutral
         bg.lineWidth = 1.5 * scale
         bg.lineJoin = 'round'
         bg.globalAlpha = PICTURE_FILL
@@ -167,7 +171,7 @@ export function Scope({
       }
       // One device pixel wide, on pixel centres: crisp at any scale
       bg.lineWidth = 1
-      bg.strokeStyle = GRID
+      bg.strokeStyle = `rgba(${over}, ${GRID})`
       bg.beginPath()
       for (let i = 1; i < DIVISIONS; i++) {
         const x = Math.round((i * width) / DIVISIONS) + 0.5
@@ -180,7 +184,7 @@ export function Scope({
         bg.lineTo(width, y)
       }
       bg.stroke()
-      bg.strokeStyle = AXIS
+      bg.strokeStyle = `rgba(${over}, ${AXIS})`
       bg.beginPath()
       const middle = Math.round(height / 2) + 0.5
       bg.moveTo(0, middle)
@@ -346,7 +350,7 @@ export function Scope({
       unsubscribeSound()
       observer.disconnect()
     }
-  }, [engine, source, picture, pictureColor])
+  }, [engine, source, picture, pictureColor, tone])
 
   return (
     <div className={`relative overflow-hidden contain-strict ${className}`}>
@@ -361,7 +365,7 @@ export function Scope({
       <span
         ref={readoutRef}
         hidden={!timing}
-        className="pointer-events-none absolute top-0.5 right-1 font-mono text-[9px] leading-none text-zinc-500"
+        className="pointer-events-none absolute top-0.5 right-1 font-mono text-[9px] leading-none text-(--ink-500)"
       />
     </div>
   )

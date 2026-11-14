@@ -14,6 +14,7 @@ import type { PlatformReport } from '../platform'
 import {
   VOICE_LIMITS,
   type AppSettings,
+  type Appearance,
   type Latency,
   type VelocityMode,
 } from '../state/settings'
@@ -21,13 +22,19 @@ import { CARD, SMALL_BUTTON, SMALL_OPTION, TALL_HIT } from './controls'
 import { Dropdown } from './Dropdown'
 import { SmallIconButton } from './IconButton'
 import { PlatformChecks } from './PlatformChecks'
-import { THEMES } from './theme'
+import { THEMES, mode as pageMode } from './theme'
 
 /** Each latencyHint as the player picks it, lowest first */
 const LATENCY_LABELS: readonly { value: Latency; label: string }[] = [
   { value: 'interactive', label: 'Low' },
   { value: 'balanced', label: 'Balanced' },
   { value: 'playback', label: 'High' },
+]
+
+const APPEARANCE_LABELS: readonly { value: Appearance; label: string }[] = [
+  { value: 'system', label: 'System' },
+  { value: 'dark', label: 'Dark' },
+  { value: 'light', label: 'Light' },
 ]
 
 const VELOCITY_LABELS: readonly { value: VelocityMode; label: string }[] = [
@@ -86,6 +93,8 @@ export function SettingsDialog({
   onClose: () => void
   onBench?: (report: BenchReport) => void
 }) {
+  // The themes' swatches in the mode the page is in
+  const mode = pageMode()
   const set = (change: Partial<AppSettings>) =>
     onChange({ ...settings, ...change })
 
@@ -129,7 +138,7 @@ export function SettingsDialog({
       id="settings"
       aria-labelledby="settings-heading"
       onClick={outside}
-      className={`m-auto max-h-[calc(100dvh_-_2rem_-_env(safe-area-inset-top)_-_env(safe-area-inset-bottom))] w-[calc(100%_-_1.5rem)] max-w-md flex-col gap-1.5 p-2.5 text-inherit open:flex backdrop:bg-black/70 ${CARD}`}
+      className={`m-auto max-h-[calc(100dvh_-_2rem_-_env(safe-area-inset-top)_-_env(safe-area-inset-bottom))] w-[calc(100%_-_1.5rem)] max-w-md flex-col gap-1.5 p-2.5 text-inherit open:flex backdrop:bg-(--backdrop) ${CARD}`}
     >
       <div className="flex h-7 shrink-0 items-center justify-end gap-1.5">
         <h2
@@ -153,13 +162,17 @@ export function SettingsDialog({
             options={THEMES.map((theme) => ({
               value: theme.id,
               label: theme.name,
-              swatch: [
-                theme.palette.accent,
-                ...theme.palette.chains.slice(0, 3),
-              ],
+              swatch: [theme[mode].accent, ...theme[mode].chains.slice(0, 3)],
             }))}
             value={settings.theme}
             onChange={(theme) => set({ theme })}
+          />
+          <Choice
+            label="Appearance"
+            hint="Dark or light, or as the device is set."
+            options={APPEARANCE_LABELS}
+            value={settings.appearance}
+            onChange={(appearance) => set({ appearance })}
           />
         </Group>
 
@@ -473,7 +486,7 @@ function OfflineRow({
     >
       {state === 'ready' ? (
         <span className="flex items-center gap-3">
-          <span className="text-[13px] text-emerald-400">
+          <span className="text-[13px] text-(--ok)">
             {OFFLINE_LABELS[state]}
           </span>
           <button

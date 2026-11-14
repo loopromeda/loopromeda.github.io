@@ -17,7 +17,7 @@ const MARK =
 const STEM =
   'pointer-events-none absolute inset-y-0 left-0 w-px bg-(--accent)/50'
 const TUNING =
-  'pointer-events-none absolute top-0 left-0 rounded bg-black/60 px-1 font-mono text-[11px] whitespace-nowrap text-(--accent)'
+  'pointer-events-none absolute top-0 left-0 rounded bg-(--veil) px-1 font-mono text-[11px] whitespace-nowrap text-(--accent)'
 /** Where a gliding note sounds, and its way left to the finger, turned */
 const SOUND =
   'pointer-events-none absolute top-0 left-0 hidden size-3 -translate-1/2 rounded-full bg-(--accent) shadow-[0_0_8px_var(--accent)]'
@@ -209,7 +209,7 @@ export function XyPad({
       onPointerUp={up}
       onPointerCancel={up}
       onLostPointerCapture={up}
-      className="absolute inset-0 touch-none overflow-hidden rounded-lg bg-[#1b1b21] shadow-[inset_0_0_0_1px_rgb(255_255_255/0.06)]"
+      className="absolute inset-0 touch-none overflow-hidden rounded-lg bg-(--tile) shadow-[inset_0_0_0_1px_color-mix(in_oklab,var(--over)_6%,transparent)]"
     >
       {/* Slide's quarters, faint across the pad */}
       {[0.25, 0.5, 0.75].map((at) => (
@@ -217,7 +217,7 @@ export function XyPad({
           key={at}
           aria-hidden
           style={{ top: `${at * 100}%` }}
-          className="pointer-events-none absolute inset-x-0 h-px bg-white/[0.04]"
+          className="pointer-events-none absolute inset-x-0 h-px bg-(--over)/4"
         />
       ))}
       {xyLines(lowest, octaves).map((line) => (
@@ -225,7 +225,7 @@ export function XyPad({
           key={line.note}
           aria-hidden
           style={{ left: `${line.x * 100}%` }}
-          className={`pointer-events-none absolute inset-y-0 w-px ${line.c ? 'bg-(--accent)/30' : line.black ? 'bg-white/[0.04]' : 'bg-white/[0.09]'}`}
+          className={`pointer-events-none absolute inset-y-0 w-px ${line.c ? 'bg-(--accent)/30' : line.black ? 'bg-(--over)/4' : 'bg-(--over)/9'}`}
         >
           {line.c && (
             <span

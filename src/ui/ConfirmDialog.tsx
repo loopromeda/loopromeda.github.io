@@ -61,7 +61,7 @@ export function ConfirmDialog({
       aria-labelledby="confirm-title"
       aria-describedby="confirm-message"
       onClick={outside}
-      className={`m-auto w-[calc(100%_-_1.5rem)] max-w-xs flex-col gap-3 p-3 text-inherit open:flex backdrop:bg-black/70 ${CARD}`}
+      className={`m-auto w-[calc(100%_-_1.5rem)] max-w-xs flex-col gap-3 p-3 text-inherit open:flex backdrop:bg-(--backdrop) ${CARD}`}
     >
       <h2 id="confirm-title" className="text-sm font-semibold text-(--ink-100)">
         {title}

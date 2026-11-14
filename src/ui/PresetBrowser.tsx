@@ -33,7 +33,7 @@ import {
   SMALL_OPTION,
   SMALL_SELECT,
 } from './controls'
-import { NEUTRAL_LOOK } from './editor'
+import { neutralLook } from './editor'
 import { FadeRow } from './FadeRow'
 import { SmallIconButton } from './IconButton'
 import { usePlacement } from './placement'
@@ -212,14 +212,14 @@ export function PresetBrowser({
           className="flex h-5 w-[26px] shrink-0 items-center justify-center rounded-[5px]"
           style={{
             background: 'var(--tile)',
-            boxShadow: `inset 0 0 0 1.5px ${NEUTRAL_LOOK.ring}`,
+            boxShadow: `inset 0 0 0 1.5px ${neutralLook().ring}`,
           }}
         >
           <svg viewBox="0 0 18 12" width={15} height={10}>
             <path
               d="M3.5 2.5h11M3.5 6h11M3.5 9.5h7"
               fill="none"
-              stroke={NEUTRAL_LOOK.ink}
+              stroke={neutralLook().ink}
               strokeWidth={1.8}
               strokeLinecap="round"
             />
@@ -380,7 +380,7 @@ export function PresetBrowser({
       {(problem ?? message) && (
         <p
           aria-hidden
-          className={`h-4 shrink-0 truncate px-1 text-[11px] ${problem ? 'text-amber-300' : 'text-(--ink-500)'}`}
+          className={`h-4 shrink-0 truncate px-1 text-[11px] ${problem ? 'text-(--warn)' : 'text-(--ink-500)'}`}
         >
           {problem ?? message}
         </p>
@@ -523,7 +523,7 @@ function PresetRow({
         type="button"
         aria-current={current ? 'true' : undefined}
         onClick={() => onLoad({ source, name: preset.name })}
-        className="flex h-11 w-full items-center gap-2 rounded-lg px-2.5 text-left text-[13px] text-(--ink-300) aria-[current]:bg-(--lift-2) aria-[current]:text-white"
+        className="flex h-11 w-full items-center gap-2 rounded-lg px-2.5 text-left text-[13px] text-(--ink-300) aria-[current]:bg-(--lift-2) aria-[current]:text-(--ink-0)"
       >
         <svg
           width="14"
@@ -535,7 +535,7 @@ function PresetRow({
           strokeLinecap="round"
           strokeLinejoin="round"
           aria-hidden="true"
-          className={`shrink-0 text-emerald-400 ${current ? '' : 'invisible'}`}
+          className={`shrink-0 text-(--secondary) ${current ? '' : 'invisible'}`}
         >
           <path d="M3 7.5l2.5 2.5L11 4.5" />
         </svg>

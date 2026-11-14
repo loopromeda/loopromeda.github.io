@@ -23,7 +23,8 @@ import { EFFECT_KINDS, type EffectKind } from '../state/sound/kinds'
 import {
   FM_START,
   GLYPHS,
-  NEUTRAL_LOOK,
+  neutralLook,
+  voiceLook,
   PAD_TILE,
   addId,
   chainLook,
@@ -43,7 +44,7 @@ import {
   tileLine,
   toggleFm,
 } from './editor'
-import { DEFAULT_THEME, setThemeId } from './theme'
+import { DEFAULT_THEME, setTheme } from './theme'
 
 /** Every knob of an effect kind at its default */
 function effectValues(kind: EffectKind): Record<string, number> {
@@ -81,8 +82,8 @@ describe('looks', () => {
 
   it('keeps inputs and the amp neutral, and modulators sky', () => {
     const sound = busy()
-    expect(lookOf(sound, 'i1')).toBe(NEUTRAL_LOOK)
-    expect(lookOf(sound, AMP)).toBe(NEUTRAL_LOOK)
+    expect(lookOf(sound, 'i1')).toBe(neutralLook())
+    expect(lookOf(sound, AMP)).toBe(neutralLook())
     expect(lookOf(sound, 'm1')).toEqual(modLook())
     expect(lookOf(sound, VOICE).ink).toBe('#d4d4d8')
   })
@@ -90,12 +91,16 @@ describe('looks', () => {
   it('follows the theme it is given', () => {
     expect(chainLook(0).ink).toBe('#ff8904')
     expect(modLook().ink).toBe('#38bdf8')
-    setThemeId('ember')
+    setTheme('ember', 'dark')
     try {
       expect(chainLook(0).ink).toBe('#fde047')
-      expect(modLook().ink).toBe('#a684ff')
+      expect(modLook().ink).toBe('#d8b4fe')
+      setTheme('ember', 'light')
+      expect(chainLook(0).ink).toBe('#8c6501')
+      expect(neutralLook().ink).toBe('#27272a')
+      expect(voiceLook().ink).toBe('#3f3f46')
     } finally {
-      setThemeId(DEFAULT_THEME)
+      setTheme(DEFAULT_THEME, 'dark')
     }
   })
 })
@@ -141,7 +146,7 @@ describe('tiles', () => {
     expect(tileLine(sound, 'f1')).toBe('0.60 Hz')
     expect(tileLine(setValue(sound, 'f2', 'rate', 1.25), 'f2')).toBe('1.25 Hz')
     expect(glyphOf(sound, 'f1')).toBe(GLYPHS.chorus)
-    expect(lookOf(sound, 'f2')).toBe(NEUTRAL_LOOK)
+    expect(lookOf(sound, 'f2')).toBe(neutralLook())
   })
 
   it('names a compressor’s tile short, its panel in full', () => {

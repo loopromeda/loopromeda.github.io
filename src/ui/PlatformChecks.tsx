@@ -30,7 +30,7 @@ export function PlatformChecks({ platform }: { platform: PlatformReport }) {
                 </span>
               )}
             </span>
-            <span className={ok ? 'text-emerald-400' : 'text-(--ink-500)'}>
+            <span className={ok ? 'text-(--ok)' : 'text-(--ink-500)'}>
               {ok ? 'yes' : 'no'}
             </span>
           </li>

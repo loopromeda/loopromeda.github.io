@@ -15,7 +15,7 @@ import {
   type Tap,
 } from '../viz/wheel'
 import { GLYPHS, modLook } from './editor'
-import { palette } from './theme'
+import { alpha, ground, palette } from './theme'
 
 /** The arrow keys turn it this far, Page Up and Page Down this */
 const STEP = 0.05
@@ -43,7 +43,7 @@ function ridgesStyle(wheel: number): CSSProperties {
     ROLL
   )
   return {
-    backgroundImage: `linear-gradient(to bottom, rgba(255,255,255,0.07) ${line}px, transparent ${line}px)`,
+    backgroundImage: `linear-gradient(to bottom, rgba(${ground().over}, 0.07) ${line}px, transparent ${line}px)`,
     backgroundSize: `100% ${gap}px`,
     backgroundPositionY: `${-offset}px`,
   }
@@ -163,7 +163,7 @@ export function ModWheel({
 
   const wheel = engine.wheel
   const percent = Math.round(wheel * 100)
-  const ink = routed ? palette().modulator : '#a1a1aa'
+  const ink = routed ? palette().modulator : ground().dim
   const style = { '--wheel': wheel, ...ridgesStyle(wheel) } as CSSProperties
   return (
     <div className="flex w-10 shrink-0 flex-col gap-1.5">
@@ -212,8 +212,8 @@ export function ModWheel({
           style={{
             height: 'calc(var(--wheel) * 100%)',
             background: routed
-              ? 'linear-gradient(to top, rgba(56,189,248,0.1), rgba(56,189,248,0.32))'
-              : 'rgba(255,255,255,0.08)',
+              ? `linear-gradient(to top, ${alpha(palette().modulator, 0.1)}, ${alpha(palette().modulator, 0.32)})`
+              : `rgba(${ground().over}, 0.08)`,
             borderTop: `2px solid ${ink}`,
           }}
           className="pointer-events-none absolute inset-x-0 bottom-0"

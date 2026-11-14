@@ -14,7 +14,7 @@ import {
 } from '../state/surface'
 import { pitchName } from '../viz/keyboard'
 import { OPTION, OPTION_CELL, RAISED } from './controls'
-import { NEUTRAL_LOOK } from './editor'
+import { neutralLook } from './editor'
 import { SmallIconButton } from './IconButton'
 import { usePlacement } from './placement'
 import { SurfaceIcon } from './SurfaceButton'
@@ -30,7 +30,7 @@ const KINDS: readonly { kind: SurfaceKind; label: string }[] = [
  * its name close together
  */
 const SURFACE =
-  'flex h-11 min-w-0 items-center justify-center gap-1.5 rounded-[10px] bg-(--lift) px-1 text-xs font-semibold tracking-wider whitespace-nowrap text-(--ink-400) aria-pressed:bg-(--lift-2) aria-pressed:text-white'
+  'flex h-11 min-w-0 items-center justify-center gap-1.5 rounded-[10px] bg-(--lift) px-1 text-xs font-semibold tracking-wider whitespace-nowrap text-(--ink-400) aria-pressed:bg-(--lift-2) aria-pressed:text-(--ink-0)'
 
 /** C to B, as semitones above C */
 const ROOTS = Array.from({ length: 12 }, (_, semitone) => semitone)
@@ -141,7 +141,7 @@ export function SurfacePicker({
           className="flex h-5 w-[26px] shrink-0 items-center justify-center rounded-[5px] text-(--ink-200)"
           style={{
             background: 'var(--tile)',
-            boxShadow: `inset 0 0 0 1.5px ${NEUTRAL_LOOK.ring}`,
+            boxShadow: `inset 0 0 0 1.5px ${neutralLook().ring}`,
           }}
         >
           <SurfaceIcon kind={seq ? 'seq' : played} size={14} />

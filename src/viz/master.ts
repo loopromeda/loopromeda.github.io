@@ -8,7 +8,7 @@
  */
 import { unSoftClip } from '../dsp/clip'
 import { ABSOLUTE_GATE } from '../dsp/loudness'
-import { scaleColour } from './colourScale'
+import type { ColourScale } from './colourScale'
 
 /** Lowest frequency on the spectrum's logarithmic axis, in Hz */
 export const SPECTRUM_MIN_HZ = 20
@@ -286,20 +286,21 @@ export function vectorPoint(
 }
 
 /**
- * Writes an opaque RGBA colour for a level into out[at .. at + 3], on the
- * colour scale (src/viz/colourScale.ts): t is (db - minDb) / (maxDb -
- * minDb) clamped to 0..1, -Infinity and NaN giving 0, the background, and
- * maxDb and over the scale's near white.
+ * Writes an opaque RGBA colour for a level into out[at .. at + 3], on a
+ * colour scale (src/viz/colourScale.ts, the mode's): t is (db - minDb) /
+ * (maxDb - minDb) clamped to 0..1, -Infinity and NaN giving 0, the
+ * background, and maxDb and over the scale's last colour.
  */
 export function spectrogramColour(
   db: number,
   minDb: number,
   maxDb: number,
+  scale: ColourScale,
   out: Uint8ClampedArray,
   at: number
 ): void {
   const t = (db - minDb) / (maxDb - minDb)
-  scaleColour(Number.isFinite(db) ? t : 0, out, at)
+  scale.colour(Number.isFinite(db) ? t : 0, out, at)
 }
 
 /**
@@ -319,17 +320,19 @@ export function spectrogramRows(
 }
 
 /**
- * Lightens the pixel at `at` of RGBA data towards white by amount, 0 to
- * 1: a line drawn into a picture as white at that opacity would be
+ * Moves the pixel at `at` of RGBA data towards a grey, level 0 (black) to
+ * 255 (white), by amount, 0 to 1: a line drawn into a picture in that
+ * grey at that opacity would be. White in the dark, black in the light.
  */
-export function lighten(
+export function blendTowards(
   data: Uint8ClampedArray,
   at: number,
-  amount: number
+  amount: number,
+  level: number
 ): void {
   for (let k = at; k < at + 3; k++) {
     const v = data[k] as number
-    data[k] = v + (255 - v) * amount
+    data[k] = v + (level - v) * amount
   }
 }
 

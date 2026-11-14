@@ -162,8 +162,8 @@ src/viz/      pure display math (scope trigger and decimation, envelope
               the master's views (spectrum,
               spectrogram, stereo, meters) and the mastering tools'
               readouts (a reduction, a loudness) in master.ts, the
-              colour scale the spectrogram's levels take in
-              colourScale.ts, and where a
+              colour scales the spectrogram's levels take, the dark's
+              and the light's, in colourScale.ts, and where a
               tile dragged goes in
               drop.ts, hit-testing, velocity and Slide from a touch's
               position, a knob turning finer as the finger strays
@@ -207,7 +207,8 @@ src/ui/       React components; SoundEditor.tsx the sound as tiles
               its Slide from the start), or with Seq shows
               StepGrid.tsx, the picked track's loop a bar at a time
               (a tap puts a note or takes it away, a drag from one
-              sets how hard and how long), with Transport.tsx's Play,
+              sets how hard and how long; RowNavigator.tsx a camera
+              over its rows), with Transport.tsx's Play,
               tempo (and swing, a popover) and lights for the bar's
               steps in its header, or in a row under a narrow one;
               KeysNavigator.tsx moves the keys a white key at a
@@ -220,8 +221,12 @@ src/ui/       React components; SoundEditor.tsx the sound as tiles
               line's project button, left of Settings (the projects
               kept, the session saved under a name, one opened in its
               place, a project's file out and in; #/project),
-              SettingsDialog.tsx, a modal dialog, holds the settings,
-              Measure CPU and the browser's checks; pages.ts gives each
+              SettingsDialog.tsx, a modal dialog, holds the settings
+              (the theme in Dropdown.tsx, the app's own select),
+              Measure CPU and the browser's checks; theme.ts the
+              colour roles and the themes that give them values, in
+              the dark and the light, appearance.ts setting them and
+              the mode (index.css's tokens) on the page; pages.ts gives each
               sheet an address (#/presets), so a reload keeps it and Back
               closes it; controls.ts the shared sizes, the insets and
               the card every panel stands on; FadeRow.tsx a row that

@@ -20,6 +20,13 @@ export type Latency = (typeof LATENCIES)[number]
 export const VELOCITY_MODES = ['touch', 'full'] as const
 export type VelocityMode = (typeof VELOCITY_MODES)[number]
 
+/**
+ * The tone the page is drawn in: the device's (light or dark as it is
+ * set, and as it changes), or dark or light whatever the device says
+ */
+export const APPEARANCES = ['system', 'dark', 'light'] as const
+export type Appearance = (typeof APPEARANCES)[number]
+
 export interface AppSettings {
   /** The most voices the synth plays at once (fewer for a slow phone) */
   readonly voices: VoiceLimit
@@ -40,6 +47,11 @@ export interface AppSettings {
    * accent — as one theme (src/ui/theme.ts)
    */
   readonly theme: ThemeId
+  /**
+   * Dark, light or the device's: the surfaces, the inks and the theme's
+   * values for that tone. Dark when nothing was chosen, the app's home.
+   */
+  readonly appearance: Appearance
   /** The status line shows sample rate, block and latency */
   readonly audioDetails: boolean
   /** The waveform shows what a frame costs to draw */
@@ -55,6 +67,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   waveform: true,
   velocity: 'touch',
   theme: DEFAULT_THEME,
+  appearance: 'dark',
   audioDetails: true,
   waveformTiming: true,
   keepAwake: true,
@@ -96,6 +109,7 @@ export function readSettings(storage?: SettingsStorage): AppSettings {
     waveform,
     velocity,
     theme,
+    appearance,
     audioDetails,
     waveformTiming,
     keepAwake,
@@ -105,6 +119,7 @@ export function readSettings(storage?: SettingsStorage): AppSettings {
     waveform: unknown
     velocity: unknown
     theme: unknown
+    appearance: unknown
     audioDetails: unknown
     waveformTiming: unknown
     keepAwake: unknown
@@ -116,6 +131,9 @@ export function readSettings(storage?: SettingsStorage): AppSettings {
       typeof waveform === 'boolean' ? waveform : DEFAULT_SETTINGS.waveform,
     velocity: isVelocityMode(velocity) ? velocity : DEFAULT_SETTINGS.velocity,
     theme: isThemeId(theme) ? theme : DEFAULT_SETTINGS.theme,
+    appearance: isAppearance(appearance)
+      ? appearance
+      : DEFAULT_SETTINGS.appearance,
     audioDetails:
       typeof audioDetails === 'boolean'
         ? audioDetails
@@ -148,6 +166,7 @@ export function writeSettings(
         waveform: settings.waveform,
         velocity: settings.velocity,
         theme: settings.theme,
+        appearance: settings.appearance,
         audioDetails: settings.audioDetails,
         waveformTiming: settings.waveformTiming,
         keepAwake: settings.keepAwake,
@@ -171,4 +190,8 @@ function isLatency(value: unknown): value is Latency {
 /** True for one of the velocity modes */
 function isVelocityMode(value: unknown): value is VelocityMode {
   return VELOCITY_MODES.some((mode) => mode === value)
+}
+
+function isAppearance(value: unknown): value is Appearance {
+  return APPEARANCES.some((appearance) => appearance === value)
 }

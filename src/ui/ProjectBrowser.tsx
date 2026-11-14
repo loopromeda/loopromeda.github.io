@@ -25,7 +25,7 @@ import {
   SMALL_FIELD,
   TALL_HIT,
 } from './controls'
-import { NEUTRAL_LOOK } from './editor'
+import { neutralLook } from './editor'
 import { FadeRow } from './FadeRow'
 import { SmallIconButton } from './IconButton'
 import { usePlacement } from './placement'
@@ -39,7 +39,7 @@ const LINE =
   'relative flex h-4 min-w-8 shrink-0 items-center justify-center gap-1 rounded text-(--ink-400) before:absolute before:-top-2 before:right-0 before:-bottom-2 before:-left-1.5 aria-expanded:text-(--ink-200)'
 
 /** On the tab rail: the panel's 28 px class, its face lit when open */
-const RAIL = `${TALL_HIT} flex h-7 min-w-7 shrink-0 items-center justify-center gap-1 rounded-md bg-(--lift) px-1.5 text-[11px] font-semibold text-(--ink-400) aria-expanded:bg-(--lift-2) aria-expanded:text-white`
+const RAIL = `${TALL_HIT} flex h-7 min-w-7 shrink-0 items-center justify-center gap-1 rounded-md bg-(--lift) px-1.5 text-[11px] font-semibold text-(--ink-400) aria-expanded:bg-(--lift-2) aria-expanded:text-(--ink-0)`
 
 /**
  * At the right end of the editor's tab rail (rail), left of the settings
@@ -107,7 +107,7 @@ export function ProjectButton({
       {unsaved && (
         <span
           aria-hidden
-          className="size-1 shrink-0 rounded-full bg-amber-300"
+          className="size-1 shrink-0 rounded-full bg-(--warn)"
         />
       )}
     </button>
@@ -286,7 +286,7 @@ export function ProjectBrowser({
           className="flex h-5 w-[26px] shrink-0 items-center justify-center rounded-[5px] text-(--ink-200)"
           style={{
             background: 'var(--tile)',
-            boxShadow: `inset 0 0 0 1.5px ${NEUTRAL_LOOK.ring}`,
+            boxShadow: `inset 0 0 0 1.5px ${neutralLook().ring}`,
           }}
         >
           <svg
@@ -493,7 +493,7 @@ export function ProjectBrowser({
       {(problem ?? message) && (
         <p
           aria-hidden
-          className={`h-4 shrink-0 truncate px-1 text-[11px] ${problem ? 'text-amber-300' : 'text-(--ink-500)'}`}
+          className={`h-4 shrink-0 truncate px-1 text-[11px] ${problem ? 'text-(--warn)' : 'text-(--ink-500)'}`}
         >
           {problem ?? message}
         </p>
@@ -576,7 +576,7 @@ function ProjectRow({
         type="button"
         aria-current={current ? 'true' : undefined}
         onClick={onOpen}
-        className="flex h-11 w-full items-center gap-2 rounded-lg px-2.5 text-left text-[13px] text-(--ink-300) aria-[current]:bg-(--lift-2) aria-[current]:text-white"
+        className="flex h-11 w-full items-center gap-2 rounded-lg px-2.5 text-left text-[13px] text-(--ink-300) aria-[current]:bg-(--lift-2) aria-[current]:text-(--ink-0)"
       >
         <svg
           width="14"
@@ -588,7 +588,7 @@ function ProjectRow({
           strokeLinecap="round"
           strokeLinejoin="round"
           aria-hidden="true"
-          className={`shrink-0 text-emerald-400 ${current ? '' : 'invisible'}`}
+          className={`shrink-0 text-(--secondary) ${current ? '' : 'invisible'}`}
         >
           <path d="M3 7.5l2.5 2.5L11 4.5" />
         </svg>

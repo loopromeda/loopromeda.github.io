@@ -68,7 +68,7 @@ import {
   type Run,
 } from '../viz/threads'
 import {
-  NEUTRAL_LOOK,
+  neutralLook,
   PAD_TILE,
   addId,
   busLook,
@@ -121,13 +121,13 @@ export interface OutputViews {
 
 /** The graph's background, a card's: tiles are cut from it by a ring of it */
 const GROUND = CARD_FACE
-/** A tile's face */
-const FACE = '#1c1c23'
-/** A tile's text: zinc-100 */
-const TEXT = '#f4f4f5'
+/** A tile's face (index.css's tokens: either mode's) */
+const FACE = 'var(--tile)'
+/** A tile's text: zinc-100, zinc-900 in the light */
+const TEXT = 'var(--ink-100)'
 /** A dashed "+" tile's text and outline at rest */
-const ADD_TEXT = '#71717a'
-const ADD_LINE = 'rgba(255,255,255,0.16)'
+const ADD_TEXT = 'var(--ink-500)'
+const ADD_LINE = 'color-mix(in srgb, var(--over) 16%, transparent)'
 
 const LIMITS = {
   inputs: MAX_INPUTS,
@@ -677,7 +677,7 @@ function PaneSwitch({
     <div
       role="group"
       aria-label="The editor shows"
-      className="flex shrink-0 gap-0.5 rounded-lg bg-black/25 p-0.5"
+      className="flex shrink-0 gap-0.5 rounded-lg bg-(--under)/25 p-0.5"
     >
       {PANES.map(({ pane: each, label }) => (
         <button
@@ -685,7 +685,7 @@ function PaneSwitch({
           type="button"
           aria-pressed={pane === each}
           onClick={() => onPane(each)}
-          className={`${TALL_HIT} h-7 rounded-md px-3 text-[11px] font-semibold tracking-wider text-(--ink-400) aria-pressed:bg-(--lift-2) aria-pressed:text-white`}
+          className={`${TALL_HIT} h-7 rounded-md px-3 text-[11px] font-semibold tracking-wider text-(--ink-400) aria-pressed:bg-(--lift-2) aria-pressed:text-(--ink-0)`}
         >
           {label}
         </button>
@@ -1045,7 +1045,7 @@ function Graph({
               engine={engine}
               label={tileLabel(sound, tile.input)}
               glyph={glyphOf(sound, tile.input)}
-              look={NEUTRAL_LOOK}
+              look={neutralLook()}
               picked={picked === tile.input}
               dashed="copy"
               aria={`${partName(sound, tile.input)} again: the same input, into ${readers}`}
@@ -1086,7 +1086,7 @@ function Graph({
               tile.box.h >= 60 && tile.column === 0 ? tile.input : undefined
             }
             glyph={glyphOf(sound, tile.input)}
-            look={NEUTRAL_LOOK}
+            look={neutralLook()}
             picked={picked === tile.input}
             reach={reach.has(tile.input)}
             routed={routed.has(tile.input)}
@@ -1112,7 +1112,7 @@ function Graph({
             left: geometry.bus.x - 1,
             top: geometry.bus.y,
             height: geometry.bus.h,
-            background: NEUTRAL_LOOK.ring,
+            background: neutralLook().ring,
           }}
         />
       )}
@@ -1214,7 +1214,7 @@ function Graph({
         label="Amp"
         line={AMP}
         picture={AMP}
-        look={NEUTRAL_LOOK}
+        look={neutralLook()}
         picked={picked === AMP}
         reach={reach.has(AMP)}
         routed={routed.has(AMP)}
@@ -1231,7 +1231,7 @@ function Graph({
             {run && (
               <Thread
                 run={run}
-                color={NEUTRAL_LOOK.ink}
+                color={neutralLook().ink}
                 shown={
                   picked === effect || picked === before ? 'lit' : undefined
                 }
@@ -1242,7 +1242,7 @@ function Graph({
               label={tileLabel(sound, effect)}
               line={effect}
               glyph={box.h >= 60 ? glyphOf(sound, effect) : undefined}
-              look={NEUTRAL_LOOK}
+              look={neutralLook()}
               picked={picked === effect}
               aria={`${partName(sound, effect)}, ${tileLine(sound, effect)}, after the amp`}
               onClick={() => pick(effect)}
@@ -1254,7 +1254,7 @@ function Graph({
       })}
       <Thread
         run={geometry.outStitch}
-        color={NEUTRAL_LOOK.ink}
+        color={neutralLook().ink}
         shown={
           picked === SENDS ||
           picked === (sound.effects[sound.effects.length - 1]?.id ?? AMP)
@@ -1266,7 +1266,7 @@ function Graph({
         engine={engine}
         label="Out"
         text={<SendsLine engine={engine} across={geometry.out.h >= 60} />}
-        look={NEUTRAL_LOOK}
+        look={neutralLook()}
         picked={picked === SENDS}
         clear="left"
         aria="Out: the sound’s level and balance in the mix, and what it sends to each bus"
@@ -1288,7 +1288,7 @@ function Graph({
         <Tile
           engine={engine}
           label="+ Input"
-          look={NEUTRAL_LOOK}
+          look={neutralLook()}
           picked={picked === addId('input')}
           dashed="add"
           aria="Add an input"
@@ -1312,7 +1312,7 @@ function Graph({
         <Tile
           engine={engine}
           label="+ FX"
-          look={NEUTRAL_LOOK}
+          look={neutralLook()}
           picked={picked === addId('effect')}
           dashed="add"
           aria="Add an effect after the amp"
@@ -1444,11 +1444,11 @@ function KitGraph({
             style={{
               ...place(box),
               background: lit
-                ? `linear-gradient(${NEUTRAL_LOOK.tint}, ${NEUTRAL_LOOK.tint}), ${FACE}`
+                ? `linear-gradient(${neutralLook().tint}, ${neutralLook().tint}), ${FACE}`
                 : FACE,
               boxShadow: lit
-                ? `inset 0 0 0 2px ${NEUTRAL_LOOK.ink}, 0 0 0 3px ${NEUTRAL_LOOK.tint}`
-                : `inset 0 0 0 1.5px ${k === pad ? NEUTRAL_LOOK.ink : NEUTRAL_LOOK.ring}`,
+                ? `inset 0 0 0 2px ${neutralLook().ink}, 0 0 0 3px ${neutralLook().tint}`
+                : `inset 0 0 0 1.5px ${k === pad ? neutralLook().ink : neutralLook().ring}`,
               color: pads[k] ? TEXT : ADD_TEXT,
             }}
             className={`flex flex-col items-center justify-center overflow-hidden rounded-[7px] px-1 text-center text-[11px] leading-tight font-semibold ${lit ? 'z-[2]' : 'z-[1]'}`}
@@ -1476,7 +1476,7 @@ function KitGraph({
             {run && (
               <Thread
                 run={run}
-                color={NEUTRAL_LOOK.ink}
+                color={neutralLook().ink}
                 shown={
                   picked === effect || picked === before ? 'lit' : undefined
                 }
@@ -1487,7 +1487,7 @@ function KitGraph({
               label={tileLabel(sound, effect)}
               line={effect}
               glyph={box.h >= 60 ? glyphOf(sound, effect) : undefined}
-              look={NEUTRAL_LOOK}
+              look={neutralLook()}
               picked={picked === effect}
               aria={`Kit ${partName(sound, effect)}, ${tileLine(sound, effect)}, after every pad`}
               onClick={() => pick(effect)}
@@ -1501,7 +1501,7 @@ function KitGraph({
         <Tile
           engine={engine}
           label="+ FX"
-          look={NEUTRAL_LOOK}
+          look={neutralLook()}
           picked={picked === addId('effect')}
           dashed="add"
           aria="Add an effect to the kit, after every pad"
@@ -1512,14 +1512,14 @@ function KitGraph({
       )}
       <Thread
         run={geometry.outStitch}
-        color={NEUTRAL_LOOK.ink}
+        color={neutralLook().ink}
         shown={picked === SENDS || picked === last ? 'lit' : undefined}
       />
       <Tile
         engine={engine}
         label="Kit Out"
         text={<SendsLine engine={engine} across={geometry.out.h >= 60} />}
-        look={NEUTRAL_LOOK}
+        look={neutralLook()}
         picked={picked === SENDS}
         clear="left"
         aria="Kit Out: the kit’s level and balance in the mix, and what it sends to each bus"
@@ -1680,7 +1680,7 @@ function MixGraph({
             label={name}
             text={<StripLine engine={engine} place={k} />}
             inline
-            look={NEUTRAL_LOOK}
+            look={neutralLook()}
             picked={played && strip}
             // Its sends' holes down its right edge
             clear="right"
@@ -1712,7 +1712,7 @@ function MixGraph({
         <Tile
           engine={engine}
           label="+ Track"
-          look={NEUTRAL_LOOK}
+          look={neutralLook()}
           picked={picked === mixAddId('track')}
           dashed="add"
           aria="Add a track"
@@ -1785,12 +1785,12 @@ function MixGraph({
           </div>
         )
       })}
-      {effects(geometry.masterEffects, 'on the master', NEUTRAL_LOOK)}
+      {effects(geometry.masterEffects, 'on the master', neutralLook())}
       {geometry.masterStitches.map((run, k) => (
         <Thread
           key={k}
           run={run}
-          color={NEUTRAL_LOOK.ink}
+          color={neutralLook().ink}
           shown={
             picked === stages[k] || picked === stages[k + 1] ? 'lit' : undefined
           }
@@ -1800,7 +1800,7 @@ function MixGraph({
         engine={engine}
         label="Master"
         text={<MixLine engine={engine} part={MASTER} />}
-        look={NEUTRAL_LOOK}
+        look={neutralLook()}
         picked={picked === master}
         // The buses' holes down its left edge
         clear="left"
@@ -1823,7 +1823,7 @@ function MixGraph({
         <Tile
           engine={engine}
           label="+ Bus"
-          look={NEUTRAL_LOOK}
+          look={neutralLook()}
           picked={picked === mixAddId('bus')}
           dashed="add"
           aria="Add a bus"
@@ -1835,7 +1835,7 @@ function MixGraph({
         <Tile
           engine={engine}
           label="+ FX"
-          look={NEUTRAL_LOOK}
+          look={neutralLook()}
           picked={picked === mixAddId(MASTER)}
           dashed="add"
           aria="Add an effect to the master"
@@ -1924,8 +1924,8 @@ function MixLine({ engine, part }: { engine: Engine; part: string }) {
  */
 function StripLine({ engine, place }: { engine: Engine; place: number }) {
   const state = useStripState(engine, place)
-  if (state === 'mute') return <span className="text-amber-200">Mute</span>
-  if (state === 'solo') return <span className="text-emerald-200">Solo</span>
+  if (state === 'mute') return <span className="text-(--warn-ink)">Mute</span>
+  if (state === 'solo') return <span className="text-(--ok-ink)">Solo</span>
   return <MixLine engine={engine} part={stripId(place)} />
 }
 
@@ -2208,7 +2208,7 @@ function ReadThread({
     <>
       <Thread
         run={read.run}
-        color={NEUTRAL_LOOK.ink}
+        color={neutralLook().ink}
         shown={shown}
         {...carrying(level)}
       />
@@ -2468,8 +2468,8 @@ function Tile({
           color:
             dashed === 'copy'
               ? picked
-                ? '#fafafa'
-                : '#d4d4d8'
+                ? 'var(--ink-0)'
+                : 'var(--ink-300)'
               : picked
                 ? look.ink
                 : ADD_TEXT,

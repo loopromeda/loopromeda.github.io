@@ -279,9 +279,34 @@ as a graph of flat tiles, flowing left to right.
   first pans, as before. Inputs are not dragged: each stands beside the
   chains it feeds, wherever it is in their order, so the panel's buttons
   move them (renaming them).
-- **Later:** colour themes, as a personal choice (ashon): the colours
-  are roles (chains A to D, modulation, neutral, accent, status), so a
-  theme gives each a value and passes the same checks.
+- **Themes** (asked for by ashon, 2026-11-14, as a personal choice,
+  then the whole tone: "다크 / 라이트 / 기본 액센트 / 세컨더리 색상 등
+  전부 컨트롤"). The colours are roles: chains A to D, the modulation
+  colour, the accent (focus, the playhead, the go button, the traces, a
+  note), the secondary (what is picked or current: a pad picked, its
+  row, a navigator's frame), and the neutral surfaces, inks and status
+  colours under them. A theme (`src/ui/theme.ts`: Default, Tidal,
+  Ember, Orchard) gives each role a value in each mode, and each value
+  passes the checks the app's own colours were held to, in both: 4.7:1
+  at least on a tile's face and a card's, chains ΔE 20 apart, the
+  modulation colour 12 from every chain, and a label (black in the
+  dark, white in the light) readable on the accent and the modulation
+  colour. The built-in themes give the secondary the accent's value.
+  Ember's modulation colour went from violet to lavender (2026-11-14):
+  the violet stood ΔE 6 from its indigo chain. Settings' Look holds the
+  theme (a dropdown of the app's own, its swatches the mode's) and the
+  appearance: System, Dark (the default, the app's home) or Light.
+  Built in steps: the surfaces and inks as CSS tokens (index.css), no
+  visual change; then the light: each token's light value under
+  `data-mode`, which App sets from the appearance (the device's,
+  followed as it changes, for System), the themes' light palettes (each
+  colour a deeper shade, its hue kept or turned a little, until the
+  checks pass), the canvases drawn from the mode's ground (the
+  spectrogram on a light scale of its own, quiet pale and loud near
+  black), a held key or pad the accent mixed into it, and on iOS a
+  dark strip under the status bar, whose letters stay white. Next: a
+  theme of one's own, a colour for each role, lifted in lightness
+  until it passes the checks, with a reset.
 
 ## Steps
 

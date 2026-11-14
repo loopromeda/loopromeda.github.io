@@ -68,7 +68,7 @@ export function Reduction({
         aria-valuemax={REDUCTION_RANGE}
         aria-valuenow={0}
         aria-valuetext="0 dB"
-        className="relative h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-white/[0.06]"
+        className="relative h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-(--over)/6"
       >
         <div
           ref={fillRef}
@@ -79,7 +79,7 @@ export function Reduction({
           <div
             key={db}
             aria-hidden
-            className="absolute inset-y-0 w-px bg-black/50"
+            className="absolute inset-y-0 w-px bg-(--under)/50"
             style={{ right: `${(db / REDUCTION_RANGE) * 100}%` }}
           />
         ))}
@@ -186,7 +186,7 @@ export function Loudness({ engine }: { engine: Engine }) {
         {WINDOWS.map(({ key, label }, i) => (
           <div
             key={key}
-            className="flex h-11 min-w-0 flex-col justify-center rounded-[10px] bg-black/25 px-2"
+            className="flex h-11 min-w-0 flex-col justify-center rounded-[10px] bg-(--under)/25 px-2"
           >
             <span className="truncate text-[10px] leading-tight text-(--ink-500)">
               {label}

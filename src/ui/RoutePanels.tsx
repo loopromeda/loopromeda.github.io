@@ -18,7 +18,7 @@ import { DepthKnob, Knob } from './Knob'
 import { palette } from './theme'
 
 /** A routing panel's tint over the dock's glass: sky at 5% */
-const ROUTING_TINT = 'rgba(56,189,248,0.05)'
+const ROUTING_TINT = 'color-mix(in srgb, var(--modulator) 5%, transparent)'
 
 /** A destination whose routes are edited: a part's, by key */
 export interface RouteTarget {
@@ -65,7 +65,7 @@ export function RoutesFrom({
             aria-label="Route from"
             value={source}
             onChange={(event) => onSource(event.target.value)}
-            className="select-chevron h-7 max-w-24 min-w-0 shrink-0 truncate rounded-md bg-white/[0.08] pr-6 pl-2.5 text-[13px] font-semibold text-sky-100"
+            className="select-chevron h-7 max-w-24 min-w-0 shrink-0 truncate rounded-md bg-(--over)/8 pr-6 pl-2.5 text-[13px] font-semibold text-(--mod-ink)"
           >
             {sources(sound).map((each) => (
               <option key={each.id} value={each.id}>
@@ -75,7 +75,7 @@ export function RoutesFrom({
           </select>
           {title !== undefined && (
             <>
-              <span aria-hidden className="shrink-0 text-sky-300">
+              <span aria-hidden className="shrink-0 text-(--modulator)">
                 →
               </span>
               <h2 className="min-w-0 truncate text-sm font-semibold text-(--ink-100)">
@@ -195,7 +195,7 @@ export function RoutesInto({
             <div
               key={route.id}
               data-route={route.id}
-              className="flex shrink-0 items-center gap-2 rounded-lg bg-white/[0.04] p-1.5"
+              className="flex shrink-0 items-center gap-2 rounded-lg bg-(--over)/4 p-1.5"
             >
               <Knob
                 engine={engine}
@@ -216,7 +216,7 @@ export function RoutesInto({
                       })
                     )
                   }
-                  className="select-chevron h-7 w-full min-w-0 truncate rounded-md bg-black/35 pr-6 pl-2 text-[11px] text-(--ink-200)"
+                  className="select-chevron h-7 w-full min-w-0 truncate rounded-md bg-(--under)/35 pr-6 pl-2 text-[11px] text-(--ink-200)"
                 >
                   <option value="">No via</option>
                   {all
@@ -233,7 +233,7 @@ export function RoutesInto({
                   onClick={() =>
                     engine.edit((current) => removePart(current, route.id))
                   }
-                  className="h-7 rounded-md bg-red-500/15 text-[11px] font-semibold text-red-200"
+                  className="h-7 rounded-md bg-(--danger)/15 text-[11px] font-semibold text-(--danger-ink)"
                 >
                   Remove
                 </button>
@@ -257,7 +257,7 @@ export function RoutesInto({
                 disabled={full || taken.has(source.id)}
                 onClick={() => add(source.id)}
                 style={{ boxShadow: `inset 0 0 0 1px ${modLook().ring}` }}
-                className="h-7 min-w-11 rounded-md px-2 text-[11px] font-semibold whitespace-nowrap text-sky-100 disabled:opacity-40"
+                className="h-7 min-w-11 rounded-md px-2 text-[11px] font-semibold whitespace-nowrap text-(--mod-ink) disabled:opacity-40"
               >
                 {source.label}
               </button>
