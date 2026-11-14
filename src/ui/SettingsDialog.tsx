@@ -17,8 +17,8 @@ import {
   type Latency,
   type VelocityMode,
 } from '../state/settings'
-import { BUTTON, CARD, OPTION } from './controls'
-import { IconButton } from './IconButton'
+import { CARD, SMALL_BUTTON, SMALL_OPTION } from './controls'
+import { SmallIconButton } from './IconButton'
 import { PlatformChecks } from './PlatformChecks'
 
 /** Each latencyHint as the player picks it, lowest first */
@@ -132,23 +132,23 @@ export function SettingsDialog({
       id="settings"
       aria-labelledby="settings-heading"
       onClick={outside}
-      className={`m-auto max-h-[calc(100dvh_-_2rem_-_env(safe-area-inset-top)_-_env(safe-area-inset-bottom))] w-[calc(100%_-_1.5rem)] max-w-md flex-col gap-2 p-3 text-inherit open:flex backdrop:bg-black/70 ${CARD}`}
+      className={`m-auto max-h-[calc(100dvh_-_2rem_-_env(safe-area-inset-top)_-_env(safe-area-inset-bottom))] w-[calc(100%_-_1.5rem)] max-w-md flex-col gap-1.5 p-2.5 text-inherit open:flex backdrop:bg-black/70 ${CARD}`}
     >
-      <div className="flex h-11 shrink-0 items-center justify-end gap-1.5">
+      <div className="flex h-7 shrink-0 items-center justify-end gap-1.5">
         <h2
           id="settings-heading"
           className="mr-auto min-w-0 truncate px-1 text-[13px] font-semibold text-zinc-200"
         >
           Settings
         </h2>
-        <IconButton
+        <SmallIconButton
           label="Close settings"
           onClick={onClose}
           path="M5 5l8 8M13 5l-8 8"
         />
       </div>
 
-      <div className="-mx-3 flex min-h-0 flex-col gap-4 overflow-y-auto overscroll-contain px-3">
+      <div className="-mx-2.5 flex min-h-0 flex-col gap-3 overflow-y-auto overscroll-contain px-2.5">
         <Group title="Performance">
           <Choice
             label="Voices"
@@ -228,10 +228,10 @@ export function SettingsDialog({
 function Group({ title, children }: { title: string; children: ReactNode }) {
   const id = useId()
   return (
-    <section aria-labelledby={id} className="flex flex-col gap-2">
+    <section aria-labelledby={id} className="flex flex-col gap-1.5">
       <h3
         id={id}
-        className="px-1 text-[11px] font-medium tracking-widest text-zinc-500 uppercase"
+        className="px-1 pt-0.5 text-[11px] font-medium tracking-widest text-zinc-500 uppercase"
       >
         {title}
       </h3>
@@ -261,8 +261,8 @@ function Row({
   children: ReactNode
 }) {
   return (
-    <div className="flex flex-col gap-1.5 px-1">
-      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
+    <div className="flex flex-col gap-1 px-1">
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
         <span id={labelId} className="text-[13px] text-zinc-300">
           {label}
         </span>
@@ -307,7 +307,7 @@ function Choice<T extends string | number | boolean>({
         role="group"
         aria-labelledby={`${id}-label`}
         aria-describedby={hint === undefined ? undefined : `${id}-hint`}
-        className="flex flex-wrap gap-1.5"
+        className="flex flex-wrap gap-1"
       >
         {options.map((option) => (
           <button
@@ -315,7 +315,7 @@ function Choice<T extends string | number | boolean>({
             type="button"
             aria-pressed={option.value === value}
             onClick={() => onChange(option.value)}
-            className={OPTION}
+            className={SMALL_OPTION}
           >
             {option.label}
           </button>
@@ -391,7 +391,7 @@ function OfflineRow({
             aria-describedby={`${id}-hint`}
             disabled={check === 'checking' || check === 'found'}
             onClick={look}
-            className={`${BUTTON} disabled:text-zinc-500`}
+            className={`${SMALL_BUTTON} disabled:text-zinc-500`}
           >
             {check === 'checking' ? 'Checking…' : 'Check for update'}
           </button>
@@ -401,7 +401,7 @@ function OfflineRow({
           type="button"
           aria-describedby={`${id}-hint`}
           onClick={onUpdate}
-          className={BUTTON}
+          className={SMALL_BUTTON}
         >
           Update
         </button>
@@ -437,11 +437,16 @@ function About() {
           href={`${import.meta.env.BASE_URL}licences.txt`}
           target="_blank"
           rel="noreferrer"
-          className={BUTTON}
+          className={SMALL_BUTTON}
         >
           Licences
         </a>
-        <a href={SOURCE} target="_blank" rel="noreferrer" className={BUTTON}>
+        <a
+          href={SOURCE}
+          target="_blank"
+          rel="noreferrer"
+          className={SMALL_BUTTON}
+        >
           Source
         </a>
       </div>
@@ -504,7 +509,7 @@ function MeasureCpu({
         id={`${id}-button`}
         disabled={bench.state === 'running'}
         onClick={() => void measure()}
-        className={BUTTON}
+        className={SMALL_BUTTON}
       >
         {bench.state === 'running' ? 'Measuring…' : 'Measure'}
       </button>
