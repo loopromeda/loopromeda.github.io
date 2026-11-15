@@ -124,6 +124,14 @@ export interface OutputViews {
 /** The graph's background, a card's: tiles are cut from it by a ring of it */
 const GROUND = CARD_FACE
 
+/**
+ * What the tiles take as picked while the knob panel is closed: no tile's
+ * id, so none stands picked, no thread lit or dimmed for it and no ring
+ * for what it reaches. The pick itself is kept, the panel opening on it
+ * again; a tile tapped picks that one (ashon, 2026-11-15: "블록을 선택한
+ * 다음 노브 패널이 닫힐때는 블록쪽 강조 표현도 디폴트가 되도록")
+ */
+const UNPICKED = ''
 /** A tile's face (index.css's tokens: either mode's) */
 const FACE = 'var(--tile)'
 /** A tile's text: zinc-100, zinc-900 in the light */
@@ -444,14 +452,16 @@ export function SoundEditor({
     keep(KIT_PICKED_KEY, id)
     if (!panel) show(true)
   }
+  /** What the tiles show picked: the pick, with the panel open */
+  const shownOf = (id: string) => (panel ? id : UNPICKED)
   const picking: Picking = {
     engine,
     sound,
     output,
-    picked,
+    picked: shownOf(picked),
     pick,
     hold,
-    reach: reachOf(sound, from ?? picked),
+    reach: reachOf(sound, from ?? shownOf(picked)),
     viewOf,
     chooseView,
   }
@@ -546,7 +556,7 @@ export function SoundEditor({
           <KitGraph
             {...picking}
             library={library}
-            picked={kitPicked}
+            picked={shownOf(kitPicked)}
             pick={pickKit}
             scope={scope}
             dock={dock}
@@ -564,7 +574,7 @@ export function SoundEditor({
         ) : (
           <MixGraph
             {...picking}
-            picked={mixed}
+            picked={shownOf(mixed)}
             pick={pickMix}
             scope={scope}
             dock={dock}

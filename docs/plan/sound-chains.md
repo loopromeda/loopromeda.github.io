@@ -265,7 +265,13 @@ as a graph of flat tiles, flowing left to right.
   (arrows) and removes it, asking first in a dialog (since 2026-11-12,
   ashon: the "⋯" menu that held them spelled out, and a removal
   confirmed). Its last button, a cross, closes it, and a tile tapped
-  opens it again; a tile held to be dragged leaves it closed. Until
+  opens it again; a tile held to be dragged leaves it closed. Closed,
+  it leaves no tile picked on the graph, in the kit or in the mix:
+  every tile, thread and ring shows as at rest, and the panel opens
+  again on the pick kept, or on the tile tapped (since 2026-11-15,
+  ashon: "블록을 선택한 다음 노브 패널이 닫힐때는 블록쪽 강조 표현도
+  디폴트가 되도록"; the tile had stayed picked, its threads lit and
+  the others' dimmed, with no panel for it). Until
   2026-11-15 the button folded it away (ashon, 2026-11-12: for the
   graph to show more chains) into a bar under the graph, or a narrow
   column beside it from md, which brought it back; then ashon asked for
