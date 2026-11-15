@@ -389,7 +389,10 @@ describe('a song', () => {
   it('holds its tempo and its swing within their ranges', () => {
     const song = initSong()
     expect(setTempo(song, 140).tempo).toBe(140)
-    expect(setTempo(song, 140.4).tempo).toBe(140)
+    expect(setTempo(song, 140.4).tempo).toBe(140.4)
+    // A tracker's tempos, to a hundredth: 900 over a speed of 8 and of 7
+    expect(setTempo(song, 112.5).tempo).toBe(112.5)
+    expect(setTempo(song, 900 / 7).tempo).toBe(128.57)
     expect(setTempo(song, 1).tempo).toBe(30)
     expect(setTempo(song, 999).tempo).toBe(240)
     expect(setTempo(song, NaN).tempo).toBe(120)

@@ -148,7 +148,7 @@ src/state/    params.ts: the knob schema and the old parameters;
               and the pad picked, and the Seq tab's track kept;
               song.ts: the session's song (the tempo, the swing and
               each track's loops, by the track's id; a loop one to
-              thirty-two bars of sixteenths and its notes, each a step, a
+              256 bars of sixteenths and its notes, each a step, a
               key (a synth's note, a kit's pad), a length and a
               velocity, and its knob lanes, a knob's value at each
               step), its edits, kept in localStorage; lanes.ts: the

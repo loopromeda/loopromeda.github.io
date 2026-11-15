@@ -131,7 +131,8 @@ two beside the first.
 Built 2026-11-13.
 
 - **The clock on the audio thread** (`src/dsp/sequencer.ts`): counted
-  in frames, sixteenths at the tempo (40 to 240), each pair split by
+  in frames, sixteenths at the tempo (30 to 240, to a hundredth of a
+  beat since 2026-11-15, so a tracker's 112.5 keeps time), each pair split by
   the swing (even to 75%). Each track has a lane, its loop played
   round at the loop's own length. A note starts on the frame its step
   falls on and is let go on the frame of the step it ends at: a strip
@@ -144,7 +145,9 @@ Built 2026-11-13.
   from the track's sound, so a preset loaded leaves the loop alone and
   a track removed takes its own. A track holds a list of loops, of
   which this stage plays and edits the first (E adds the rest). A loop
-  is one to four bars of sixteenths and its notes, each a step, a key,
+  is one to four bars of sixteenths (256 bars, 4096 steps, since
+  2026-11-15, so a whole song fits one loop, and a long take: H) and
+  its notes, each a step, a key,
   a length and a velocity: a synth's key is the note, a kit's the pad.
   More than one note at a step is a chord. A loop made shorter keeps
   the notes past its end, unplayed.

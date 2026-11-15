@@ -590,6 +590,24 @@ describe('Lane', () => {
     expect(tape.ons()).toEqual([MAX_STEPS - 1, 2 * MAX_STEPS - 1])
   })
 
+  it('counts more notes in a loop than sixteen bits do', () => {
+    const tape = new Tape()
+    const lane = new Lane(tape)
+    const notes: LaneNote[] = []
+    // A chord on every step, just enough notes to pass sixteen bits
+    const keys = Math.floor(0xffff / MAX_STEPS) + 1
+    for (let step = 0; step < MAX_STEPS; step++) {
+      for (let key = 0; key < keys; key++) notes.push(note(step, key))
+    }
+    expect(notes.length).toBeGreaterThan(0xffff)
+    lane.setLoop(MAX_STEPS, notes)
+    tape.base = MAX_STEPS - 1
+    lane.fire(MAX_STEPS - 1, 0)
+    expect(tape.events.map((event) => event.key)).toEqual(
+      Array.from({ length: keys }, (_, key) => key)
+    )
+  })
+
   it('plays no more notes at once than it can hold', () => {
     const tape = new Tape()
     const lane = new Lane(tape)

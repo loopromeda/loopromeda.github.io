@@ -86,7 +86,7 @@ export interface Loop {
 }
 
 export interface Song {
-  /** Beats a minute, MIN_TEMPO..MAX_TEMPO */
+  /** Beats a minute, MIN_TEMPO..MAX_TEMPO, to a hundredth */
   readonly tempo: number
   /**
    * The share of a pair of sixteenths the first takes, MIN_SWING (even)
@@ -581,8 +581,12 @@ function cleanSteps(value: unknown): number {
   return Math.max(1, Math.min(MAX_BARS, bars)) * BAR_STEPS
 }
 
+/**
+ * To a hundredth of a beat: a tracker's tempo (900 over its speed, 112.5
+ * at 8, 128.57 at 7) kept as it is, so a song taken from one keeps time
+ */
 function cleanTempo(value: unknown): number {
-  const tempo = Math.round(number(value, DEFAULT_TEMPO))
+  const tempo = Math.round(number(value, DEFAULT_TEMPO) * 100) / 100
   return Math.max(MIN_TEMPO, Math.min(MAX_TEMPO, tempo))
 }
 

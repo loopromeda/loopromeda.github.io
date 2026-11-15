@@ -13,8 +13,13 @@ import type { Click } from './click'
 import { Clock } from './clock'
 import type { Strip } from './output'
 
-/** The longest loop, in steps: thirty-two bars of sixteenths */
-export const MAX_STEPS = 512
+/**
+ * The longest loop, in steps: 256 bars of sixteenths (ashon's limit), a
+ * whole song as one loop and as long a take as is played into one (four
+ * and a quarter minutes at 240, eight and a half at 120). Its notes are
+ * counted in 32 bits, as many as it holds.
+ */
+export const MAX_STEPS = 4096
 
 /** The notes of a lane sounding at once; one past them is not played */
 export const MAX_HELD = 32
@@ -115,9 +120,9 @@ export class Lane {
   readonly #target: Target
   #steps = 0
   /** The loop's notes by step: step s's are first[s] up to first[s + 1] */
-  #first = new Uint16Array(1)
+  #first = new Uint32Array(1)
   #keys = new Int16Array(0)
-  #lengths = new Uint16Array(0)
+  #lengths = new Uint32Array(0)
   #velocities = new Float32Array(0)
   /** The notes sounding: their keys, and the step each ends at */
   readonly #heldKey = new Int16Array(MAX_HELD)
@@ -149,7 +154,7 @@ export class Lane {
         Number.isInteger(note.key) &&
         note.length >= 1
     )
-    const first = new Uint16Array(length + 1)
+    const first = new Uint32Array(length + 1)
     for (const note of kept) {
       first[note.step + 1] = (first[note.step + 1] as number) + 1
     }
@@ -157,7 +162,7 @@ export class Lane {
       first[s + 1] = (first[s + 1] as number) + (first[s] as number)
     }
     const keys = new Int16Array(kept.length)
-    const lengths = new Uint16Array(kept.length)
+    const lengths = new Uint32Array(kept.length)
     const velocities = new Float32Array(kept.length)
     const next = first.slice(0, length)
     for (const note of kept) {
