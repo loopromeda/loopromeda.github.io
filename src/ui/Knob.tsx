@@ -2,6 +2,7 @@ import {
   useEffect,
   useLayoutEffect,
   useRef,
+  useSyncExternalStore,
   type CSSProperties,
   type KeyboardEvent,
   type MouseEvent,
@@ -12,6 +13,7 @@ import type { Engine } from '../engine/engine'
 import {
   formatAmount,
   formatValue,
+  isSwitch,
   toNormalized,
   toValue,
   type ValueSpec,
@@ -30,7 +32,8 @@ import {
   type PartDest,
 } from '../state/sound/knob'
 import { FINE_ZONES, fineZone, type FineZone } from '../viz/fine'
-import { HOLD, KNOB_SIZE } from './controls'
+import { HOLD, KNOB_READOUT, KNOB_SIZE } from './controls'
+import { CHOICE_GLYPHS } from './editor'
 import { keepHeld } from './held'
 import { ground, palette } from './theme'
 
@@ -162,17 +165,20 @@ export function Knob({
 }) {
   const spec = knobSpec(engine.getSound(), part, knob)
   if (!spec) return null
+  const turns: Turns = {
+    spec: label === undefined ? spec : { ...spec, label },
+    read: () => knobValue(engine.getSound(), part, knob),
+    write: (value) => engine.edit((sound) => setKnob(sound, part, knob, value)),
+    format: format ?? ((value) => formatValue(spec, value)),
+  }
+  if (isSwitch(spec)) {
+    return <Toggle turns={turns} color={color} follow={engine.subscribeSound} />
+  }
   return (
     <Dial
       engine={engine}
       address={`${part} ${knob}`}
-      turns={{
-        spec: label === undefined ? spec : { ...spec, label },
-        read: () => knobValue(engine.getSound(), part, knob),
-        write: (value) =>
-          engine.edit((sound) => setKnob(sound, part, knob, value)),
-        format: format ?? ((value) => formatValue(spec, value)),
-      }}
+      turns={turns}
       color={color}
       hot={hot}
       routed={{ part, knob, onHold }}
@@ -233,20 +239,123 @@ export function MixKnob({
 }) {
   const spec = mixKnob(engine.getMix(), part, knob)
   if (!spec) return null
+  const turns: Turns = {
+    spec,
+    read: () => mixValue(engine.getMix(), part, knob) ?? spec.default,
+    write: (value) => engine.editMix(part, knob, value),
+    format: (value) => formatValue(spec, value),
+  }
+  if (isSwitch(spec)) {
+    return <Toggle turns={turns} color={color} follow={engine.subscribeMix} />
+  }
   return (
     <Dial
       engine={engine}
       address={`mix ${part} ${knob}`}
-      turns={{
-        spec,
-        read: () => mixValue(engine.getMix(), part, knob) ?? spec.default,
-        write: (value) => engine.editMix(part, knob, value),
-        format: (value) => formatValue(spec, value),
-      }}
+      turns={turns}
       color={color}
       hot={undefined}
       follow={engine.subscribeMix}
     />
+  )
+}
+
+/**
+ * A knob that is a switch, a choice of two (isSwitch: a Sync, an LFO's
+ * Trigger), upright in a dial's place: its second choice at the top (On,
+ * Free), its first at the foot (Off, Key), the thumb at the one it
+ * stands at, ringed in the knob's colour unless that is Off, and that
+ * one's name lit; its own name under it, as a dial's (asked for by
+ * ashon, 2026-11-15, with a picture of one: "On/Off 패널의 경우 이런식으로
+ * 세로 토글로 해 보면 어떨까?", then every knob of two: "다른 노브들도
+ * 이렇게"), short and its thumb large ("좀 더 짧게", "원을 더 크게": two
+ * thumbs long), and its size the knob's ("큰 레이아웃에서도 잘
+ * 어울리게": in cqw of its square, the track two thirds of it, as in a
+ * 48 px row). Names too long to stand there have pictures in their
+ * place (CHOICE_GLYPHS: the delay's Stereo and Ping-pong), and the one
+ * it stands at under its own, as a dial's reading. A tap turns it over,
+ * the arrows up and down set it. Off and On it is a switch to a reader
+ * too; other two a button named with the one it stands at.
+ */
+function Toggle({
+  turns,
+  color,
+  follow,
+}: {
+  turns: Turns
+  color: string
+  /** What it follows for a value set elsewhere: the sound, or the mix */
+  follow: (listener: () => void) => () => void
+}) {
+  const { spec, read, write } = turns
+  const up = useSyncExternalStore(follow, () => read() === spec.max)
+  const [foot = '', top = ''] = spec.choices ?? []
+  const name = up ? top : foot
+  const [footGlyph, topGlyph] = [CHOICE_GLYPHS[foot], CHOICE_GLYPHS[top]]
+  const drawn = footGlyph !== undefined && topGlyph !== undefined
+  /** A choice's name beside the track, or its picture in its place */
+  const shown = (choice: string, glyph: string | undefined) =>
+    drawn ? (
+      <svg viewBox="0 0 18 12" className="h-[25cqw] w-[37.5cqw]">
+        <path
+          d={glyph}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={1.4}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    ) : (
+      choice
+    )
+  const flag = foot === 'Off' && top === 'On'
+  const key = (event: KeyboardEvent<HTMLButtonElement>) => {
+    const to = { ArrowUp: true, ArrowDown: false }[event.key]
+    if (to === undefined) return
+    event.preventDefault()
+    write(to ? spec.max : spec.min)
+  }
+  const lit = 'text-(--ink-100)'
+  const dim = 'text-(--ink-600)'
+  /** Each name level with the thumb standing at it */
+  const half = 'flex flex-1 items-center'
+  return (
+    <div className="flex min-w-0 flex-col items-center gap-0.5 transition-opacity duration-150 in-data-fine:opacity-30">
+      <button
+        type="button"
+        {...(flag
+          ? { role: 'switch', 'aria-checked': up, 'aria-label': spec.label }
+          : { 'aria-label': `${spec.label}: ${name}` })}
+        onClick={() => write(up ? spec.min : spec.max)}
+        onKeyDown={key}
+        className={`${KNOB_SIZE} @container flex aspect-square items-center justify-center rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-(--accent)`}
+      >
+        <span aria-hidden className="flex gap-[12.5cqw]">
+          <span className="relative h-[66.667cqw] w-[33.333cqw] shrink-0 rounded-full bg-(--over)/10">
+            <span
+              className="absolute left-0 size-[33.333cqw] rounded-full bg-(--key) transition-[top] duration-150 motion-reduce:transition-none"
+              style={{
+                top: up ? 0 : '33.333cqw',
+                boxShadow: `inset 0 0 0 4.167cqw ${name === 'Off' ? 'var(--ink-500)' : color}`,
+              }}
+            />
+          </span>
+          <span className="flex h-[66.667cqw] flex-col text-[11px] leading-none font-medium">
+            <span className={`${up ? lit : dim} ${half}`}>
+              {shown(top, topGlyph)}
+            </span>
+            <span className={`${up ? dim : lit} ${half}`}>
+              {shown(foot, footGlyph)}
+            </span>
+          </span>
+        </span>
+      </button>
+      <span className="text-[11px] leading-tight whitespace-nowrap text-(--ink-400)">
+        {spec.label}
+      </span>
+      {drawn && <span className={KNOB_READOUT}>{name}</span>}
+    </div>
   )
 }
 

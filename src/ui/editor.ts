@@ -173,6 +173,13 @@ export const GLYPHS = {
   // A tap on each side, the lower later; two waves of a little different
   // lengths; a centre with the sides pushed out from it
   haas: 'M1 4.5 H17 M4 4.5 V1.5 M1 10.5 H17 M11 10.5 V7.5',
+  // A delay's echoes, each smaller than the last, the left over the
+  // right as the Haas's: on both sides at once (Stereo); from side to
+  // side, a ball's way across a table (Ping-pong)
+  echoes:
+    'M1 3 a2 2 0 1 0 4 0 a2 2 0 1 0 -4 0 M7.5 3 a1.5 1.5 0 1 0 3 0 a1.5 1.5 0 1 0 -3 0 M14 3 a1 1 0 1 0 2 0 a1 1 0 1 0 -2 0 M1 9 a2 2 0 1 0 4 0 a2 2 0 1 0 -4 0 M7.5 9 a1.5 1.5 0 1 0 3 0 a1.5 1.5 0 1 0 -3 0 M14 9 a1 1 0 1 0 2 0 a1 1 0 1 0 -2 0',
+  pingPong:
+    'M1 3 a2 2 0 1 0 4 0 a2 2 0 1 0 -4 0 M7.5 9 a1.5 1.5 0 1 0 3 0 a1.5 1.5 0 1 0 -3 0 M14 3 a1 1 0 1 0 2 0 a1 1 0 1 0 -2 0 M5.05 5.05 L7.3 7.3 M10.7 7.3 L13.66 4.34',
   doubler: 'M1 4 Q3.5 0.5 6 4 T11 4 T16 4 M1 9.5 Q4 6 7 9.5 T13 9.5',
   width:
     'M9 1.5 V10.5 M1.5 6 H6.5 M10.5 6 H16.5 M4 3.5 L1.5 6 L4 8.5 M14 3.5 L16.5 6 L14 8.5',
@@ -206,6 +213,17 @@ const LFO_GLYPHS = [
   GLYPHS.sampleHold,
   GLYPHS.smooth,
 ]
+
+/**
+ * The pictograms that stand for a switch's choices whose names are too
+ * long to stand beside its track (Toggle, src/ui/Knob.tsx), by name: the
+ * delay's Mode, Stereo or Ping-pong (ashon, 2026-11-15: "딜레이의 모드는
+ * 스테레오 핑퐁으로 직관적으로 보이게")
+ */
+export const CHOICE_GLYPHS: Readonly<Partial<Record<string, string>>> = {
+  Stereo: GLYPHS.echoes,
+  'Ping-pong': GLYPHS.pingPong,
+}
 
 /** An effect's pictogram, by its kind */
 export const EFFECT_GLYPHS: Record<EffectKind, string> = {

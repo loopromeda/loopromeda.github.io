@@ -8,6 +8,7 @@ import {
   MOD_SOURCES,
   PARAMS,
   clampValue,
+  isSwitch,
   defaultValues,
   formatAmount,
   formatValue,
@@ -325,5 +326,26 @@ describe('defaultValues', () => {
     PARAMS.forEach((spec, i) => {
       expect(values[i]).toBe(spec.default)
     })
+  })
+})
+
+describe('isSwitch', () => {
+  const choice = {
+    min: 0,
+    max: 1,
+    default: 0,
+    curve: 'linear',
+    step: 1,
+    unit: '',
+  } as const
+
+  it('takes a knob of two choices for a switch', () => {
+    expect(isSwitch({ ...choice, choices: ['Off', 'On'] })).toBe(true)
+    expect(isSwitch({ ...choice, choices: ['Key', 'Free'] })).toBe(true)
+  })
+
+  it('leaves more choices, and knobs with none, dials', () => {
+    expect(isSwitch({ ...choice, choices: ['Off', 'On', 'More'] })).toBe(false)
+    expect(isSwitch(choice)).toBe(false)
   })
 })

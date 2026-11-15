@@ -659,6 +659,29 @@ note value, over a time always in beats, and the LFO's rate synced too
   기본값을 On 으로 두자"): an added one starts synced, and so does a
   new session's delay bus (375 ms at 120, where it was 350). The
   factory presets read as written, unsynced.
+- **A switch.** A knob of two choices, Off and On, as Sync is, stands
+  in its square as an upright switch (`Toggle` in `src/ui/Knob.tsx`,
+  `isSwitch` in `src/state/params.ts`), asked for by ashon the same day
+  with a picture of one ("On/Off 패널의 경우 이런식으로 세로 토글로 해
+  보면 어떨까?"): On at the top, the thumb ringed in the part's colour,
+  Off below it, the one it is lit; tapped, it flips, and the arrows set
+  it. Its label stays under it, as the other knobs' do. First as tall as
+  a dial, then, seen, two thumbs long with a larger thumb ("좀 더
+  짧게", "원을 더 크게"), and then as large as the knob's square makes
+  it ("큰 레이아웃에서도 잘 어울리게"): the track two thirds of the
+  square, the thumb a third, so 16 px in a row of 48 px knobs, 24 in
+  one of 72. Then every knob of two choices a switch ("다른 노브들도
+  이렇게 변경해 줘"): the LFO's Trigger (Free over Key) and the Haas's
+  Later (Left over Right), the second choice at the top, ringed in
+  colour at either. The delay's Mode, Stereo or Ping-pong, has
+  pictures beside its track in place of names too long for it (a 48 px
+  square holds about 26 px of name there; Stereo is 37, Ping-pong 55):
+  the echoes on both sides at once, then from side to side, the left
+  over the right as the Haas's pictogram has them (`CHOICE_GLYPHS` in
+  `src/ui/editor.ts`), and the mode's name under its label, as a
+  dial's reading. It was Ping-pong, Off or On, for a moment first;
+  ashon wanted the two seen ("딜레이의 모드는 스테레오 핑퐁으로 직관적으로
+  보이게").
 - **The clock** (`src/dsp/clock.ts`): the sequencer keeps the tempo and,
   as each block starts, the beat it starts on (none while stopped or
   counting in); every synth and rack in the worklet holds the same one.

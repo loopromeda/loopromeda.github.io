@@ -642,6 +642,15 @@ export function toNormalized(spec: ValueSpec, value: number): number {
   return spec.curve === 'quadratic' ? Math.sqrt(r) : r
 }
 
+/**
+ * Whether a knob is a switch, a choice of two (a Sync, Off or On; an
+ * LFO's Trigger, Key or Free): turned over by a tap, shown upright in a
+ * dial's place (Toggle, src/ui/Knob.tsx)
+ */
+export function isSwitch(spec: ValueSpec): boolean {
+  return spec.choices?.length === 2
+}
+
 /** U+2212 MINUS SIGN, not the ASCII hyphen */
 const MINUS = '\u2212'
 

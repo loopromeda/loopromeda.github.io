@@ -19,8 +19,13 @@ import {
   partName,
   type Sound,
 } from '../state/sound/sound'
-import { EFFECT_KINDS, type EffectKind } from '../state/sound/kinds'
 import {
+  EFFECT_KINDS,
+  type EffectKind,
+  type KnobSpec,
+} from '../state/sound/kinds'
+import {
+  CHOICE_GLYPHS,
   FM_START,
   GLYPHS,
   neutralLook,
@@ -372,5 +377,16 @@ describe('destName', () => {
     expect(destName(sound, VOICE, 'pitch')).toBe('Voice · Pitch')
     expect(destName(sound, AMP, 'gain')).toBe('Amp · Gain')
     expect(destName(sound, 'c1', 'send.i2')).toBe('Chain A · IN 2')
+  })
+})
+
+describe('CHOICE_GLYPHS', () => {
+  it('draws both of the delay’s modes, each its own', () => {
+    const knobs: readonly KnobSpec[] = EFFECT_KINDS.delay.knobs
+    const mode = knobs.find((knob) => knob.key === 'mode')
+    const [stereo = '', pingPong = ''] = mode?.choices ?? []
+    expect([stereo, pingPong]).toEqual(['Stereo', 'Ping-pong'])
+    expect(CHOICE_GLYPHS[stereo]).toBe(GLYPHS.echoes)
+    expect(CHOICE_GLYPHS[pingPong]).toBe(GLYPHS.pingPong)
   })
 })
