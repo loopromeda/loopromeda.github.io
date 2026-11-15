@@ -531,6 +531,23 @@ describe('the spectrogram’s grid', () => {
     for (let k = 1; k <= 10; k++) if (ticks.next()) half.push(k)
     expect(half).toEqual([3, 5, 8, 10])
   })
+
+  it('goes on from a phase kept, and tells it', () => {
+    const ticks = new Ticks()
+    ticks.reset(80)
+    for (let k = 0; k < 30; k++) ticks.next()
+    expect(ticks.phase).toBe(30)
+    // Started again 30 past a tick: the next one 50 columns on
+    ticks.reset(80, ticks.phase)
+    const at: number[] = []
+    for (let k = 1; k <= 130; k++) if (ticks.next()) at.push(k)
+    expect(at).toEqual([50, 130])
+    // A phase past the period wraps; a negative one is a tick's
+    ticks.reset(80, 100)
+    expect(ticks.phase).toBe(20)
+    ticks.reset(80, -5)
+    expect(ticks.phase).toBe(0)
+  })
 })
 
 describe('the mastering tools’ readouts', () => {

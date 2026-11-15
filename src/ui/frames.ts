@@ -18,6 +18,38 @@ export interface Frames {
   resize(width: number, height: number, scale: number): void
   /** Draws the frame of now (requestAnimationFrame's time, ms) */
   draw(now: number): void
+  /**
+   * What it shows is about to go, the canvas resized or let go: a view
+   * that builds its picture over time keeps it here, to draw again
+   */
+  keep?(): void
+}
+
+/**
+ * A canvas drawn by frames comes in from nothing: hidden until its first
+ * frame is drawn (useFrames, Scope), then faded in, never the black of a
+ * canvas not yet drawn (asked for by ashon, 2026-11-15: "캔버스 시각화가
+ * 전환될 때 페이드로 부드럽게 전환될 수 있게 ... 지금은 까만색으로 깜빡
+ * 깜빡 하면서 전환되거든")
+ */
+export const FADE_IN =
+  'opacity-0 transition-opacity duration-200 ease-out motion-reduce:transition-none'
+
+/** Shows a canvas FADE_IN hides, once it has been drawn */
+export function shown(canvas: HTMLCanvasElement): void {
+  if (canvas.style.opacity !== '1') canvas.style.opacity = '1'
+}
+
+/**
+ * The time of the latest display frame any canvas drew, ms: a canvas
+ * drawn between frames (resized) draws at it, so that an output read for
+ * that frame (OutputTap) is not read again
+ */
+let frameAt = 0
+
+/** The time to draw at between frames: the latest frame's, while running */
+export function between(running: boolean): number {
+  return running && frameAt > 0 ? frameAt : performance.now()
 }
 
 /**
@@ -27,6 +59,9 @@ export interface Frames {
  * MAX_SCALE, sized before the first frame, the loop stopped while the
  * audio is not running (and by the browser in a background tab). start
  * makes what draws it, once per canvas and key: a new key, a new start.
+ * Resized, it is drawn again at once, before the page is painted (a
+ * canvas resized is blank, and opaque, black), and its first frame shows
+ * it (FADE_IN).
  */
 export function useFrames(
   engine: Engine,
@@ -57,6 +92,7 @@ export function useFrames(
         next === scale
       )
         return
+      if (sized) frames.keep?.()
       canvas.width = width
       canvas.height = height
       scale = next
@@ -65,11 +101,13 @@ export function useFrames(
       sized = width > 0 && height > 0
       if (!sized) return
       frames.resize(width, height, next)
-      // The resized canvas is blank: a frame now if no loop will draw one
-      if (!raf) frames.draw(performance.now())
+      // The resized canvas is blank: drawn now, not on the next frame
+      frames.draw(between(raf !== 0))
+      shown(canvas)
     }
     const frame = (now: number) => {
       raf = requestAnimationFrame(frame)
+      frameAt = now
       if (sized && canvas.width && canvas.height) frames.draw(now)
     }
     const sync = () => {
@@ -114,6 +152,7 @@ export function useFrames(
       raf = 0
       unsubscribe()
       observer.disconnect()
+      if (sized) frames.keep?.()
     }
     // canvasRef is a ref; key names what start draws
     // eslint-disable-next-line react-hooks/exhaustive-deps

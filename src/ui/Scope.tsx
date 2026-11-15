@@ -12,6 +12,7 @@ import {
   outlineFill,
   outlinePath,
 } from './outline'
+import { FADE_IN, shown } from './frames'
 import { ground, mode, palette, themeId } from './theme'
 
 /** Samples on screen: 21 ms at 48 kHz, about nine cycles of A4 */
@@ -263,9 +264,11 @@ export function Scope({
       mins = new Float32Array(width)
       maxs = new Float32Array(width)
       paintBackground()
-      // The resized canvas is blank: draw now if no loop will
+      // The resized canvas is blank: drawn now, not on the next frame,
+      // and shown once it is (FADE_IN)
       wasSilent = false
-      if (!raf) render()
+      render()
+      shown(canvas)
     }
 
     const frame = (now: number) => {
@@ -362,7 +365,7 @@ export function Scope({
         aria-label={
           source === 'master' ? 'The output’s waveform' : 'The sound’s waveform'
         }
-        className="block h-full w-full"
+        className={`block h-full w-full ${FADE_IN}`}
       />
       <span
         ref={readoutRef}

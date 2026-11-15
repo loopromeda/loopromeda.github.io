@@ -346,10 +346,18 @@ export class Ticks {
   #period = 1
   #phase = 0
 
-  /** Starts again every period columns, the column just drawn a tick */
-  reset(period: number): void {
+  /**
+   * Starts again every period columns, the column just drawn a tick, or
+   * phase columns past one (a picture kept, drawn again: phase)
+   */
+  reset(period: number, phase = 0): void {
     this.#period = Math.max(1, period)
-    this.#phase = 0
+    this.#phase = Math.max(0, phase) % this.#period
+  }
+
+  /** How many columns have been drawn since the last tick */
+  get phase(): number {
+    return this.#phase
   }
 
   /** Whether the next column drawn is a tick */

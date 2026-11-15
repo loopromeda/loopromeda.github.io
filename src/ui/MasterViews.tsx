@@ -26,7 +26,7 @@ import {
   type Levels,
 } from '../viz/master'
 import { scaleOn } from '../viz/colourScale'
-import { outputTap, useFrames } from './frames'
+import { FADE_IN, outputTap, useFrames } from './frames'
 import { Scope, type ScopeStats } from './Scope'
 import {
   alpha,
@@ -613,7 +613,7 @@ export function Spectrum({
         ref={canvasRef}
         role="img"
         aria-label={`${named(source)} spectrum, 20 Hz to 20 kHz`}
-        className="block h-full w-full"
+        className={`block h-full w-full ${FADE_IN}`}
       />
       {labelled && (
         <span aria-hidden className="pointer-events-none">
@@ -644,6 +644,24 @@ export function Spectrum({
 }
 
 /**
+ * Each output's spectrogram as it last showed, by output, mode and theme:
+ * a canvas resized, or another drawn in its place (the editor's tab
+ * changed, a view picked again), goes on from it rather than from empty
+ */
+const histories = new Map<
+  string,
+  {
+    readonly image: HTMLCanvasElement
+    /** Its pixels per CSS pixel */
+    readonly scale: number
+    /** Columns drawn since its last second's line */
+    readonly phase: number
+    /** Columns of silence drawn since the last sound */
+    readonly silent: number
+  }
+>()
+
+/**
  * The spectrum over time: a column a frame at the right, the older ones
  * scrolling left at SCROLL, low notes at the bottom on the spectrum's
  * logarithmic axis, each level on the colour scale from the background
@@ -659,7 +677,8 @@ export function Spectrum({
  * wide or more: a narrower one (a phone's tiles) has no room to spare
  * for it (ashon: "렌더링 영역이 작으면 legend는 그냥 제거해도 좋을 것
  * 같아"). In silence it scrolls the last sound away, then rests, its
- * lines where they were.
+ * lines where they were. Resized, or drawn anew in another's place, it
+ * goes on from what it showed (histories), not from empty.
  */
 export function Spectrogram({
   engine,
@@ -676,6 +695,7 @@ export function Spectrogram({
   // Drawn again in the other mode (useFrames' key)
   const tone = mode()
   const colours = viewColours(tone)
+  const key = `${source}:${tone}:${themeId()}`
   useFrames(
     engine,
     canvasRef,
@@ -695,15 +715,20 @@ export function Spectrogram({
 
       return {
         resize(width, height, next) {
+          // What it showed before, at its size then (keep): the same
+          // sound at the right edge, so a canvas resized or drawn anew
+          // goes on from it
+          const kept = histories.get(key)
+          const across = kept ? next / kept.scale : 1
           scale = next
           column = ctx.createImageData(1, height)
           second = ctx.createImageData(1, height)
           rows = new Float32Array(height)
           decades = spectrogramRows(DECADES, height)
           // A second's columns at the scroll's rate, the one at the right
-          // edge a second's line
+          // edge a second's line, or as far past one as it was
           const period = SCROLL * scale
-          ticks.reset(period)
+          ticks.reset(period, kept ? kept.phase * across : 0)
           // Empty, its lines drawn: the decades across, the seconds back
           // from the right edge
           ctx.fillStyle = colours.background
@@ -713,10 +738,25 @@ export function Spectrogram({
             ctx.fillRect(0, decades[k] as number, width, 1)
           }
           ctx.fillStyle = colours.lineColour(SECOND_LINE)
-          for (let x = width - 1; x >= 0; x -= period) {
+          for (let x = width - 1 - ticks.phase; x >= 0; x -= period) {
             ctx.fillRect(Math.round(x), 0, 1, height)
           }
           silent = width
+          if (kept) {
+            // Its pixels a second's columns as wide, stretched down to
+            // the new height (the rows a share of it each)
+            const w = Math.round(kept.image.width * across)
+            ctx.drawImage(kept.image, width - w, 0, w, height)
+            silent = Math.round(kept.silent * across)
+          }
+        },
+        keep() {
+          const image =
+            histories.get(key)?.image ?? document.createElement('canvas')
+          image.width = canvas.width
+          image.height = canvas.height
+          image.getContext('2d', { alpha: false })?.drawImage(canvas, 0, 0)
+          histories.set(key, { image, scale, phase: ticks.phase, silent })
         },
         draw(now) {
           const { width, height } = canvas
@@ -778,7 +818,7 @@ export function Spectrogram({
         },
       }
     },
-    `${source}:${tone}:${themeId()}`
+    key
   )
   return (
     <div
@@ -788,7 +828,7 @@ export function Spectrogram({
         ref={canvasRef}
         role="img"
         aria-label={`${named(source)} spectrogram: the spectrum over time, a line down each second`}
-        className="block h-full w-full"
+        className={`block h-full w-full ${FADE_IN}`}
       />
       {labelled && (
         <span aria-hidden className="pointer-events-none">
@@ -993,7 +1033,7 @@ export function Vectorscope({
         ref={canvasRef}
         role="img"
         aria-label={`${named(source)} two sides against each other: mid up, side across, the left up to the left, the right up to the right`}
-        className="block h-full w-full"
+        className={`block h-full w-full ${FADE_IN}`}
       />
       <span
         aria-hidden
@@ -1204,7 +1244,7 @@ export function Meters({
               ? 'Output levels, left and right, going into the clip'
               : 'The sound’s level, both sides together'
           }
-          className="block h-full w-full"
+          className={`block h-full w-full ${FADE_IN}`}
         />
       </div>
       {readout && (

@@ -202,7 +202,8 @@ src/ui/       React components; SoundEditor.tsx the sound as tiles
               Scope.tsx's waveform, the spectrum, the spectrogram and
               its colours' key within it, the stereo, the meters; frames.ts
               draws them a display frame at a time, the output read
-              once a frame), its filters,
+              once a frame, each faded in once first drawn, the
+              spectrogram going on from what it showed), its filters,
               drives and modulators their pictures (Picture.tsx, drawn
               from outline.ts); MasterSheet.tsx all the views at size
               (MasterBoard, #/master), under the tab rail, with the

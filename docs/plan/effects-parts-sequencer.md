@@ -593,6 +593,19 @@ the same height, so the keys under them stay put.
   되지 않을까?"), the view showing what comes out, not a stage it passes
   through; with no effects the buses' threads end at the master's head,
   as a sound's sends at an empty chain's.
+- **Views faded in**, 2026-11-15, asked for by ashon: "캔버스 시각화가
+  전환될 때 페이드로 부드럽게 전환될 수 있게 버퍼링 잘 해 보면 어떨까?
+  지금은 까만색으로 깜빡 깜빡 하면서 전환되거든". A canvas drawn every
+  frame is opaque: until it is drawn it is black, and so it was for a
+  frame or two whenever one was resized (the knob panel opened, the
+  views beside one another changed) or drawn anew (a tab changed, a
+  view picked). Resized, a view now draws at once, before the page is
+  painted, at the latest frame's time (so an output read for that frame
+  is not read again); drawn anew, it is hidden until its first frame,
+  then fades in over 200 ms (none where motion is reduced). The
+  spectrogram keeps what it showed, for each output, mode and theme: a
+  spectrogram resized or drawn anew goes on from it, its seconds'
+  lines where they were, rather than from empty.
 - **Panels**: the Out and the strip open the same panel (named Out in
   the Sound, Synth in the Mix): the strip's fader, Level and Balance, the
   mix's, first, then a send to each bus, the sound's, and the view of
