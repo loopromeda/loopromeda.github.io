@@ -31,6 +31,19 @@ describe('holes', () => {
   it('makes none for none', () => {
     expect(holes(BOX, 'left', 0)).toEqual([])
   })
+
+  it('squeezes them closer where they would stand past the inset', () => {
+    // A head 22 tall: two fit, 12 apart, 5 from its top and its foot
+    const head = { x: 0, y: 0, w: 100, h: 22 }
+    expect(holes(head, 'left', 2, true).map((hole) => hole.y)).toEqual([5, 17])
+    // Three: 6 apart, the first and last 5 inside
+    expect(holes(head, 'left', 3, true).map((hole) => hole.y)).toEqual([
+      5, 11, 17,
+    ])
+    // Room enough: as far apart as ever
+    expect(holes(BOX, 'right', 4, true)).toEqual(holes(BOX, 'right', 4))
+    expect(holes(head, 'left', 1, true)).toEqual([{ x: 5, y: 11 }])
+  })
 })
 
 describe('across', () => {
@@ -54,6 +67,13 @@ describe('runPath', () => {
   it('bends an S over the seam’s middle between ends apart', () => {
     const run = { from: { x: 71, y: 49 }, to: { x: 95, y: 30 } }
     expect(runPath(run)).toBe('M71 49C83 49 83 30 95 30')
+  })
+
+  it('runs upright down into a tile under it, or turns across to it', () => {
+    const down = { from: { x: 40, y: 10 }, to: { x: 40, y: 30 }, upright: true }
+    expect(runPath(down)).toBe('M40 10V30')
+    const turn = { from: { x: 90, y: 10 }, to: { x: 30, y: 30 }, upright: true }
+    expect(runPath(turn, 10, 0)).toBe('M80 10C80 20 20 20 20 30')
   })
 })
 

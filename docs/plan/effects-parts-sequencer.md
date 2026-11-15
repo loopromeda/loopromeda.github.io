@@ -467,9 +467,13 @@ the same height, so the keys under them stay put.
   row, as a chain is, in its letter's colour (the chains' colours, A
   orange, B violet, C lime, D pink, so that a letter wears one colour in
   either view): a head with its letter and level, its effects after it
-  and a "+" filling the row to the longest; then the master's effects,
-  as tall as the strip, and the **Master**, which fills the rest with
-  its name over the output's view and wider meters. Under the rows
+  and a "+" filling the row to the longest; then the master's effects
+  and the **Master**, which fills the rest of the width with its name
+  over the output's view and wider meters, both two rows tall in the
+  rows' middle, as a sound's amp stands. They stood as tall as the
+  strips until 2026-11-15, when six tracks beside two buses made them
+  long sticks down the frame and ashon asked for their blocks' shapes
+  ("가독성을 위해 비율에 잘 맞게 블럭 모양을 잘 유지하면 좋겠어"). Under the rows
   "+ Bus" (until every letter has one), and "+ FX" under the master's
   effects. Since 2026-11-14 threads join them, as they join a sound's
   tiles (`sound-chains.md`, Threads): from each track's strip, a hole for
@@ -490,7 +494,9 @@ the same height, so the keys under them stay put.
   still read as corners: "베지어 기반으로 잘 조정해 봐"). Along each
   bus's row a thread runs over its "+", into the master's first effect
   or the master at the row's own middle, the last run as thick as the
-  bus's level, and on through the master's effects. They replace a peg
+  bus's level, and on through the master's effects; with three buses or
+  four, taller than the master, onto a bus down the seam before it, as a
+  sound's chains run onto theirs. They replace a peg
   on the seam to each bus, as long as its send, and a bus down the seam
   after the rows with each bus's level a peg on it. The seam between the
   strips and the heads is 12 px (was 4), 16 with four buses for their
@@ -509,7 +515,65 @@ the same height, so the keys under them stay put.
   master takes what is left. On a 412 px phone (a frame of 396) two
   effects on a row and the Master now fit, where the mix was 413 wide
   and panned; three or more on a row still pan. A frame wide enough for
-  the tiles at rest names them again.
+  the tiles at rest names them again. Since 2026-11-15 the master's
+  effects, two or more, stand in a column there instead of a row: one
+  under another, 3 apart, sharing the master's two rows (58 px each of
+  three), a thread down the column's middle from each to the next and
+  across from the last into the Master. The buses' threads end on a
+  bus down the seam before the column (6 px wide, the bus in its
+  middle, clear of the effects), and a run off it goes into the first.
+  Asked by ashon (the Master past a phone's edge, three on the master:
+  483 px in a frame of 396), who chose it over the master's row under
+  the buses' and over one block for all its effects. Six tracks, B's
+  delay and three on the master now fit in 396, and so do four buses.
+  The groups (below) replaced the column and the rows the same day.
+- **Groups**, 2026-11-15, asked for by ashon with the phone's mix in
+  view (A's three effects in a row, the master's in a column): "AB
+  버스도 그룹 형태로 묶어서.. 정사각형 형태로 FX 블록들을 이어보는건
+  어떨까? 마스터링도 마스터링 FX를 안에 배치할 수 있게 하면 공간을 더
+  아낄 수 있을 것 같네". Each bus is now a group, a box in its letter's
+  colour with its letter and level in a head 22 px tall across its top
+  and its effects inside as squares (60 px, 44 as icons), 3 apart, in
+  lines as long as the frame allows, 8 between lines, the "+" in the
+  place after the last, filling its line (30 px tall alone in one). The
+  sound is as it was: ashon chose a layout only, the effects still in
+  series, over parallel chains in a bus. The master is a group too, its
+  effects in a line under its head and the output's view under them
+  (half as tall as wide, 56 to 200 px), its "+ FX" inside, which ashon
+  chose over the effects beside the view. At rest each group is one
+  line, its squares up to twice as large with room; a narrower frame
+  breaks the lines, down to two squares to a line, before the effects
+  become icons. A thread from a strip ran into the hole at the left of
+  its bus's head and down into the first square at its top left (into
+  the first's left at its middle since, below); it runs across from
+  square to square in a line and down from one's foot at its right into
+  the next line's first at its top left (`Run.upright`,
+  `src/viz/threads.ts`; a run into a square's middle crossed its
+  pictogram), and from the last at its middle onto the bus line or into
+  the master (down a lane into the master's first since, below). On a
+  412 px phone (a frame of 396) six tracks, A's three effects, B's none
+  and two on the master fit without panning; at 344 px the icons pan 2
+  px, as they did.
+- **Into the master as into a bus**, 2026-11-15, asked for by ashon:
+  "버스에서 마스터링으로 갈 때도, 인풋에서 버스로 가는 메커니즘과
+  동일하게 맞춰보면 좋겠는데". Each bus's level leaves its group by a
+  hole in its right edge (over its "+" from its last effect; the last's
+  own hole where it stands at that edge, the head's with none) and runs,
+  as thick as the level, down a lane in the seam before the master into
+  the hole at the left of the master's first effect (of its head, with
+  none), every bus's into the one, as every track's into a bus's; a tap
+  picks the bus. The bus down that seam, and the run off it, are gone;
+  the seam is 12 px (it was 8), as the strips' is. The tracks' threads
+  end at the left of the bus's first effect, at its middle, no longer at
+  the head's hole and down into it: in the sound ashon found that turn
+  awkward ("체인 표현도 어색하게 꺾이지 않도록", `sound-chains.md`,
+  Threads), and a bus's threads go the same way. Inside the master the
+  thread runs from effect to effect and ends at the last: it ran on down
+  into the view under them until ashon, the same day, saw no need
+  ("마스터 블록 안의 체인들과 그 하단에 시각화는 굳이 연결하지 않아도
+  되지 않을까?"), the view showing what comes out, not a stage it passes
+  through; with no effects the buses' threads end at the master's head,
+  as a sound's sends at an empty chain's.
 - **Panels**: the Out and the strip open the same panel (named Out in
   the Sound, Synth in the Mix): the strip's fader, Level and Balance, the
   mix's, first, then a send to each bus, the sound's, and the view of

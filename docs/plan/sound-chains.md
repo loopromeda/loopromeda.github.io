@@ -129,15 +129,29 @@ Drawn on the design canvas with ashon, 2026-11-10/11, after panels of
 knobs (stage tabs, one rack, a flow map) read as unintuitive: the sound
 as a graph of flat tiles, flowing left to right.
 
-- **Tiles.** Inputs stand in the first column; each chain is a row: its
-  head (letter and level), then its items side by side, then the amp,
-  which stands at the end of every row (since 2026-11-12 at most two
-  slots tall, or three fifths of its width: past that it stands in the
-  rows' middle and a bus down the seam takes every row to it; a chain's
-  items and its "+" likewise stand at most two slots tall, in the row's
-  middle, and since 2026-11-14 the head with them: it kept the row's
-  height for the pegs, and ashon saw it need not once threads bent into
-  it). Modulators sit
+- **Tiles.** Inputs stand in the first column; each chain is a group
+  (since 2026-11-15, ashon: "사운드 쪽에서도 체인을 그룹처럼 다뤄보면
+  좋겠어", as the Mix's buses had just become): a head across its top
+  (letter and level, 22 px), its items squares inside, as many to a
+  line as the frame has room for at rest (60 px squares: with a column
+  of inputs and no inserts, two to a line need a frame 386 px wide, so
+  a 412 px phone has two and a narrower one stands them one under
+  another), every group breaking its lines alike, and the "+" in the
+  place after them, to the end of that line, or in a line of its own
+  30 px tall after a full one. A scrollbar that takes room keeps it,
+  scrolling or not: a group broken into more lines, taller, scrolled,
+  and left too little width to mend them. A taller frame grows the
+  squares, up to 120 px, and a wider one widens them before the rest. A
+  chain's row is as tall as its group, or as its inputs need, the group
+  in its middle. Then the amp, which stands at the end of every row
+  (since 2026-11-12 at most two slots tall, or three fifths of its
+  width: past that it stands in the rows' middle and a bus down the seam
+  takes every row to it). Until 2026-11-15 a chain was a row: its head
+  (as tall as its items, in the row's middle since 2026-11-14: it kept
+  the row's height for the pegs, and ashon saw it need not once threads
+  bent into it), then its items side by side, at most two slots tall, a
+  longer chain panning the graph right; on a phone the frame stood
+  mostly empty under it. Modulators sit
   in a rack above, the voice at its end (since 2026-11-12 at its start,
   over the inputs whose pitch it sets; from md up, and on a phone on its
   side, the rack is a column at the graph's left, which has width to
@@ -147,8 +161,8 @@ as a graph of flat tiles, flowing left to right.
   30rem tall (ashon, 2026-11-12: on a phone on its side the column
   showed the voice and half a modulator). A tile
   is flat, outlined by a ring; picked, its ring is heavier and it takes a
-  tint. A dashed "+" fills a row's free place; a longer chain pans the
-  graph right.
+  tint; a group is outlined in its chain's colour. A graph wider or
+  taller than its frame pans.
 - **Threads**, since 2026-11-14, in place of the pegs that stood on the
   seams (a pill as long as its level: an input's send into a chain, the
   chain's level before the amp). ashon asked on 2026-11-13 for the
@@ -162,23 +176,36 @@ as a graph of flat tiles, flowing left to right.
   the two stand level, an S bending in the seam where they do not. A
   tile that sends to several has a hole for each down its edge, 12 px
   apart about its middle and in their order, in each one's colour, so
-  that no two threads cross; a head takes a hole for each input that
-  feeds it. A send's thread, a chain's last run (its level, into the amp
-  or onto the bus) and a read's are as thick and as strong as what they
-  carry, 1 px and 35% for nothing to 3 px and full for all; the stitches
-  between a chain's items, and after the amp, are 2 px. The seam an
-  input's threads bend across, before the heads, is 12 px (it was 4):
-  the storyboard's 14 made a sound of one item 398 px wide, 2 px more
-  than a 412 px phone's frame, so it panned. Each send's and read's
-  thread has a tap target of 44 × 28 px about its middle, picking as its
-  peg did. Picking a chain's head lights its threads from its inputs to
-  the amp, the rest of the chains' and the inputs' dimmed to a quarter;
-  picking an input lights its own, the other inputs' dimmed; an item
-  lights the runs on either side of it. A "+" in a row has its label at
-  its foot, out of the thread's way, and the Out's view stands clear of
-  its hole. In the session's mix the same threads run from every track
-  to the buses it sends to, each bus's in a lane of its own, and along
-  each bus into the master (`effects-parts-sequencer.md`, Mix).
+  that no two threads cross. A head took a hole for each input that
+  feeds it; a group's (2026-11-15) took one at its left, where every
+  send ended, the thread running down from it into the first square.
+  On the phone the same day ashon found that climb to the head and
+  turn back down awkward ("좌측 공간 살짝 양보하면서 체인 표현도
+  어색하게 꺾이지 않도록"): each send now ends in a hole of its own down
+  the left edge of the chain's first item (of its head, holding none),
+  about its middle, closer where they would not fit, an S across the
+  seam and no turn. From the first the thread runs across from square
+  to square along a line, from a line's last (at its foot) into the
+  next's first (at its top), and from the last square, over the "+",
+  into the amp or onto the bus. A send's thread, a chain's last run
+  (its level, into the amp or onto the bus) and a read's are as thick
+  and as strong as what they carry, 1 px and 35% for nothing to 3 px
+  and full for all; the stitches between a chain's items, and after the
+  amp, are 2 px. The seam an input's threads bend across, before the
+  groups, is 18 px since 2026-11-15, the inputs 62 px wide for it where
+  they were 68 (the room ashon asked them to give), so a sound stands no
+  wider; it was 4, then 12: the storyboard's 14 made a sound of one item
+  398 px wide, 2 px more than a 412 px phone's frame, so it panned. Each
+  send's and read's thread has a tap target of 44 × 28 px about its
+  middle, picking as its peg did. Picking a chain's head lights its
+  threads from its inputs to the amp, the rest of the chains' and the
+  inputs' dimmed to a quarter; picking an input lights its own, the
+  other inputs' dimmed; an item lights the runs on either side of it. A
+  "+" in a row has its label at its foot, out of the thread's way, and
+  the Out's view stands clear of its hole. In the session's mix the same
+  threads run from every track to the buses it sends to, each bus's in a
+  lane of its own, and from every bus down a lane of their own into the
+  master (`effects-parts-sequencer.md`, Mix).
 - **Crossing.** An input is drawn once and stretches over neighbouring
   chains it feeds; where it cannot, a dashed copy of it stands in that
   chain's row (`src/viz/graph.ts` lays this out). Tapping a copy picks
@@ -273,8 +300,11 @@ as a graph of flat tiles, flowing left to right.
   held; a mouse moved with its button down) lifts and follows the
   finger, picked; a bar on a seam shows where it would go, and near an
   edge the graph pans. An item moves along its chain or into another
-  that has room, a chain's letter takes its row up or down (its letter
-  and colour follow its new place), a modulator moves along the rack.
+  that has room (to the seam nearest the finger on the group's line
+  nearest it: a line's end and the next one's start both take it to
+  the same place), a chain held by its group takes its row up or down
+  (its letter and colour follow its new place), a modulator moves
+  along the rack.
   Let go off the graph, or Escape, and it goes back. A touch that moves
   first pans, as before. Inputs are not dragged: each stands beside the
   chains it feeds, wherever it is in their order, so the panel's buttons

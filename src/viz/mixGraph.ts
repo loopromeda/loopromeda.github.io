@@ -3,63 +3,92 @@
  * out as the sound's graph lays out a sound (graph.ts): the tracks'
  * strips at the left in one column, one under another, as a sound's
  * inputs stand, each with room for its view under its name, and under
- * the last the "+" that adds a track; the buses in rows, one under
- * another, as chains are: a head with the bus's letter, its effects in a
- * row after it, and its "+" filling the row to the longest; then the
- * master's effects and the master, as tall as the rows, filling the rest
- * of the frame, the view of the output it holds as wide as it can be.
+ * the last the "+" that adds a track; then each bus a group, one under
+ * another: a box in its letter's colour, its head across the top (the
+ * letter and the level), and under it its effects as squares, a line of
+ * them after another, its "+" in the next place filling the rest of its
+ * line; then the master a group too, its head, its effects and its "+"
+ * the same way (its "+" after its effects taking one place only, its
+ * line as long as the frame), and under them the view of the output it
+ * holds, filling the rest of the frame's width. Asked for by ashon,
+ * 2026-11-15 ("AB 버스도 그룹 형태로 묶어서.. 정사각형 형태로 FX 블록들을
+ * 이어보는건 어떨까? 마스터링도 마스터링 FX를 안에 배치할 수 있게 하면
+ * 공간을 더 아낄 수 있을 것 같네"), where each bus had been a row of tiles
+ * as long as its effects, and the master's effects tiles of their own
+ * before it.
+ *
  * Threads join them (threads.ts), as they join a sound's tiles: from each
- * track's strip to the head of each bus it sends to, a hole for each down
- * the strip's edge and a lane down the seam for each bus (mixSends), and
- * along each bus's row, over its "+", into
- * the master's first effect or the master at the row's middle, as a
- * chain's thread runs into the amp; then on through the master's. Along
- * the foot, the "+"s: a track's under the strips, "+ Bus" under the rows,
- * and "+ FX" under the master's. More tracks make the mix taller, never
- * wider: the column and the rows stand as tall as the taller of them, and
- * a frame shorter than that pans down. Pure math, no DOM.
+ * track's strip into each bus it sends to, a hole for each down the
+ * strip's edge and a lane down the seam for each bus (mixSends), into
+ * the bus's first effect at its left (its head, with none); in each
+ * group across to the next effect in its line, and turning across to
+ * the first of the next line; then from the last, its level's, out of
+ * the group's right edge. The buses' threads go on into the master the
+ * same way, down a lane of their own in the seam before it, into its
+ * first effect at its left (its head, with none): asked for by ashon,
+ * 2026-11-15 ("버스에서 마스터링으로 갈 때도, 인풋에서 버스로 가는
+ * 메커니즘과 동일하게"), where they had come onto a bus down the seam
+ * that took them into it, and the tracks' into each head, then down into
+ * its first effect ("체인 표현도 어색하게 꺾이지 않도록"). In the master
+ * they run on in the same way, ending at the last effect: none runs on
+ * into the view, which shows what comes out and is no stage of it
+ * ("마스터 블록 안의 체인들과 그 하단에 시각화는 굳이 연결하지 않아도",
+ * ashon, 2026-11-15). Along the foot, the "+"s: a track's under the
+ * strips and "+ Bus" under the groups. More tracks make the mix taller,
+ * never wider: the strips, and the groups and the master in the middle
+ * beside them, stand as tall as the tallest of them, and a frame shorter
+ * than that pans down. Pure math, no DOM.
  */
 import type { Box } from './graph'
 import { across, holes, THREAD, type Point, type Run } from './threads'
 
 /**
- * The mix in pixels at rest: a bus a row tall (44, a touch's height), 6
- * between rows; a strip 62 tall at least (its view under its name) and
- * 84 wide (a track's name by its kind and place and its level on a
- * line), 6 between strips, 12 between them and the heads (THREAD.gap, as
- * between the sound's inputs and chains), or more where the buses' lanes
- * down it need more (16 for four: stripGap), and 4 between the rows and
- * the master's; a
- * head 36 wide, an effect 60, a "+" 44 at least, 3 between them, as in a
- * chain; the master 96 wide at least; the "+" row 30 tall. The master
- * stands as tall as two rows at least.
+ * The mix in pixels at rest: a strip 62 tall at least (its view under its
+ * name) and 84 wide (a track's name by its kind and place and its level
+ * on a line), 6 between strips and between groups, 12 between the strips
+ * and the groups (THREAD.gap),
+ * or more where the buses' lanes down it need more (16 for four:
+ * stripGap); a group's head 22 tall, its squares 4 inside its edges, an
+ * effect's square 60 (44 as an icon), 3 between squares in a line and 8
+ * between lines (room for the thread turning across); 12 between the
+ * groups and the master, where the buses' threads bend (THREAD.gap); the
+ * master 96 wide at least, its view half as tall as it is wide, from 56
+ * to 200, and in a taller frame up to 360; the "+" row 30 tall.
  *
- * A frame narrower than the mix at rest (a phone's, or rows long with
- * effects) makes every effect an icon, its pictogram alone, 44 wide (a
- * touch's width, square in a row at rest), and nothing widens: the
- * master takes what is left, and a frame narrower still pans.
+ * At rest each bus's group holds its squares in one line, as long as the
+ * longest bus's, and the master's in one line too. A frame narrower than
+ * that breaks the groups' lines, as few at a time as fit, two squares to
+ * a line at least, the master taking what is left with as many to a line
+ * as it holds; and narrower still makes every effect an icon, its
+ * pictogram alone, 44 square (a touch's width), breaking them again. A
+ * frame narrower than that pans.
  *
- * A wider frame widens the strip, the effects and the "+" by a third of
- * what it has past that, in proportion, up to stretch times theirs (the
- * heads keep theirs), and the master takes the rest. A taller one grows
- * the strips and the rows, up to stretch times at rest for the taller of
- * the two, the frame's rest left empty past that.
+ * A wider frame widens the strip and the squares by a third of what it
+ * has past the mix at rest, in proportion, up to stretch times theirs,
+ * and the master takes the rest. A taller one grows the strips, up to
+ * stretch times at rest, and the master's view, up to half as tall as
+ * it is wide, the groups and the master standing in their middle; the
+ * frame's rest is left empty past that.
  */
 export const MIX_GRAPH = {
   top: 8,
   x: 8,
   end: 8,
-  row: 44,
   rowGap: 6,
   strip: 62,
   stripW: 84,
-  seam: 4,
-  headW: 36,
+  head: 22,
+  pad: 4,
   itemW: 60,
   iconW: 44,
   itemSeam: 3,
-  addMin: 44,
+  lineGap: 8,
+  busSeam: THREAD.gap,
   masterW: 96,
+  viewTall: 0.5,
+  viewMin: 56,
+  viewMax: 200,
+  viewMost: 360,
   addRow: 30,
   stretch: 2,
 } as const
@@ -78,8 +107,9 @@ export interface MixGraphMix {
 }
 
 /**
- * How many buses a mix holds, and effects in a row, at most; and tracks,
- * where one can be added from here (without, no "+" stands for one)
+ * How many buses a mix holds, and effects in a group, at most; and
+ * tracks, where one can be added from here (without, no "+" stands for
+ * one)
  */
 export interface MixLimits {
   readonly buses: number
@@ -88,7 +118,7 @@ export interface MixLimits {
 }
 
 /**
- * How wide the seam between the strips and the heads stands for buses:
+ * How wide the seam between the strips and the groups stands for buses:
  * THREAD.gap, or a lane for each, THREAD.lane apart and laneMargin inside
  * its edges, where that is wider
  */
@@ -114,30 +144,54 @@ export interface EffectBox {
   readonly box: Box
 }
 
-/** A bus's row: its head, its effects and its "+" (unless full) */
-export interface BusRow {
+/**
+ * A bus's thread into the master: from the group's right edge (or its
+ * last effect's, standing there) into the master's first effect at its
+ * left (its head, with none), bending about the lane down the seam
+ * (lanePath), and its tap target over the group's edge about its hole
+ * and the seam
+ */
+export interface BusOut {
+  readonly run: Run
+  readonly lane: number
+  readonly hit: Box
+}
+
+/** A bus's group: its box, its head, its effects and its "+" (unless full) */
+export interface BusGroup {
   readonly bus: string
+  /** The group, its head and its squares inside it */
+  readonly box: Box
+  /**
+   * Its head across the top, its letter and level: where the tracks'
+   * threads come in while it holds no effects
+   */
   readonly head: Box
   readonly effects: readonly EffectBox[]
+  /** The "+" in the place after its effects, to the end of that line */
   readonly add: Box | undefined
   /**
-   * The thread's runs along it, at its middle: from the head into each
-   * effect, then the last, its level's, over its "+" into the master's
-   * first effect or the master
+   * The thread's runs through it, from each effect to the next (across,
+   * or turning across to the next line)
    */
   readonly stitches: readonly Run[]
+  /**
+   * Its level's run from the last effect (or the head) to its hole in
+   * the group's right edge, over the "+" after it: none where the last
+   * stands at that edge, its own hole the thread's
+   */
+  readonly level: Run | undefined
+  /** Its level's thread on, into the master */
+  readonly out: BusOut
 }
 
 export interface MixGeometry {
-  /**
-   * Whether its effects stand as icons, MIX_GRAPH.iconW wide: the mix at
-   * rest wider than its frame
-   */
+  /** Whether its effects stand as icons, MIX_GRAPH.iconW square */
   readonly icons: boolean
   /** The content, which pans when wider or taller than its frame */
   readonly width: number
   readonly height: number
-  /** Its height at rest (rows MIX_GRAPH.row tall): what it asks of a frame */
+  /** Its height at rest (its lines whole): what it asks of a frame */
   readonly rest: number
   /**
    * Each track's strip, in the mix's order, down the one column: as tall
@@ -150,41 +204,58 @@ export interface MixGeometry {
    * row, unless there are the most
    */
   readonly addTrack: Box | undefined
-  /** The buses, in their order */
-  readonly buses: readonly BusRow[]
-  /** The master's effects, after the buses: as tall as the master */
+  /** The buses' groups, in their order, as wide as each other */
+  readonly buses: readonly BusGroup[]
+  /** The master's group: its head, its squares and its view inside it */
+  readonly master: Box
+  readonly masterHead: Box
   readonly masterEffects: readonly EffectBox[]
+  /** Its "+", in the place after its effects, unless full */
+  readonly masterAdd: Box | undefined
+  /** Where the output's view stands in it, under its squares */
+  readonly view: Box
   /**
-   * The runs between them and into the master, at its middle. The first
-   * of the row (an effect or the master) has none of its own: the buses'
-   * level runs come into it, as a sound's chains' come into its amp
+   * The runs from each of the master's effects to the next, across or
+   * turning across to the next line: none into the view, which shows the
+   * output and is not a stage of it. The first effect has none of its
+   * own: the buses' threads come into it
    */
   readonly masterStitches: readonly Run[]
-  /** The master, last: from the top down to the "+" row */
-  readonly master: Box
-  /** The dashed "+ Bus" under the rows, and "+ FX" under the master's */
+  /** The dashed "+ Bus" under the groups */
   readonly addBus: Box | undefined
-  readonly addMaster: Box | undefined
 }
 
-/** The tiles' widths, s times their own; as icons, an effect's its own */
-interface Widths {
-  readonly strip: number
-  readonly item: number
-  readonly add: number
-}
+/** The places in a group: its effects, and its "+" unless full */
+const slotsOf = (effects: number, limits: MixLimits) =>
+  effects + (effects < limits.effects ? 1 : 0)
 
-function widths(
-  s: number,
-  round: (n: number) => number,
-  icons = false
-): Widths {
+/** How wide n squares fx wide stand in a line */
+const lineW = (n: number, fx: number) => n * fx + (n - 1) * MIX_GRAPH.itemSeam
+
+/** How wide a group stands holding cols squares to a line */
+const groupW = (cols: number, fx: number) => 2 * MIX_GRAPH.pad + lineW(cols, fx)
+
+/**
+ * Whether a group's "+" stands in a line of its own, its effects filling
+ * the lines before it, perLine to a line
+ */
+const alone = (effects: number, perLine: number, limits: MixLimits) =>
+  effects < limits.effects && effects % perLine === 0
+
+/**
+ * How tall a group's lines stand, perLine to a line: each a square's
+ * height, but a line holding the "+" alone the "+" row's
+ */
+function linesH(
+  effects: number,
+  perLine: number,
+  fx: number,
+  limits: MixLimits
+): number {
   const g = MIX_GRAPH
-  return {
-    strip: round(g.stripW * s),
-    item: icons ? g.iconW : round(g.itemW * s),
-    add: round(g.addMin * s),
-  }
+  const lines = Math.max(1, Math.ceil(slotsOf(effects, limits) / perLine))
+  const last = alone(effects, perLine, limits) ? g.addRow : fx
+  return (lines - 1) * (fx + g.lineGap) + last
 }
 
 /** How many strips stand in the column, and whether a "+" under them */
@@ -196,81 +267,97 @@ function stripsOf(mix: MixGraphMix, limits: MixLimits) {
   } as const
 }
 
-/** Where the heads, the effects, the rows' end and the master stand */
-function columns(mix: MixGraphMix, limits: MixLimits, w: Widths) {
-  const g = MIX_GRAPH
-  const headX = g.x + w.strip + stripGap(mix.buses.length)
-  const itemsX = headX + g.headW + g.itemSeam
-  const pitch = w.item + g.itemSeam
-  // The rows end with the longest, counting its "+"
-  let reach = w.add
-  for (const bus of mix.buses) {
-    const n = bus.effects.length
-    const add = n < limits.effects ? w.add + g.itemSeam : 0
-    reach = Math.max(reach, n * pitch + add - g.itemSeam)
-  }
-  const rowsEnd = itemsX + reach
-  const masterFxX = rowsEnd + g.seam
-  const masterX = masterFxX + mix.master.effects.length * pitch
-  return { headX, itemsX, pitch, rowsEnd, masterFxX, masterX }
-}
-
-/** How wide the mix stands, its tiles s times their own, the master least */
-function extent(mix: MixGraphMix, limits: MixLimits, s: number): number {
-  const g = MIX_GRAPH
-  const exact = (n: number) => n
-  return columns(mix, limits, widths(s, exact)).masterX + g.masterW + g.end
-}
-
-/**
- * How far the strip, the effects and the "+" widen in a frame fill wide:
- * by a third of what it has past the mix at rest, in proportion, up to
- * MIX_GRAPH.stretch times
- */
-function stretchFor(mix: MixGraphMix, limits: MixLimits, fill: number): number {
-  const at1 = extent(mix, limits, 1)
-  if (fill <= at1) return 1
-  const s = 1 + (fill - at1) / 3 / (extent(mix, limits, 2) - at1)
-  return Math.min(MIX_GRAPH.stretch, s)
-}
-
-/** The rows the master stands beside: two at least */
-const rowsOf = (mix: MixGraphMix) => Math.max(2, mix.buses.length)
-
-/**
- * How tall everything stands in a frame room tall (unframed, at rest):
- * the body, from the top of the tiles to the "+" row's foot, is the
- * taller of the strips' column and the buses' rows, each over its "+"
- * (the rows' is always there); a taller frame grows it, until the taller
- * of the two is stretch times its rest. The strips share their column;
- * the rows share theirs up to stretch times a row, and stand in its
- * middle past that.
- */
-function heights(mix: MixGraphMix, limits: MixLimits, room?: number) {
-  const g = MIX_GRAPH
-  const { parts, more } = stripsOf(mix, limits)
-  const rows = rowsOf(mix)
-  const foot = g.rowGap + g.addRow
-  const under = more ? foot : 0
-  const column = (strip: number) =>
-    parts * (strip + g.rowGap) - g.rowGap + under
-  const beside = (row: number) => rows * (row + g.rowGap) - g.rowGap + foot
-  const rest = Math.max(column(g.strip), beside(g.row))
-  const most = Math.max(column(g.strip * g.stretch), beside(g.row * g.stretch))
-  const body =
-    room === undefined
-      ? rest
-      : Math.min(most, Math.max(rest, room - g.top - g.end))
-  const span = body - foot
-  const row = Math.min(
-    g.row * g.stretch,
-    Math.floor((span + g.rowGap) / rows) - g.rowGap
+/** The most places a bus's group holds, and the master's */
+function placesOf(mix: MixGraphMix, limits: MixLimits) {
+  const most = Math.max(
+    1,
+    ...mix.buses.map((bus) => slotsOf(bus.effects.length, limits))
   )
-  // The strips' own, down to their "+" or the foot; the last takes what
-  // rounding leaves
-  const own = body - under
-  const strip = Math.floor((own + g.rowGap) / parts) - g.rowGap
-  return { rest, body, span, row, own, strip }
+  return { most, master: slotsOf(mix.master.effects.length, limits) }
+}
+
+/**
+ * How wide the mix stands, its strip and squares s times their own (or
+ * icons), its groups cols squares to a line and the master need wide
+ */
+function extent(
+  mix: MixGraphMix,
+  cols: number,
+  fx: number,
+  s: number,
+  need: number
+): number {
+  const g = MIX_GRAPH
+  const left = g.x + g.stripW * s + stripGap(mix.buses.length)
+  return left + groupW(cols, fx) + g.busSeam + need + g.end
+}
+
+/** The mix at rest, s times its own: every group's squares in one line */
+function restExtent(mix: MixGraphMix, limits: MixLimits, s: number) {
+  const { most, master } = placesOf(mix, limits)
+  const fx = MIX_GRAPH.itemW * s
+  const need = Math.max(MIX_GRAPH.masterW, groupW(master, fx))
+  return extent(mix, most, fx, s, need)
+}
+
+/**
+ * How the mix stands in a frame fill wide: its effects icons or not, how
+ * many squares to a group's line, and how far the strip and the squares
+ * widen (MIX_GRAPH)
+ */
+function layoutFor(mix: MixGraphMix, limits: MixLimits, fill?: number) {
+  const g = MIX_GRAPH
+  const { most, master } = placesOf(mix, limits)
+  const at1 = restExtent(mix, limits, 1)
+  if (fill === undefined) return { icons: false, cols: most, s: 1 }
+  if (fill >= at1) {
+    const s = 1 + (fill - at1) / 3 / (restExtent(mix, limits, 2) - at1)
+    return { icons: false, cols: most, s: Math.min(g.stretch, s) }
+  }
+  const least = Math.min(2, most)
+  for (const icons of [false, true]) {
+    const fx = icons ? g.iconW : g.itemW
+    // The master two to a line at least, where it holds two
+    const need = Math.max(g.masterW, groupW(Math.min(2, master), fx))
+    for (let cols = most; cols >= least; cols--) {
+      if (extent(mix, cols, fx, 1, need) <= fill) return { icons, cols, s: 1 }
+    }
+  }
+  return { icons: true, cols: least, s: 1 }
+}
+
+/**
+ * The places of a group at x, y, its squares fx square, cols to a line:
+ * the nth's box
+ */
+function placer(x: number, y: number, fx: number, cols: number) {
+  const g = MIX_GRAPH
+  return (n: number): Box => ({
+    x: x + g.pad + (n % cols) * (fx + g.itemSeam),
+    y: y + g.head + Math.floor(n / cols) * (fx + g.lineGap),
+    w: fx,
+    h: fx,
+  })
+}
+
+/** The middle of a box, down */
+const middleOf = (box: Box) => box.y + box.h / 2
+
+/**
+ * The run from one square into the next: across where they share a
+ * line, else turning across from the one's foot at its right into the
+ * next's top at its left, clear of their pictograms and names
+ */
+function onward(from: Box, to: Box): Run {
+  if (from.y === to.y) return across(from, to, middleOf(from))
+  return {
+    from: {
+      x: from.x + from.w - THREAD.inset,
+      y: from.y + from.h - THREAD.inset,
+    },
+    to: { x: to.x + THREAD.inset, y: to.y + THREAD.inset },
+    upright: true,
+  }
 }
 
 /**
@@ -285,67 +372,167 @@ export function mixGeometry(
   room?: number
 ): MixGeometry {
   const g = MIX_GRAPH
-  const { rest, body, span, row, own, strip } = heights(mix, limits, room)
-  const tall = (rows: number) => rows * (row + g.rowGap) - g.rowGap
   const count = mix.buses.length
-  // The rows stand in the master's middle when they do not fill it
-  const rowsTop = g.top + Math.floor((span - tall(Math.max(1, count))) / 2)
-  const rowY = (k: number) => rowsTop + k * (row + g.rowGap)
-  const middle = (k: number) => rowY(k) + row / 2
-
-  // Too narrow for the mix at rest: its effects icons, nothing widened
-  const icons = fill !== undefined && fill < extent(mix, limits, 1)
-  const s = fill === undefined || icons ? 1 : stretchFor(mix, limits, fill)
-  const w = widths(s, Math.floor, icons)
-  const { headX, itemsX, pitch, rowsEnd, masterFxX, masterX } = columns(
-    mix,
-    limits,
-    w
+  const { icons, cols, s } = layoutFor(mix, limits, fill)
+  const fx = icons ? g.iconW : Math.floor(g.itemW * s)
+  const stripW = Math.floor(g.stripW * s)
+  const headX = g.x + stripW + stripGap(count)
+  const gw = groupW(cols, fx)
+  const masterX = headX + gw + g.busSeam
+  const { master: masterSlots } = placesOf(mix, limits)
+  const masterW =
+    fill === undefined
+      ? Math.max(g.masterW, groupW(masterSlots, fx))
+      : Math.max(g.masterW, fill - masterX - g.end)
+  // The master's squares, as many to a line as it holds, and its view
+  const inner = masterW - 2 * g.pad
+  const perLine = Math.max(
+    1,
+    Math.floor((inner + g.itemSeam) / (fx + g.itemSeam))
   )
+  const masterLinesH = linesH(mix.master.effects.length, perLine, fx, limits)
+  // Its view at rest, and as tall as a taller frame lets it grow
+  const half = Math.round(inner * g.viewTall)
+  const viewRest = Math.min(g.viewMax, Math.max(g.viewMin, half))
+  const viewMost = Math.max(viewRest, Math.min(g.viewMost, half))
+  const masterOwn = g.head + masterLinesH + g.lineGap + g.pad
 
+  // The groups, each as tall as its lines, down one column
+  const tallOf = mix.buses.map(
+    (bus) => g.head + linesH(bus.effects.length, cols, fx, limits) + g.pad
+  )
+  const groupsH =
+    tallOf.reduce((sum, h) => sum + h, 0) + Math.max(0, count - 1) * g.rowGap
+
+  // How tall everything stands: the strips' column and, beside it, the
+  // groups and the master over the "+" row, which is always there; a
+  // taller frame grows the strips
+  const { parts, more } = stripsOf(mix, limits)
+  const foot = g.rowGap + g.addRow
+  const under = more ? foot : 0
+  const column = (h: number) => parts * (h + g.rowGap) - g.rowGap + under
+  const beside = (view: number) => Math.max(groupsH, masterOwn + view) + foot
+  const rest = Math.max(column(g.strip), beside(viewRest))
+  const most = Math.max(column(g.strip * g.stretch), beside(viewMost))
+  const body =
+    room === undefined
+      ? rest
+      : Math.min(most, Math.max(rest, room - g.top - g.end))
+  const span = body - foot
+  // The view takes what the span has past the master at rest
+  const viewH = Math.min(viewMost, Math.max(viewRest, span - masterOwn))
+  const masterH = masterOwn + viewH
+  // The strips grow with the frame up to twice theirs, not past that
+  // with the master's view: the "+" for another under the last
+  const own =
+    Math.min(body, Math.max(rest, column(g.strip * g.stretch))) - under
+  const strip = Math.floor((own + g.rowGap) / parts) - g.rowGap
+
+  // The master in the middle: its squares, its "+" and its view
+  const masterY = g.top + Math.floor((span - masterH) / 2)
+  const master = { x: masterX, y: masterY, w: masterW, h: masterH }
+  const masterHead = { x: masterX, y: masterY, w: masterW, h: g.head }
+  const masterPlace = placer(masterX, masterY, fx, perLine)
   const masterEffects = mix.master.effects.map((effect, f) => ({
     effect: effect.id,
-    box: { x: masterFxX + f * pitch, y: g.top, w: w.item, h: span },
+    box: masterPlace(f),
   }))
-  const masterW =
-    fill === undefined ? g.masterW : Math.max(g.masterW, fill - masterX - g.end)
-  const master = { x: masterX, y: g.top, w: masterW, h: span }
-  /** What the buses' threads come into: the master's first effect, or it */
-  const into = masterEffects[0]?.box ?? master
-  const stages = [...masterEffects.map(({ box }) => box), master]
+  /** A "+" in its place, filling the rest of its line in a group x, w */
+  const toEnd = (box: Box, x: number, w: number, own: boolean) => ({
+    ...box,
+    w: x + w - g.pad - box.x,
+    h: own ? g.addRow : box.h,
+  })
+  // The master's "+" fills a line of its own only: after its effects it
+  // takes its place, the master's line as long as the frame leaves it
+  const masterOwnLine = alone(mix.master.effects.length, perLine, limits)
+  const masterPlus = masterPlace(mix.master.effects.length)
+  const masterAdd =
+    mix.master.effects.length < limits.effects
+      ? masterOwnLine
+        ? toEnd(masterPlus, masterX, masterW, true)
+        : masterPlus
+      : undefined
+  const view = {
+    x: masterX + g.pad,
+    y: masterY + g.head + masterLinesH + g.lineGap,
+    w: inner,
+    h: viewH,
+  }
+  const stages = masterEffects.map(({ box }) => box)
+  // Where every bus's thread comes into the master, as the tracks' come
+  // into a bus: its first effect's left, at its middle (its head's, with
+  // none)
+  const into = holes(stages[0] ?? masterHead, 'left', 1)[0] as Point
 
-  const buses: BusRow[] = mix.buses.map((bus, k) => {
-    const y = rowY(k)
+  // The groups in the middle, each its squares and its "+"
+  let y = g.top + Math.floor((span - groupsH) / 2)
+  const groups = mix.buses.map((bus, k) => {
+    const box = { x: headX, y, w: gw, h: tallOf[k] ?? 0 }
+    y += box.h + g.rowGap
+    const head = { x: headX, y: box.y, w: gw, h: g.head }
+    const place = placer(headX, box.y, fx, cols)
     const effects = bus.effects.map((effect, f) => ({
       effect: effect.id,
-      box: { x: itemsX + f * pitch, y, w: w.item, h: row },
+      box: place(f),
     }))
-    const addX = itemsX + bus.effects.length * pitch
-    const head = { x: headX, y, w: g.headW, h: row }
-    const tiles = [head, ...effects.map(({ box }) => box)]
+    const add =
+      bus.effects.length < limits.effects
+        ? toEnd(
+            place(bus.effects.length),
+            headX,
+            gw,
+            alone(bus.effects.length, cols, limits)
+          )
+        : undefined
+    const last = effects[effects.length - 1]?.box ?? head
+    return { bus: bus.id, box, head, effects, add, last }
+  })
+
+  // Each bus's level out of its group's right edge, then down the lane
+  // in the seam into the master
+  const lane = masterX - g.busSeam / 2
+  const buses: BusGroup[] = groups.map(({ last, ...group }) => {
+    const tiles = group.effects.map(({ box }) => box)
+    const stitches = tiles
+      .slice(1)
+      .map((tile, t) => onward(tiles[t] ?? tile, tile))
+    const y = middleOf(last)
+    const right = group.box.x + group.box.w
+    const own = last.x + last.w - THREAD.inset
+    const edge = right - THREAD.inset
+    // The last standing at the edge: its own hole is the group's
+    const level =
+      edge - own > THREAD.spacing
+        ? { from: { x: own, y }, to: { x: edge, y } }
+        : undefined
+    const from = { x: level ? edge : own, y }
     return {
-      bus: bus.id,
-      head,
-      effects,
-      add:
-        bus.effects.length < limits.effects
-          ? { x: addX, y, w: rowsEnd - addX, h: row }
-          : undefined,
-      stitches: tiles.map((tile, t) =>
-        across(tile, tiles[t + 1] ?? into, middle(k))
-      ),
+      ...group,
+      stitches,
+      level,
+      out: {
+        run: { from, to: into },
+        lane,
+        hit: {
+          x: right - THREAD.spacing,
+          y: y - THREAD.hitH / 2,
+          w: masterX - right + THREAD.spacing,
+          h: THREAD.hitH,
+        },
+      },
     }
   })
 
   const addY = g.top + span + g.rowGap
-  const { parts, more } = stripsOf(mix, limits)
+  const trackY = g.top + own + g.rowGap
   const strips = Array.from({ length: parts }, (_, k) => {
-    const y = k * (strip + g.rowGap)
+    const at = k * (strip + g.rowGap)
     return {
       x: g.x,
-      y: g.top + y,
-      w: w.strip,
-      h: k === parts - 1 ? own - y : strip,
+      y: g.top + at,
+      w: stripW,
+      h: k === parts - 1 ? own - at : strip,
     }
   })
   return {
@@ -354,27 +541,19 @@ export function mixGeometry(
     height: g.top + body + g.end,
     rest: g.top + rest + g.end,
     strips,
-    addTrack: more ? { x: g.x, y: addY, w: w.strip, h: g.addRow } : undefined,
+    addTrack: more ? { x: g.x, y: trackY, w: stripW, h: g.addRow } : undefined,
     buses,
+    master,
+    masterHead,
     masterEffects,
+    masterAdd,
+    view,
     masterStitches: stages
       .slice(1)
-      .map((box, f) =>
-        across(stages[f] ?? master, box, master.y + master.h / 2)
-      ),
-    master,
+      .map((box, f) => onward(stages[f] ?? box, box)),
     addBus:
       count < limits.buses
-        ? { x: headX, y: addY, w: rowsEnd - headX, h: g.addRow }
-        : undefined,
-    addMaster:
-      mix.master.effects.length < limits.effects
-        ? {
-            x: masterFxX,
-            y: addY,
-            w: Math.max(w.add, masterX - g.itemSeam - masterFxX),
-            h: g.addRow,
-          }
+        ? { x: headX, y: addY, w: gw, h: g.addRow }
         : undefined,
   }
 }
@@ -395,8 +574,12 @@ export function mixSends(
   geometry: MixGeometry,
   sends: readonly (readonly string[])[]
 ): MixThread[] {
+  // Into the bus's first effect at its left, or its head with none
   const into = new Map(
-    geometry.buses.map((row) => [row.bus, holes(row.head, 'left', 1)[0]])
+    geometry.buses.map((row) => [
+      row.bus,
+      holes(row.effects[0]?.box ?? row.head, 'left', 1)[0],
+    ])
   )
   const runs: { strip: number; bus: string; run: Run; tall: number }[] = []
   geometry.strips.forEach((strip, k) => {

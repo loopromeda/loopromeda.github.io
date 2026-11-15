@@ -2,8 +2,9 @@
  * Where a tile dragged in the sound editor is put down
  * (docs/plan/sound-chains.md, The editor): at the seam between tiles
  * nearest the finger, which a marker shows. An item goes into the chain
- * whose row is nearest, a chain between the rows, a modulator between the
- * lane's blocks. Pure math on the graph's geometry, or on tiles measured.
+ * whose row is nearest, among its group's squares, a chain between the
+ * rows, a modulator between the lane's blocks. Pure math on the graph's
+ * geometry, or on tiles measured.
  */
 import { GRAPH, type Box, type ChainBoxes, type GraphGeometry } from './graph'
 
@@ -65,8 +66,10 @@ export const MARK = 3
 
 /**
  * Item dragged to (x, y) of the graph: into the chain whose row is nearest
- * y, at the seam nearest x across it. Undefined where it stands, or into
- * another chain already holding limit items.
+ * y, at the seam nearest the point among its squares, on the line nearest
+ * it first (a group's items stand in lines: the place after one line's
+ * last is the next line's first, either seam taking it there). Undefined
+ * where it stands, or into another chain already holding limit items.
  */
 export function itemDrop(
   geometry: GraphGeometry,
@@ -83,18 +86,41 @@ export function itemDrop(
   const from =
     row === home ? row.items.findIndex((each) => each.item === item) : -1
   if (from < 0 && row.items.length >= limit) return undefined
-  const spans = row.items.map(({ box }) => ({
-    start: box.x,
-    end: box.x + box.w,
-  }))
-  // An empty chain's first place: on the seam after its head
-  const empty = row.head.x + row.head.w + GRAPH.seam / 2
-  const drop = spanDrop(spans, from, x, GRAPH.seam, empty)
-  if (!drop) return undefined
+  const half = GRAPH.seam / 2
+  // Each seam a square can go into: before and after each item (the
+  // end of a line as well as the next one's start), and before the "+"
+  // (an empty chain's first place)
+  const seams: { to: number; x: number; box: Box }[] = row.items.flatMap(
+    ({ box }, k) => [
+      { to: k, x: box.x - half, box },
+      { to: k + 1, x: box.x + box.w + half, box },
+    ]
+  )
+  const count = row.items.length
+  if (row.add) seams.push({ to: count, x: row.add.x - half, box: row.add })
+  let best: (typeof seams)[number] | undefined
+  let off = Infinity
+  for (const seam of seams) {
+    const { y: top, h } = seam.box
+    const down = y < top ? top - y : y > top + h ? y - top - h : 0
+    // A line nearer always wins; along it, the nearer seam
+    const distance = down * 1e4 + Math.abs(x - seam.x)
+    if (distance < off) {
+      best = seam
+      off = distance
+    }
+  }
+  if (!best) return undefined
+  if (from >= 0 && (best.to === from || best.to === from + 1)) return undefined
   return {
     chain: row.chain,
-    to: drop.to,
-    marker: { x: drop.middle - MARK / 2, y: row.row.y, w: MARK, h: row.row.h },
+    to: from >= 0 && best.to > from ? best.to - 1 : best.to,
+    marker: {
+      x: best.x - MARK / 2,
+      y: best.box.y,
+      w: MARK,
+      h: best.box.h,
+    },
   }
 }
 
@@ -119,7 +145,7 @@ export function chainDrop(
     marker: {
       x: first.row.x,
       y: drop.middle - MARK / 2,
-      w: first.row.w - GRAPH.seam,
+      w: first.row.w,
       h: MARK,
     },
   }

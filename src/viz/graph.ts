@@ -1,13 +1,16 @@
 /**
  * Where the sound editor's tiles go (docs/plan/sound-chains.md, The
- * editor). Chains are rows, one under another; inputs stand in a column
- * before them, each beside the chains it feeds; the amp after them all,
- * its inserts after it in a row, and the sound's out last, its sends to
- * the session's returns (docs/plan/effects-parts-sequencer.md; the mix
- * after it is laid out by mixGraph.ts). Measured in slots, one input tile
- * tall, which the screen turns into pixels. Threads join them
- * (threads.ts): from each input to each chain it feeds, along each chain
- * to the amp, and on to the out. Pure math, no DOM.
+ * editor). Chains are groups, one under another, each in a row of its
+ * own: a box with its head across the top and its items as squares
+ * inside, a line of them after another, as the mix's buses are
+ * (mixGraph.ts); inputs stand in a column before them, each beside the
+ * chains it feeds; the amp after them all, its inserts after it in a
+ * row, and the sound's out last, its sends to the session's returns
+ * (docs/plan/effects-parts-sequencer.md). Laid out in slots, one input
+ * tile tall, which the screen turns into pixels, a row as tall as its
+ * group at least. Threads join them (threads.ts): from each input to the
+ * head of each chain it feeds, through each chain's items to the amp,
+ * and on to the out. Pure math, no DOM.
  *
  * An input is drawn once, and stretches over neighbouring chains it feeds.
  * Where it cannot, a dashed copy of it stands in that chain's row instead:
@@ -390,21 +393,31 @@ export interface InputBox extends InputTile {
 
 export interface ChainBoxes {
   readonly chain: string
-  /** The whole row, head to the amp */
-  readonly row: Box
   /**
-   * Its head, its letter and level: as tall as its items, in the row's
-   * middle (as tall as the row until 2026-11-14, for the pegs on its seam)
+   * Its row, beside the inputs it takes: as wide as the groups, as tall
+   * as its group or its slots, whichever is taller
+   */
+  readonly row: Box
+  /** Its group, in its colour: its head and its squares, mid-row */
+  readonly box: Box
+  /**
+   * Its head across the group's top, its letter and level: where its
+   * inputs' threads come in, at its left, while it holds no items
    */
   readonly head: Box
-  /** At most two slots tall, in the row's middle */
+  /** Its items as squares, a line of them after another, in the group */
   readonly items: readonly { readonly item: string; readonly box: Box }[]
-  /** The dashed "+" after its items, unless it holds all it may: as tall */
+  /**
+   * The dashed "+" in the place after its items, to the end of that line
+   * (the "+" row's height in a line of its own), unless it holds all it
+   * may
+   */
   readonly add: Box | undefined
   /**
-   * The thread's runs across its seams, from its head to the amp, over
-   * its "+": the last its level's, into the amp, or onto the bus where
-   * the amp stands short of the rows
+   * The thread's runs through it: from each item to the next (across, or
+   * turning across to the next line), then the last, its level's, out of
+   * the group's right edge into the amp or onto the bus before it; with
+   * no items, that one alone, from the head
    */
   readonly stitches: readonly Run[]
 }
@@ -413,31 +426,34 @@ export interface GraphGeometry {
   /** The content, which pans when wider or taller than its frame */
   readonly width: number
   readonly height: number
-  /** Its height at rest (slots GRAPH.slot tall): what it asks of a frame */
+  /** Its height at rest (squares GRAPH.itemW): what it asks of a frame */
   readonly rest: number
   /** The modulators' lane across the head: the blocks and their "+" */
   readonly mods: readonly { readonly mod: string; readonly box: Box }[]
   readonly addMod: Box | undefined
   readonly inputs: readonly InputBox[]
   readonly chains: readonly ChainBoxes[]
-  /** The amp, at the end of every row: in their middle, past its cap */
+  /** The amp, after the groups: in the rows' middle, past its cap */
   readonly amp: Box
   /** The sound's out, after the inserts: as tall as the amp, at its y */
   readonly out: Box
   /** The run into the out, from the amp or the last insert */
   readonly outStitch: Run
   /**
-   * When the amp stands shorter than the rows, the bus down the seam
-   * before it, from the first row's middle to the last's: every chain's
-   * level run ends on it
+   * When a chain's level run comes level with no part of the amp, the
+   * bus down the seam before it, from the highest of the runs (or the
+   * amp's middle) to the lowest: every chain's level run ends on it
    */
   readonly bus:
     { readonly x: number; readonly y: number; readonly h: number } | undefined
+  /** The run off that bus into the amp, at its middle */
+  readonly busInto: Run | undefined
   /**
-   * Each send's run, across the seam between the inputs and the chains:
+   * Each send's run, across the seam between the inputs and the groups:
    * from its hole down the input's right edge (one for each chain it
-   * stands beside, in their order) to its hole down the head's left edge
-   * (one for each input that feeds the chain, in theirs)
+   * stands beside, in their order) to its hole down the left edge of the
+   * chain's first item, or of its head while it holds none (one for each
+   * input feeding it, in their order, closer where they would not fit)
    */
   readonly sends: readonly (SendPeg & { readonly run: Run })[]
   /**
@@ -460,43 +476,52 @@ export interface GraphGeometry {
 }
 
 /**
- * The editor drawn on the design canvas, in pixels: a slot is a tile 44
- * tall (a touch's height; the canvas drew 39, before the waveform moved
- * into the amp and left the graph more room) with 6 between slots; inputs
- * stand in a column 68 wide, 12 before the chains, where their threads
- * bend (THREAD.gap; 4 while pegs stood on it); a chain's head is 36 and
- * each item 60, 3 apart; the amp, 52 wide, stands after the longest
- * chain and its "+", which is 44 wide at least; the out after the amp
- * and its inserts, 96 wide at least.
+ * The editor in pixels: a slot is an input's tile 44 tall at least (a
+ * touch's height) with 6 between slots; inputs stand in a column 62
+ * wide, 18 before the groups, where their threads bend (68 and 12 until
+ * 2026-11-15, when ashon asked for the inputs to give a little room and
+ * the threads not to bend awkwardly: "좌측 공간 살짝 양보하면서 체인
+ * 표현도 어색하게 꺾이지 않도록");
+ * each chain a group, as the mix's buses are (mixGraph.ts): its head 22
+ * tall across its top, its items squares 60 wide 4 inside its edges, 3
+ * apart in a line and 8 between lines (room for the thread turning
+ * across), its "+" in the place after them; the amp, 52 wide, 8 after
+ * the groups (the bus down the middle of that seam, clear of either);
+ * the out after the amp and its inserts, 96 wide at least.
  *
- * A frame wider than the graph needs is shared, square first: the items,
- * the amp and its inserts widen together towards as wide as they are
- * tall (as ashon asked, 2026-11-12), every one in proportion, and no
- * wider (one already wider, in a row of one slot, stays as it is). Past
- * that the "+", the out, the inputs and their sources widen together (a
- * head keeps its 36), the "+" and the out up to stretch times their
- * width, the inputs and sources only up to inputStretch times theirs
- * (their names are short), and stay so: the rest of the frame is left
- * for chains to grow into. Short of either, the out fills what the rest
- * leave. A frame too narrow keeps the out at outW, room for the view of
- * the output it holds, and pans. A frame taller than the graph needs is
- * shared the same way: every slot grows (the gaps, the "+" row and the
- * margins keep theirs), up to stretch times its height, and past that
- * the frame's rest is left empty too.
+ * Asked for by ashon, 2026-11-15 ("사운드 쪽에서도 체인을 그룹처럼
+ * 다뤄보면 좋겠어"), after the mix's buses became groups; until then a
+ * chain was a row: a head 36 wide, then its items, then its "+".
+ *
+ * A row stands as tall as its group, or as its slots where those are
+ * taller (more inputs beside it than the group is tall for), the group
+ * in its middle; the inputs beside it share its height. At rest every
+ * group holds its squares in one line, as long as the longest chain's
+ * (its "+" counted); a frame narrower than that breaks the lines, as few
+ * at a time as fit, one square to a line at least, and narrower still
+ * pans.
+ *
+ * A frame wider than the graph needs is shared, squares first: the
+ * items widen towards as large as a taller frame has room for (up to
+ * stretch times theirs: none, in a frame no taller than the graph), the
+ * amp and its inserts towards as wide as they are tall, every one in
+ * proportion. Past that the out, the inputs and their sources widen
+ * together, the out up to stretch times its width, the inputs and
+ * sources only up to inputStretch times theirs (their names are short),
+ * and stay so: the rest of the frame is left empty. Short of either, the
+ * out fills what the rest leave. A frame too narrow keeps the out at
+ * outW, room for the view of the output it holds, and pans.
  *
  * The amp stands as tall as the rows, up to two slots or ampTall times
  * the out's width, whichever is more: past that it stands in their
- * middle, and a bus down the seam takes every row to it. A chain's items
- * and its "+" stand as tall as its row up to two slots, and in its
- * middle past that, and its head with them (ashon, 2026-11-14: kept the
- * row's height for the pegs, it need not, the threads bending into its
- * holes). Each column of sources is 52 wide, 12 before the next
- * (its threads bend there too), and the
- * inputs' column moves right past them. The inserts stand after the amp
- * as items do after a head, as wide as items at rest and as tall as the
- * amp, and the out after them, as tall too. Their "+" stands in the "+"
- * row, under them and the amp, so a sound with none is no wider for it.
- * That row is always there, under one slot at least.
+ * middle, and where a chain's level comes level with no part of it, a
+ * bus down the seam takes every chain to it. Each column of sources is
+ * 52 wide, 12 before the next (its threads bend there too), and the
+ * inputs' column moves right past them. The inserts stand after the amp,
+ * as wide as items at rest and as tall as the amp, and the out after
+ * them, as tall too. Their "+" stands in the "+" row, under them and the
+ * amp, so a sound with none is no wider for it. That row is always
+ * there, under one slot at least.
  *
  * Across the head, above every row, stands the modulators' lane: blocks
  * 64 wide, 4 apart, and their "+" 28 wide, all 44 tall; the rows begin 8
@@ -518,12 +543,22 @@ export const GRAPH = {
   slotGap: 6,
   inputX: 8,
   sourceW: 52,
-  inputW: 68,
+  inputW: 62,
+  /** Between a column of sources and the next, where their threads bend */
   inputGap: THREAD.gap,
-  headW: 36,
+  /** Between the inputs and the groups, where the sends bend */
+  sendGap: 18,
+  /** A group's head, across its top */
+  head: 22,
+  /** Its squares inside its edges */
+  pad: 4,
   itemW: 60,
+  /** Between squares in a line, and between the amp and its inserts */
   seam: 3,
-  addMin: 44,
+  /** Between a group's lines */
+  lineGap: 8,
+  /** Between the groups and the amp */
+  groupSeam: 8,
   ampW: 52,
   outW: 96,
   stretch: 2,
@@ -533,12 +568,107 @@ export const GRAPH = {
   end: 8,
 } as const
 
+/** Where the rows begin: under the lane across the head */
+const HEAD = GRAPH.top + GRAPH.modH + GRAPH.modRow
+
+/** How tall slots of input tiles stand, the gaps between them counted */
+const tall = (slots: number) =>
+  slots * (GRAPH.slot + GRAPH.slotGap) - GRAPH.slotGap
+
+/** The places in a chain's group: its items, and its "+" unless full */
+const placesOf = (items: number, limits: GraphLimits) =>
+  items + (items < limits.items ? 1 : 0)
+
+/** How wide a group stands holding cols squares side wide to a line */
+const groupW = (cols: number, side: number) =>
+  2 * GRAPH.pad + cols * side + (cols - 1) * GRAPH.seam
+
+/**
+ * Whether a group's "+" stands in a line of its own, its items filling
+ * the lines before it, cols to a line
+ */
+const alone = (items: number, cols: number, limits: GraphLimits) =>
+  items < limits.items && items % cols === 0
+
+/**
+ * How tall a chain's group stands, cols squares side wide to a line: its
+ * head, then each line a square's height, but a line holding the "+"
+ * alone the "+" row's
+ */
+function groupH(
+  items: number,
+  cols: number,
+  side: number,
+  limits: GraphLimits
+): number {
+  const g = GRAPH
+  const lines = Math.max(1, Math.ceil(placesOf(items, limits) / cols))
+  const last = alone(items, cols, limits) ? g.addRow : side
+  return g.head + (lines - 1) * (side + g.lineGap) + last + g.pad
+}
+
+/** Each row's height: its group's, or its slots' where they are taller */
+function rowHeights(
+  layout: GraphLayout,
+  sound: GeometrySound,
+  limits: GraphLimits,
+  cols: number,
+  side: number
+): number[] {
+  return layout.rows.map((row, c) =>
+    Math.max(
+      tall(row.slots),
+      groupH(sound.chains[c]?.items.length ?? 0, cols, side, limits)
+    )
+  )
+}
+
+/**
+ * Where the slots stand down the graph, rows heights tall: slot n's top
+ * (or a share of one's: a source's), a row's slots sharing its height,
+ * and those after the rows (inputs that feed nothing) a slot apart
+ */
+function slotMap(layout: GraphLayout, heights: readonly number[]) {
+  const g = GRAPH
+  const tops: number[] = []
+  let end = HEAD
+  heights.forEach((h) => {
+    tops.push(end)
+    end += h + g.slotGap
+  })
+  const last = layout.rows[layout.rows.length - 1]
+  const slots = last ? last.first + last.slots : 0
+  const at = (n: number): number => {
+    for (const [r, row] of layout.rows.entries()) {
+      if (n > row.first + row.slots) continue
+      const top = tops[r] ?? HEAD
+      const pitch = ((heights[r] ?? 0) + g.slotGap) / row.slots
+      // A row's end exactly: the next's top
+      if (n === row.first + row.slots) return top + pitch * row.slots
+      return top + Math.floor((n - row.first) * pitch)
+    }
+    return end + (n - slots) * (g.slot + g.slotGap)
+  }
+  const lastTop = tops[tops.length - 1]
+  const rowsEnd =
+    lastTop === undefined
+      ? HEAD + g.slot
+      : lastTop + (heights[heights.length - 1] ?? 0)
+  return { tops, at, rowsEnd }
+}
+
+/**
+ * The slots above the "+" row: the layout's, one at least, where the amp
+ * and the out stand when there are no chains
+ */
+const slotsOf = (layout: GraphLayout) => Math.max(1, layout.slots)
+
 /** The tiles' widths, at a share of the frame (widths) */
 interface Widths {
   readonly source: number
   readonly input: number
+  /** An item's square */
   readonly item: number
-  readonly add: number
   readonly amp: number
   /** The inserts' */
   readonly fx: number
@@ -547,35 +677,36 @@ interface Widths {
   readonly ampH: number
 }
 
-/** The heights the squares are read off, from the slots */
-interface Heights {
-  /** The tallest items', two slots at most; 0 without chains */
-  readonly items: number
-  /** The rows', top to bottom: the most the amp stands */
-  readonly span: number
-  /** Two slots: the least the amp stands, the rows as tall */
-  readonly two: number
-}
-
 /**
  * The tiles' widths at share u of what a frame has over the graph at
- * rest: from 0 to 1 the items, the amp and the inserts widen to their
- * squares, from 1 to 2 the rest widen to their most (GRAPH)
+ * rest: from 0 to 1 the items widen to a square side wide, the amp and
+ * the inserts to their squares, from 1 to 2 the rest widen to their most
+ * (GRAPH). The rows grow with the items, and the amp's height with them:
+ * spanAt is how tall the rows stand with squares that wide.
  */
-function widths(u: number, h: Heights, round: (n: number) => number): Widths {
+function widths(
+  u: number,
+  side: number,
+  spanAt: (item: number) => number,
+  round: (n: number) => number
+): Widths {
   const g = GRAPH
   const t = Math.min(1, u)
   const s = 1 + Math.max(0, u - 1) * (g.stretch - 1)
   const narrow = 1 + (s - 1) * ((g.inputStretch - 1) / (g.stretch - 1))
   const out = round(g.outW * s)
-  const ampH = Math.min(h.span, Math.max(h.two, Math.round(out * g.ampTall)))
-  const square = (rest: number, side: number) =>
-    round(rest + (Math.max(rest, side) - rest) * t)
+  const item = round(g.itemW + (Math.max(g.itemW, side) - g.itemW) * t)
+  const two = tall(2)
+  const ampH = Math.min(
+    spanAt(item),
+    Math.max(two, Math.round(out * g.ampTall))
+  )
+  const square = (rest: number, to: number) =>
+    round(rest + (Math.max(rest, to) - rest) * t)
   return {
     source: round(g.sourceW * narrow),
     input: round(g.inputW * narrow),
-    item: square(g.itemW, h.items),
-    add: round(g.addMin * s),
+    item,
     amp: square(g.ampW, ampH),
     fx: square(g.itemW, ampH),
     out,
@@ -584,26 +715,16 @@ function widths(u: number, h: Heights, round: (n: number) => number): Widths {
 }
 
 /**
- * Where the inputs' column, a chain's head, its items and the amp stand,
- * at those widths, with sources columns of sources before the inputs
+ * Where the inputs' column, the groups and the amp stand, at those
+ * widths, with sources columns of sources before the inputs and the
+ * groups cols squares to a line
  */
-function columns(
-  sound: GeometrySound,
-  limits: GraphLimits,
-  w: Widths,
-  sources: number
-) {
+function columns(w: Widths, sources: number, cols: number) {
   const g = GRAPH
   const inputsX = g.inputX + sources * (w.source + g.inputGap)
-  const headX = inputsX + w.input + g.inputGap
-  const itemsX = headX + g.headW + g.seam
-  // The amp stands after the longest chain, counting its "+"
-  let reach = w.add + g.seam
-  for (const chain of sound.chains) {
-    const add = chain.items.length < limits.items ? w.add + g.seam : 0
-    reach = Math.max(reach, chain.items.length * (w.item + g.seam) + add)
-  }
-  return { inputsX, headX, itemsX, ampX: itemsX + reach }
+  const groupX = inputsX + w.input + g.sendGap
+  const ampX = groupX + groupW(cols, w.item) + g.groupSeam
+  return { inputsX, groupX, ampX }
 }
 
 /** Where the out stands, at those widths: past the amp and inserts */
@@ -614,23 +735,10 @@ function outAt(sound: GeometrySound, w: Widths, ampX: number): number {
 /**
  * The share of a frame fill wide the tiles take (widths): 0 when it is
  * no wider than the graph needs, at most 2. The graph grows with the
- * share, though not in step (the longest chain may change as its items
- * widen and its "+" does not), so the share is sought, the most whose
- * graph fits.
+ * share, though not in step (the amp squares to the rows, which grow
+ * with the items), so the share is sought, the most whose graph fits.
  */
-function shareFor(
-  sound: GeometrySound,
-  limits: GraphLimits,
-  sources: number,
-  heights: Heights,
-  fill: number
-): number {
-  const exact = (n: number) => n
-  const extent = (u: number) => {
-    const w = widths(u, heights, exact)
-    const { ampX } = columns(sound, limits, w, sources)
-    return outAt(sound, w, ampX) + w.out + GRAPH.end
-  }
+function shareFor(extent: (u: number) => number, fill: number): number {
   if (fill <= extent(0)) return 0
   if (extent(2) <= fill) return 2
   let fits = 0
@@ -645,52 +753,49 @@ function shareFor(
 }
 
 /**
- * The slots above the "+" row: the layout's, one at least, where the amp
- * and the out stand when there are no chains
+ * The places of a group at x, y, its squares side wide, cols to a line:
+ * the nth's box
  */
-const slotsOf = (layout: GraphLayout) => Math.max(1, layout.slots)
-
-/**
- * The graph's height with slots slot tall, as graphGeometry draws it: the
- * lane across the head is always there, and the "+" row
- */
-function heightAt(layout: GraphLayout, slot: number): number {
+function placer(x: number, y: number, side: number, cols: number) {
   const g = GRAPH
-  return (
-    g.top +
-    g.modH +
-    g.modRow +
-    slotsOf(layout) * (slot + g.slotGap) +
-    g.addRow +
-    g.end
-  )
+  return (n: number): Box => ({
+    x: x + g.pad + (n % cols) * (side + g.seam),
+    y: y + g.head + Math.floor(n / cols) * (side + g.lineGap),
+    w: side,
+    h: side,
+  })
 }
 
+/** The middle of a box, down */
+const middleOf = (box: Box) => box.y + box.h / 2
+
 /**
- * How tall a slot is in a frame room tall: GRAPH.slot when it is no
- * taller than the graph needs, up to GRAPH.stretch times that. The
- * graph's height grows in step with the slot, so it is read off the
- * heights at 1 and 2.
+ * The run from one square into the next: across where they share a
+ * line, else turning across from the one's foot at its right into the
+ * next's top at its left, clear of their pictures and names
  */
-function slotFor(layout: GraphLayout, room: number): number {
-  const g = GRAPH
-  const at1 = heightAt(layout, g.slot)
-  const at2 = heightAt(layout, g.slot * 2)
-  if (room <= at1 || at2 <= at1) return g.slot
-  // Whole pixels, the frame's rest left over
-  const grown = g.slot + Math.floor(((room - at1) * g.slot) / (at2 - at1))
-  return Math.min(grown, g.slot * g.stretch)
+function onward(from: Box, to: Box): Run {
+  if (from.y === to.y) return across(from, to, middleOf(from))
+  return {
+    from: {
+      x: from.x + from.w - THREAD.inset,
+      y: from.y + from.h - THREAD.inset,
+    },
+    to: { x: to.x + THREAD.inset, y: to.y + THREAD.inset },
+    upright: true,
+  }
 }
 
 /**
  * Where everything in the sound's graph is drawn, the modulators' blocks
  * and their "+" standing in a lane across the head above every row. Given
- * the width of its frame, the tiles share it (see GRAPH): the items, the
- * amp and its inserts widening to squares first, then the rest; the out
+ * the width of its frame, the groups break their lines to fit it, and
+ * the tiles share what it has past them (see GRAPH): the items, the amp
+ * and its inserts widening to squares first, then the rest; the out
  * fills what they leave, at least GRAPH.outW wide and at most
  * GRAPH.stretch times that, the frame's rest left empty; unframed,
- * everything is as GRAPH has it. Given its height too (room), the slots
- * share that.
+ * everything is as GRAPH has it. Given its height too (room), the items
+ * may grow as large as it has room for.
  */
 export function graphGeometry(
   sound: GeometrySound,
@@ -700,65 +805,94 @@ export function graphGeometry(
 ): GraphGeometry {
   const g = GRAPH
   const layout = graphLayout(sound)
-  const slot = room === undefined ? g.slot : slotFor(layout, room)
-  const pitch = slot + g.slotGap
-  // The rows begin under the lane across the head
-  const head = g.top + g.modH + g.modRow
-  const slotY = (n: number) => head + n * pitch
-  const tall = (slots: number) => slots * pitch - g.slotGap
   const sources = layout.columns
-  const lastRow = layout.rows[layout.rows.length - 1]
-  const rowsEnd = lastRow
-    ? slotY(lastRow.first) + tall(lastRow.slots)
-    : head + slot
-  const heights: Heights = {
-    items: Math.max(
-      0,
-      ...layout.rows.map((row) => tall(Math.min(2, row.slots)))
-    ),
-    span: rowsEnd - head,
-    two: tall(2),
+  const exact = (n: number) => n
+  const spanAt = (cols: number) => (item: number) =>
+    slotMap(layout, rowHeights(layout, sound, limits, cols, item)).rowsEnd -
+    HEAD
+  const extentAt = (cols: number, side: number) => (u: number) => {
+    const w = widths(u, side, spanAt(cols), exact)
+    const { ampX } = columns(w, sources, cols)
+    return outAt(sound, w, ampX) + w.out + g.end
   }
-  const share =
-    fill === undefined ? 0 : shareFor(sound, limits, sources, heights, fill)
-  const w = widths(share, heights, Math.floor)
-  const itemPitch = w.item + g.seam
-  const { inputsX, headX, itemsX, ampX } = columns(sound, limits, w, sources)
+  /** How tall the graph stands, its groups cols to a line, squares side */
+  const heightAt = (cols: number, side: number) => {
+    const { at } = slotMap(
+      layout,
+      rowHeights(layout, sound, limits, cols, side)
+    )
+    return at(slotsOf(layout)) + g.addRow + g.end
+  }
+
+  // As many squares to a line as fit at rest, the longest chain's at most
+  const most = Math.max(
+    1,
+    ...sound.chains.map((chain) => placesOf(chain.items.length, limits))
+  )
+  let cols = most
+  if (fill !== undefined) {
+    while (cols > 1 && extentAt(cols, g.itemW)(0) > fill) cols--
+  }
+  // The squares as large as a taller frame has room for, up to stretch
+  let side: number = g.itemW
+  if (room !== undefined) {
+    for (let s = g.itemW * g.stretch; s > g.itemW; s--) {
+      if (heightAt(cols, s) <= room) {
+        side = s
+        break
+      }
+    }
+  }
+  const share = fill === undefined ? 0 : shareFor(extentAt(cols, side), fill)
+  const w = widths(share, side, spanAt(cols), Math.floor)
+  const { inputsX, groupX, ampX } = columns(w, sources, cols)
+  const gw = groupW(cols, w.item)
+  const heights = rowHeights(layout, sound, limits, cols, w.item)
+  const { tops, at, rowsEnd } = slotMap(layout, heights)
+  /** A tile from slot first, slots tall */
+  const tileBox = (x: number, width: number, first: number, slots: number) => {
+    const y = at(first)
+    return { x, y, w: width, h: at(first + slots) - g.slotGap - y }
+  }
   // Column k's left edge: 0 the inputs', the sources' leftwards from it
   const columnX = (k: number) =>
     k === 0 ? inputsX : inputsX - k * (w.source + g.inputGap)
 
-  const chains: Omit<ChainBoxes, 'stitches'>[] = layout.rows.map((row, c) => {
+  const groups = layout.rows.map((row, c) => {
     const items = sound.chains[c]?.items ?? []
-    const y = slotY(row.first)
-    const h = tall(row.slots)
-    const itemH = Math.min(h, tall(2))
-    const itemY = y + Math.floor((h - itemH) / 2)
-    const boxes = items.map((item, k) => ({
-      item: item.id,
-      box: { x: itemsX + k * itemPitch, y: itemY, w: w.item, h: itemH },
-    }))
-    const addX = itemsX + items.length * itemPitch
+    const rowY = tops[c] ?? HEAD
+    const h = heights[c] ?? 0
+    const gh = groupH(items.length, cols, w.item, limits)
+    const y = rowY + Math.floor((h - gh) / 2)
+    const place = placer(groupX, y, w.item, cols)
+    const boxes = items.map((item, k) => ({ item: item.id, box: place(k) }))
+    const next = place(items.length)
+    const own = alone(items.length, cols, limits)
     return {
       chain: row.chain,
-      row: { x: headX, y, w: ampX - headX, h },
-      head: { x: headX, y: itemY, w: g.headW, h: itemH },
+      row: { x: groupX, y: rowY, w: gw, h },
+      box: { x: groupX, y, w: gw, h: gh },
+      head: { x: groupX, y, w: gw, h: g.head },
       items: boxes,
       add:
         items.length < limits.items
-          ? { x: addX, y: itemY, w: ampX - g.seam - addX, h: itemH }
+          ? {
+              ...next,
+              w: groupX + gw - g.pad - next.x,
+              h: own ? g.addRow : next.h,
+            }
           : undefined,
     }
   })
 
   const inputs = layout.tiles.map((tile) => ({
     ...tile,
-    box: {
-      x: columnX(tile.column),
-      y: slotY(tile.first),
-      w: tile.column === 0 ? w.input : w.source,
-      h: tall(tile.slots),
-    },
+    box: tileBox(
+      columnX(tile.column),
+      tile.column === 0 ? w.input : w.source,
+      tile.first,
+      tile.slots
+    ),
   }))
   const sends = layout.pegs.map((peg) => {
     // Its hole down the edge of the input's tile beside the chain
@@ -769,17 +903,24 @@ export function graphGeometry(
         each.chains.includes(peg.chain)
     )
     const c = layout.rows.findIndex((row) => row.chain === peg.chain)
-    const head = chains[c]?.head
+    const group = groups[c]
     const from = tile
       ? (holes(tile.box, 'right', tile.chains.length)[
           tile.chains.indexOf(peg.chain)
         ] as Point)
-      : { x: inputsX + w.input - THREAD.inset, y: slotY(peg.slot) + slot / 2 }
-    // Into the head, a hole for each input that feeds it, in their order
-    const into = layout.pegs.filter((each) => each.chain === peg.chain)
-    const to = head
-      ? (holes(head, 'left', into.length)[into.indexOf(peg)] as Point)
-      : { x: headX + THREAD.inset, y: from.y }
+      : {
+          x: inputsX + w.input - THREAD.inset,
+          y: at(peg.slot) + g.slot / 2,
+        }
+    // Into the chain's first item at its left, as an S across the seam,
+    // a hole for each input feeding it: no climb to the head and back
+    const feeding = layout.pegs.filter((each) => each.chain === peg.chain)
+    const into = group?.items[0]?.box ?? group?.head
+    const to = into
+      ? (holes(into, 'left', feeding.length, true)[
+          feeding.indexOf(peg)
+        ] as Point)
+      : { x: groupX + THREAD.inset, y: from.y }
     return { ...peg, run: { from, to } }
   })
   /** The input's tile in column that stands beside slots from first on */
@@ -793,7 +934,8 @@ export function graphGeometry(
     )
   const reads = layout.reads.map((peg) => {
     const source = tileAt(peg.from, peg.column, peg.first, peg.slots)
-    const y = slotY(peg.first) + tall(peg.slots) / 2
+    const share = tileBox(0, 0, peg.first, peg.slots)
+    const y = share.y + share.h / 2
     // A hole for each reader the source's tile stands beside, in order
     const out = source
       ? layout.reads.filter(
@@ -812,14 +954,14 @@ export function graphGeometry(
     }
   })
 
-  const addY = slotY(slotsOf(layout))
+  const addY = at(slotsOf(layout))
   const addInput =
     sound.inputs.length < limits.inputs
       ? { x: inputsX, y: addY, w: w.input, h: g.addRow }
       : undefined
   const addChain =
     sound.chains.length < limits.chains
-      ? { x: headX, y: addY, w: ampX - g.seam - headX, h: g.addRow }
+      ? { x: groupX, y: addY, w: gw, h: g.addRow }
       : undefined
   const bottom = addY + g.addRow
 
@@ -832,9 +974,9 @@ export function graphGeometry(
     fill !== undefined && share < 2
       ? Math.max(w.out, fill - outX - g.end)
       : w.out
-  const span = heights.span
-  const ampH = w.ampH
-  const ampY = head + Math.floor((span - ampH) / 2)
+  const span = rowsEnd - HEAD
+  const ampH = Math.min(span, w.ampH)
+  const ampY = HEAD + Math.floor((span - ampH) / 2)
   const fxX = ampX + w.amp + g.seam
   const effects = sound.effects.map((effect, k) => ({
     effect: effect.id,
@@ -844,31 +986,42 @@ export function graphGeometry(
     sound.effects.length < limits.effects
       ? { x: ampX, y: addY, w: outX - g.seam - ampX, h: g.addRow }
       : undefined
-  const middle = (row: { readonly row: Box }) => row.row.y + row.row.h / 2
-  const firstRow = chains[0]
-  const endRow = chains[chains.length - 1]
-  const busTop = firstRow ? middle(firstRow) : 0
-  const busEnd = endRow ? middle(endRow) : 0
-  const bus =
-    ampH < span && busEnd > busTop
-      ? { x: ampX - g.seam / 2, y: busTop, h: busEnd - busTop }
-      : undefined
   const amp = { x: ampX, y: ampY, w: w.amp, h: ampH }
   const out = { x: outX, y: ampY, w: outW, h: ampH }
-  // Along each row, over its "+", into the amp or onto the bus
-  const rows = chains.map((row) => {
-    const y = middle(row)
-    const tiles = [row.head, ...row.items.map(({ box }) => box)]
-    const stitches = tiles.map((tile, k) => {
-      const next = tiles[k + 1]
-      if (next) return across(tile, next, y)
-      const from = { x: tile.x + tile.w - THREAD.inset, y }
-      return { from, to: { x: bus ? bus.x : ampX + THREAD.inset, y } }
-    })
-    return { ...row, stitches }
-  })
   const ampY2 = ampY + ampH / 2
+
+  // Each chain's level leaves its last item (or its head) at its middle:
+  // straight into the amp where the amp stands level with every one,
+  // else onto a bus down the seam that takes them to it
+  const exits = groups.map((row) =>
+    middleOf(row.items[row.items.length - 1]?.box ?? row.head)
+  )
+  const level = (y: number) =>
+    y >= ampY + THREAD.inset && y <= ampY + ampH - THREAD.inset
+  const busX = ampX - g.groupSeam / 2
+  const ys = [...exits, ampY2]
+  const bus = exits.every(level)
+    ? undefined
+    : {
+        x: busX,
+        y: Math.min(...ys),
+        h: Math.max(...ys) - Math.min(...ys),
+      }
+  const exitX = bus ? busX : ampX + THREAD.inset
+  const chains = groups.map((row, c) => {
+    const tiles = row.items.map(({ box }) => box)
+    // The inputs' threads come into the first: from it on, to the next
+    const runs = tiles.slice(1).map((tile, t) => onward(tiles[t] ?? tile, tile))
+    const last = tiles[tiles.length - 1] ?? row.head
+    const y = exits[c] ?? middleOf(last)
+    const levelRun = {
+      from: { x: last.x + last.w - THREAD.inset, y },
+      to: { x: exitX, y },
+    }
+    return { ...row, stitches: [...runs, levelRun] }
+  })
   const stages = [amp, ...effects.map(({ box }) => box)]
+
   // The lane's blocks, left to right from the inputs' margin, and the "+"
   // after the last where there is room; past the out they widen the graph
   const mods = (sound.modulators ?? []).map((mod, k) => ({
@@ -899,15 +1052,21 @@ export function graphGeometry(
   return {
     width: Math.max(outX + outW, lane) + g.end,
     height: bottom + g.end,
-    rest: heightAt(layout, g.slot),
+    rest: heightAt(cols, g.itemW),
     mods,
     addMod,
     inputs,
-    chains: rows,
+    chains,
     amp,
     out,
     outStitch: across(stages[stages.length - 1] ?? amp, out, ampY2),
     bus,
+    busInto: bus
+      ? {
+          from: { x: busX, y: ampY2 },
+          to: { x: ampX + THREAD.inset, y: ampY2 },
+        }
+      : undefined,
     sends,
     reads,
     effects,

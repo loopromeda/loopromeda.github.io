@@ -25,10 +25,16 @@ export interface Point {
   readonly y: number
 }
 
-/** A thread's run across a seam, hole to hole */
+/**
+ * A thread's run across a seam, hole to hole. Upright, it leaves its
+ * hole and comes into the next going down (from a tile into the one
+ * under it, or the first of the next line in a group's: mixGraph.ts),
+ * its bends over the seam's middle across
+ */
 export interface Run {
   readonly from: Point
   readonly to: Point
+  readonly upright?: boolean
 }
 
 /**
@@ -68,19 +74,24 @@ export const threadOpacity = (level: number) => 0.35 + 0.65 * unit(level)
 
 /**
  * count holes down a box's left or right edge, THREAD.inset inside it,
- * THREAD.spacing apart about its middle, top to bottom
+ * THREAD.spacing apart about its middle, top to bottom; given squeeze,
+ * closer where that many would stand past THREAD.inset from its top and
+ * foot
  */
 export function holes(
   box: Box,
   side: 'left' | 'right',
-  count: number
+  count: number,
+  squeeze = false
 ): Point[] {
   const x =
     side === 'left' ? box.x + THREAD.inset : box.x + box.w - THREAD.inset
   const middle = box.y + box.h / 2
+  const room = (box.h - 2 * THREAD.inset) / Math.max(1, count - 1)
+  const apart = squeeze ? Math.min(THREAD.spacing, room) : THREAD.spacing
   return Array.from({ length: count }, (_, k) => ({
     x,
-    y: middle + (k - (count - 1) / 2) * THREAD.spacing,
+    y: middle + (k - (count - 1) / 2) * apart,
   }))
 }
 
@@ -97,13 +108,20 @@ export function across(left: Box, right: Box, y: number): Run {
 
 /**
  * A run's path in SVG, moved by -dx, -dy: a line where its ends stand
- * level, else an S whose bends stand over the seam's middle
+ * level, else an S whose bends stand over the seam's middle; upright, a
+ * line where they stand one over the other, else an S turning across
+ * the seam's middle
  */
 export function runPath(run: Run, dx = 0, dy = 0): string {
   const x1 = run.from.x - dx
   const y1 = run.from.y - dy
   const x2 = run.to.x - dx
   const y2 = run.to.y - dy
+  if (run.upright) {
+    if (x1 === x2) return `M${x1} ${y1}V${y2}`
+    const mid = (y1 + y2) / 2
+    return `M${x1} ${y1}C${x1} ${mid} ${x2} ${mid} ${x2} ${y2}`
+  }
   if (y1 === y2) return `M${x1} ${y1}H${x2}`
   const mid = (x1 + x2) / 2
   return `M${x1} ${y1}C${mid} ${y1} ${mid} ${y2} ${x2} ${y2}`
