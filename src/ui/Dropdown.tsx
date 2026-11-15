@@ -11,6 +11,8 @@ import { usePlacement } from './placement'
 
 /** The list's want, rem wide: a name, its dots and the check */
 const WANT_W = 11
+/** On the tab rail: a short name and the check */
+const RAIL_W = 8
 /** A row: 28 px, the gap under it 2 px */
 const ROW = (28 + 2) / 16
 /** Around the rows: the card's padding, 4 px each side — tight, not a dialog */
@@ -43,7 +45,12 @@ function Dots({ colours }: { colours: readonly string[] }) {
  * jump, Enter or Space picks (the rows are buttons), Escape closes back
  * onto the button and stops there, so a dialog this stands in keeps its
  * own Escape for what it is. A tap anywhere else closes it, and so does a
- * scroll of what holds the button, which would else part them.
+ * scroll of what holds the button, which would else part them. The
+ * button is read by the row's name and then the chosen one's. On the
+ * editor's tab rail (rail) the button is one of the rail's, the chosen
+ * one's name bright, lit when open, as wide for each (so what follows it
+ * stays put), and its list narrower; the
+ * list stands over the sheet under the rail (z-40).
  */
 export function Dropdown<T extends string | number>({
   labelId,
@@ -51,6 +58,7 @@ export function Dropdown<T extends string | number>({
   options,
   value,
   onChange,
+  rail = false,
 }: {
   /** The row's name, which both button and list are read by */
   labelId: string
@@ -64,6 +72,8 @@ export function Dropdown<T extends string | number>({
   }[]
   value: T
   onChange: (value: T) => void
+  /** The editor's Sound, Seq or Mix, folded on a narrow tab rail */
+  rail?: boolean
 }) {
   const id = useId()
   const [open, setOpen] = useState(false)
@@ -71,7 +81,7 @@ export function Dropdown<T extends string | number>({
   const list = useRef<HTMLDivElement>(null)
   const placed = usePlacement(
     trigger,
-    WANT_W,
+    rail ? RAIL_W : WANT_W,
     options.length * ROW + AROUND,
     'below'
   )
@@ -145,14 +155,20 @@ export function Dropdown<T extends string | number>({
         type="button"
         aria-haspopup="listbox"
         aria-expanded={open}
-        aria-labelledby={labelId}
+        aria-labelledby={`${labelId} ${id}-value`}
         aria-describedby={hintId}
         aria-controls={open ? `${id}-list` : undefined}
         onClick={() => setOpen((was) => !was)}
-        className={`group flex h-7 min-w-28 items-center gap-1.5 rounded-md bg-(--over)/8 py-0 pr-2 pl-2.5 text-[11px] font-semibold text-(--ink-200) outline-none ${TALL_HIT} hover:bg-(--lift-2) focus-visible:bg-(--lift-2) aria-expanded:bg-(--lift-2)`}
+        className={
+          rail
+            ? `group flex h-7 min-w-18 items-center gap-1.5 rounded-md bg-(--lift) pr-2 pl-3 text-[11px] font-semibold tracking-wider text-(--ink-0) aria-expanded:bg-(--lift-2) ${TALL_HIT}`
+            : `group flex h-7 min-w-28 items-center gap-1.5 rounded-md bg-(--over)/8 py-0 pr-2 pl-2.5 text-[11px] font-semibold text-(--ink-200) outline-none ${TALL_HIT} hover:bg-(--lift-2) focus-visible:bg-(--lift-2) aria-expanded:bg-(--lift-2)`
+        }
       >
         {chosen?.swatch && <Dots colours={chosen.swatch} />}
-        <span className="min-w-0 truncate">{chosen?.label ?? '—'}</span>
+        <span id={`${id}-value`} className="min-w-0 truncate">
+          {chosen?.label ?? '—'}
+        </span>
         <svg
           width="10"
           height="6"
@@ -163,7 +179,7 @@ export function Dropdown<T extends string | number>({
           strokeLinecap="round"
           strokeLinejoin="round"
           aria-hidden="true"
-          className={`ml-auto shrink-0 text-(--ink-500) transition-transform duration-150 group-aria-expanded:rotate-180`}
+          className={`ml-auto shrink-0 ${rail ? 'text-(--ink-400)' : 'text-(--ink-500)'} transition-transform duration-150 group-aria-expanded:rotate-180`}
         >
           <path d="M1 1l4 4 4-4" />
         </svg>
@@ -185,7 +201,7 @@ export function Dropdown<T extends string | number>({
               height: placed.height,
             }
           }
-          className={`fixed z-30 flex flex-col gap-0.5 p-1 ${RAISED} ${placed ? '' : 'invisible'}`}
+          className={`fixed z-40 flex flex-col gap-0.5 p-1 ${RAISED} ${placed ? '' : 'invisible'}`}
         >
           {options.map((option) => (
             <button

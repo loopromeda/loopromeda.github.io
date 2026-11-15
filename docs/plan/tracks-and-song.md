@@ -326,12 +326,17 @@ too. Built 2026-11-15.
   was heard, not where the thread was. A note is written once let go,
   and only after its step has played: one played just ahead of its step
   sounds as played, not a second time from the loop.
-- **Room**: on a phone under 416 px wide the rail's tabs are narrower,
-  and under 384 px it leaves out the position, so Record still fits
-  (the Seq tab follows the bar playing). The play surface's header
-  holds the transport from 644 px wide, not 600, so the keys' navigator
-  keeps the room it had; a phone on its side (718 wide) still has it
-  there.
+- **Room**: under 512 px wide (a phone held upright: the Fold 8's
+  cover, 416) the rail's three tabs fold into a dropdown, the one shown
+  and a chevron, without the tabs' frame (both ashon's asks); the
+  project's name gives way next, and under 384 px the position, so
+  Record still fits (the Seq tab follows the bar playing). The pad
+  panel's presets (Kick, Snare…) are 28 px, as its note's steps are, at
+  ashon's ask. In the play surface's header
+  (600 px wide or more) the keys' navigator keeps 64 px at least, the
+  patch's name giving way first: moving the header's threshold to 644
+  instead put the navigator in a row of its own on the Fold 8's cover on
+  its side (657 wide), and cut the knob panel above it.
 - Not built: recording a knob turned (F); a step other than the
   sixteenth to land on; undoing a take; recording the loops started
   along the song's timeline (E, 3).

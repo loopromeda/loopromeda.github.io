@@ -1,4 +1,5 @@
 import {
+  useId,
   useLayoutEffect,
   useRef,
   useState,
@@ -98,6 +99,7 @@ import {
 } from './editor'
 import { CARD, CARD_FACE, RAISED, TALL_HIT } from './controls'
 import { TileReduction } from './Dynamics'
+import { Dropdown } from './Dropdown'
 import {
   MasterBoard,
   ViewsAcross,
@@ -541,7 +543,8 @@ export function SoundEditor({
           붙어있는게 좋을 것 같네", after a while in the middle), the
           rest at its right. Each end as far in from the side as from
           the top and bottom (ashon: "상하여백과 우측 여백이 일치하게"):
-          4 px by the switch, 32 px tall, 6 px by the 28 px buttons */}
+          4 px by the switch, 32 px tall, 6 px by the 28 px buttons. Short
+          of room, the project's name gives way (ProjectButton) */}
       <div
         className={`mb-2 flex h-10 shrink-0 items-center gap-2 pr-1.5 pl-1 ${CARD}`}
       >
@@ -550,7 +553,7 @@ export function SoundEditor({
           <div className="flex shrink-0 items-center gap-1.5">{transport}</div>
         )}
         {rail !== undefined && (
-          <div className="ml-auto flex shrink-0 items-center gap-1.5">
+          <div className="ml-auto flex min-w-0 items-center gap-1.5">
             {rail}
           </div>
         )}
@@ -671,11 +674,20 @@ export function SoundEditor({
   )
 }
 
+/** Sound, Seq and Mix as the dropdown lists them */
+const PANE_OPTIONS = PANES.map(({ pane, label }) => ({ value: pane, label }))
+
 /**
  * Sound, Seq or Mix, the three the editor shows: first in the panel over
  * the card, where it stands in each. Its buttons are of the panel's 28 px
- * class, their touch reaching 44 (TALL_HIT), and narrower on a phone
- * under 416 px wide, so the rail's Record still fits.
+ * class, their touch reaching 44 (TALL_HIT). Under 32rem wide (a phone
+ * held upright: the Fold 8's cover, 416) the three tabs leave the rail's
+ * transport and project no room: they fold into a button of the rail's
+ * own, the one shown with a chevron, no tabs' frame around it (ashon,
+ * 2026-11-15: "탭 메뉴처럼 보이는 바깥 테두리는 없어도"), 6 px in from
+ * the side as from the top and bottom; a tap lists the three (Dropdown).
+ * Wider, a phone on its side included, they stay side by side, a tap
+ * from each other.
  */
 function PaneSwitch({
   pane,
@@ -684,24 +696,39 @@ function PaneSwitch({
   pane: Pane
   onPane: (pane: Pane) => void
 }) {
+  const id = useId()
   return (
-    <div
-      role="group"
-      aria-label="The editor shows"
-      className="flex shrink-0 gap-0.5 rounded-lg bg-(--under)/25 p-0.5"
-    >
-      {PANES.map(({ pane: each, label }) => (
-        <button
-          key={each}
-          type="button"
-          aria-pressed={pane === each}
-          onClick={() => onPane(each)}
-          className={`${TALL_HIT} h-7 rounded-md px-3 text-[11px] font-semibold tracking-wider text-(--ink-400) max-[26rem]:px-2 aria-pressed:bg-(--lift-2) aria-pressed:text-(--ink-0)`}
-        >
-          {label}
-        </button>
-      ))}
-    </div>
+    <>
+      <div
+        role="group"
+        aria-label="The editor shows"
+        className="flex shrink-0 gap-0.5 rounded-lg bg-(--under)/25 p-0.5 max-[32rem]:hidden"
+      >
+        {PANES.map(({ pane: each, label }) => (
+          <button
+            key={each}
+            type="button"
+            aria-pressed={pane === each}
+            onClick={() => onPane(each)}
+            className={`${TALL_HIT} h-7 rounded-md px-3 text-[11px] font-semibold tracking-wider text-(--ink-400) aria-pressed:bg-(--lift-2) aria-pressed:text-(--ink-0)`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      <div className="hidden shrink-0 pl-0.5 max-[32rem]:flex">
+        <span id={id} hidden>
+          The editor shows
+        </span>
+        <Dropdown
+          labelId={id}
+          options={PANE_OPTIONS}
+          value={pane}
+          onChange={onPane}
+          rail
+        />
+      </div>
+    </>
   )
 }
 

@@ -35,8 +35,12 @@ const FOLDER =
 const LINE =
   'relative flex h-4 min-w-8 shrink-0 items-center justify-center gap-1 rounded text-(--ink-400) before:absolute before:-top-2 before:right-0 before:-bottom-2 before:-left-1.5 aria-expanded:text-(--ink-200)'
 
-/** On the tab rail: the panel's 28 px class, its face lit when open */
-const RAIL = `${TALL_HIT} flex h-7 min-w-7 shrink-0 items-center justify-center gap-1 rounded-md bg-(--lift) px-1.5 text-[11px] font-semibold text-(--ink-400) aria-expanded:bg-(--lift-2) aria-expanded:text-(--ink-0)`
+/**
+ * On the tab rail: the panel's 28 px class, its face lit when open, and
+ * the first to give way when the rail is short of room, the name cut
+ * down to nothing before the folder
+ */
+const RAIL = `${TALL_HIT} flex h-7 min-w-7 items-center justify-center gap-1 rounded-md bg-(--lift) px-1.5 text-[11px] font-semibold text-(--ink-400) aria-expanded:bg-(--lift-2) aria-expanded:text-(--ink-0)`
 
 /**
  * At the right end of the editor's tab rail (rail), left of the settings
@@ -97,7 +101,7 @@ export function ProjectButton({
         <path d={FOLDER} />
       </svg>
       {current !== undefined && (
-        <span aria-hidden className="max-w-24 truncate">
+        <span aria-hidden className="min-w-0 max-w-24 truncate">
           {current}
         </span>
       )}

@@ -64,8 +64,9 @@ const page =
  * out around. Beside (index.css: md wide, or a phone on its side) they
  * stand at that and the editor takes the rest: the keys stay put as
  * inputs and chains come and go, and the graph pans when they do not fit.
- * On a screen under 30rem tall they give way, down to their least (7rem)
- * at 27rem, so a phone on its side keeps the editor's panel whole. Held
+ * On a screen under 30rem tall they give way, down to their least (6rem)
+ * at 26rem, so a phone on its side keeps the editor's panel whole (the
+ * Fold 8's cover on its side, 416 tall: 7rem cut the knobs' values). Held
  * upright, the editor keeps what it needs first and the keys take the
  * rest up to that length, and at most 45% of the screen; past it, the
  * editor grows, its tiles with it (graph.ts), and what they cannot fill
@@ -78,7 +79,7 @@ const EDITOR_SIZE = 'upright:grow side:flex-1'
 const KEYS_SIZE = [
   'flex-1 upright:grow-[999]',
   'upright:max-h-[calc(var(--play-head,2.75rem)_+_min(10rem,45dvh))]',
-  'side:flex-[0_0_calc(var(--play-head,2.75rem)_+_clamp(7rem,100dvh_-_20rem,10rem))]',
+  'side:flex-[0_0_calc(var(--play-head,2.75rem)_+_clamp(6rem,100dvh_-_20rem,10rem))]',
 ].join(' ')
 
 /** Arrows in the 18 px box: up, what stands below rises; down, it sinks */

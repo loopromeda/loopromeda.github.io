@@ -47,6 +47,14 @@ findings are added by hand during the M1 checklist.
   seconds; the status line showed 26867 ms a little later). Before that
   reload it had read 24 ms. The audio sounded as usual, so the reading,
   not the output, was wrong.
+- Viewports, 2026-11-15: the phone is a Galaxy Z Fold 8. ashon gave its
+  screens as DevTools devices, at a device pixel ratio of 3: the cover
+  416×657 CSS px, the inner screen 816×616 (`side` in index.css, not
+  `tall`). Nothing in the layout reads the pointer or the ratio, so a
+  frame at those sizes lays out as the phone does. On its side the cover
+  is 657×416: its header 641 wide, past the 600 that puts the keys'
+  navigator in it, and the keys at their least, 6rem since then (7rem
+  cut the knob panel's values by 14 px).
 
 ## Desktop baseline: macOS · Chrome (desktop)
 

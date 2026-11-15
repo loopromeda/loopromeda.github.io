@@ -89,12 +89,12 @@ import {
 import {
   knobRow,
   KNOB_SIZE,
-  OPTION,
   PANEL_BODY,
   SMALL_BUTTON,
   SMALL_CONFIRM,
   SMALL_FIELD,
   SMALL_ICON_BUTTON,
+  SMALL_OPTION,
   TALL_HIT,
 } from './controls'
 import {
@@ -811,7 +811,8 @@ function PadNote({
 /**
  * The kit's pad picked (PAD_TILE): the preset mapped onto it, played as
  * it is, at the pad's note (set here: setNote); the presets of its
- * category in a row, a tap mapping another (map: onto the pad picked);
+ * category in a row of 28 px options, as small as the note's steps (their
+ * touch 44), a tap mapping another (map: onto the pad picked);
  * and all of them, the presets' popover (onPresets). A pad of no preset
  * (its own deleted) offers the Drums.
  */
@@ -855,7 +856,7 @@ function padView(
                 current?.source === ref.source && current.name === ref.name
               }
               onClick={() => map(ref)}
-              className={`${OPTION} shrink-0`}
+              className={SMALL_OPTION}
             >
               {ref.name}
             </button>

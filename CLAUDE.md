@@ -220,7 +220,8 @@ src/ui/       React components; SoundEditor.tsx the sound as tiles
               its rows; under it LaneStrip.tsx its knob lanes, one
               over another, drawn on, and LanePicker.tsx in its
               place adds one), or, switched to Mix,
-              the session's mix, under its tab rail (Sound | Seq | Mix, then
+              the session's mix, under its tab rail (Sound | Seq | Mix,
+              a Dropdown.tsx under 32rem wide, then
               the transport: Transport.tsx's Play, Record, the
               position and the tempo, whose popover holds the tempo,
               the swing, the click, the count-in, Overdub or Replace

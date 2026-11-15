@@ -69,13 +69,17 @@ const OCTAVE: Readonly<Record<SurfaceKind, number>> = {
 /**
  * From this width of the header (CSS px) the transport and the keys'
  * navigator stand in it, between the patch and the arrows: room for the
- * navigator, Play, Record and the tempo, the arrows, the buttons at the
- * end and the patch's name at its least (its 6rem, PatchButton) — the
- * beat lights give way to the name, and vanish before it does. Under it,
- * in a row of their own below, which a phone on its side has no height
- * for. Record's 36 px and its gap came on 600.
+ * navigator at its least (NAVIGATOR_LEAST), Play, Record and the tempo,
+ * the arrows, the buttons at the end and the patch's name at its least
+ * (its 6rem, PatchButton), which gives way first — the beat lights give
+ * way to the name, and vanish before it does. Under it, in a row of
+ * their own below, which a phone on its side has no height for: the
+ * Fold 8's cover on its side is 657 wide, a header of 641.
  */
-const NAVIGATOR_IN_HEADER = 644
+const NAVIGATOR_IN_HEADER = 600
+
+/** The keys' navigator in the header at its least, 64 px: the name gives */
+const NAVIGATOR_LEAST = 'min-w-16'
 
 /**
  * Computer keys (KeyboardEvent.code) for the keys: each plays as many
@@ -485,7 +489,9 @@ export function PlaySurface({
         {fit.wide && (
           <>
             <div className="flex shrink-0 items-center gap-2">{transport}</div>
-            {between('ml-auto h-7 max-w-md flex-1')}
+            {between(
+              `ml-auto h-7 max-w-md flex-1 ${navigator ? NAVIGATOR_LEAST : ''}`
+            )}
           </>
         )}
         <div
@@ -522,7 +528,7 @@ export function PlaySurface({
           {fold}
         </div>
       )}
-      <div hidden={away} className="flex min-h-28 flex-1 gap-2">
+      <div hidden={away} className="flex min-h-24 flex-1 gap-2">
         {beside}
         <div ref={surfaceRef} className="relative min-w-0 flex-1">
           {kit ? (
