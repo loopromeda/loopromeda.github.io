@@ -391,7 +391,7 @@ export function TransportPicker({
         />
         <ChoiceRow
           label="Record"
-          hint="Overdub adds what is played. Replace first empties the loop as it plays, once round."
+          hint="Overdub adds what is played. Replace first empties the loop as it plays, once round. An empty loop grows with the take, which sets its length."
           options={RECORD_LABELS}
           value={settings.record}
           onChange={(record) => onSettings({ ...settings, record })}

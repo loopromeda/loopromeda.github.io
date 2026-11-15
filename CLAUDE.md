@@ -156,7 +156,8 @@ src/state/    params.ts: the knob schema and the old parameters;
               fader's) and its lanes as they play; record.ts: what
               is played while recording written into a loop (on the
               sixteenth nearest, as long as held, after its step has
-              played), Overdub or Replace;
+              played), Overdub or Replace, a loop of no notes growing
+              with the take, which sets its length;
               project.ts: a project, the session (the tracks, the mix,
               the song) kept under a name, the list of them and a
               project's file; projects.ts: the projects kept in

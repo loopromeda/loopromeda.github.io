@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { Recorder, type RecordHost } from './record'
-import { initLoop, putNote, type Loop, type Note } from './song'
+import {
+  BAR_STEPS,
+  MAX_BARS,
+  initLoop,
+  putNote,
+  setBars,
+  type Loop,
+  type Note,
+} from './song'
 
 /** Loops by track, each a bar unless given; and how often each was edited */
 class Host implements RecordHost {
@@ -55,12 +63,14 @@ describe('the recorder', () => {
 
   it('writes a kit’s pad for a step, and on the loop’s own step', () => {
     const host = new Host()
+    host.loops.set('t2', putNote(initLoop(), note(8, 1)))
     const recorder = new Recorder(host)
     recorder.start(16, 't2', 'overdub')
     for (let step = 16; step <= 20; step++) recorder.step(step)
     recorder.noteOn(4, 't2', 3, 1, true, 18.2)
     recorder.noteOff(4, 20)
-    expect(host.notes('t2')).toEqual([note(2, 3)])
+    expect(host.notes('t2')).toEqual([note(2, 3), note(8, 1)])
+    expect(host.loopOf('t2').steps).toBe(BAR_STEPS)
   })
 
   it('takes a beat counted in as no note, and the downbeat as the first', () => {
@@ -175,5 +185,70 @@ describe('the recorder', () => {
     recorder.noteOff(1, 4.2)
     expect(host.notes('t1')).toEqual([])
     expect(host.notes('t2')).toEqual([note(3, 1), note(4, 5)])
+  })
+
+  it('grows a loop of no notes a bar ahead, then ends it on the bar line nearest', () => {
+    const host = new Host()
+    const recorder = new Recorder(host)
+    const steps = () => host.loopOf('t1').steps
+    recorder.start(0, 't1', 'replace')
+    expect(steps()).toBe(2 * BAR_STEPS)
+    for (let step = 0; step <= 16; step++) recorder.step(step)
+    expect(steps()).toBe(3 * BAR_STEPS)
+    for (let step = 17; step <= 40; step++) recorder.step(step)
+    expect(steps()).toBe(4 * BAR_STEPS)
+    recorder.noteOn(1, 't1', 60, 1, false, 35.2)
+    recorder.noteOff(1, 36)
+    for (let step = 41; step <= 129; step++) recorder.step(step)
+    expect(steps()).toBe(10 * BAR_STEPS)
+    // Let go a little late for bar 9: eight bars
+    recorder.stop(130)
+    expect(steps()).toBe(8 * BAR_STEPS)
+    expect(host.notes('t1')).toEqual([note(35, 60)])
+  })
+
+  it('keeps every note of a take grown, one held past its end cut there', () => {
+    const host = new Host()
+    const recorder = new Recorder(host)
+    recorder.start(0, 't1', 'overdub')
+    for (let step = 0; step <= 33; step++) recorder.step(step)
+    recorder.noteOn(1, 't1', 60, 1, false, 30)
+    recorder.stop(33.4)
+    expect(host.loopOf('t1').steps).toBe(2 * BAR_STEPS)
+    expect(host.notes('t1')).toEqual([note(30, 60, 2)])
+    // A note starting in the bar it rounds off keeps that bar
+    const late = new Host()
+    const again = new Recorder(late)
+    again.start(0, 't1', 'overdub')
+    for (let step = 0; step <= 18; step++) again.step(step)
+    again.noteOn(1, 't1', 62, 1, false, 17)
+    again.noteOff(1, 18)
+    again.stop(19)
+    expect(late.loopOf('t1').steps).toBe(2 * BAR_STEPS)
+  })
+
+  it('gives a loop of no notes its length back when nothing goes in', () => {
+    const host = new Host()
+    host.loops.set('t1', setBars(initLoop(), 4))
+    const recorder = new Recorder(host)
+    recorder.start(0, 't1', 'overdub')
+    for (let step = 0; step <= 100; step++) recorder.step(step)
+    expect(host.loopOf('t1').steps).toBe(8 * BAR_STEPS)
+    recorder.stop(101)
+    expect(host.loopOf('t1').steps).toBe(4 * BAR_STEPS)
+  })
+
+  it('grows no further than the longest loop, and goes round there', () => {
+    const host = new Host()
+    const recorder = new Recorder(host)
+    const end = MAX_BARS * BAR_STEPS
+    recorder.start(end - 8, 't1', 'overdub')
+    expect(host.loopOf('t1').steps).toBe(end)
+    for (let step = end - 8; step <= end + 3; step++) recorder.step(step)
+    recorder.noteOn(1, 't1', 60, 1, false, end + 2)
+    recorder.noteOff(1, end + 3)
+    recorder.stop(end + 4)
+    expect(host.loopOf('t1').steps).toBe(end)
+    expect(host.notes('t1')).toEqual([note(2, 60)])
   })
 })

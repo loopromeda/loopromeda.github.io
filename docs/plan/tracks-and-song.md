@@ -311,6 +311,17 @@ too. Built 2026-11-15.
   is there, a note on the same step and key in its place. Replace first
   empties the loop of the track played a step ahead of the sequencer,
   one time round, keeping what is recorded on the way, then overdubs.
+- **A loop of no notes** (ashon, 2026-11-15: "최대 길이를 그냥 무한대로
+  해도 되지 않을까"; of three ways offered, this one): recorded into, it
+  does not go round but grows, a bar ahead of the bar playing, as long
+  as the take lasts, up to 256 bars (eight and a half minutes at 120:
+  4096 steps, the limit ashon set).
+  Where recording stops, on the bar line nearest, is its length, long
+  enough for every note to start in it, a note held past it cut there;
+  nothing played, it keeps the length it had. A loop with notes goes
+  round as before, in Overdub or Replace. Endless was not offered: a
+  loop's steps and its lanes' values are held whole, in the audio
+  thread and in localStorage.
 - **What is written** (`src/state/record.ts`, pure): each note started
   while recording, into the loop of the track it sounds on, the track
   played below (Engine.setRecording shows it in the Seq tab, and the

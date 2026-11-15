@@ -7,14 +7,27 @@
  * them; its bends are not kept). Overdub adds
  * the notes to what is there (one on the same step and key in its
  * place); Replace first empties the loop of the track played as the
- * sequencer passes over it, one time round, then adds. A note is written
+ * sequencer passes over it, one time round, then adds. A loop of no notes
+ * recorded into is not gone round: it grows a bar at a time ahead of the
+ * song, as long as it is played into (up to MAX_BARS), and where the take
+ * stops, on the bar line nearest, is its length (ashon, 2026-11-15: the
+ * first take sets it, as a looper's does). A note is written
  * once let go, and not before its step has played: one put on a step
  * still to come sounds as played, not again from the loop. Pure: the
  * positions come in steps of the song, heard (the engine's: the audio
  * thread's less the output's latency), and the loops go out through the
  * host.
  */
-import { MAX_KEY, MIN_VELOCITY, type Loop, type Note, putNote } from './song'
+import {
+  BAR_STEPS,
+  MAX_BARS,
+  MAX_KEY,
+  MIN_VELOCITY,
+  type Loop,
+  type Note,
+  putNote,
+  setBars,
+} from './song'
 
 /** How what is played meets what is there */
 export type RecordMode = 'overdub' | 'replace'
@@ -54,6 +67,25 @@ interface Replacing {
   readonly kept: Set<string>
 }
 
+/**
+ * The take into a loop of no notes, growing: its length before it (back
+ * if nothing is written), the song's furthest step reached, and whether a
+ * note went in
+ */
+interface Growing {
+  readonly track: string
+  readonly was: number
+  reach: number
+  wrote: boolean
+}
+
+/**
+ * Bars the loop keeps ahead of the step playing: the bar after it, so the
+ * audio thread, a block or the output's latency ahead of what is heard,
+ * never comes round
+ */
+const AHEAD = 1
+
 /** A loop's own step for a step of the song */
 function local(step: number, steps: number): number {
   return ((step % steps) + steps) % steps
@@ -67,6 +99,7 @@ export class Recorder {
   /** The song's step last played */
   #played = -1
   #replacing: Replacing | undefined
+  #growing: Growing | undefined
 
   constructor(host: RecordHost) {
     this.#host = host
@@ -80,18 +113,25 @@ export class Recorder {
   /**
    * Records from step next of the song on (the next to play); with
    * replace, track's loop is emptied as it passes, one time round, from
-   * next (whose notes go at once, before it plays)
+   * next (whose notes go at once, before it plays). Of no notes, the loop
+   * grows instead, either way.
    */
   start(next: number, track: string, mode: RecordMode): void {
     this.#on = true
     this.#played = next - 1
     this.#waiting = []
     this.#taking.clear()
-    const steps = this.#host.loopOf(track).steps
+    const loop = this.#host.loopOf(track)
+    const steps = loop.steps
+    this.#growing =
+      loop.notes.length === 0 && steps > 0
+        ? { track, was: steps, reach: next, wrote: false }
+        : undefined
     this.#replacing =
-      mode === 'replace' && steps > 0
+      mode === 'replace' && steps > 0 && !this.#growing
         ? { track, next, end: next + steps, kept: new Set() }
         : undefined
+    this.#grow(next)
     this.#empty(next)
   }
 
@@ -104,6 +144,7 @@ export class Recorder {
     // Moved back (a seek): what waited for the steps passed goes in now
     const back = step < this.#played
     this.#played = step
+    this.#grow(step)
     this.#empty(step + 1)
     const ready = this.#waiting.filter((each) => back || each.at <= step)
     if (ready.length === 0) return
@@ -135,7 +176,8 @@ export class Recorder {
 
   /**
    * Stops recording: a note still held ends at at, and every note let go
-   * is written, its step played or not
+   * is written, its step played or not; a loop grown ends at the bar line
+   * nearest the furthest the take reached (settle)
    */
   stop(at: number): void {
     if (!this.#on) return
@@ -145,6 +187,9 @@ export class Recorder {
     const waiting = this.#waiting
     this.#waiting = []
     for (const each of waiting) this.#write(each)
+    const growing = this.#growing
+    this.#growing = undefined
+    if (growing) this.#settle(growing, Math.max(growing.reach, at))
   }
 
   #finish(id: number, end: number): void {
@@ -169,11 +214,54 @@ export class Recorder {
   }
 
   #write({ track, note }: Taken): void {
+    if (this.#growing?.track === track) this.#growing.wrote = true
     const replacing = this.#replacing
     if (replacing?.track === track) {
       replacing.kept.add(`${note.step}:${note.key}`)
     }
     this.#host.editLoop(track, (loop) => putNote(loop, note))
+  }
+
+  /**
+   * The loop growing, the bar after step's in it (AHEAD), as far as the
+   * longest loop
+   */
+  #grow(step: number): void {
+    const growing = this.#growing
+    if (!growing || step < 0) return
+    growing.reach = Math.max(growing.reach, step)
+    const bars = Math.min(MAX_BARS, Math.floor(step / BAR_STEPS) + 1 + AHEAD)
+    if (bars * BAR_STEPS <= this.#host.loopOf(growing.track).steps) return
+    this.#host.editLoop(growing.track, (loop) => setBars(loop, bars))
+  }
+
+  /**
+   * A take grown ends: the loop as long as the bar line nearest reach,
+   * long enough for every note to start in it, each held past its end
+   * cut there; back as it was if nothing went in
+   */
+  #settle({ track, was, wrote }: Growing, reach: number): void {
+    this.#host.editLoop(track, (loop) => {
+      if (!wrote) return setBars(loop, was / BAR_STEPS)
+      let last = 0
+      for (const note of loop.notes) last = Math.max(last, note.step + 1)
+      const bars = Math.max(
+        1,
+        Math.round(reach / BAR_STEPS),
+        Math.ceil(last / BAR_STEPS)
+      )
+      const cut = setBars(loop, bars)
+      const end = cut.steps
+      if (!cut.notes.some((note) => note.step + note.length > end)) return cut
+      return {
+        ...cut,
+        notes: cut.notes.map((note) =>
+          note.step + note.length > end
+            ? { ...note, length: end - note.step }
+            : note
+        ),
+      }
+    })
   }
 
   /** Replace empties the steps of the song up to through, each once */
