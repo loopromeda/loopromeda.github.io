@@ -17,8 +17,8 @@ import type { AppSettings } from '../state/settings'
 import { loopOn, setLoopOn, setSwing, setTempo } from '../state/song'
 import { trackName, tracksKey } from '../state/tracks'
 import { COLUMNS } from '../viz/steps'
-import { ICON_BUTTON, SECTION_HEADING, TALL_HIT } from './controls'
-import { IconButton, SmallIconButton } from './IconButton'
+import { BAR_HIT, ICON_BUTTON, SECTION_HEADING, TALL_HIT } from './controls'
+import { BarIconButton, SmallIconButton } from './IconButton'
 import { Popover } from './Popover'
 import { SettingGroup, SwitchRow } from './SettingRows'
 import { transportKey } from './transportKeys'
@@ -31,7 +31,7 @@ const STOP = 'M5 5h8v8H5z'
  * Starts the sequencer, every track's loop from its first step (a bar
  * counted in first, where the settings ask for it), and stops it: lit
  * while it plays. On the tab rail (small), or in the play surface's
- * header while the rail is put away with the controls.
+ * header (at its 36 px) while the rail is put away with the controls.
  */
 export function PlayButton({
   engine,
@@ -50,7 +50,7 @@ export function PlayButton({
     pressed: playing,
     onClick: () => (playing ? engine.stop() : engine.play()),
   }
-  return small ? <SmallIconButton {...props} /> : <IconButton {...props} />
+  return small ? <SmallIconButton {...props} /> : <BarIconButton {...props} />
 }
 
 /**
@@ -146,8 +146,8 @@ export function Position({ engine }: { engine: Engine }) {
   )
 }
 
-const TEMPO_BUTTON =
-  'flex h-11 w-14 shrink-0 items-center justify-center rounded-[10px] bg-(--lift) font-mono text-[13px] text-(--ink-200) aria-expanded:bg-(--lift-2)'
+/** In the play surface's header: its 36 px class (BAR_HIT) */
+const TEMPO_BUTTON = `${BAR_HIT} flex h-9 w-12 shrink-0 items-center justify-center rounded-lg bg-(--lift) font-mono text-[13px] text-(--ink-200) aria-expanded:bg-(--lift-2)`
 
 /** On the tab rail: the panel's 28 px class, its face lit when open */
 const RAIL_TEMPO_BUTTON = `${TALL_HIT} flex h-7 min-w-9 shrink-0 items-center justify-center rounded-md bg-(--lift) px-1.5 font-mono text-[11px] text-(--ink-200) aria-expanded:bg-(--lift-2) aria-expanded:text-(--ink-0)`

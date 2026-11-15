@@ -4,7 +4,7 @@ import type { PartKind } from '../state/kit'
 import type { Library } from '../state/library'
 import { VOICE } from '../state/sound/sound'
 import { MAX_TRACKS, kindLabel, trackName, type Track } from '../state/tracks'
-import { OPTION } from './controls'
+import { BAR_HIT, OPTION } from './controls'
 import { tileLine } from './editor'
 import { Mutes, STATE_WORDS, useStripState } from './Mutes'
 import { Popover } from './Popover'
@@ -44,7 +44,7 @@ export function TrackButton({
       aria-controls="tracks"
       aria-label={words ? `Track: ${name}, ${words}` : `Track: ${name}`}
       onClick={onToggle}
-      className="flex h-11 w-24 shrink-0 items-center justify-center gap-1.5 rounded-[10px] bg-(--lift) px-2.5 text-xs font-semibold text-(--ink-200) aria-expanded:bg-(--lift-2) @max-[26rem]:w-16 @max-[26rem]:gap-1 @max-[26rem]:px-1.5"
+      className={`${BAR_HIT} flex h-9 w-24 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-(--lift) px-2.5 text-xs font-semibold text-(--ink-200) aria-expanded:bg-(--lift-2) @max-[26rem]:w-16 @max-[26rem]:gap-1 @max-[26rem]:px-1.5`}
     >
       {state !== 'on' && (
         <span

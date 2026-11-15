@@ -108,6 +108,18 @@ export const HOLD = 450
 export const TALL_HIT =
   'relative before:absolute before:inset-x-0 before:-top-2 before:-bottom-2'
 
+/**
+ * Reaches a 36 px button's hit area 4 px above and below it: 44 px. The
+ * play surface's header stands its buttons at 36 (ashon, 2026-11-15: "중간
+ * 툴바 부분도 버튼 사이즈를 작게"), its rows 36 px tall and 8 apart, so
+ * that the reaches of its two rows meet and do not overlap.
+ */
+export const BAR_HIT =
+  'relative before:absolute before:inset-x-0 before:-top-1 before:-bottom-1'
+
+/** A 36 px square button holding a 16 px icon, its touch 44 px (BAR_HIT) */
+export const BAR_ICON_BUTTON = `${BAR_HIT} flex size-9 shrink-0 items-center justify-center rounded-lg bg-(--lift) text-(--ink-200) disabled:opacity-40 aria-pressed:bg-(--lift-2)`
+
 /** A 28 px button's shape, its touch 44 px tall (TALL_HIT): no face */
 export const SMALL_BUTTON_SHAPE = `${TALL_HIT} flex h-7 shrink-0 items-center justify-center gap-1.5 rounded-md px-3 text-[11px] font-semibold tracking-wider whitespace-nowrap disabled:opacity-40`
 

@@ -5,7 +5,7 @@ import {
   type SurfaceSettings,
 } from '../state/surface'
 import { pitchName } from '../viz/keyboard'
-import { ICON_BUTTON } from './controls'
+import { BAR_ICON_BUTTON } from './controls'
 
 /** What a surface's picture shows: a surface, or the step sequencer */
 type Pictured = SurfaceKind | 'seq'
@@ -88,9 +88,9 @@ export function SurfaceButton({
                 : 'Play surface: keys'
       }
       onClick={onToggle}
-      className={`${ICON_BUTTON} aria-expanded:bg-(--lift-2)`}
+      className={`${BAR_ICON_BUTTON} aria-expanded:bg-(--lift-2)`}
     >
-      <SurfaceIcon kind={seq ? 'seq' : played} />
+      <SurfaceIcon kind={seq ? 'seq' : played} size={16} />
     </button>
   )
 }

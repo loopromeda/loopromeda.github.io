@@ -1,6 +1,7 @@
 import { useSyncExternalStore, type Ref } from 'react'
 import { padName } from '../state/kit'
 import type { Library } from '../state/library'
+import { BAR_HIT } from './controls'
 
 /**
  * The sound's name at the left of the keyboard's header: the preset it
@@ -10,7 +11,8 @@ import type { Library } from '../state/library'
  * place from preset to preset: 12rem, or where the header has the keys'
  * navigator under it (held upright) the room its buttons leave it
  * (PlaySurface). Narrow, it keeps its least (6rem): a word of the name and
- * the chevron, the beat lights giving way before it (PlaySurface). A tap
+ * the chevron, the beat lights giving way before it (PlaySurface); under
+ * 22rem (a 344 px phone), 5rem, what the header's 36 px buttons leave. A tap
  * opens the presets, a popover standing on it (PresetBrowser, which ref
  * places), and closes them again. In a header under 26rem the chevron goes,
  * its room the name's.
@@ -46,7 +48,7 @@ export function PatchButton({
       aria-controls="presets"
       aria-label={`Patch: ${name}${changed ? ', edited' : ''}`}
       onClick={onToggle}
-      className="flex h-11 w-48 min-w-24 items-center gap-2 rounded-[10px] bg-(--lift) px-3 text-[13px] font-medium text-(--ink-200) aria-expanded:bg-(--lift-2) @max-[26rem]:px-2.5"
+      className={`${BAR_HIT} flex h-9 w-48 min-w-24 items-center gap-2 rounded-lg bg-(--lift) px-3 text-[13px] font-medium text-(--ink-200) aria-expanded:bg-(--lift-2) @max-[26rem]:px-2.5 @max-[22rem]:min-w-20`}
     >
       <span className="flex min-w-0 flex-1 items-center gap-2">
         <span className="truncate">{name}</span>

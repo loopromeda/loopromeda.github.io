@@ -495,6 +495,15 @@ right, benchmark within budget.
         from 896 px three, so none is cut in half. Measured in frames:
         knobs 54 px at 360×720, 56 at 390×844, 768×1024 and 1280×800, 47
         at 930×566 (keys 137 px); the only control heights are 28 and 44.
+        2026-11-15, asked for by ashon on a phone, where the patch's
+        name ran under the octave arrows ("중간 툴바 부분도 버튼 사이즈를
+        작게 만들어 볼 수 있을까?"): the play surface's header, its second
+        row and the Play and tempo there are 36 px (rounded 8 px, 16 px
+        icons; `BAR_ICON_BUTTON`, `BarIconButton`), their touch still
+        44 px tall (`BAR_HIT`), its rows 8 px apart. A header under 29rem
+        drops the note range (was 26rem), and under 22rem (a 344 px phone)
+        the patch's name gives way to 5rem. Measured in frames at 344,
+        412, 454 and 1100 wide: no button over another, 8 px between.
   - [x] Controls put away, 2026-11-10, after ashon's screenshot from the
         Fold folded shut (about 490×670 CSS px), where the tabs and knob
         panel took 270 px and left the pads two rows: the button after the

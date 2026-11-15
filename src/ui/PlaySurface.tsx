@@ -33,7 +33,7 @@ import {
 import { kitGrid, padGrid, padNote, type PadGrid } from '../viz/pads'
 import { xyOctaves } from '../viz/xy'
 import { COMPUTER_ID, Hands } from './hands'
-import { IconButton } from './IconButton'
+import { BarIconButton } from './IconButton'
 import { Keys } from './Keys'
 import { KeysNavigator } from './KeysNavigator'
 import { KitPads } from './KitPads'
@@ -153,10 +153,14 @@ const sameGrid = (a: PadGrid, b: PadGrid) =>
 
 /**
  * The octaves' range, between their arrows: read out, not shown, in a
- * header too narrow for it (a wide one holds the transport too)
+ * header too narrow for it (a wide one holds the transport too). Under
+ * 29rem it went over the patch, which keeps its least (6rem) beside the
+ * track's wide button from 26rem: shown to 26rem, a range as long as
+ * C−1 – C0 pushed the patch under the octave's arrows (ashon's phone,
+ * 2026-11-15).
  */
 const RANGE =
-  'font-mono text-[13px] whitespace-nowrap text-(--ink-400) @max-[26rem]:sr-only'
+  'font-mono text-[13px] whitespace-nowrap text-(--ink-400) @max-[29rem]:sr-only'
 const WIDE_RANGE =
   'font-mono text-[13px] whitespace-nowrap text-(--ink-400) @max-[52rem]:sr-only'
 
@@ -458,10 +462,10 @@ export function PlaySurface({
   // Its header and the surface's least height are its minimum: on a short
   // screen the controls above give way (their graph pans), not the keys.
   // What stands above the keys, for App to size them by: the header and its
-  // gap (2.75rem and 0.5rem), and under a narrow one the transport's row
-  // and its gap, the same again
+  // gap (2.25rem and 0.5rem: its buttons at 36 px, BAR_HIT), and under a
+  // narrow one the transport's row and its gap, the same again
   const style = {
-    '--play-head': fit.wide ? '3.25rem' : '6.5rem',
+    '--play-head': fit.wide ? '2.75rem' : '5.5rem',
   } as CSSProperties
   return (
     <section
@@ -469,12 +473,12 @@ export function PlaySurface({
       className={`flex flex-col gap-2 ${className}`}
       style={style}
     >
-      {/* A narrow header (a phone's, under 26rem) keeps the patch's name
+      {/* A narrow header (a phone's, under 29rem) keeps the patch's name
           and every button, and drops the range; so does a wide one with
           the transport in it, under 52rem */}
       <div
         ref={headerRef}
-        className="@container flex h-11 shrink-0 items-center gap-2"
+        className="@container flex h-9 shrink-0 items-center gap-2"
       >
         {/* Held upright, the patch (start's last) takes the room the
             buttons leave */}
@@ -493,14 +497,14 @@ export function PlaySurface({
           hidden={kit !== undefined || seq || away}
           className="flex shrink-0 items-center gap-2"
         >
-          <IconButton
+          <BarIconButton
             label="Octave down"
             disabled={first <= lowest}
             onClick={() => shift(-1)}
             path="M11 4l-5 5 5 5"
           />
           <span className={fit.wide ? WIDE_RANGE : RANGE}>{range}</span>
-          <IconButton
+          <BarIconButton
             label="Octave up"
             disabled={first >= highest}
             onClick={() => shift(1)}
@@ -515,7 +519,7 @@ export function PlaySurface({
         )}
       </div>
       {!fit.wide && (
-        <div className="flex h-11 shrink-0 items-center gap-2">
+        <div className="flex h-9 shrink-0 items-center gap-2">
           {transport}
           {between(
             navigator ? 'h-7 min-w-0 flex-1' : 'mx-2 h-7 min-w-0 flex-1'

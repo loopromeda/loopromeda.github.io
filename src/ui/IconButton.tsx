@@ -1,47 +1,30 @@
-import { ICON_BUTTON, SMALL_ICON_BUTTON } from './controls'
+import type { ReactNode } from 'react'
+import { BAR_ICON_BUTTON, ICON_BUTTON, SMALL_ICON_BUTTON } from './controls'
 
-/**
- * A 44 px square button showing one 18 px stroked path (an arrow, a
- * cross), named by label for screen readers. Given pressed, it is a toggle.
- */
-export function IconButton({
-  label,
-  path,
-  onClick,
-  disabled,
-  pressed,
-}: {
+/** What an icon button takes, at any size */
+interface IconButtonProps {
   label: string
   /** An SVG path in an 18×18 box */
   path: string
   onClick: () => void
   disabled?: boolean
   pressed?: boolean
-}) {
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      aria-pressed={pressed}
-      disabled={disabled}
-      onClick={onClick}
-      className={ICON_BUTTON}
-    >
-      <svg
-        width="18"
-        height="18"
-        viewBox="0 0 18 18"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        aria-hidden="true"
-      >
-        <path d={path} />
-      </svg>
-    </button>
-  )
+}
+
+/**
+ * A 44 px square button showing one 18 px stroked path (an arrow, a
+ * cross), named by label for screen readers. Given pressed, it is a toggle.
+ */
+export function IconButton(props: IconButtonProps) {
+  return <Face {...props} className={ICON_BUTTON} icon={18} />
+}
+
+/**
+ * The same at 36 px, an icon of 16, as the play surface's header holds
+ * them: its touch still 44 px tall (BAR_HIT)
+ */
+export function BarIconButton(props: IconButtonProps) {
+  return <Face {...props} className={BAR_ICON_BUTTON} icon={16} />
 }
 
 /**
@@ -49,21 +32,28 @@ export function IconButton({
  * panel header's actions are: its touch still 44 px tall (TALL_HIT)
  */
 export function SmallIconButton({
+  className = '',
+  ...props
+}: IconButtonProps & { className?: string }) {
+  return (
+    <Face
+      {...props}
+      className={`${SMALL_ICON_BUTTON} ${className}`}
+      icon={14}
+    />
+  )
+}
+
+/** The button at a size: its class, and its icon's side in px */
+function Face({
   label,
   path,
   onClick,
   disabled,
   pressed,
-  className = '',
-}: {
-  label: string
-  /** An SVG path in an 18×18 box */
-  path: string
-  onClick: () => void
-  disabled?: boolean
-  pressed?: boolean
-  className?: string
-}) {
+  className,
+  icon,
+}: IconButtonProps & { className: string; icon: number }): ReactNode {
   return (
     <button
       type="button"
@@ -71,11 +61,11 @@ export function SmallIconButton({
       aria-pressed={pressed}
       disabled={disabled}
       onClick={onClick}
-      className={`${SMALL_ICON_BUTTON} ${className}`}
+      className={className}
     >
       <svg
-        width="14"
-        height="14"
+        width={icon}
+        height={icon}
         viewBox="0 0 18 18"
         fill="none"
         stroke="currentColor"

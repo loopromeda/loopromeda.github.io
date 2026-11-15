@@ -20,7 +20,7 @@ import {
   type SurfaceSettings,
   type SurfaceStorage,
 } from './state/surface'
-import { IconButton } from './ui/IconButton'
+import { BarIconButton } from './ui/IconButton'
 import { MasterSheet } from './ui/MasterSheet'
 import { hashOf, sheetOf, type Sheet } from './ui/pages'
 import { PatchButton } from './ui/PatchButton'
@@ -58,7 +58,7 @@ const page =
 /**
  * How the height is shared, the controls out. The keys stand at most 10rem
  * long, whatever the width, under what stands above them (PlaySurface's
- * --play-head: the header and its gap, 3.25rem, and on a narrow screen
+ * --play-head: the header and its gap, 2.75rem, and on a narrow screen
  * the keys' navigator in a strip of its own): one length to lay the rest
  * out around. Beside (index.css: md wide, or a phone on its side) they
  * stand at that and the editor takes the rest: the keys stay put as
@@ -77,13 +77,13 @@ const EDITOR_SIZE = 'upright:grow side:flex-1'
 // Written out whole, for Tailwind to find
 const KEYS_SIZE = [
   'flex-1 upright:grow-[999]',
-  'upright:max-h-[calc(var(--play-head,3.25rem)_+_min(10rem,45dvh))]',
-  'side:flex-[0_0_calc(var(--play-head,3.25rem)_+_clamp(7rem,100dvh_-_20rem,10rem))]',
+  'upright:max-h-[calc(var(--play-head,2.75rem)_+_min(10rem,45dvh))]',
+  'side:flex-[0_0_calc(var(--play-head,2.75rem)_+_clamp(7rem,100dvh_-_20rem,10rem))]',
 ].join(' ')
 const SEQ_SIZE = [
   'flex-1 upright:grow-[999]',
-  'upright:max-h-[calc(var(--play-head,3.25rem)_+_min(18rem,50dvh))]',
-  'side:flex-[0_0_calc(var(--play-head,3.25rem)_+_clamp(7rem,100dvh_-_20rem,18rem))]',
+  'upright:max-h-[calc(var(--play-head,2.75rem)_+_min(18rem,50dvh))]',
+  'side:flex-[0_0_calc(var(--play-head,2.75rem)_+_clamp(7rem,100dvh_-_20rem,18rem))]',
 ].join(' ')
 
 /** Arrows in the 18 px box: up, what stands below rises; down, it sinks */
@@ -411,7 +411,7 @@ export function App({
         away={away}
         fold={
           !surface.hideControls && (
-            <IconButton
+            <BarIconButton
               label="Hide surface"
               pressed={away}
               onClick={() => changeSurface({ ...surface, hideSurface: !away })}
@@ -472,7 +472,7 @@ export function App({
               onToggle={() => toggle('surface')}
             />
             {!away && (
-              <IconButton
+              <BarIconButton
                 label="Hide controls"
                 pressed={surface.hideControls}
                 onClick={() =>
