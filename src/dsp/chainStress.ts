@@ -1,5 +1,13 @@
 import { ChainSynth } from './chainSynth'
 import { EffectRack } from './effects'
+import {
+  EQ_BELL,
+  EQ_FLAT_Q,
+  EQ_HIGH_CUT,
+  EQ_HIGH_SHELF,
+  EQ_LOW_CUT,
+  EQ_LOW_SHELF,
+} from './eq'
 import { BANDPASS, HIGHPASS, LOWPASS } from './filter'
 import { Mixer, Part, Strip } from './output'
 import { LFO_SAMPLE_HOLD, LFO_SINE, LFO_SMOOTH, LFO_TRIANGLE } from './lfo'
@@ -185,7 +193,15 @@ function fill(rack: EffectRack, kinds = HEAVIEST): void {
     if (kind === FX_CHORUS) rack.setChorus(k, 0.6 + 0.3 * k, 0.5, 0.5)
     else if (kind === FX_DELAY) rack.setDelay(k, 0.35, 0.6, 0.6, true, 0.5)
     // Every band moved and the lows cut, so none is skipped
-    else if (kind === FX_EQ) rack.setEq(k, 40, 3, 100, -2, 1000, 4, 8000)
+    else if (kind === FX_EQ) {
+      // Every point at work
+      rack.setEq(k, 0, EQ_LOW_CUT, 40, 0, EQ_FLAT_Q)
+      rack.setEq(k, 1, EQ_LOW_SHELF, 100, 3, EQ_FLAT_Q)
+      rack.setEq(k, 2, EQ_BELL, 400, -2, 1.4)
+      rack.setEq(k, 3, EQ_BELL, 2500, 2, 1)
+      rack.setEq(k, 4, EQ_HIGH_SHELF, 8000, 4, EQ_FLAT_Q)
+      rack.setEq(k, 5, EQ_HIGH_CUT, 16000, 0, EQ_FLAT_Q)
+    }
     // Working all the while, at an even mix
     else if (kind === FX_COMPRESSOR) {
       rack.setCompressor(k, -40, 4, 0.005, 0.1, 6, 0.5)

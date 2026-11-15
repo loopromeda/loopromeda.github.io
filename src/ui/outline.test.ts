@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { addItem, addModulator, setValue } from '../state/sound/edit'
+import { addEffect, addItem, addModulator, setValue } from '../state/sound/edit'
 import { AMP, VOICE, initSound, type Sound } from '../state/sound/sound'
 import { STAGE_POINTS } from '../viz/envelope'
 import {
   OUTLINE_HEIGHT,
+  OUTLINE_MIDDLE,
   OUTLINE_WIDTH,
   outlineFill,
   outlineKind,
@@ -74,6 +75,26 @@ describe('outlinePath', () => {
     expect(outlinePath(setValue(sound, 'm2', 'shape', 3), 'm2')).not.toBe(
       outlinePath(sound, 'm2')
     )
+  })
+})
+
+describe('an EQ’s outline', () => {
+  it('draws its curve, flat across the middle, and its gain off it', () => {
+    const { sound, id = null } = addEffect(initSound(), 'eq')
+    if (id === null) throw new Error('no room for an EQ')
+    expect(outlineKind(sound, id)).toBe('eq')
+    const flat = points(outlinePath(sound, id))
+    expect(flat.length).toBeGreaterThan(2)
+    for (const [, y] of flat) expect(y).toBeCloseTo(OUTLINE_MIDDLE, 1)
+    // The low shelf up: its lows over the middle (y down)
+    const lifted = points(outlinePath(setValue(sound, id, 'low', 9), id))
+    expect(lifted[0]?.[1]).toBeLessThan(OUTLINE_MIDDLE - 3)
+    expect(lifted.at(-1)?.[1]).toBeCloseTo(OUTLINE_MIDDLE, 0)
+    // Its area closes on 0 dB, not on the bottom
+    const line = outlinePath(sound, id)
+    expect(
+      outlineFill(line, OUTLINE_MIDDLE).endsWith(`0 ${OUTLINE_MIDDLE}Z`)
+    ).toBe(true)
   })
 })
 

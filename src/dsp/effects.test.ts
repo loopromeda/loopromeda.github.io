@@ -5,7 +5,6 @@ import {
   Compressor,
   Delay,
   Doubler,
-  EQ_CUT_OFF,
   EffectRack,
   Equalizer,
   Haas,
@@ -22,6 +21,17 @@ import {
   wetLevel,
 } from './effects'
 import { Clock } from './clock'
+import {
+  EQ_BELL,
+  EQ_FLAT_Q,
+  EQ_HIGH_CUT,
+  EQ_HIGH_SHELF,
+  EQ_LOW_CUT,
+  EQ_LOW_SHELF,
+  EQ_POINTS,
+  biquadGain,
+  eqCoefficients,
+} from './eq'
 import {
   FX_CHORUS,
   FX_COMPRESSOR,
@@ -363,7 +373,7 @@ function eqGain(eq: Equalizer, hertz: number): number {
 }
 
 describe('Equalizer', () => {
-  it('passes the signal untouched while flat', () => {
+  it('passes the signal untouched while flat, its cuts off', () => {
     const eq = new Equalizer(SAMPLE_RATE)
     const signal = sine(0.1, 440)
     const before = Float32Array.from(signal.left)
@@ -372,37 +382,74 @@ describe('Equalizer', () => {
     expect(signal.right).toEqual(before)
   })
 
-  it('raises or lowers each band by its gain, leaving the rest', () => {
+  it('raises or lowers a shelf or a bell by its gain, leaving the rest', () => {
     const low = new Equalizer(SAMPLE_RATE)
-    low.set(EQ_CUT_OFF, 6, 200, 0, 1000, 0, 8000)
+    low.setPoint(1, EQ_LOW_SHELF, 200, 6, EQ_FLAT_Q)
     expect(eqGain(low, 30)).toBeCloseTo(6, 0)
     expect(Math.abs(eqGain(low, 5000))).toBeLessThan(0.1)
 
     const mid = new Equalizer(SAMPLE_RATE)
-    mid.set(EQ_CUT_OFF, 0, 100, -6, 1000, 0, 8000)
+    mid.setPoint(2, EQ_BELL, 1000, -6, 0.7)
     expect(eqGain(mid, 1000)).toBeCloseTo(-6, 1)
     expect(Math.abs(eqGain(mid, 40))).toBeLessThan(0.3)
     expect(Math.abs(eqGain(mid, 18000))).toBeLessThan(0.3)
 
     const high = new Equalizer(SAMPLE_RATE)
-    high.set(EQ_CUT_OFF, 0, 100, 0, 1000, 9, 4000)
+    high.setPoint(4, EQ_HIGH_SHELF, 4000, 9, EQ_FLAT_Q)
     expect(eqGain(high, 18000)).toBeCloseTo(9, 0)
     expect(Math.abs(eqGain(high, 100))).toBeLessThan(0.1)
   })
 
   it('cuts the lows at 12 dB an octave under its corner', () => {
     const eq = new Equalizer(SAMPLE_RATE)
-    eq.set(200, 0, 100, 0, 1000, 0, 8000)
+    eq.setPoint(0, EQ_LOW_CUT, 200, 0, EQ_FLAT_Q)
     // At its corner, 3 dB down (no bump); two octaves under, about 24
     expect(eqGain(eq, 200)).toBeCloseTo(-3, 0)
     expect(eqGain(eq, 50)).toBeLessThan(-22)
     expect(Math.abs(eqGain(eq, 4000))).toBeLessThan(0.1)
   })
 
+  it('cuts the highs at 12 dB an octave over its corner', () => {
+    const eq = new Equalizer(SAMPLE_RATE)
+    eq.setPoint(5, EQ_HIGH_CUT, 2000, 0, EQ_FLAT_Q)
+    expect(eqGain(eq, 2000)).toBeCloseTo(-3, 0)
+    expect(eqGain(eq, 8000)).toBeLessThan(-22)
+    expect(Math.abs(eqGain(eq, 200))).toBeLessThan(0.1)
+  })
+
+  it('rings a cut at its corner as high as its Q', () => {
+    const eq = new Equalizer(SAMPLE_RATE)
+    eq.setPoint(0, EQ_LOW_CUT, 200, 0, 4)
+    // 20 log 4: 12 dB up at the corner
+    expect(eqGain(eq, 200)).toBeCloseTo(12, 0)
+  })
+
+  it('plays any point as any kind, as its curve has it', () => {
+    const eq = new Equalizer(SAMPLE_RATE)
+    eq.setPoint(0, EQ_BELL, 1000, 6, 2)
+    const c = new Float64Array(6)
+    eqCoefficients(EQ_BELL, 1000, 6, 2, SAMPLE_RATE, c)
+    for (const hertz of [300, 1000, 1500, 6000]) {
+      expect(eqGain(eq, hertz)).toBeCloseTo(
+        biquadGain(c, hertz, SAMPLE_RATE),
+        1
+      )
+    }
+  })
+
+  it('holds a shelf’s Q within its kind’s', () => {
+    const at = (q: number) => {
+      const eq = new Equalizer(SAMPLE_RATE)
+      eq.setPoint(1, EQ_LOW_SHELF, 300, 9, q)
+      return run(eq, sine(0.1, 300)).left
+    }
+    expect(at(10)).toEqual(at(2))
+  })
+
   it('glides to a knob turned rather than jumping', () => {
     const eq = new Equalizer(SAMPLE_RATE)
     run(eq, sine(0.05, 1000))
-    eq.set(EQ_CUT_OFF, 0, 100, 12, 1000, 0, 8000)
+    eq.setPoint(2, EQ_BELL, 1000, 12, 0.7)
     const signal = run(eq, sine(0.3, 1000))
     const ms = (t: number) => Math.round(t * SAMPLE_RATE)
     // A few milliseconds in, on its way; by 200 ms, there
@@ -414,7 +461,9 @@ describe('Equalizer', () => {
 
   it('stays finite with corners past what the sample rate holds', () => {
     const eq = new Equalizer(SAMPLE_RATE)
-    eq.set(1e6, 15, 1e6, 15, 1e6, 15, 1e6)
+    for (let p = 0; p < EQ_POINTS; p++) {
+      eq.setPoint(p, p % 5, 1e6, 15, 10)
+    }
     const signal = run(eq, sine(0.1, 440))
     expect(signal.left.every(Number.isFinite)).toBe(true)
   })
@@ -605,7 +654,7 @@ describe('EffectRack, the mastering tools', () => {
     rack.setKind(0, FX_EQ)
     rack.setKind(1, FX_COMPRESSOR)
     rack.setKind(2, FX_LIMITER)
-    rack.setEq(0, EQ_CUT_OFF, 0, 100, 0, 1000, 0, 8000)
+    rack.setEq(0, 2, EQ_BELL, 1000, 0, 1)
     rack.setCompressor(1, -24, 4, 0.005, 0.1, 0, 1)
     rack.setLimiter(2, 12, -3, 0.1)
     const signal = run(rack, sine(0.5, 1000, 0.5))

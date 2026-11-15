@@ -17,6 +17,7 @@ import {
   chainStressRack,
   chainStressSynth,
 } from './chainStress'
+import { EQ_BELL, EQ_FLAT_Q, EQ_HIGH_SHELF, EQ_LOW_SHELF } from './eq'
 import { LFO_SINE, LFO_SMOOTH } from './lfo'
 import { LoudnessMeter } from './loudness'
 import { LOWPASS } from './filter'
@@ -226,7 +227,10 @@ test('renders an EQ gliding well within a block', async ({ bench }) => {
       turn++
       const gain = turn % 2 === 0 ? 6 : -6
       for (let k = 0; k < rack.count; k++) {
-        rack.setEq(k, 40, gain, 100, -gain, 1000, gain, 8000)
+        rack.setEq(k, 1, EQ_LOW_SHELF, 100, gain, EQ_FLAT_Q)
+        rack.setEq(k, 2, EQ_BELL, 400, -gain, 1.4)
+        rack.setEq(k, 3, EQ_BELL, 2500, gain, 1)
+        rack.setEq(k, 4, EQ_HIGH_SHELF, 8000, gain, EQ_FLAT_Q)
       }
       left.fill(0.1)
       right.fill(0.1)

@@ -123,6 +123,8 @@ import {
 } from './editor'
 import { ConfirmDialog } from './ConfirmDialog'
 import { LoudnessCell, Reduction } from './Dynamics'
+import { EqGraph } from './EqGraph'
+import { mixEq, soundEq } from './eqAccess'
 import { FadeRow } from './FadeRow'
 import { Knob, MixKnob, neutralArc } from './Knob'
 import type { MasterViewKind } from './MasterViews'
@@ -327,8 +329,13 @@ interface View {
   readonly choices?: readonly Choice[]
   readonly choiceNote?: string
   readonly actions?: readonly Action[]
-  /** In the knobs' place, what a part of no knobs holds: a pad's presets */
+  /**
+   * In the knobs' place, what a part of no knobs holds (a pad's presets),
+   * or what its knobs are turned with (an EQ's curve, EqGraph)
+   */
   readonly body?: ReactNode
+  /** The body takes the height the panel has, not centred in it */
+  readonly fill?: boolean
 }
 
 const INPUT_HINTS: Record<InputKind, string> = {
@@ -349,7 +356,7 @@ const EFFECT_HINTS: Record<EffectKind, string> = {
   chorus: 'Wide and moving',
   delay: 'Echoes, in time',
   reverb: 'A room around it',
-  eq: 'Lows to highs',
+  eq: 'Six points',
   compressor: 'Evens the level',
   limiter: 'Caps the peaks',
   haas: 'One side later',
@@ -586,7 +593,11 @@ export function PartPanel({
           fm={view.fm}
         />
       )}
-      <div className={PANEL_BODY}>
+      <div
+        className={
+          view.fill ? 'flex min-h-0 flex-1 flex-col gap-2' : PANEL_BODY
+        }
+      >
         {view.body ??
           (view.choices ? (
             <>
@@ -1247,6 +1258,10 @@ function mixView(
           EFFECT_KINDS[effect.kind].knobs,
           effect.values
         ).map(({ key }) => ({ part: effect.id, key })),
+        ...(effect.kind === 'eq' && {
+          body: <EqGraph key={effect.id} access={mixEq(engine, effect.id)} />,
+          fill: true,
+        }),
         color: owner === MASTER ? neutralArc() : look.ink,
         reduction: reduces(effect.kind) ? { id: effect.id } : undefined,
         actions: [
@@ -1621,6 +1636,10 @@ function viewOf(
           picked,
           shownKnobs(EFFECT_KINDS[kind].knobs, found.part.values)
         ),
+        ...(kind === 'eq' && {
+          body: <EqGraph key={picked} access={soundEq(engine, picked)} />,
+          fill: true,
+        }),
         color: neutralArc(),
         reduction: reduces(kind)
           ? { track: engine.getTrack().id, id: picked }

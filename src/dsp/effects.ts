@@ -10,6 +10,19 @@
  * a time over a few tens of milliseconds. Allocates nothing in process.
  */
 import { Clock } from './clock'
+import {
+  EQ_BELL,
+  EQ_FLAT,
+  EQ_FLAT_Q,
+  EQ_HIGH_CUT,
+  EQ_LOW_CUT,
+  EQ_MAX_FREQ,
+  EQ_MIN_FREQ,
+  EQ_POINTS,
+  eqCoefficients,
+  eqType,
+  fitQ,
+} from './eq'
 import { sinCycles } from './fastMath'
 import {
   FX_CHORUS,
@@ -887,83 +900,75 @@ class Section {
   }
 }
 
-/** A low cut at this or lower is off: the EQ passes the lows whole */
-export const EQ_CUT_OFF = 10
-/** The mid band's bell: about two octaves wide, broad, as a master's */
-const EQ_MID_Q = 0.7
-/** The low cut's slope: 12 dB an octave, no bump at its corner */
-const EQ_CUT_Q = Math.SQRT1_2
 /** How long an EQ's knob takes to glide most of the way, in seconds */
 const EQ_GLIDE = 0.02
-/** Its bands never go past this share of the sample rate */
-const EQ_HIGHEST = 0.45
-
-/** The EQ's knobs, gains in dB and corners in hertz (the logs of them) */
-const EQ_CUT = 0
-const EQ_LOW_GAIN = 1
-const EQ_LOW_FREQ = 2
-const EQ_MID_GAIN = 3
-const EQ_MID_FREQ = 4
-const EQ_HIGH_GAIN = 5
-const EQ_HIGH_FREQ = 6
-const EQ_KNOBS = 7
+/** A point's values glided: its frequency's log, its gain, its Q's log */
+const EQ_FREQ = 0
+const EQ_GAIN = 1
+const EQ_Q = 2
+const EQ_VALUES = 3
+const LOG_MIN_FREQ = Math.log(EQ_MIN_FREQ)
+const LOG_MAX_FREQ = Math.log(EQ_MAX_FREQ)
 
 /**
- * An EQ for a sound, a bus or the master: a low cut (12 dB an octave, off
- * at EQ_CUT_OFF), a low shelf, a broad bell in the middle and a high
- * shelf, each band's gain in dB and corner in hertz (the cookbook's
- * filters). A knob turned glides over about 20 ms, the bands worked out
- * again each block while it does; a band at 0 dB, or a cut that is off,
- * costs nothing.
+ * A parametric EQ (eq.ts) for a sound, a bus or the master: EQ_POINTS
+ * points, each its kind (a low cut, a low shelf, a bell, a high shelf or
+ * a high cut), its frequency, its gain in dB and its Q. A knob turned
+ * glides over about 20 ms, the points worked out again each block while
+ * it does; a kind changed takes at once. A shelf or a bell at 0 dB, or a
+ * cut that is off, costs nothing, and starts again from silence when it
+ * comes back.
  */
 export class Equalizer {
   readonly #sampleRate: number
-  readonly #cut = new Section()
-  readonly #low = new Section()
-  readonly #mid = new Section()
-  readonly #high = new Section()
-  /** Where each knob goes and where it is: gains in dB, corners as logs */
-  readonly #goal = new Float64Array(EQ_KNOBS)
-  readonly #now = new Float64Array(EQ_KNOBS)
+  readonly #sections: readonly Section[] = Array.from(
+    { length: EQ_POINTS },
+    () => new Section()
+  )
+  readonly #types = new Int8Array(EQ_POINTS)
+  /** Whether each point ran last block */
+  readonly #ran = new Uint8Array(EQ_POINTS)
+  /** Where each point's values go and where they are (EQ_VALUES each) */
+  readonly #goal = new Float64Array(EQ_POINTS * EQ_VALUES)
+  readonly #now = new Float64Array(EQ_POINTS * EQ_VALUES)
+  readonly #coefficients = new Float64Array(6)
   #settled = false
   #fresh = true
 
   constructor(sampleRate: number) {
     this.#sampleRate = sampleRate
-    this.set(EQ_CUT_OFF, 0, 100, 0, 1000, 0, 8000)
+    EQ_FLAT.forEach(({ type, freq }, p) => {
+      this.setPoint(p, type, freq, 0, type === EQ_BELL ? 1 : EQ_FLAT_Q)
+    })
   }
 
-  set(
-    cut: number,
-    lowGain: number,
-    lowFreq: number,
-    midGain: number,
-    midFreq: number,
-    highGain: number,
-    highFreq: number
+  /**
+   * Point p (0 to EQ_POINTS - 1): its kind (EQ_LOW_CUT to EQ_HIGH_CUT),
+   * its frequency in Hz (EQ_MIN_FREQ to EQ_MAX_FREQ), its gain in dB and
+   * its Q (within its kind's)
+   */
+  setPoint(
+    p: number,
+    type: number,
+    freq: number,
+    gain: number,
+    q: number
   ): void {
-    const most = EQ_HIGHEST * this.#sampleRate
-    const corner = (hertz: number, fallback: number) =>
-      Math.log(
-        Number.isFinite(hertz) ? Math.min(Math.max(hertz, 1), most) : fallback
-      )
-    const gain = (db: number) => (Number.isFinite(db) ? db : 0)
+    if (!(p >= 0 && p < EQ_POINTS)) return
+    const kind = eqType(type)
+    const j = p * EQ_VALUES
     const goal = this.#goal
-    goal[EQ_CUT] = corner(cut, EQ_CUT_OFF)
-    goal[EQ_LOW_GAIN] = gain(lowGain)
-    goal[EQ_LOW_FREQ] = corner(lowFreq, 100)
-    goal[EQ_MID_GAIN] = gain(midGain)
-    goal[EQ_MID_FREQ] = corner(midFreq, 1000)
-    goal[EQ_HIGH_GAIN] = gain(highGain)
-    goal[EQ_HIGH_FREQ] = corner(highFreq, 8000)
+    goal[j + EQ_FREQ] = Number.isFinite(freq)
+      ? Math.log(Math.min(Math.max(freq, EQ_MIN_FREQ), EQ_MAX_FREQ))
+      : Math.log(1000)
+    goal[j + EQ_GAIN] = Number.isFinite(gain) ? gain : 0
+    goal[j + EQ_Q] = Math.log(fitQ(kind, Number.isFinite(q) ? q : EQ_FLAT_Q))
+    this.#types[p] = kind
     this.#settled = false
   }
 
   reset(): void {
-    this.#cut.reset()
-    this.#low.reset()
-    this.#mid.reset()
-    this.#high.reset()
+    for (const section of this.#sections) section.reset()
     this.#fresh = true
   }
 
@@ -979,7 +984,7 @@ export class Equalizer {
       // Most of the way over EQ_GLIDE, landing once within a hair
       const k = 1 - Math.exp(-length / (EQ_GLIDE * this.#sampleRate))
       let settled = true
-      for (let j = 0; j < EQ_KNOBS; j++) {
+      for (let j = 0; j < now.length; j++) {
         const gap = (goal[j] as number) - (now[j] as number)
         if (Math.abs(gap) < 1e-4) now[j] = goal[j] as number
         else {
@@ -990,80 +995,57 @@ export class Equalizer {
       this.#settled = settled
       this.#design()
     }
-    if ((now[EQ_CUT] as number) > Math.log(EQ_CUT_OFF) + 1e-6) {
-      this.#cut.process(left, right, length)
+    for (let p = 0; p < EQ_POINTS; p++) {
+      const section = this.#sections[p] as Section
+      if (!this.#runs(p)) {
+        this.#ran[p] = 0
+        continue
+      }
+      // Back from resting, from silence rather than what it last held
+      if (this.#ran[p] === 0) section.reset()
+      this.#ran[p] = 1
+      section.process(left, right, length)
     }
-    if (now[EQ_LOW_GAIN] !== 0) this.#low.process(left, right, length)
-    if (now[EQ_MID_GAIN] !== 0) this.#mid.process(left, right, length)
-    if (now[EQ_HIGH_GAIN] !== 0) this.#high.process(left, right, length)
   }
 
-  /** Each band's coefficients from where its knobs are now */
+  /** Whether point p changes anything where its values are now */
+  #runs(p: number): boolean {
+    const j = p * EQ_VALUES
+    const freq = this.#now[j + EQ_FREQ] as number
+    switch (this.#types[p]) {
+      case EQ_LOW_CUT:
+        return freq > LOG_MIN_FREQ + 1e-6
+      case EQ_HIGH_CUT:
+        return freq < LOG_MAX_FREQ - 1e-6
+      default:
+        return this.#now[j + EQ_GAIN] !== 0
+    }
+  }
+
+  /** Each point's coefficients from where its values are now */
   #design(): void {
     const now = this.#now
-    const rate = this.#sampleRate
-    const w = (log: number) => (2 * Math.PI * Math.exp(log)) / rate
-    {
-      const w0 = w(now[EQ_CUT] as number)
-      const cos = Math.cos(w0)
-      const alpha = Math.sin(w0) / (2 * EQ_CUT_Q)
-      this.#cut.set(
-        (1 + cos) / 2,
-        -(1 + cos),
-        (1 + cos) / 2,
-        1 + alpha,
-        -2 * cos,
-        1 - alpha
+    const c = this.#coefficients
+    for (let p = 0; p < EQ_POINTS; p++) {
+      const j = p * EQ_VALUES
+      eqCoefficients(
+        this.#types[p] as number,
+        Math.exp(now[j + EQ_FREQ] as number),
+        now[j + EQ_GAIN] as number,
+        Math.exp(now[j + EQ_Q] as number),
+        this.#sampleRate,
+        c
+      )
+      ;(this.#sections[p] as Section).set(
+        c[0] as number,
+        c[1] as number,
+        c[2] as number,
+        c[3] as number,
+        c[4] as number,
+        c[5] as number
       )
     }
-    shelf(
-      this.#low,
-      now[EQ_LOW_GAIN] as number,
-      w(now[EQ_LOW_FREQ] as number),
-      -1
-    )
-    {
-      const a = 10 ** ((now[EQ_MID_GAIN] as number) / 40)
-      const w0 = w(now[EQ_MID_FREQ] as number)
-      const cos = Math.cos(w0)
-      const alpha = Math.sin(w0) / (2 * EQ_MID_Q)
-      this.#mid.set(
-        1 + alpha * a,
-        -2 * cos,
-        1 - alpha * a,
-        1 + alpha / a,
-        -2 * cos,
-        1 - alpha / a
-      )
-    }
-    shelf(
-      this.#high,
-      now[EQ_HIGH_GAIN] as number,
-      w(now[EQ_HIGH_FREQ] as number),
-      1
-    )
   }
-}
-
-/**
- * A shelf of gain dB from w0 (radians a sample) on: up the spectrum
- * (side 1, a high shelf) or down it (-1, a low shelf), its slope the
- * cookbook's steepest without a bump (S = 1)
- */
-function shelf(section: Section, gain: number, w0: number, side: 1 | -1) {
-  const a = 10 ** (gain / 40)
-  const cos = Math.cos(w0)
-  const alpha = (Math.sin(w0) / 2) * Math.SQRT2
-  const root = 2 * Math.sqrt(a) * alpha
-  const s = side
-  section.set(
-    a * (a + 1 + s * (a - 1) * cos + root),
-    -2 * s * a * (a - 1 + s * (a + 1) * cos),
-    a * (a + 1 + s * (a - 1) * cos - root),
-    a + 1 - s * (a - 1) * cos + root,
-    2 * s * (a - 1 - s * (a + 1) * cos),
-    a + 1 - s * (a - 1) * cos - root
-  )
 }
 
 /** The compressor's knee, dB wide: its ratio comes in softly over it */
@@ -1497,25 +1479,16 @@ export class EffectRack {
     this.#reverb[k]?.set(size, decay, damp, mix)
   }
 
+  /** Point p of slot k's EQ: its kind, frequency, gain and Q */
   setEq(
     k: number,
-    cut: number,
-    lowGain: number,
-    lowFreq: number,
-    midGain: number,
-    midFreq: number,
-    highGain: number,
-    highFreq: number
+    p: number,
+    type: number,
+    freq: number,
+    gain: number,
+    q: number
   ): void {
-    this.#eq[k]?.set(
-      cut,
-      lowGain,
-      lowFreq,
-      midGain,
-      midFreq,
-      highGain,
-      highFreq
-    )
+    this.#eq[k]?.setPoint(p, type, freq, gain, q)
   }
 
   setCompressor(

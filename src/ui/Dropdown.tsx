@@ -6,6 +6,7 @@ import {
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
 } from 'react'
+import { createPortal } from 'react-dom'
 import { RAISED, TALL_HIT } from './controls'
 import { usePlacement } from './placement'
 
@@ -17,6 +18,26 @@ const RAIL_W = 8
 const ROW = (28 + 2) / 16
 /** Around the rows: the card's padding, 4 px each side — tight, not a dialog */
 const AROUND = 8 / 16
+
+/** A picture before a name, in its ink */
+function Glyph({ path }: { path: string }) {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 14 14"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className="shrink-0"
+    >
+      <path d={path} />
+    </svg>
+  )
+}
 
 /** Colour dots before a name: what the themes give their options */
 function Dots({ colours }: { colours: readonly string[] }) {
@@ -50,7 +71,10 @@ function Dots({ colours }: { colours: readonly string[] }) {
  * editor's tab rail (rail) the button is one of the rail's, the chosen
  * one's name bright, lit when open, as wide for each (so what follows it
  * stays put), and its list narrower; the
- * list stands over the sheet under the rail (z-40).
+ * list stands over the sheet under the rail (z-40). The list is put on
+ * the page itself (on a modal dialog's, in one), not where the button
+ * stands: in the editor's panel, whose glass would hold it inside and
+ * scroll to show it, which closes it (the EQ's kind, in EqGraph).
  */
 export function Dropdown<T extends string | number>({
   labelId,
@@ -69,6 +93,8 @@ export function Dropdown<T extends string | number>({
     label: string
     /** The theme's colours, as dots before the name */
     readonly swatch?: readonly string[]
+    /** A picture before the name: a path on a 14 px square (an EQ's kind) */
+    readonly glyph?: string
   }[]
   value: T
   onChange: (value: T) => void
@@ -77,6 +103,8 @@ export function Dropdown<T extends string | number>({
 }) {
   const id = useId()
   const [open, setOpen] = useState(false)
+  /** Where the list is put while open: the page, or a modal dialog */
+  const [host, setHost] = useState<Element>()
   const trigger = useRef<HTMLButtonElement>(null)
   const list = useRef<HTMLDivElement>(null)
   const placed = usePlacement(
@@ -158,7 +186,10 @@ export function Dropdown<T extends string | number>({
         aria-labelledby={`${labelId} ${id}-value`}
         aria-describedby={hintId}
         aria-controls={open ? `${id}-list` : undefined}
-        onClick={() => setOpen((was) => !was)}
+        onClick={() => {
+          setHost(trigger.current?.closest('dialog') ?? document.body)
+          setOpen((was) => !was)
+        }}
         className={
           rail
             ? `group flex h-7 min-w-18 items-center gap-1.5 rounded-md bg-(--lift) pr-2 pl-3 text-[11px] font-semibold tracking-wider text-(--ink-0) aria-expanded:bg-(--lift-2) ${TALL_HIT}`
@@ -166,6 +197,7 @@ export function Dropdown<T extends string | number>({
         }
       >
         {chosen?.swatch && <Dots colours={chosen.swatch} />}
+        {chosen?.glyph && <Glyph path={chosen.glyph} />}
         <span id={`${id}-value`} className="min-w-0 truncate">
           {chosen?.label ?? '—'}
         </span>
@@ -184,56 +216,60 @@ export function Dropdown<T extends string | number>({
           <path d="M1 1l4 4 4-4" />
         </svg>
       </button>
-      {open && (
-        <div
-          ref={list}
-          id={`${id}-list`}
-          role="listbox"
-          aria-labelledby={labelId}
-          aria-describedby={hintId}
-          onKeyDown={keys}
-          // Unseen until placed, a frame after it opens
-          style={
-            placed && {
-              left: placed.left,
-              top: placed.top,
-              width: placed.width,
-              height: placed.height,
+      {open &&
+        host &&
+        createPortal(
+          <div
+            ref={list}
+            id={`${id}-list`}
+            role="listbox"
+            aria-labelledby={labelId}
+            aria-describedby={hintId}
+            onKeyDown={keys}
+            // Unseen until placed, a frame after it opens
+            style={
+              placed && {
+                left: placed.left,
+                top: placed.top,
+                width: placed.width,
+                height: placed.height,
+              }
             }
-          }
-          className={`fixed z-40 flex flex-col gap-0.5 p-1 ${RAISED} ${placed ? '' : 'invisible'}`}
-        >
-          {options.map((option) => (
-            <button
-              key={`${option.value}`}
-              type="button"
-              role="option"
-              aria-selected={option.value === value}
-              onClick={() => pick(option.value)}
-              className={`flex h-7 w-full shrink-0 items-center gap-2 rounded-md px-2 text-left text-[11px] font-semibold text-(--ink-400) outline-none hover:bg-(--lift) focus-visible:bg-(--lift) aria-selected:bg-(--lift-2) aria-selected:text-(--ink-100)`}
-            >
-              {option.swatch && <Dots colours={option.swatch} />}
-              <span className="min-w-0 truncate">{option.label}</span>
-              {option.value === value && (
-                <svg
-                  width="12"
-                  height="12"
-                  viewBox="0 0 14 14"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                  className="ml-auto shrink-0 text-(--accent)"
-                >
-                  <path d="M2.5 7.5l3 3 6-6.5" />
-                </svg>
-              )}
-            </button>
-          ))}
-        </div>
-      )}
+            className={`fixed z-40 flex flex-col gap-0.5 p-1 ${RAISED} ${placed ? '' : 'invisible'}`}
+          >
+            {options.map((option) => (
+              <button
+                key={`${option.value}`}
+                type="button"
+                role="option"
+                aria-selected={option.value === value}
+                onClick={() => pick(option.value)}
+                className={`flex h-7 w-full shrink-0 items-center gap-2 rounded-md px-2 text-left text-[11px] font-semibold text-(--ink-400) outline-none hover:bg-(--lift) focus-visible:bg-(--lift) aria-selected:bg-(--lift-2) aria-selected:text-(--ink-100)`}
+              >
+                {option.swatch && <Dots colours={option.swatch} />}
+                {option.glyph && <Glyph path={option.glyph} />}
+                <span className="min-w-0 truncate">{option.label}</span>
+                {option.value === value && (
+                  <svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 14 14"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                    className="ml-auto shrink-0 text-(--accent)"
+                  >
+                    <path d="M2.5 7.5l3 3 6-6.5" />
+                  </svg>
+                )}
+              </button>
+            ))}
+          </div>,
+          host
+        )}
     </>
   )
 }

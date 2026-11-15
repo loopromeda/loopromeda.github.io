@@ -9,6 +9,7 @@
 import {
   BUS_IDS,
   EFFECT_KINDS,
+  EQ_POINT_KEYS,
   FILTER_TYPE_NAMES,
   INPUT_KINDS,
   ITEM_KINDS,
@@ -25,6 +26,7 @@ import {
   type Mix,
   type MixOwner,
 } from '../state/mix'
+import { isCut } from '../dsp/eq'
 import { formatValue } from '../state/params'
 import { setRef, setValue } from '../state/sound/edit'
 import {
@@ -40,6 +42,7 @@ import {
   type Effect,
   type Sound,
 } from '../state/sound/sound'
+import { EQ_SHORT_NAMES, eqPoints, isFlat } from '../viz/eq'
 import { groundOf, mode, palette, type Mode } from './theme'
 
 /**
@@ -590,27 +593,27 @@ export function effectLine(effect: {
   }
 }
 
-/** The EQ's bands, as its line names them */
-const EQ_BANDS = [
-  { key: 'low', name: 'Low' },
-  { key: 'mid', name: 'Mid' },
-  { key: 'high', name: 'High' },
-] as const
+/** A point's name on its EQ's line, by its kind: a shelf by its side */
 
-/** An EQ's line: the band it moves most, else its low cut, else Flat */
+/**
+ * An EQ's line: the shelf or bell it moves most, else a cut it makes
+ * (the lowest first), else Flat
+ */
 function eqLine(values: Readonly<Record<string, number>>): string {
-  let boldest: (typeof EQ_BANDS)[number] | undefined
-  for (const band of EQ_BANDS) {
-    const gain = Math.abs(values[band.key] ?? 0)
-    if (gain >= 0.05 && gain > Math.abs(values[boldest?.key ?? ''] ?? 0)) {
-      boldest = band
-    }
+  const points = eqPoints(values)
+  let boldest = -1
+  points.forEach((point, p) => {
+    if (isCut(point.type) || isFlat(point)) return
+    const was = points[boldest]
+    if (!was || Math.abs(point.gain) > Math.abs(was.gain)) boldest = p
+  })
+  const bold = points[boldest]
+  const keys = EQ_POINT_KEYS[boldest]
+  if (bold && keys) {
+    return `${EQ_SHORT_NAMES[bold.type] ?? ''} ${shown('eq', keys.gain, values)}`
   }
-  if (boldest) return `${boldest.name} ${shown('eq', boldest.key, values)}`
-  const cut = values.cut ?? 0
-  return shown('eq', 'cut', values) === 'Off' || cut <= 0
-    ? 'Flat'
-    : `Cut ${shortHz(cut)}`
+  const cut = points.find((point) => isCut(point.type) && !isFlat(point))
+  return cut ? `Cut ${shortHz(cut.freq)}` : 'Flat'
 }
 
 /** Knob key of an effect of kind, shown as its knob shows it */

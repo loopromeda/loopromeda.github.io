@@ -2,17 +2,19 @@ import { useLayoutEffect, useRef } from 'react'
 import type { Engine } from '../engine/engine'
 import {
   OUTLINE_HEIGHT,
+  OUTLINE_MIDDLE,
   OUTLINE_WIDTH,
   outlineFill,
+  outlineKind,
   outlinePath,
 } from './outline'
 
 /**
  * A part's picture (outline.ts): its line, and the area under it filled
- * faintly, stretched to the box className gives it (the stroke keeps its
- * width). It follows the knobs by setting the paths itself, so a knob
- * turning re-renders nothing, and leaves them be while the picture stays
- * the same.
+ * faintly (an EQ's, between it and 0 dB), stretched to the box className
+ * gives it (the stroke keeps its width). It follows the knobs by setting
+ * the paths itself, so a knob turning re-renders nothing, and leaves them
+ * be while the picture stays the same.
  */
 export function Picture({
   engine,
@@ -34,11 +36,14 @@ export function Picture({
   useLayoutEffect(() => {
     let shown = ''
     const draw = () => {
-      const line = outlinePath(engine.getSound(), part)
+      const sound = engine.getSound()
+      const line = outlinePath(sound, part)
       if (line === shown) return
       shown = line
+      const base =
+        outlineKind(sound, part) === 'eq' ? OUTLINE_MIDDLE : OUTLINE_HEIGHT
       lineRef.current?.setAttribute('d', line)
-      fillRef.current?.setAttribute('d', outlineFill(line))
+      fillRef.current?.setAttribute('d', outlineFill(line, base))
     }
     draw()
     return engine.subscribeSound(draw)

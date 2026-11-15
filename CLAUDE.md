@@ -64,7 +64,9 @@ src/dsp/      pure DSP (oscillators, envelopes, LFOs, filters, voices);
               and reverb, the stereo tools (a Haas delay, a doubler
               of two paths, a width) and the mastering tools (an EQ,
               a compressor, a limiter), in stereo, in racks: a sound's
-              inserts, the kit's, a bus's, the master's; loudness.ts
+              inserts, the kit's, a bus's, the master's; eq.ts the
+              EQ's six points (a kind, a frequency, a gain, a Q), the
+              cookbook's biquads it and its curve both use; loudness.ts
               the output's loudness as BS.1770 measures it
               (momentary, short-term, integrated, in LUFS);
               output.ts a sound's strip
@@ -207,7 +209,9 @@ src/viz/      pure display math (scope trigger and decimation, envelope
               button in popover.ts, the step grid's cells, a note's
               box and what a drag from a note makes of it in steps.ts,
               a knob lane's strip (a stroke's steps, Fill's shapes,
-              its outline) in laneStrip.ts,
+              its outline) in laneStrip.ts, an EQ's curve, where its
+              points stand and what a drag or a pinch makes of one in
+              eq.ts,
               and the app's mark, on the icons' grid and the
               favicon's, in mark.ts)
 src/ui/       React components; SoundEditor.tsx the sound as tiles
@@ -238,8 +242,14 @@ src/ui/       React components; SoundEditor.tsx the sound as tiles
               draws them a display frame at a time, the output read
               once a frame, each faded in once first drawn, the
               spectrogram going on from what it showed), its filters,
-              drives and modulators their pictures (Picture.tsx, drawn
-              from outline.ts); MasterSheet.tsx all the views at size
+              drives, modulators and EQs their pictures (Picture.tsx,
+              drawn from outline.ts); EqGraph.tsx an EQ's curve in its
+              panel's place of knobs, over the spectrum of what it is
+              heard in (its track's own, the master's), its points
+              dragged, pinched and typed (eqAccess.ts: the sound's or
+              the mix's knobs it reads and writes, and the output it is
+              heard in), small on the master's sheet;
+              MasterSheet.tsx all the views at size
               (MasterBoard, #/master), under the tab rail, with the
               loudness and the
               master's knobs (its level, its effects', one added);
@@ -282,7 +292,8 @@ src/ui/       React components; SoundEditor.tsx the sound as tiles
               kept, the session saved under a name, one opened in its
               place, a project's file out and in; #/project),
               SettingsDialog.tsx, a modal dialog, holds the settings
-              (the theme in Dropdown.tsx, the app's own select),
+              (the theme in Dropdown.tsx, the app's own select, its
+              list on the page, out of a panel's glass),
               Measure CPU and the browser's checks; Splash.tsx the
               mark and the name a moment as the page opens, and the
               first tap anywhere starting audio held back; theme.ts the

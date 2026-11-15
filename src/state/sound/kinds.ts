@@ -4,6 +4,17 @@
  * move on each, and how many of each a sound may hold. The one schema for
  * the editor, the audio thread and presets.
  */
+import {
+  EQ_BELL,
+  EQ_FLAT,
+  EQ_FLAT_Q,
+  EQ_MAX_FREQ,
+  EQ_MAX_GAIN,
+  EQ_MAX_Q,
+  EQ_MIN_FREQ,
+  EQ_MIN_Q,
+  EQ_TYPE_NAMES,
+} from '../../dsp/eq'
 import { LFO_SHAPE_NAMES, type ValueSpec } from '../params'
 
 /** One knob of a part, keyed within the part */
@@ -414,6 +425,63 @@ function mix(initial: number): KnobSpec {
   }
 }
 
+/**
+ * The keys of an EQ's points' knobs (src/dsp/eq.ts), the first point's
+ * first. Points 1, 2, 3 and 5 keep the keys of the four bands the EQ
+ * grew from (a low cut, a low shelf, a mid bell and a high shelf), so an
+ * EQ saved before, and a lane on one of its knobs, read as they sounded.
+ */
+export const EQ_POINT_KEYS = [
+  { type: 't1', freq: 'cut', gain: 'g1', q: 'q1' },
+  { type: 't2', freq: 'lowFreq', gain: 'low', q: 'q2' },
+  { type: 't3', freq: 'midFreq', gain: 'mid', q: 'q3' },
+  { type: 't4', freq: 'f4', gain: 'g4', q: 'q4' },
+  { type: 't5', freq: 'highFreq', gain: 'high', q: 'q5' },
+  { type: 't6', freq: 'f6', gain: 'g6', q: 'q6' },
+] as const
+
+/**
+ * An EQ's knobs: for each point its Type, Freq, Gain and Q, flat as
+ * EQ_FLAT has it. The third point, the old mid bell, reads its old
+ * place and Q where it was saved without them (1 kHz, 0.7).
+ */
+function eqKnobs(): KnobSpec[] {
+  return EQ_POINT_KEYS.flatMap((keys, p): KnobSpec[] => {
+    const flat = EQ_FLAT[p] ?? { type: EQ_BELL, freq: 1000 }
+    const n = p + 1
+    const old = p === 2
+    return [
+      {
+        key: keys.type,
+        label: `Type ${n}`,
+        min: 0,
+        max: EQ_TYPE_NAMES.length - 1,
+        default: flat.type,
+        curve: 'linear',
+        step: 1,
+        unit: '',
+        choices: EQ_TYPE_NAMES,
+      },
+      {
+        ...hertz(keys.freq, `Freq ${n}`, EQ_MIN_FREQ, EQ_MAX_FREQ, flat.freq),
+        ...(old ? { absent: 1000 } : {}),
+      },
+      decibels(keys.gain, `Gain ${n}`, -EQ_MAX_GAIN, EQ_MAX_GAIN, 0),
+      {
+        key: keys.q,
+        label: `Q ${n}`,
+        min: EQ_MIN_Q,
+        max: EQ_MAX_Q,
+        default: flat.type === EQ_BELL ? 1 : EQ_FLAT_Q,
+        ...(old ? { absent: 0.7 } : {}),
+        curve: 'exponential',
+        step: 0,
+        unit: 'q',
+      },
+    ]
+  })
+}
+
 /** A level or a gain in dB, from min to max, turned evenly */
 function decibels(
   key: string,
@@ -672,15 +740,7 @@ export const EFFECT_KINDS = {
   },
   eq: {
     label: 'EQ',
-    knobs: [
-      { ...hertz('cut', 'Low Cut', 10, 500, 10), atMin: 'Off' },
-      decibels('low', 'Low', -15, 15, 0),
-      hertz('lowFreq', 'Low Freq', 30, 500, 100),
-      decibels('mid', 'Mid', -15, 15, 0),
-      hertz('midFreq', 'Mid Freq', 150, 8000, 1000),
-      decibels('high', 'High', -15, 15, 0),
-      hertz('highFreq', 'High Freq', 2000, 16000, 8000),
-    ],
+    knobs: eqKnobs(),
     dests: [],
     refs: [],
   },

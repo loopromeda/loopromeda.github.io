@@ -61,6 +61,7 @@ import {
   BUS_SPEC,
   DELAY_NOTES,
   EFFECT_KINDS,
+  EQ_POINT_KEYS,
   LFO_NOTES,
   MASTER_SPEC,
   SENDS_SPEC,
@@ -487,16 +488,16 @@ function setEffect(
       )
       return
     case 'eq':
-      rack.setEq(
-        k,
-        value('cut'),
-        value('low'),
-        value('lowFreq'),
-        value('mid'),
-        value('midFreq'),
-        value('high'),
-        value('highFreq')
-      )
+      EQ_POINT_KEYS.forEach((keys, p) => {
+        rack.setEq(
+          k,
+          p,
+          value(keys.type),
+          value(keys.freq),
+          value(keys.gain),
+          value(keys.q)
+        )
+      })
       return
     case 'compressor':
       rack.setCompressor(

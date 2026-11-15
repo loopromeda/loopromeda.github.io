@@ -16,6 +16,31 @@ export const SPECTRUM_MIN_HZ = 20
 /** Highest frequency on the spectrum's logarithmic axis, in Hz */
 export const SPECTRUM_MAX_HZ = 20000
 
+/**
+ * The spectrum's top, dB as the analyser reads it: a full-scale sine
+ * peaks near -14 (its window halves it and more), so -10 at the top. The
+ * analyser reads down to -100.
+ */
+export const SPECTRUM_TOP = -10
+
+/**
+ * How far under the top the spectrum and the spectrogram reach, dB: 70,
+ * leaving out what is lost under a dense mix (down to the analyser's
+ * floor, 90, every tail and the window's skirts 70 dB under the mix
+ * filled the picture). Chosen on the device from 50, 70 and 90 since
+ * 2026-11-13 (asked for by ashon: "표시 대비도 조정 해 보자"), and fixed
+ * since 2026-11-14, when the spectrogram's levels took the colour scale
+ * (ashon: "스펙트로그램에 컬러링이 되었는데 그래서 50 70 90 데시벨 같은
+ * 기준선은 이제 없어도 되지 않나?")
+ */
+export const SPECTRUM_RANGE = 70
+
+/**
+ * The spectral views' floor, dB: darkest there, nothing under it (the
+ * spectrum, the spectrogram, an EQ's spectrum behind its curve)
+ */
+export const SPECTRUM_FLOOR = SPECTRUM_TOP - SPECTRUM_RANGE
+
 /** Lowest level any meter shows, in dB */
 export const METER_MIN_DB = -60
 

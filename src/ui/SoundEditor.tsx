@@ -1296,6 +1296,7 @@ function Graph({
               label={tileLabel(sound, effect)}
               line={effect}
               glyph={box.h >= 60 ? glyphOf(sound, effect) : undefined}
+              picture={outlineKind(sound, effect) ? effect : undefined}
               look={neutralLook()}
               picked={picked === effect}
               aria={`${partName(sound, effect)}, ${tileLine(sound, effect)}, after the amp`}
@@ -1541,6 +1542,7 @@ function KitGraph({
               label={tileLabel(sound, effect)}
               line={effect}
               glyph={box.h >= 60 ? glyphOf(sound, effect) : undefined}
+              picture={outlineKind(sound, effect) ? effect : undefined}
               look={neutralLook()}
               picked={picked === effect}
               aria={`Kit ${partName(sound, effect)}, ${tileLine(sound, effect)}, after every pad`}

@@ -47,6 +47,11 @@ export function shown(canvas: HTMLCanvasElement): void {
  */
 let frameAt = 0
 
+/** A display frame drawn at now: what between gives until the next */
+export function drewAt(now: number): void {
+  frameAt = now
+}
+
 /** The time to draw at between frames: the latest frame's, while running */
 export function between(running: boolean): number {
   return running && frameAt > 0 ? frameAt : performance.now()
@@ -107,7 +112,7 @@ export function useFrames(
     }
     const frame = (now: number) => {
       raf = requestAnimationFrame(frame)
-      frameAt = now
+      drewAt(now)
       if (sized && canvas.width && canvas.height) frames.draw(now)
     }
     const sync = () => {

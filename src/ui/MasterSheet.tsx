@@ -25,6 +25,8 @@ import {
 } from './controls'
 import { Loudness, ReductionCell } from './Dynamics'
 import { EFFECT_GLYPHS, GLYPHS, effectInRow } from './editor'
+import { EqGraph } from './EqGraph'
+import { mixEq } from './eqAccess'
 import { FadeRow } from './FadeRow'
 import { IconButton } from './IconButton'
 import { MixKnob, neutralArc } from './Knob'
@@ -136,15 +138,20 @@ function MasterKnobs({ engine }: { engine: Engine }) {
       </Group>
       {mix.master.effects.map((effect) => (
         <Group key={effect.id} name={effectInRow(mix.master.effects, effect)}>
-          {shownKnobs(EFFECT_KINDS[effect.kind].knobs, effect.values).map(
-            ({ key }) => (
-              <MixKnob
-                key={key}
-                engine={engine}
-                part={effect.id}
-                knob={key}
-                color={arc}
-              />
+          {effect.kind === 'eq' ? (
+            // Its curve in its 24 knobs' place, the panel's in small
+            <EqGraph compact access={mixEq(engine, effect.id)} />
+          ) : (
+            shownKnobs(EFFECT_KINDS[effect.kind].knobs, effect.values).map(
+              ({ key }) => (
+                <MixKnob
+                  key={key}
+                  engine={engine}
+                  part={effect.id}
+                  knob={key}
+                  color={arc}
+                />
+              )
             )
           )}
           {reduces(effect.kind) && (

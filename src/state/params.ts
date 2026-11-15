@@ -15,10 +15,11 @@ export type Curve = 'linear' | 'quadratic' | 'exponential' | 'bipolar'
  * How a value is rendered on screen: 's' shows milliseconds below 1 s, 'Hz'
  * kilohertz from 1 kHz, '%' signs the value when the range is two-sided,
  * 'pan' names a side, -1..1: L 50, C, R 100; 'dB' a tenth of a decibel
- * under 10 (−1.5 dB, +12 dB), and 'ratio' a compressor's (2.5:1, 20:1)
+ * under 10 (−1.5 dB, +12 dB), 'ratio' a compressor's (2.5:1, 20:1), and
+ * 'q' an EQ point's, two places under 10 (0.71, 10.0)
  */
 export type Unit =
-  '' | '%' | 'oct' | 'st' | 'ct' | 's' | 'Hz' | 'pan' | 'dB' | 'ratio'
+  '' | '%' | 'oct' | 'st' | 'ct' | 's' | 'Hz' | 'pan' | 'dB' | 'ratio' | 'q'
 
 /** One knob: its range, its mapping and how to display it */
 export interface ParamSpec extends ValueSpec {
@@ -690,6 +691,10 @@ export function formatValue(spec: ValueSpec, value: number): string {
   if (spec.unit === 'ratio') {
     const r = v < 9.95 ? Math.round(v * 10) / 10 : Math.round(v)
     return `${r}:1`
+  }
+  if (spec.unit === 'q') {
+    // A filter's Q, two places under 10: 0.71, 4.00, 10.0
+    return v < 9.995 ? v.toFixed(2) : v.toFixed(1)
   }
   if (spec.unit) {
     const r = Math.round(v)

@@ -10,6 +10,9 @@ import { masterLimited } from '../state/mix'
 import {
   METER_MIN_DB,
   MeterBallistics,
+  SPECTRUM_FLOOR,
+  SPECTRUM_RANGE,
+  SPECTRUM_TOP,
   Ticks,
   correlation,
   dbToY,
@@ -79,28 +82,6 @@ function viewColours(tone: Mode) {
     scale: scaleOn(tone, page),
   }
 }
-
-/**
- * The spectrum's top, dB as the analyser reads it: a full-scale sine
- * peaks near -14 (its window halves it and more), so -10 at the top. The
- * analyser reads down to -100.
- */
-const SPECTRUM_TOP = -10
-
-/**
- * How far under the top the spectrum and the spectrogram reach, dB: 70,
- * leaving out what is lost under a dense mix (down to the analyser's
- * floor, 90, every tail and the window's skirts 70 dB under the mix
- * filled the picture). Chosen on the device from 50, 70 and 90 since
- * 2026-11-13 (asked for by ashon: "표시 대비도 조정 해 보자"), and fixed
- * since 2026-11-14, when the spectrogram's levels took the colour scale
- * (ashon: "스펙트로그램에 컬러링이 되었는데 그래서 50 70 90 데시벨 같은
- * 기준선은 이제 없어도 되지 않나?")
- */
-const SPECTRUM_RANGE = 70
-
-/** The spectral views' floor, dB: darkest there, nothing under it */
-const SPECTRUM_FLOOR = SPECTRUM_TOP - SPECTRUM_RANGE
 
 /** The key's ticks: every 10 dB between the floor and the top */
 const KEY_TICKS = Array.from(

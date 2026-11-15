@@ -170,11 +170,15 @@ describe('tiles', () => {
     const eq = (values: Record<string, number>) =>
       effectLine({ kind: 'eq', values: { ...effectValues('eq'), ...values } })
     expect(eq({})).toBe('Flat')
-    // The band it moves most, whichever way
+    // The shelf or bell it moves most, whichever way
     expect(eq({ low: 3 })).toBe('Low +3.0 dB')
     expect(eq({ low: 3, high: -4.5 })).toBe('High \u22124.5 dB')
-    // No band moved, but the lows cut
+    expect(eq({ low: 3, g4: 6 })).toBe('Bell +6.0 dB')
+    // A point made a bell
+    expect(eq({ t1: 2, g1: -2 })).toBe('Bell \u22122.0 dB')
+    // Nothing moved, but the lows cut, or the highs
     expect(eq({ cut: 80 })).toBe('Cut 80')
+    expect(eq({ f6: 12000 })).toBe('Cut 12.0k')
     const compressor = effectValues('compressor')
     expect(effectLine({ kind: 'compressor', values: compressor })).toBe(
       '\u221218 dB 2:1'

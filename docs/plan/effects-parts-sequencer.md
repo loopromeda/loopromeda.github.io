@@ -123,7 +123,7 @@ part: voices → inserts → fader ─┬─ send A → Bus A: its effects → l
 | Haas       | Time 1–40 ms (15), Later: Right or Left, Mix (100%)                                                                                                           |
 | Doubler    | Detune 1–50 ct (9), Delay 2–40 ms (12), Spread (100%), Mix (50%)                                                                                              |
 | Width      | Width 0–200% (100%), Mono Below 20–500 Hz (Off at 20)                                                                                                         |
-| EQ         | Low Cut 10–500 Hz (Off at 10), Low ±15 dB (0), Low Freq 30–500 Hz (100), Mid ±15 dB (0), Mid Freq 150 Hz–8 kHz (1k), High ±15 dB (0), High Freq 2–16 kHz (8k) |
+| EQ         | Six points, each a Type (Low Cut, Low Shelf, Bell, High Shelf or High Cut), a Freq 20 Hz–20 kHz, a Gain ±15 dB (0) and a Q 0.3–10 (a bell's 1, the rest 0.71) |
 | Compressor | Threshold −60–0 dB (−18), Ratio 1–20:1 (2), Attack 0.1–100 ms (10), Release 10 ms–2 s (150 ms), Makeup 0–24 dB (0), Mix (100%)                                |
 | Limiter    | Gain 0–24 dB (0), Ceiling −12–0 dB (−1), Release 10 ms–1 s (100 ms)                                                                                           |
 | Bus        | Level (100%), Pan (the middle): a balance                                                                                                                     |
@@ -243,11 +243,46 @@ checked with ("표시 대비도 조정 해 보자. 그리고 말처럼 마스터
 부족한데 추가해 줘"): three effect kinds, for an insert, a bus or the
 master like the rest, and two readouts.
 
-- **EQ**: a low cut (12 dB an octave, Butterworth, Off at its lowest),
-  a low shelf, a broad bell (Q 0.7) and a high shelf, the cookbook's
-  biquads (shelves at S = 1). A knob glides over about 20 ms, the bands
-  worked out again each block while it does; a band at 0 dB and a cut
-  that is Off cost nothing, so a flat EQ passes the sound untouched.
+- **EQ**: six points, since 2026-11-15, in the four bands' place (ashon:
+  "EQ는 파라메트릭 eq로 만들어 보면 어떨까 노브보다 훨씬 직관적일 것
+  같거든", then, of the first demo, "각 지점마다 Q freq gain 등을 정할
+  수있어야 하지 않을까?"; the second demo taken as it was, "둘다
+  좋네"). Each point is a kind (a low cut or a high cut, 12 dB
+  an octave; a low shelf or a high shelf; a bell), a frequency (20 Hz to
+  20 kHz), a gain (±15 dB; a cut has none) and a Q held within its
+  kind's (a bell's 0.3 to 10, a shelf's 0.3 to 2, a cut's 0.5 to 8;
+  Butterworth's 0.71 a shelf at S = 1, a cut with no bump), the
+  cookbook's biquads (`src/dsp/eq.ts`). An EQ added is flat: a low cut
+  and a high cut, Off at their ends, and between them a low shelf (100
+  Hz), two bells (400 Hz, 2.5 kHz) and a high shelf (8 kHz).
+  Frequencies and Qs glide on their logarithms over about 20 ms, the
+  points worked out again each block while they do; a kind changes at
+  once. A point that does nothing (a cut Off, a shelf or a bell at 0 dB)
+  costs nothing, so a flat EQ passes the sound untouched. The bands'
+  knobs became points 1, 2, 3 and 5 (the low cut, the low shelf, the
+  mid at Q 0.7, the high shelf), so an old preset sounds as it did.
+
+  Its panel is the curve (`src/ui/EqGraph.tsx`, its math in
+  `src/viz/eq.ts`): a point dragged across for its frequency and up for
+  its gain (a cut's for its Q, the cut standing on its curve at its
+  corner), two fingers pinched or a wheel for the picked one's Q, a
+  double tap putting it back where it does nothing. Under it, the
+  picked point's kind (a menu of the five) and its Freq, Gain and Q,
+  each dragged up or down; beside the editor's graph, where the panel
+  is tall, a row of the six to pick one by. They stay knobs (Type 1 to
+  Q 6, twenty-four), for presets and lanes; the master's sheet shows the
+  curve small in their place, and an insert's tile a picture of it.
+
+  Behind the curve, while the audio runs, the spectrum of what the EQ
+  is heard in, on the spectrum view's scale, to watch the sound move
+  as a point does (asked for by ashon, 2026-11-15: "EQ에서 실제 음에
+  대한 파형도 렌더링 되면 조정되는 상황을 잘 모니터링 할 수 있을 것
+  같은데"): a sound's or a kit's EQ its track's own sound, after its
+  inserts, before its sends; the master's EQ the master's, after the
+  clip. A bus has no tap of its own, so a bus's EQ draws the curve
+  alone. It is read once a display frame however many views read it,
+  and a frame of silence after another draws nothing.
+
 - **Compressor**: both sides' louder peak each sample, in dB, turned
   down above Threshold by Ratio over a 6 dB soft knee, the turn
   deepening over Attack and letting go over Release, then Makeup; Mix
@@ -328,7 +363,8 @@ from −80 to −10 dB with a tick every 10 dB, stands in the panel's row
 when the spectrogram is shown and at the lower left of the sheet's.
 
 Measured (M3 Max, `pnpm bench`), a full rack of four: compressors
-0.015 ms a block, EQs 0.009 (0.009 gliding), limiters 0.009; the
+0.015 ms a block, EQs 0.009 (0.009 gliding; six points each since
+2026-11-15, all working: 0.015, 0.019 gliding), limiters 0.009; the
 loudness 0.009, all the while. The stress rack stays the chorus and
 the reverb, still the heaviest.
 
@@ -702,12 +738,14 @@ note value, over a time always in beats, and the LFO's rate synced too
 
 A delay's time in beats once the sequencer had a tempo (since
 2026-11-15: Synced, above); more effect kinds (a phaser; the EQ and the
-compressor came, 2026-11-13); an EQ's curve and a compressor's on its
-tile; a compressor keyed by another sound (side-chain); true peak in the
-meters (the limiter holds the samples, not what lies between them); a
-picture on an effect's tile; dragging an effect to move it, along its
-row or to another, as an item is dragged; a bus fed by another (a delay
-into the reverb's bus) rather than in a row.
+compressor came, 2026-11-13); a compressor's curve on its tile (an EQ's
+came, 2026-11-15, an insert's; a bus's and the master's tiles are too
+small); a compressor keyed by another sound (side-chain); true peak in
+the meters (the limiter holds the samples, not what lies between them);
+what comes into an EQ beside what leaves it (the track's spectrum, after
+its inserts, came behind the curve, 2026-11-15); dragging an effect to move
+it, along its row or to another, as an item is dragged; a bus fed by
+another (a delay into the reverb's bus) rather than in a row.
 
 ## 2. Parts and the kit
 
