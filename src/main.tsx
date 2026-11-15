@@ -13,7 +13,12 @@ import { initMix, loadMix, saveMix } from './state/mix'
 import { Projects } from './state/projects'
 import { readSettings } from './state/settings'
 import { initSong, loadSong, saveSong } from './state/song'
-import { readPick, writePick } from './state/tracks'
+import {
+  readPick,
+  readSeqTrack,
+  writePick,
+  writeSeqTrack,
+} from './state/tracks'
 import { touchHeld } from './ui/held'
 import type { ScopeStats } from './ui/Scope'
 import { ScreenAwake } from './wakeLock'
@@ -99,11 +104,21 @@ const library = new Library(engine, FACTORY_PRESETS, storage, FACTORY_KIT)
 library.restore()
 let pick = readPick(storage, engine.getTracks())
 engine.pickTrack(pick.track, pick.pad)
+// The Seq tab's track, picked apart from the one played: that one until
+// another is
+let seq = readSeqTrack(storage, engine.getTracks()) ?? pick.track
+engine.pickSeqTrack(seq)
 engine.subscribeSound(() => {
   const now = engine.getPick()
-  if (now.track === pick.track && now.pad === pick.pad) return
-  pick = now
-  writePick(storage, now)
+  if (now.track !== pick.track || now.pad !== pick.pad) {
+    pick = now
+    writePick(storage, now)
+  }
+  const shown = engine.getSeqTrack().id
+  if (shown !== seq) {
+    seq = shown
+    writeSeqTrack(storage, shown)
+  }
 })
 // The session's mix (the returns, the master), kept apart from the sound:
 // a preset brings its own sends, never the room they send to
@@ -135,7 +150,8 @@ engine.subscribeSong(() => {
 })
 // The projects: sessions kept under a name, to come back to. What plays
 // is the engine's; a project's tracks go through the library, which maps
-// each pad's preset, and it starts stopped, its first track picked
+// each pad's preset, and it starts stopped, its first track picked (on
+// the Seq tab too)
 const projects = new Projects(
   {
     getSession: () => ({
@@ -151,7 +167,10 @@ const projects = new Projects(
       engine.setMix(mix)
       engine.setSong(song)
       const first = engine.getTracks()[0]
-      if (first) engine.pickTrack(first.id, 0)
+      if (first) {
+        engine.pickTrack(first.id, 0)
+        engine.pickSeqTrack(first.id)
+      }
     },
     subscribe: (listener) => {
       const offs = [

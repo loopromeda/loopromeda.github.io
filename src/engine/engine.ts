@@ -205,6 +205,12 @@ export class Engine {
   #tracks: readonly Track[] = [{ id: 't1', kind: 'synth', sound: initSound() }]
   /** What is played and edited: a track, and the pad picked in a kit */
   #pick: TrackPick = { track: 't1', pad: 0 }
+  /**
+   * The track whose loop the Seq tab writes: picked there, apart from
+   * the one played (ashon, 2026-11-15: "따로 고르기"); the one played
+   * when it goes
+   */
+  #seqTrack = 't1'
   /** The pad picked as getSound last showed it, with its kit's chain */
   #shown: { pad: Sound; chain: KitChain; sound: Sound } | undefined
   /** The kit picked's pads' notes as getPadNotes last gave them */
@@ -370,7 +376,16 @@ export class Engine {
    * with that Slide, and glides to it as its pitch does.
    */
   noteOn(id: number, note: number, velocity = 1, slide?: number): void {
-    const track = this.getTrack()
+    this.#noteOn(this.getTrack(), id, note, velocity, slide)
+  }
+
+  #noteOn(
+    track: Track,
+    id: number,
+    note: number,
+    velocity: number,
+    slide?: number
+  ): void {
     if (track.kind !== 'synth') return
     const held = this.#held.get(id)
     if (held && (held.track !== track.id || held.pad !== undefined)) {
@@ -389,7 +404,10 @@ export class Engine {
    * key is; one holding another note lets it go. Nothing on a synth.
    */
   hit(id: number, pad: number, velocity = 1): void {
-    const track = this.getTrack()
+    this.#hit(this.getTrack(), id, pad, velocity)
+  }
+
+  #hit(track: Track, id: number, pad: number, velocity: number): void {
     const struck = track.kind === 'kit' ? track.pads[pad] : undefined
     if (!struck) return
     const held = this.#held.get(id)
@@ -399,6 +417,17 @@ export class Engine {
     this.#held.set(id, { track: track.id, pad })
     const note = struck.note
     this.#post({ t: 'noteOn', id, note, velocity, track: track.id, pad })
+  }
+
+  /**
+   * Touch id plays key on track id, the one played or another: a synth's
+   * note, or a kit's pad at the pad's note (the step grid's rows, on the
+   * Seq tab's track); noteOff lets it go
+   */
+  playKey(id: number, track: string, key: number, velocity = 1): void {
+    const on = this.#tracks.find((each) => each.id === track)
+    if (on?.kind === 'synth') this.#noteOn(on, id, key, velocity)
+    else if (on) this.#hit(on, id, key, velocity)
   }
 
   /** Touch id lets go, on the track and the pad it holds */
@@ -769,7 +798,8 @@ export class Engine {
 
   /**
    * Removes track id and its strip, its notes with it; the one after it
-   * is picked if it was (the last, if it was last). The only track stays.
+   * is picked if it was (the last, if it was last), and so on the Seq
+   * tab. The only track stays.
    */
   removeTrack(id: string): void {
     const k = this.#tracks.findIndex((track) => track.id === id)
@@ -780,6 +810,8 @@ export class Engine {
       this.#pick.track === id && beside
         ? { track: beside.id, pad: this.#pick.pad }
         : this.#pick
+    // The Seq tab's goes to the one after it too
+    if (this.#seqTrack === id && beside) this.#seqTrack = beside.id
     this.#change(next, removeStrip(this.#mix, k), pick)
   }
 
@@ -889,6 +921,10 @@ export class Engine {
     this.#tracks = tracks
     this.#mix = fitted
     if (pickChanged) this.#pick = picked
+    // The Seq tab's track gone, it shows the one played
+    if (!tracks.some((track) => track.id === this.#seqTrack)) {
+      this.#seqTrack = picked.track
+    }
     // A track gone takes its loops with it
     const song = tracksChanged ? fitSong(this.#song, ids(tracks)) : this.#song
     const songChanged = song !== this.#song
@@ -930,12 +966,31 @@ export class Engine {
     this.setSong(edit(this.#song))
   }
 
-  /** The loop the track picked plays, the same one until it changes */
-  readonly getLoop = (): Loop => loopOf(this.#song, this.getTrack().id)
+  /** The track the Seq tab writes the loop of (pickSeqTrack) */
+  readonly getSeqTrack = (): Track =>
+    this.#tracks.find((track) => track.id === this.#seqTrack) ?? this.getTrack()
 
-  /** Plays what edit makes of the loop of the track picked */
-  editLoop(edit: (loop: Loop) => Loop): void {
-    this.setSong(editLoop(this.#song, this.getTrack().id, edit))
+  /** Its place among the tracks: its strip's in the mix */
+  readonly getSeqPlace = (): number =>
+    Math.max(0, this.#tracks.indexOf(this.getSeqTrack()))
+
+  /**
+   * Shows track id's loop on the Seq tab, whichever is played: the
+   * sound's listeners hear of it, as of a pick
+   */
+  pickSeqTrack(id: string): void {
+    if (id === this.#seqTrack) return
+    if (!this.#tracks.some((track) => track.id === id)) return
+    this.#seqTrack = id
+    for (const listener of this.#soundListeners) listener()
+  }
+
+  /** The loop the Seq tab's track plays, the same one until it changes */
+  readonly getSeqLoop = (): Loop => loopOf(this.#song, this.getSeqTrack().id)
+
+  /** Plays what edit makes of the loop of the Seq tab's track */
+  editSeqLoop(edit: (loop: Loop) => Loop): void {
+    this.setSong(editLoop(this.#song, this.getSeqTrack().id, edit))
   }
 
   /** Calls listener after each change to the song; returns the way to stop */

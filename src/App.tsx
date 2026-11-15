@@ -70,8 +70,7 @@ const page =
  * editor grows, its tiles with it (graph.ts), and what they cannot fill
  * is left an empty canvas. It needs the same with its panel shown or
  * hidden (the panel stands over its graph: SoundEditor.tsx), so neither
- * moves the keys. The step sequencer in the keys' place stands taller, at
- * most 18rem and half the screen: a dozen rows of notes a finger finds.
+ * moves the keys.
  */
 const EDITOR_SIZE = 'upright:grow side:flex-1'
 // Written out whole, for Tailwind to find
@@ -79,11 +78,6 @@ const KEYS_SIZE = [
   'flex-1 upright:grow-[999]',
   'upright:max-h-[calc(var(--play-head,2.75rem)_+_min(10rem,45dvh))]',
   'side:flex-[0_0_calc(var(--play-head,2.75rem)_+_clamp(7rem,100dvh_-_20rem,10rem))]',
-].join(' ')
-const SEQ_SIZE = [
-  'flex-1 upright:grow-[999]',
-  'upright:max-h-[calc(var(--play-head,2.75rem)_+_min(18rem,50dvh))]',
-  'side:flex-[0_0_calc(var(--play-head,2.75rem)_+_clamp(7rem,100dvh_-_20rem,18rem))]',
 ].join(' ')
 
 /** Arrows in the 18 px box: up, what stands below rises; down, it sinks */
@@ -97,8 +91,9 @@ const SINK = 'M5 4.5l4 4 4-4M5 9.5l4 4 4-4'
  * not need: KEYS_SIZE), and a status line under it. The patch at the left
  * of the keyboard's header opens the presets, a popover on it over the
  * page as it is (a tap in the editor puts them away), and the first
- * button at its right end the choice of keys or pads (or the step
- * sequencer in their place), a popover on it the same way: what is
+ * button at its right end the choice of keys, pads or the XY pad, a
+ * popover on it the same way (the step sequencer is the editor's Seq
+ * tab, its track picked there): what is
  * played on stays there to try them on. Play and the tempo stand by the
  * patch (under it on a phone held upright: PlaySurface), the tempo's
  * button opening the tempo and the swing, a popover too. The
@@ -398,15 +393,7 @@ export function App({
       </div>
       <PlaySurface
         engine={engine}
-        className={
-          away
-            ? 'shrink-0'
-            : controls
-              ? surface.seq
-                ? SEQ_SIZE
-                : KEYS_SIZE
-              : 'flex-1'
-        }
+        className={away ? 'shrink-0' : controls ? KEYS_SIZE : 'flex-1'}
         settings={surface}
         away={away}
         fold={

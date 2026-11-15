@@ -30,7 +30,7 @@ import {
 } from '../viz/laneStrip'
 import { COLUMNS } from '../viz/steps'
 import { ConfirmDialog } from './ConfirmDialog'
-import { SMALL_BUTTON, SMALL_OPTION, TALL_HIT } from './controls'
+import { SMALL_BUTTON, SMALL_OPTION } from './controls'
 import { SmallIconButton } from './IconButton'
 import { Switch } from './Switch'
 
@@ -39,8 +39,9 @@ const CROSS = 'M5 5l8 8M13 5l-8 8'
 const CELL = 'border-r border-(--under)/50 bg-(--over)/7'
 const BEAT_CELL = 'border-r border-(--under)/50 bg-(--over)/12'
 
-/** The lane's chip: its knob's name, a tap away from the others' list */
-const CHIP = `${TALL_HIT} flex h-7 min-w-0 flex-1 items-center gap-1 rounded-md bg-(--lift) px-2 text-left text-[11px] font-semibold text-(--ink-200)`
+/** The lane's name: its knob's */
+const NAME =
+  'flex h-7 min-w-0 flex-1 items-center gap-1.5 px-1 text-[11px] font-semibold text-(--ink-200)'
 
 /** How far an arrow key moves the step focused, of the knob's turn */
 const KEY_STEP = 0.05
@@ -57,15 +58,15 @@ interface Draw {
 }
 
 /**
- * One knob lane of the loop picked, under its step grid (docs/plan/
+ * One knob lane of the Seq tab's loop, under its step grid (docs/plan/
  * tracks-and-song.md, F): its knob's value at each step of the bar shown,
  * the columns in line with the grid's, the knob's own value dashed across
  * it. A finger drawn over it writes the steps it passes, in the knob's
  * turn (the top its highest); a lane off is put on by it. Over it: the
- * lane's name (a tap lists the others, and adds one), Step or Glide, on
- * or off, Fill (a shape over the whole loop) and remove. At its left the
- * value playing, or stopped the knob's own. The step playing is lit
- * outside React, as the audio thread tells of it.
+ * lane's name, Step or Glide, on or off, Fill (a shape over the whole
+ * loop) and remove. At its left the value playing, or stopped the knob's
+ * own. The step playing is lit outside React, as the audio thread tells
+ * of it.
  */
 export function LaneStrip({
   engine,
@@ -76,7 +77,6 @@ export function LaneStrip({
   bar,
   aside,
   label,
-  onPick,
   onHint,
 }: {
   engine: Engine
@@ -91,7 +91,6 @@ export function LaneStrip({
   aside: boolean
   /** The grid's labels' width: the readout stands under them */
   label: string
-  onPick: () => void
   onHint: (hint: string) => void
 }) {
   const headRef = useRef<HTMLDivElement>(null)
@@ -134,7 +133,7 @@ export function LaneStrip({
   const write = (from: number, levels: readonly number[]) => {
     if (!spec) return
     const values = levels.map((level) => toValue(spec, level))
-    engine.editLoop((each) =>
+    engine.editSeqLoop((each) =>
       editLane(each, part, key, (was) =>
         setLaneOn(setLaneValues(was, from, values), true)
       )
@@ -219,7 +218,7 @@ export function LaneStrip({
   }
 
   return (
-    <div className="flex min-h-0 shrink flex-col gap-1.5">
+    <div className="flex shrink-0 flex-col gap-1.5">
       <div className="flex h-7 shrink-0 items-center gap-1.5">
         {filling ? (
           <>
@@ -247,13 +246,7 @@ export function LaneStrip({
           </>
         ) : (
           <>
-            <button
-              type="button"
-              aria-haspopup="dialog"
-              aria-label={`${name} lane: the loop’s lanes`}
-              onClick={onPick}
-              className={CHIP}
-            >
+            <h4 className={NAME}>
               <span
                 aria-hidden
                 className={`size-1.5 shrink-0 rounded-full bg-current ${ink}`}
@@ -261,21 +254,7 @@ export function LaneStrip({
               <span className="truncate">
                 {knob ? name : `${name} · not on this sound`}
               </span>
-              <svg
-                aria-hidden
-                viewBox="0 0 18 18"
-                className="ml-auto size-3 shrink-0 text-(--ink-400)"
-              >
-                <path
-                  d="M5 7l4 4 4-4"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </button>
+            </h4>
             <div
               role="group"
               aria-label={`${name}: between steps`}
@@ -285,7 +264,7 @@ export function LaneStrip({
                 type="button"
                 aria-pressed={!lane.glide}
                 onClick={() =>
-                  engine.editLoop((each) =>
+                  engine.editSeqLoop((each) =>
                     editLane(each, part, key, (was) => setLaneGlide(was, false))
                   )
                 }
@@ -297,7 +276,7 @@ export function LaneStrip({
                 type="button"
                 aria-pressed={lane.glide}
                 onClick={() =>
-                  engine.editLoop((each) =>
+                  engine.editSeqLoop((each) =>
                     editLane(each, part, key, (was) => setLaneGlide(was, true))
                   )
                 }
@@ -310,7 +289,7 @@ export function LaneStrip({
               checked={lane.on}
               label={`${name} lane`}
               onChange={(on) =>
-                engine.editLoop((each) =>
+                engine.editSeqLoop((each) =>
                   editLane(each, part, key, (was) => setLaneOn(was, on))
                 )
               }
@@ -332,7 +311,7 @@ export function LaneStrip({
         )}
       </div>
 
-      <div className="flex h-14 min-h-6 shrink gap-1">
+      <div className="flex h-12 shrink-0 gap-1">
         {aside && <div aria-hidden className="w-4 shrink-0" />}
         <div
           aria-hidden
@@ -411,7 +390,7 @@ export function LaneStrip({
           confirm="Remove"
           onConfirm={() => {
             setRemoving(false)
-            engine.editLoop((each) => removeLane(each, part, key))
+            engine.editSeqLoop((each) => removeLane(each, part, key))
           }}
           onCancel={() => setRemoving(false)}
         />

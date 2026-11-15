@@ -112,6 +112,7 @@ import { PartPanel } from './PartPanel'
 import { Picture } from './Picture'
 import { RoutesFrom, RoutesInto, type RouteTarget } from './RoutePanels'
 import type { ScopeStats } from './Scope'
+import { SeqView } from './SeqView'
 import { useTileDrag, type DragProps, type Spot } from './tileDrag'
 
 /** The output's view the Out and the Master hold, if they show one */
@@ -174,16 +175,25 @@ const MIX_PICKED_KEY = 'loopromeda.mixPicked'
 const KIT_PICKED_KEY = 'loopromeda.kitPicked'
 /** Kept for the tab too: '0' while the panel is hidden */
 const PANEL_KEY = 'loopromeda.panel'
-/** And which of the two the editor shows */
+/** And which of the three the editor shows */
 const PANE_KEY = 'loopromeda.pane'
 
-/** What the editor shows: the sound's graph, or the session's mix */
-export type Pane = 'sound' | 'mix'
+/**
+ * What the editor shows: the sound's graph, the step sequencer, or the
+ * session's mix
+ */
+export type Pane = 'sound' | 'seq' | 'mix'
 
 const PANES: readonly { readonly pane: Pane; readonly label: string }[] = [
   { pane: 'sound', label: 'Sound' },
+  { pane: 'seq', label: 'Seq' },
   { pane: 'mix', label: 'Mix' },
 ]
+
+function readPane(): Pane {
+  const kept = readKept(PANE_KEY)
+  return PANES.find(({ pane }) => pane === kept)?.pane ?? 'sound'
+}
 
 function readPanel(): boolean {
   try {
@@ -254,7 +264,8 @@ interface Picking {
 
 /**
  * The sound as flat tiles flowing left to right (docs/plan/sound-chains.md,
- * The editor): the Sound and Mix switch in a thin panel over the card,
+ * The editor): the Sound, Seq and Mix switch in a thin panel over the
+ * card,
  * the modulators in a lane across the graph's head, the inputs in a
  * column, a row per chain (its
  * head, its items, the amp at the end of every row, its inserts and the
@@ -276,7 +287,10 @@ interface Picking {
  * the other inputs'; a bus's head does as a chain's in the mix. The panel
  * stands over the graph's card and hides (its header's last button),
  * showing the canvas under it, the tiles as they were; a bar where it
- * stood brings it back, and so does picking a tile.
+ * stood brings it back, and so does picking a tile. Seq shows the step
+ * sequencer in the card instead (SeqView), the whole of it, no panel
+ * over it: its own track picked, whichever is played below (ashon,
+ * 2026-11-15, who moved it up from the play surface).
  *
  * It redraws when the sound's shape changes (shapeKey: a part added, an
  * input feeding a chain, a wave changed); a knob turning redraws only the
@@ -358,9 +372,7 @@ export function SoundEditor({
   const [chosen, setChosen] = useState(() => readKept(PICKED_KEY))
   const [mixChosen, setMixChosen] = useState(() => readKept(MIX_PICKED_KEY))
   const [kitChosen, setKitChosen] = useState(() => readKept(KIT_PICKED_KEY))
-  const [pane, setPane] = useState<Pane>(() =>
-    readKept(PANE_KEY) === 'mix' ? 'mix' : 'sound'
-  )
+  const [pane, setPane] = useState<Pane>(readPane)
   const [focus, setFocus] = useState<string | undefined>(undefined)
   const [panel, setPanel] = useState(readPanel)
   const [routing, setRouting] = useState<RouteTarget | null>(null)
@@ -452,6 +464,8 @@ export function SoundEditor({
     keep(KIT_PICKED_KEY, id)
     if (!panel) show(true)
   }
+  // The panel stands over the sound's graph and the mix's, not the steps
+  const docked = panel && pane !== 'seq'
   /** What the tiles show picked: the pick, with the panel open */
   const shownOf = (id: string) => (panel ? id : UNPICKED)
   const picking: Picking = {
@@ -546,9 +560,11 @@ export function SoundEditor({
         aria-label={
           pane === 'mix'
             ? 'The mix: the sound, the buses and the master'
-            : kitView
-              ? 'The kit: its pads, then its chain'
-              : 'The sound, flowing left to right'
+            : pane === 'seq'
+              ? 'The step sequencer'
+              : kitView
+                ? 'The kit: its pads, then its chain'
+                : 'The sound, flowing left to right'
         }
         className={`flex min-h-[8rem] min-w-0 flex-1 flex-col overflow-hidden side:flex-row ${CARD}`}
       >
@@ -562,6 +578,8 @@ export function SoundEditor({
             dock={dock}
             docked={panel}
           />
+        ) : pane === 'seq' ? (
+          <SeqView engine={engine} />
         ) : pane === 'sound' ? (
           <Graph
             {...picking}
@@ -585,9 +603,9 @@ export function SoundEditor({
       <div
         ref={setDock}
         inert={sheet !== undefined}
-        className={`absolute inset-x-2 bottom-2 z-20 h-[calc(7.75rem_+_var(--knob))] max-h-[calc(100%-9.25rem)] min-h-0 side:top-14 side:bottom-2 side:right-2 side:left-auto side:h-auto side:max-h-none side:w-[clamp(22rem,36%,40rem)] tall:top-auto tall:left-2 tall:h-[calc(7.75rem_+_var(--knob))] tall:max-h-[calc(100%-9.25rem)] tall:w-auto ${panel ? `grid overflow-y-auto overscroll-contain ${DOCKED}` : 'pointer-events-none'}`}
+        className={`absolute inset-x-2 bottom-2 z-20 h-[calc(7.75rem_+_var(--knob))] max-h-[calc(100%-9.25rem)] min-h-0 side:top-14 side:bottom-2 side:right-2 side:left-auto side:h-auto side:max-h-none side:w-[clamp(22rem,36%,40rem)] tall:top-auto tall:left-2 tall:h-[calc(7.75rem_+_var(--knob))] tall:max-h-[calc(100%-9.25rem)] tall:w-auto ${docked ? `grid overflow-y-auto overscroll-contain ${DOCKED}` : 'pointer-events-none'}`}
       >
-        {panel &&
+        {docked &&
           (pane === 'mix' ? (
             <PartPanel
               {...picking}
@@ -654,8 +672,8 @@ export function SoundEditor({
 }
 
 /**
- * Sound or Mix, the two the editor shows: first in the panel over the
- * card, where it stands in both. Its buttons are of the panel's 28 px
+ * Sound, Seq or Mix, the three the editor shows: first in the panel over
+ * the card, where it stands in each. Its buttons are of the panel's 28 px
  * class, their touch reaching 44 (TALL_HIT).
  */
 function PaneSwitch({

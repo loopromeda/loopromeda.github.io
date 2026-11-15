@@ -27,7 +27,10 @@ Asked as four choices, 2026-11-12:
 - **The sequencer's place**: a new play surface, Seq, beside Keys, Pads
   and XY, its transport and tempo in the surface's header. The editor
   stays above it, so sounds can be edited while it plays. Ruled out: a
-  sheet of its own (#/seq).
+  sheet of its own (#/seq). Revised by ashon, 2026-11-15, once knob
+  lanes filled it: a tab of the editor's rail, Seq, its track picked
+  there ("하단 패널은 그냥 컨트롤 할 수 있는 부분으로 두고 시퀀스를
+  상단으로", `tracks-and-song.md`, G).
 
 Then, asked whether an instrument usually holds its own delay and reverb
 ("인스트루먼트에서는 딜레이 리버브가 빠지고, 이후에 거는 방식은 별로인가?"),

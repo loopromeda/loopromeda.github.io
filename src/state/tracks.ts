@@ -359,3 +359,32 @@ export function writePick(
     // Not kept: the next visit starts on the first track
   }
 }
+
+/** localStorage key of the track whose loop the Seq tab shows */
+export const SEQ_KEY = 'loopromeda.seq'
+
+/** The Seq tab's track kept in storage: its id, while tracks have it */
+export function readSeqTrack(
+  storage: PickStorage | undefined,
+  tracks: readonly Track[]
+): string | undefined {
+  let id: string | null | undefined
+  try {
+    id = storage?.getItem(SEQ_KEY)
+  } catch {
+    return undefined
+  }
+  return tracks.find((track) => track.id === id)?.id
+}
+
+/** Keeps the Seq tab's track; storage that fails is let be */
+export function writeSeqTrack(
+  storage: PickStorage | undefined,
+  id: string
+): void {
+  try {
+    storage?.setItem(SEQ_KEY, id)
+  } catch {
+    // Not kept: the next visit shows the track played
+  }
+}

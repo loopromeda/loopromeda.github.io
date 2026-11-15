@@ -1,9 +1,8 @@
 /**
  * The playing surface's settings: whether the keyboard area plays piano
  * keys, a grid of pads or an XY pad, the key the pads play in (a root and
- * a scale), whether the track's steps stand there instead (the
- * sequencer's grid), whether the mod wheel stands beside them, and
- * whether the sound's controls above it are put away to give it room.
+ * a scale), whether the mod wheel stands beside them, and whether the
+ * sound's controls above it are put away to give it room.
  * These belong to the player rather than to a preset, so they are kept
  * apart from the sound.
  */
@@ -106,17 +105,12 @@ export interface SurfaceSettings {
   readonly root: number
   readonly scale: ScaleId
   /**
-   * The picked track's steps stand in the surface's place (StepGrid.tsx),
-   * a synth's or a kit's: what it plays on is kept for when they go
-   */
-  readonly seq: boolean
-  /**
    * The tabs and panels of knobs hidden, the waveform left: the surface
    * takes their height (a phone folded shut has little to spare)
    */
   readonly hideControls: boolean
   /**
-   * The keys, pads or steps hidden, with the mod wheel, their header left
+   * The keys or pads hidden, with the mod wheel, their header left
    * (and the transport's row under a narrow one): the controls take their
    * height, for the mix and the knobs alone (ashon, 2026-11-14). Never
    * with hideControls: each puts the other back
@@ -134,7 +128,6 @@ export const DEFAULT_SURFACE: SurfaceSettings = {
   kind: 'keys',
   root: 0,
   scale: 'minor',
-  seq: false,
   hideControls: false,
   hideSurface: false,
   wheel: true,
@@ -170,16 +163,15 @@ export function readSurface(storage?: SurfaceStorage): SurfaceSettings {
     return { ...DEFAULT_SURFACE }
   }
 
-  const { kind, root, scale, seq, hideControls, hideSurface, wheel } =
-    saved as {
-      kind: unknown
-      root: unknown
-      scale: unknown
-      seq: unknown
-      hideControls: unknown
-      hideSurface: unknown
-      wheel: unknown
-    }
+  // A seq of before is let be: the steps are the editor's Seq tab now
+  const { kind, root, scale, hideControls, hideSurface, wheel } = saved as {
+    kind: unknown
+    root: unknown
+    scale: unknown
+    hideControls: unknown
+    hideSurface: unknown
+    wheel: unknown
+  }
   const controlsAway =
     typeof hideControls === 'boolean'
       ? hideControls
@@ -188,7 +180,6 @@ export function readSurface(storage?: SurfaceStorage): SurfaceSettings {
     kind: isKind(kind) ? kind : DEFAULT_SURFACE.kind,
     root: isRoot(root) ? root : DEFAULT_SURFACE.root,
     scale: isScaleId(scale) ? scale : DEFAULT_SURFACE.scale,
-    seq: typeof seq === 'boolean' ? seq : DEFAULT_SURFACE.seq,
     hideControls: controlsAway,
     // Both away would leave nothing to play or edit: the controls win
     hideSurface: hideSurface === true && !controlsAway,
@@ -213,7 +204,6 @@ export function writeSurface(
         kind: settings.kind,
         root: settings.root,
         scale: settings.scale,
-        seq: settings.seq,
         hideControls: settings.hideControls,
         hideSurface: settings.hideSurface,
         wheel: settings.wheel,

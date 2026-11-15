@@ -153,6 +153,7 @@ Built 2026-11-13.
 - **Seq is a setting beside the surface's kind** (`surface.seq`), not a
   fourth kind: Keys, Pads or XY is kept under it and comes back. One
   setting for every track; a kit's surface button offers Pads and Seq.
+  Since moved up, to a tab of the editor's rail (G).
 - **The step grid** (`src/ui/StepGrid.tsx`, its geometry in
   `src/viz/steps.ts`): a bar of sixteen columns, a row for each key,
   as many as stand 20 px each (a synth's chromatic from C3, a kit's
@@ -234,8 +235,9 @@ own Step or Glide, on or off, and removed. Built 2026-11-15.
   resolved on the track's sound, again when a sound changed moves them
   elsewhere.
 - **In Seq** (`src/ui/LaneStrip.tsx`, `src/viz/laneStrip.ts`): one lane
-  under the grid, the bar shown, its sixteen columns in line with the
-  grid's, the knob's own value dashed across it, the step playing lit;
+  under the grid (since G, every lane, one over another), the bar
+  shown, its sixteen columns in line with the grid's, the knob's own
+  value dashed across it, the step playing lit;
   at its left, under the grid's names, the value playing, or stopped the
   knob's own. A finger drawn over it writes each step it passes, a quick
   stroke on a line; a lane off is put on by it. Over it: its name (a tap
@@ -243,14 +245,47 @@ own Step or Glide, on or off, and removed. Built 2026-11-15.
   place, `src/ui/LanePicker.tsx`), Step or Glide, on or off, Fill (Flat
   at the knob's own value, Rise, Fall, Peak, Random, over the whole
   loop) and remove, which asks first. With no lanes, Lane stands in the
-  grid's header.
+  grid's header (since G, always, and the lane's name only names it).
 - **Room**: a lane under it, the grid keeps three rows and the lane's
   strip gives way to 24 px; where even that does not fit (a phone
   upright with the sound editor open) the lane is cut off: the surface
-  raised shows it whole.
+  raised shows it whole. G gave the grid the editor's room instead.
 - Not built: recording a knob turned while it plays into its lane;
   lanes for a kit's chain (its inserts, its sends), the buses or the
   master; the panel's knob turning with its lane; a route's amount.
+
+### G. The sequencer up top
+
+Asked for by ashon, 2026-11-15, as the lanes made Seq fuller ("시퀀스
+안에 기능이 많이 들어오고 있는데 하단 패널은 그냥 컨트롤 할 수 있는
+부분으로 두고 시퀀스를 상단으로 빼는게 어떨까? 그러면 다른 트랙을
+빠르게 컨트롤 할 때는 아래를 쓰고 시퀀스는 위에서 쓰거나 할 수 있을 것
+같은데.."). Asked whether the top's sequence follows the track played
+below or is picked on its own, ashon chose its own ("따로 고르기"): a
+bass's loop written above while a lead is played under it. Built
+2026-11-15. This undoes the place chosen for it at first
+(`effects-parts-sequencer.md`: a play surface under the editor).
+
+- **The Seq tab** (`src/ui/SeqView.tsx`): the editor's rail reads Sound,
+  Seq, Mix, and Seq fills the editor's card: a chip for each track, by
+  its name, and under them the step grid of the one picked, its lanes
+  stacked under it, panned up and down past 45% of the height. No knob
+  panel stands over it; the sound's tiles are a tab away, while the
+  play surface below still plays.
+- **The track it shows** (`Engine.getSeqTrack`, kept as
+  `loopromeda.seq`): picked on its chips, apart from the track played
+  (`getTrack`), which a project opened sets to its first, as it does
+  the track played. A track removed hands it to the one after, as the
+  track played is; one gone otherwise shows the track played.
+- **Heard and picked from the grid**: a row's name plays its key on the
+  tab's track, whichever is played (`Engine.playKey`), and on a kit
+  picks the pad only where the kit is the track played.
+- **The play surface** keeps Keys, Pads and XY, a kit its pads; a Seq
+  of before is let be when the surface's settings are read.
+- **Room**: held upright, the grid takes what the surface leaves, more
+  rows than it had under the editor. On a phone on its side the editor
+  is short: three rows and no lane until the surface is put away (its
+  fold button), which gives the grid the height.
 
 ## Projects
 

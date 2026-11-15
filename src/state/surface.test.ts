@@ -116,7 +116,6 @@ describe('readSurface', () => {
       kind: 'pads',
       root: 4,
       scale: 'dorian',
-      seq: true,
       hideControls: true,
       hideSurface: false,
       wheel: false,
@@ -127,8 +126,9 @@ describe('readSurface', () => {
     expect(readSurface(shown)).toEqual({ ...good, hideControls: false })
     const wheel = storageWith(JSON.stringify({ ...good, wheel: 0 }))
     expect(readSurface(wheel)).toEqual({ ...good, wheel: true })
-    const seq = storageWith(JSON.stringify({ ...good, seq: 1 }))
-    expect(readSurface(seq)).toEqual({ ...good, seq: false })
+    // The steps' place of before: the editor's Seq tab now
+    const seq = storageWith(JSON.stringify({ ...good, seq: true }))
+    expect(readSurface(seq)).toEqual(good)
     const xy = storageWith(JSON.stringify({ ...good, kind: 'xy' }))
     expect(readSurface(xy)).toEqual({ ...good, kind: 'xy' })
   })
@@ -166,7 +166,6 @@ describe('readSurface', () => {
       kind: 'pads',
       root: 9,
       scale: 'blues',
-      seq: false,
       hideControls: false,
       hideSurface: false,
       wheel: true,
@@ -181,7 +180,6 @@ describe('writeSurface', () => {
       kind: 'pads',
       root: 9,
       scale: 'blues',
-      seq: true,
       hideControls: true,
       hideSurface: false,
       wheel: false,
@@ -199,7 +197,6 @@ describe('writeSurface', () => {
       kind: 'pads',
       root: 9,
       scale: 'blues',
-      seq: true,
       hideControls: true,
       hideSurface: false,
       wheel: false,
@@ -209,7 +206,6 @@ describe('writeSurface', () => {
       kind: 'pads',
       root: 9,
       scale: 'blues',
-      seq: true,
       hideControls: true,
       hideSurface: false,
       wheel: false,

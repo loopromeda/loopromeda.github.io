@@ -5,6 +5,7 @@ import { SENDS, initSound } from './sound/sound'
 import {
   MAX_TRACKS,
   PICK_KEY,
+  SEQ_KEY,
   addTrack,
   editPad,
   editTrack,
@@ -12,6 +13,7 @@ import {
   moveTrack,
   nextTrackId,
   readPick,
+  readSeqTrack,
   readSynthSession,
   readTracks,
   removeTrack,
@@ -22,6 +24,7 @@ import {
   tracksWithoutBus,
   without,
   writePick,
+  writeSeqTrack,
   type KitTrack,
   type PickStorage,
   type Track,
@@ -218,5 +221,17 @@ describe('the tracks', () => {
     // A write refused is let be
     storage.fail = true
     expect(() => writePick(storage, first)).not.toThrow()
+  })
+
+  it('keeps the Seq tab’s track, while there is such a one', () => {
+    const storage = new FakeStorage()
+    expect(readSeqTrack(storage, TRACKS)).toBeUndefined()
+    writeSeqTrack(storage, 't2')
+    expect(storage.items.get(SEQ_KEY)).toBe('t2')
+    expect(readSeqTrack(storage, TRACKS)).toBe('t2')
+    expect(readSeqTrack(storage, TRACKS.slice(0, 1))).toBeUndefined()
+    expect(readSeqTrack(undefined, TRACKS)).toBeUndefined()
+    storage.fail = true
+    expect(() => writeSeqTrack(storage, 't1')).not.toThrow()
   })
 })

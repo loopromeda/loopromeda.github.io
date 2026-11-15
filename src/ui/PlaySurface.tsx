@@ -38,7 +38,6 @@ import { Keys } from './Keys'
 import { KeysNavigator } from './KeysNavigator'
 import { KitPads } from './KitPads'
 import { Pads } from './Pads'
-import { StepGrid } from './StepGrid'
 import { StepLights } from './Transport'
 import { XyPad } from './XyPad'
 
@@ -174,10 +173,8 @@ const sameFit = (a: Fit, b: Fit) =>
 /**
  * Where notes are played, on piano keys, on pads or on the XY pad
  * (settings.kind), or given kit (the kit's pads' names: the kit is the
- * part played), on the kit's pads (KitPads), a tap picking the pad too;
- * or, with settings.seq, where the picked track's loop is written, a
- * step at a time (StepGrid), in their place: no octaves then, no mod
- * wheel, and the computer's keys play nothing.
+ * part played), on the kit's pads (KitPads), a tap picking the pad too.
+ * The step sequencer is the editor's Seq tab (SeqView), no longer here.
  * Sized by className in the page's column: App gives it
  * the rest, at most the keys' length (the pads stand as tall), under what
  * stands above them, which the section holds as --play-head.
@@ -280,7 +277,7 @@ export function PlaySurface({
   })
   const surfaceRef = useRef<HTMLDivElement>(null)
   const headerRef = useRef<HTMLDivElement>(null)
-  const { kind, root, scale, seq } = settings
+  const { kind, root, scale } = settings
   const pads = kind === 'pads'
   const xy = kind === 'xy'
   const { grid } = fit
@@ -307,8 +304,7 @@ export function PlaySurface({
   const range = `${noteName(lowestNote)} – ${noteName(highestNote)}`
   // The navigator, for keys that do not reach C−1 to G9 at once
   const whites = whiteCount(fit.octaves)
-  const navigator =
-    !kit && !seq && !away && kind === 'keys' && whites < REACH_WHITES
+  const navigator = !kit && !away && kind === 'keys' && whites < REACH_WHITES
   const notes = useMemo(
     () =>
       pads
@@ -367,9 +363,8 @@ export function PlaySurface({
   )
 
   // Computer keys, for a desktop: they play, Z and X shift the octave; on
-  // the kit, the pads' keys strike and pick them. None over the steps
+  // the kit, the pads' keys strike and pick them
   useEffect(() => {
-    if (seq) return
     if (kit) {
       const padOf = (code: string) => {
         const pad = PAD_CODES.indexOf(code)
@@ -433,7 +428,6 @@ export function PlaySurface({
   }, [
     hands,
     kitHands,
-    seq,
     kit,
     pick,
     pads,
@@ -494,7 +488,7 @@ export function PlaySurface({
           </>
         )}
         <div
-          hidden={kit !== undefined || seq || away}
+          hidden={kit !== undefined || away}
           className="flex shrink-0 items-center gap-2"
         >
           <BarIconButton
@@ -528,11 +522,9 @@ export function PlaySurface({
         </div>
       )}
       <div hidden={away} className="flex min-h-28 flex-1 gap-2">
-        {!seq && beside}
+        {beside}
         <div ref={surfaceRef} className="relative min-w-0 flex-1">
-          {seq ? (
-            <StepGrid engine={engine} kit={kit} />
-          ) : kit ? (
+          {kit ? (
             <KitPads
               hands={kitHands}
               grid={fit.kit}

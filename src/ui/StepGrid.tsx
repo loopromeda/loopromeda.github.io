@@ -9,9 +9,11 @@ import {
   type PointerEvent,
 } from 'react'
 import type { Engine } from '../engine/engine'
+import { padName } from '../state/kit'
 import { laneGroups, ownValue, type LaneKnob } from '../state/lanes'
 import {
   MAX_BARS,
+  MAX_LANES,
   MIN_VELOCITY,
   addLane,
   barsOf,
@@ -75,10 +77,6 @@ const PAD_LABEL =
 const PICKED_LABEL =
   'flex min-h-0 min-w-0 items-center rounded-sm px-1 text-left text-[10px] leading-none text-(--secondary) active:bg-(--lift-2)'
 
-/** A lane's knob, as the lane shown is kept: its part and key */
-const laneId = (lane: { part: string; key: string }) =>
-  `${lane.part}\t${lane.key}`
-
 /** A finger on the grid: the note it holds, and what it had as it took it */
 interface Drag {
   readonly pointer: number
@@ -99,38 +97,33 @@ interface Drag {
 }
 
 /**
- * The play surface as a step sequencer: the loop of the track picked, a
- * bar of sixteenths across (src/viz/steps.ts) and a row for each key up
- * it, the lowest at the bottom: a synth's notes, every semitone, or given
- * kit (its pads' names) the kit's pads. A tap on an empty step puts a
- * note there and a tap on a note takes it away; a finger dragged up or
- * down from a note sets its velocity (the fainter, the softer) and, on a
- * synth, sideways its length. A note put while the sequencer is stopped
- * is heard. Over the grid: a bar fewer or more, the loop's bars (a tap
- * shows one, the one playing ringed and carried into sight, the row
- * panned sideways when there are more of them than fit), and Clear.
- * While the sequencer plays the grid shows the bar playing, page by
- * page, until a bar is tapped (the one playing tapped, or Play, follows
- * again); stopped, it shows the bar Play starts from as that moves. A
- * camera at the grid's left frames the rows shown over the whole reach:
- * a tap or a drag brings another part of it on screen. A row's name at
- * the left plays it, and picks a kit's pad. A dot marks a row another
- * track of the same kind plays. Under the grid, one of the loop's knob
- * lanes (LaneStrip), its steps in line with the grid's; its name lists
- * them all in the grid's place (LanePicker), and adds one: Lane in the
- * header while there are none.
+ * The step sequencer, on the Seq tab: the loop of the tab's track (its
+ * own pick, apart from the one played: Engine.getSeqTrack), a bar of
+ * sixteenths across (src/viz/steps.ts) and a row for each key up it, the
+ * lowest at the bottom: a synth's notes, every semitone, or a kit's
+ * pads, by their names. A tap on an empty step puts a note there and a
+ * tap on a note takes it away; a finger dragged up or down from a note
+ * sets its velocity (the fainter, the softer) and, on a synth, sideways
+ * its length. A note put while the sequencer is stopped is heard. Over
+ * the grid: a bar fewer or more, the loop's bars (a tap shows one, the
+ * one playing ringed and carried into sight, the row panned sideways
+ * when there are more of them than fit), Lane and Clear. While the
+ * sequencer plays the grid shows the bar playing, page by page, until a
+ * bar is tapped (the one playing tapped, or Play, follows again);
+ * stopped, it shows the bar Play starts from as that moves. A camera at
+ * the grid's left frames the rows shown over the whole reach: a tap or a
+ * drag brings another part of it on screen. A row's name at the left
+ * plays it, and picks a kit's pad where the kit is the track played. A
+ * dot marks a row another track of the same kind plays. Under the grid,
+ * the loop's knob lanes (LaneStrip), one over another, their steps in
+ * line with the grid's, panned up and down past what fits; Lane lists
+ * the knobs one may be added for (LanePicker) in the grid's place.
  * The step playing is lit outside React, as the audio thread tells of
  * it; edits go to the engine, which sends the loop whole.
  */
-export function StepGrid({
-  engine,
-  kit,
-}: {
-  engine: Engine
-  /** The kit's pads' names, while a kit is the track picked */
-  kit?: readonly string[]
-}) {
-  // The loop is the picked track's: it changes with the song and the pick
+export function StepGrid({ engine }: { engine: Engine }) {
+  // The loop is the Seq tab's track's: it changes with the song and the
+  // pick
   const subscribe = useCallback(
     (listener: () => void) => {
       const song = engine.subscribeSong(listener)
@@ -142,10 +135,19 @@ export function StepGrid({
     },
     [engine]
   )
-  const loop = useSyncExternalStore(subscribe, engine.getLoop)
+  const track = useSyncExternalStore(subscribe, engine.getSeqTrack)
+  const loop = useSyncExternalStore(subscribe, engine.getSeqLoop)
   const song = useSyncExternalStore(subscribe, engine.getSong)
   const tracks = useSyncExternalStore(subscribe, engine.getTracks)
-  const picked = useSyncExternalStore(engine.subscribeSound, engine.getPad)
+  const pick = useSyncExternalStore(engine.subscribeSound, engine.getPick)
+  // The track played: its pad picked lit, and a row's name picks one
+  const played = pick.track === track.id
+  // A kit's pads' names
+  const pads = track.kind === 'kit' ? track.pads : undefined
+  const kit = useMemo(
+    () => pads?.map((pad, k) => padName(pad.current, k)),
+    [pads]
+  )
   const mix = useSyncExternalStore(engine.subscribeMix, engine.getMix)
   const loopRef = useRef<Loop>(loop)
   useLayoutEffect(() => {
@@ -174,15 +176,14 @@ export function StepGrid({
   // The rows another track of the same kind plays in the bar shown
   const kind = kit === undefined ? 'synth' : 'kit'
   const others = useMemo(() => {
-    const playing = engine.getPick().track
     const loops: Loop[] = []
-    for (const track of tracks) {
-      if (track.kind !== kind || track.id === playing) continue
-      const each = song.loops[track.id]?.[0]
-      if (each) loops.push(each)
+    for (const each of tracks) {
+      if (each.kind !== kind || each.id === track.id) continue
+      const other = song.loops[each.id]?.[0]
+      if (other) loops.push(other)
     }
     return othersRows(loops, bar)
-  }, [engine, tracks, song, kind, bar])
+  }, [tracks, track.id, song, kind, bar])
   const total = kit ? kit.length : SYNTH_ROWS
   const high = kit ? kit.length - 1 : HIGHEST_NOTE
   // All the rows the whole reach holds: a synth's 128 notes, a kit's pads
@@ -212,19 +213,15 @@ export function StepGrid({
 
   // The knobs a lane may move: a synth's sound's and its fader's, or a
   // kit's fader's (its pads each a sound of its own)
-  const track = engine.getTrack()
   const voice = track.kind === 'synth' ? track.sound : undefined
   const groups = useMemo(() => laneGroups(voice), [voice])
-  const [shownLane, setShownLane] = useState('')
   const [picking, setPicking] = useState(false)
-  const lane =
-    loop.lanes.find((each) => laneId(each) === shownLane) ?? loop.lanes[0]
   const knobOf = (each: KnobLane) =>
     groups
       .find((group) => group.part === each.part)
       ?.knobs.find((knob) => knob.key === each.key)
-  const laneKnobShown = lane && knobOf(lane)
-  const own = (knob: LaneKnob) => ownValue(knob, voice, mix, engine.getPlace())
+  const own = (knob: LaneKnob) =>
+    ownValue(knob, voice, mix, engine.getSeqPlace())
   const closePicker = useCallback(() => setPicking(false), [])
 
   // As many rows as the grid's height gives a finger
@@ -299,10 +296,8 @@ export function StepGrid({
   )
 
   /** Plays a row's key while touch id holds it: a note, or a kit's pad */
-  const sound = (id: number, key: number) => {
-    if (kit) engine.hit(id, key, 1)
-    else engine.noteOn(id, key, 1)
-  }
+  const sound = (id: number, key: number) =>
+    engine.playKey(id, track.id, key, 1)
 
   const down = (event: PointerEvent<HTMLDivElement>) => {
     if (event.pointerType === 'mouse' && event.button !== 0) return
@@ -320,7 +315,7 @@ export function StepGrid({
     const over = noteOver(was, step, key)
     const note = over ?? { step, key, length: 1, velocity: 1 }
     if (!over) {
-      engine.editLoop((each) => putNote(each, note))
+      engine.editSeqLoop((each) => putNote(each, note))
       // Heard as it is put, unless the sequencer is about to play it
       if (!engine.getPlaying()) sound(event.pointerId, key)
     }
@@ -351,12 +346,12 @@ export function StepGrid({
       const velocity = dragVelocity(drag.velocity, dy, MIN_VELOCITY)
       setHint(`Vel ${Math.round(velocity * 100)}%`)
       if (velocity === note.velocity) return
-      engine.editLoop((each) => putNote(each, { ...note, velocity }))
+      engine.editSeqLoop((each) => putNote(each, { ...note, velocity }))
     } else if (!kit) {
       const length = dragLength(drag.length, dx, drag.column, drag.room)
       setHint(`Len ${length}`)
       if (length === note.length) return
-      engine.editLoop((each) => putNote(each, { ...note, length }))
+      engine.editSeqLoop((each) => putNote(each, { ...note, length }))
     }
   }
 
@@ -368,7 +363,7 @@ export function StepGrid({
     engine.noteOff(drag.pointer)
     setHint('')
     if (!drag.added && !drag.axis && event.type === 'pointerup') {
-      engine.editLoop((each) => removeNote(each, drag.step, drag.key))
+      engine.editSeqLoop((each) => removeNote(each, drag.step, drag.key))
     }
   }
 
@@ -410,7 +405,7 @@ export function StepGrid({
           path="M4.5 9h9"
           disabled={bars <= 1}
           onClick={() => {
-            engine.editLoop((each) => setBars(each, bars - 1))
+            engine.editSeqLoop((each) => setBars(each, bars - 1))
             pickBar(Math.min(bar, bars - 2))
           }}
         />
@@ -419,7 +414,7 @@ export function StepGrid({
           path="M4.5 9h9M9 4.5v9"
           disabled={bars >= MAX_BARS}
           onClick={() => {
-            engine.editLoop((each) => setBars(each, bars + 1))
+            engine.editSeqLoop((each) => setBars(each, bars + 1))
             pickBar(bars)
           }}
         />
@@ -448,16 +443,16 @@ export function StepGrid({
         >
           {hint}
         </span>
-        {loop.lanes.length === 0 && (
-          <button
-            type="button"
-            aria-haspopup="dialog"
-            onClick={() => setPicking(true)}
-            className={SMALL_BUTTON}
-          >
-            Lane
-          </button>
-        )}
+        <button
+          type="button"
+          aria-haspopup="dialog"
+          aria-label="Add a knob lane"
+          disabled={loop.lanes.length >= MAX_LANES}
+          onClick={() => setPicking(true)}
+          className={SMALL_BUTTON}
+        >
+          Lane
+        </button>
         <button
           type="button"
           disabled={loop.notes.length === 0}
@@ -468,8 +463,10 @@ export function StepGrid({
         </button>
       </div>
 
-      {/* A lane under it, the grid keeps three rows: the lane gives way */}
-      <div className={`flex flex-1 gap-1 ${lane ? 'min-h-16' : 'min-h-0'}`}>
+      {/* Lanes under it, the grid keeps three rows: they pan instead */}
+      <div
+        className={`flex flex-1 gap-1 ${loop.lanes.length > 0 ? 'min-h-16' : 'min-h-0'}`}
+      >
         {reach > rows && (
           <RowNavigator
             position={first}
@@ -504,7 +501,7 @@ export function StepGrid({
                   }
                   event.currentTarget.setPointerCapture(event.pointerId)
                   sound(event.pointerId, key)
-                  if (kit) engine.pickTrack(engine.getPick().track, key)
+                  if (kit && played) engine.pickTrack(track.id, key)
                 }}
                 onPointerUp={(event) => engine.noteOff(event.pointerId)}
                 onPointerCancel={(event) => engine.noteOff(event.pointerId)}
@@ -513,7 +510,7 @@ export function StepGrid({
                 }
                 className={`relative ${
                   kit
-                    ? key === picked
+                    ? played && key === pick.pad
                       ? PICKED_LABEL
                       : PAD_LABEL
                     : isBlack(key)
@@ -579,38 +576,36 @@ export function StepGrid({
         </div>
       </div>
 
-      {lane && (
-        <LaneStrip
-          engine={engine}
-          loop={loop}
-          lane={lane}
-          knob={laneKnobShown}
-          own={laneKnobShown ? own(laneKnobShown) : 0}
-          bar={bar}
-          aside={reach > rows}
-          label={kit ? 'w-14' : 'w-9'}
-          onPick={() => setPicking(true)}
-          onHint={setHint}
-        />
+      {loop.lanes.length > 0 && (
+        <div className="flex max-h-[45%] shrink-0 flex-col gap-2 overflow-y-auto overscroll-contain [scrollbar-width:none]">
+          {loop.lanes.map((lane) => {
+            const knob = knobOf(lane)
+            return (
+              <LaneStrip
+                key={`${lane.part}:${lane.key}`}
+                engine={engine}
+                loop={loop}
+                lane={lane}
+                knob={knob}
+                own={knob ? own(knob) : 0}
+                bar={bar}
+                aside={reach > rows}
+                label={kit ? 'w-14' : 'w-9'}
+                onHint={setHint}
+              />
+            )
+          })}
+        </div>
       )}
 
       {picking && (
         <LanePicker
           groups={groups}
-          lanes={loop.lanes.map((each) => ({
-            lane: each,
-            name: knobOf(each)?.name ?? `${each.part} · ${each.key}`,
-          }))}
-          shown={lane}
-          onShow={(each) => {
-            setShownLane(laneId(each))
-            setPicking(false)
-          }}
+          lanes={loop.lanes}
           onAdd={(knob) => {
-            engine.editLoop((each) =>
+            engine.editSeqLoop((each) =>
               addLane(each, knob.part, knob.key, own(knob))
             )
-            setShownLane(laneId(knob))
             setPicking(false)
           }}
           onClose={closePicker}
@@ -624,7 +619,7 @@ export function StepGrid({
           confirm="Clear"
           onConfirm={() => {
             setClearing(false)
-            engine.editLoop(clearLoop)
+            engine.editSeqLoop(clearLoop)
           }}
           onCancel={() => setClearing(false)}
         />

@@ -7,7 +7,8 @@ modulators: `docs/plan/sound-chains.md`; effects, then parts and a drum
 kit, then a step sequencer, under way:
 `docs/plan/effects-parts-sequencer.md`; tracks (a synth or a kit each,
 as many as are added), a sequence for each, then a song, under way,
-knob lanes in a loop, and projects (a session saved under a name):
+knob lanes in a loop, the sequencer up top (a tab of the editor's
+rail), and projects (a session saved under a name):
 `docs/plan/tracks-and-song.md`; the transport on the tab rail, then
 MIDI (notes in, learn, clock out and in), under way:
 `docs/plan/transport-and-midi.md`. What real devices did:
@@ -115,7 +116,8 @@ src/engine/   AudioContext lifecycle, unlock, node wiring; the sound,
               output (each side, the waveform, the spectrum), the
               master's and each track's own (the node's later outputs),
               never the click's (the last, straight to the speakers);
-              the tracks, the one picked edited and played; the
+              the tracks, the one picked edited and played, and the
+              one the Seq tab shows, picked apart; the
               song, held here and edited, its tempo and each loop sent
               as it changes (its lanes resolved on the track's sound),
               the transport, and the step playing; the
@@ -130,8 +132,7 @@ src/state/    params.ts: the knob schema and the old parameters;
               kit, written by name (sound/write.ts); library.ts: user
               presets and the session's tracks, kept in localStorage;
               surface.ts: keys, pads or XY, the pads' key (root and
-              scale), and whether the sequencer's steps stand in their
-              place (Seq);
+              scale), the mod wheel;
               kit.ts: a kit's 16 pads, each a preset mapped onto
               it and played as it is at the pad's note, and its
               chain (the inserts and sends after them, every
@@ -140,7 +141,7 @@ src/state/    params.ts: the knob schema and the old parameters;
               tracks.ts: the session's tracks, each a synth (its
               sound) or a kit (its pads and chain), up to eight,
               named, added, moved and removed, and the track played
-              and the pad picked;
+              and the pad picked, and the Seq tab's track kept;
               song.ts: the session's song (the tempo, the swing and
               each track's loops, by the track's id; a loop one to
               thirty-two bars of sixteenths and its notes, each a step, a
@@ -202,8 +203,16 @@ src/viz/      pure display math (scope trigger and decimation, envelope
               favicon's, in mark.ts)
 src/ui/       React components; SoundEditor.tsx the sound as tiles
               (editor.ts: their names, lines, pictograms and colours),
-              with the kit its pads and its chain, or, switched to Mix,
-              the session's mix, under its tab rail (Sound | Mix, then
+              with the kit its pads and its chain, or, switched to Seq,
+              SeqView.tsx (a chip for each track, the one picked
+              there apart from the one played, and its StepGrid.tsx:
+              its loop a bar at a time, the bar playing followed, a
+              tap puts a note or takes it away, a drag from one sets
+              how hard and how long; RowNavigator.tsx a camera over
+              its rows; under it LaneStrip.tsx its knob lanes, one
+              over another, drawn on, and LanePicker.tsx in its
+              place adds one), or, switched to Mix,
+              the session's mix, under its tab rail (Sound | Seq | Mix, then
               the transport: Transport.tsx's Play, the position and
               the tempo, whose popover holds the tempo, the swing, the
               click, the count-in and each track's loop on or off;
@@ -247,23 +256,17 @@ src/ui/       React components; SoundEditor.tsx the sound as tiles
               notes on Keys.tsx, Pads.tsx or XyPad.tsx, or the kit on
               KitPads.tsx (hands.ts: who
               holds which note, bends it, and on the XY pad places it,
-              its Slide from the start), or with Seq shows
-              StepGrid.tsx, the picked track's loop a bar at a time,
-              the bar playing followed (a tap puts a note or takes
-              it away, a drag from one
-              sets how hard and how long; RowNavigator.tsx a camera
-              over its rows; under it LaneStrip.tsx one of its knob
-              lanes, drawn on, and LanePicker.tsx in its place lists
-              them and adds one), with the lights for the bar's steps in
-              its header, or in a row under a narrow one (Play and the
-              tempo there too while the rail is put away);
+              its Slide from the start), with the lights for the
+              bar's steps in its header, or in a row under a narrow
+              one (Play and the tempo there too while the rail is put
+              away);
               KeysNavigator.tsx moves the keys a white key at a
               time over C−1 to G9 (all of MIDI's notes), ModWheel.tsx the mod wheel at their
               left (the Wheel source) and its Route, PresetBrowser.tsx
               loads, saves and moves presets, a popover on the patch's
               button (placement.ts places it), SurfacePicker.tsx one on
-              the surface's (keys, pads, XY or Seq, the pads' key; a
-              kit's pads or Seq), ProjectBrowser.tsx one on the status
+              the surface's (keys, pads or XY, the pads' key; a kit's
+              pads), ProjectBrowser.tsx one on the status
               line's project button, left of Settings (the projects
               kept, the session saved under a name, one opened in its
               place, a project's file out and in; #/project),
