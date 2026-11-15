@@ -23,9 +23,11 @@ import {
   loopOf,
   loopOn,
   playedNotes,
+  setLoopOn,
   type Loop,
   type Song,
 } from '../state/song'
+import { Recorder, type RecordMode } from '../state/record'
 import { lanesPlayed, sameLanes, type PlayedLane } from '../state/lanes'
 import { knobChanges } from '../state/sound/diff'
 import { initSound, type Sound } from '../state/sound/sound'
@@ -271,6 +273,19 @@ export class Engine {
   #counted = false
   /** The step Play starts from: a beat's first */
   #cue = 0
+  /** The step the last Play started from: its count-in's steps before it */
+  #from = 0
+  /**
+   * What is played while recording, written into the loop of the track
+   * it sounds on (put on, if it was off)
+   */
+  readonly #recorder = new Recorder({
+    loopOf: (track) => loopOf(this.#song, track),
+    editLoop: (track, edit) =>
+      this.setSong(setLoopOn(editLoop(this.#song, track, edit), track, true)),
+  })
+  /** How recording meets the notes there: the device's setting */
+  #recordMode: RecordMode = 'overdub'
   readonly #transportListeners = new Set<() => void>()
   #step = -1
   readonly #stepListeners = new Set<(step: number) => void>()
@@ -491,6 +506,7 @@ export class Engine {
       ...(from > 0 && { from }),
     })
     this.#counted = countIn
+    this.#from = from
     // Before the audio thread tells of a step: the count's, or none
     this.#setStep(countIn ? -COUNT_IN_STEPS : -1)
     if (this.#playing) return
@@ -561,6 +577,60 @@ export class Engine {
     for (const listener of this.#transportListeners) listener()
   }
 
+  /** Whether what is played is recorded into the loops */
+  readonly getRecording = (): boolean => this.#recorder.on
+
+  /** How recording meets the notes there: Overdub, or Replace */
+  setRecordMode(mode: RecordMode): void {
+    this.#recordMode = mode
+  }
+
+  /**
+   * Records what is played into the loop of the track it sounds on
+   * (src/state/record.ts), from the next step; stopped, the sequencer
+   * plays too (a bar counted in first, where asked). The Seq tab shows
+   * the track played, and follows it while recording. Off, a note still
+   * held ends where the sequencer stands; so it does as the sequencer
+   * stops. Nothing before the audio has started. Its listeners are the
+   * transport's.
+   */
+  setRecording(on: boolean): void {
+    if (on === this.#recorder.on || !this.#node) return
+    if (on) {
+      const track = this.getTrack().id
+      this.pickSeqTrack(track)
+      const next = !this.#playing
+        ? this.#cue
+        : this.#step < 0
+          ? this.#from
+          : this.#step + 1
+      this.#post({ t: 'record', on: true })
+      // Replace empties the first step before the sequencer plays it
+      this.#recorder.start(next, track, this.#recordMode)
+      if (!this.#playing) this.play()
+    } else {
+      this.#endRecording()
+    }
+    for (const listener of this.#transportListeners) listener()
+  }
+
+  #endRecording(): void {
+    if (!this.#recorder.on) return
+    this.#post({ t: 'record', on: false })
+    this.#recorder.stop(this.#step + 1)
+  }
+
+  /**
+   * Where a stamp of the audio thread's stands in the song, as it was
+   * heard: a count-in's counted back from the step Play started from,
+   * less the output's latency (a sixteenth a quarter of a beat)
+   */
+  #heard(at: number): number {
+    const song = at < 0 ? this.#from + at : at
+    const { baseLatency = 0, outputLatency = 0 } = this.#snapshot
+    return song - ((baseLatency + outputLatency) * this.#song.tempo) / 15
+  }
+
   /** The sequencer stops, its notes let go */
   stop(): void {
     if (!this.#playing) return
@@ -596,8 +666,12 @@ export class Engine {
     return () => this.#stepListeners.delete(listener)
   }
 
-  /** The sequencer is not playing (any more): its listeners hear of it */
+  /**
+   * The sequencer is not playing (any more), nor recording: its listeners
+   * hear of it
+   */
   #stopped(): void {
+    this.#endRecording()
     this.#setStep(-1)
     if (!this.#playing) return
     this.#playing = false
@@ -921,8 +995,12 @@ export class Engine {
     this.#tracks = tracks
     this.#mix = fitted
     if (pickChanged) this.#pick = picked
-    // The Seq tab's track gone, it shows the one played
-    if (!tracks.some((track) => track.id === this.#seqTrack)) {
+    // The Seq tab's track gone, it shows the one played; so it does
+    // while recording, the track played followed
+    if (
+      (pickChanged && this.#recorder.on) ||
+      !tracks.some((track) => track.id === this.#seqTrack)
+    ) {
       this.#seqTrack = picked.track
     }
     // A track gone takes its loops with it
@@ -1124,7 +1202,17 @@ export class Engine {
       for (const listener of this.#glideListeners) listener(message)
     } else if (message.t === 'step') {
       // One sent before a stop reached the audio thread is not shown
-      if (this.#playing) this.#setStep(message.step)
+      if (!this.#playing) return
+      this.#setStep(message.step)
+      this.#recorder.step(message.step)
+    } else if (message.t === 'stamp') {
+      const at = this.#heard(message.at)
+      if (message.on) {
+        const { id, track, key, velocity, kit } = message
+        this.#recorder.noteOn(id, track, key, velocity, kit, at)
+      } else {
+        this.#recorder.noteOff(message.id, at)
+      }
     } else if (message.t === 'reduction') {
       this.#reductions.receive(message)
     } else if (message.t === 'loudness') {

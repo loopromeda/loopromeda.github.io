@@ -7,6 +7,7 @@
 
 // theme.ts is pure data, so the state reading it is safe
 import { DEFAULT_THEME, isThemeId, type ThemeId } from '../ui/theme'
+import { RECORD_MODES, type RecordMode } from './record'
 
 /** Voice counts the player may limit the synth to; the last is VOICE_COUNT */
 export const VOICE_LIMITS = [4, 8, 12, 16] as const
@@ -62,6 +63,11 @@ export interface AppSettings {
   readonly click: boolean
   /** Play counts a bar of beats in before the first step */
   readonly countIn: boolean
+  /**
+   * Recording adds to a loop's notes (Overdub), or first empties it, one
+   * time round (Replace): src/state/record.ts
+   */
+  readonly record: RecordMode
 }
 
 /** The whole synth at once, the lowest delay, everything shown */
@@ -77,6 +83,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   keepAwake: true,
   click: false,
   countIn: false,
+  record: 'overdub',
 }
 
 /** Where the settings are kept */
@@ -121,6 +128,7 @@ export function readSettings(storage?: SettingsStorage): AppSettings {
     keepAwake,
     click,
     countIn,
+    record,
   } = saved as {
     voices: unknown
     latency: unknown
@@ -133,6 +141,7 @@ export function readSettings(storage?: SettingsStorage): AppSettings {
     keepAwake: unknown
     click: unknown
     countIn: unknown
+    record: unknown
   }
   return {
     voices: isVoiceLimit(voices) ? voices : DEFAULT_SETTINGS.voices,
@@ -156,6 +165,8 @@ export function readSettings(storage?: SettingsStorage): AppSettings {
       typeof keepAwake === 'boolean' ? keepAwake : DEFAULT_SETTINGS.keepAwake,
     click: typeof click === 'boolean' ? click : DEFAULT_SETTINGS.click,
     countIn: typeof countIn === 'boolean' ? countIn : DEFAULT_SETTINGS.countIn,
+    record:
+      RECORD_MODES.find((mode) => mode === record) ?? DEFAULT_SETTINGS.record,
   }
 }
 
@@ -184,6 +195,7 @@ export function writeSettings(
         keepAwake: settings.keepAwake,
         click: settings.click,
         countIn: settings.countIn,
+        record: settings.record,
       })
     )
   } catch {

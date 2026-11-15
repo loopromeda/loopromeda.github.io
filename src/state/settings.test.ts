@@ -94,6 +94,7 @@ describe('readSettings', () => {
       keepAwake: false,
       click: true,
       countIn: true,
+      record: 'replace',
     }
     const voices = storageWith(JSON.stringify({ ...good, voices: 6 }))
     expect(readSettings(voices)).toEqual({ ...good, voices: 16 })
@@ -116,6 +117,8 @@ describe('readSettings', () => {
     expect(readSettings(click)).toEqual({ ...good, click: false })
     const countIn = storageWith(JSON.stringify({ ...good, countIn: 'bar' }))
     expect(readSettings(countIn)).toEqual({ ...good, countIn: false })
+    const record = storageWith(JSON.stringify({ ...good, record: 'punch' }))
+    expect(readSettings(record)).toEqual({ ...good, record: 'overdub' })
   })
 
   it('defaults voices that is not one of the counts, even as a number', () => {
@@ -153,6 +156,8 @@ describe('readSettings', () => {
       // Kept before the transport's were there: off
       click: false,
       countIn: false,
+      // Kept before recording was there: its default
+      record: 'overdub',
     })
   })
 })
@@ -172,6 +177,7 @@ describe('writeSettings', () => {
       keepAwake: false,
       click: true,
       countIn: false,
+      record: 'replace',
     }
     writeSettings(storage, settings)
     expect(readSettings(storage)).toEqual(settings)
@@ -197,6 +203,7 @@ describe('writeSettings', () => {
       keepAwake: true,
       click: false,
       countIn: true,
+      record: 'overdub',
     })
     expect(JSON.parse(storage.items.get(SETTINGS_KEY) ?? 'null')).toEqual({
       version: 1,
@@ -211,6 +218,7 @@ describe('writeSettings', () => {
       keepAwake: true,
       click: false,
       countIn: true,
+      record: 'overdub',
     })
   })
 

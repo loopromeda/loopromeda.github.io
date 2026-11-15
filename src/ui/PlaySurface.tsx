@@ -69,12 +69,13 @@ const OCTAVE: Readonly<Record<SurfaceKind, number>> = {
 /**
  * From this width of the header (CSS px) the transport and the keys'
  * navigator stand in it, between the patch and the arrows: room for the
- * navigator, Play and the tempo, the arrows, the buttons at the end and
- * the patch's name at its least (its 6rem, PatchButton) — the beat lights
- * give way to the name, and vanish before it does. Under it, in a row
- * of their own below, which a phone on its side has no height for.
+ * navigator, Play, Record and the tempo, the arrows, the buttons at the
+ * end and the patch's name at its least (its 6rem, PatchButton) — the
+ * beat lights give way to the name, and vanish before it does. Under it,
+ * in a row of their own below, which a phone on its side has no height
+ * for. Record's 36 px and its gap came on 600.
  */
-const NAVIGATOR_IN_HEADER = 600
+const NAVIGATOR_IN_HEADER = 644
 
 /**
  * Computer keys (KeyboardEvent.code) for the keys: each plays as many

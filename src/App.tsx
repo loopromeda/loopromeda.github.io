@@ -41,6 +41,7 @@ import { useTheme } from './ui/appearance'
 import { TrackButton, TrackPicker } from './ui/TrackPicker'
 import {
   PlayButton,
+  RecordButton,
   Position,
   TempoButton,
   TransportPicker,
@@ -254,6 +255,7 @@ export function App({
     if (next.latency !== settings.latency) engine.setLatency(next.latency)
     engine.setClick(next.click)
     engine.setCountIn(next.countIn)
+    engine.setRecordMode(next.record)
   }
   // The master's views open over the controls, which they cover, under
   // the tab rail; the presets and the surface popovers over the page,
@@ -356,6 +358,7 @@ export function App({
             transport={
               <>
                 <PlayButton engine={engine} small />
+                <RecordButton engine={engine} small />
                 <Position engine={engine} />
                 <TempoButton
                   ref={tempoRailRef}
@@ -440,6 +443,7 @@ export function App({
           !controls && (
             <>
               <PlayButton engine={engine} />
+              <RecordButton engine={engine} />
               <TempoButton
                 ref={tempoRef}
                 engine={engine}

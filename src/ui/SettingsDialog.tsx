@@ -17,11 +17,11 @@ import {
   type Latency,
   type VelocityMode,
 } from '../state/settings'
-import { CARD, SMALL_BUTTON, SMALL_OPTION } from './controls'
+import { CARD, SMALL_BUTTON } from './controls'
 import { Dropdown } from './Dropdown'
 import { SmallIconButton } from './IconButton'
 import { PlatformChecks } from './PlatformChecks'
-import { SettingGroup, SettingRow, SwitchRow } from './SettingRows'
+import { ChoiceRow, SettingGroup, SettingRow, SwitchRow } from './SettingRows'
 import { THEMES, mode as pageMode } from './theme'
 
 /** Each latencyHint as the player picks it, lowest first */
@@ -167,7 +167,7 @@ export function SettingsDialog({
             value={settings.theme}
             onChange={(theme) => set({ theme })}
           />
-          <Choice
+          <ChoiceRow
             label="Appearance"
             hint="Dark or light, or as the device is set."
             options={APPEARANCE_LABELS}
@@ -177,7 +177,7 @@ export function SettingsDialog({
         </SettingGroup>
 
         <SettingGroup title="Performance">
-          <Choice
+          <ChoiceRow
             label="Voices"
             options={VOICE_LIMITS.map((voices) => ({
               value: voices,
@@ -186,7 +186,7 @@ export function SettingsDialog({
             value={settings.voices}
             onChange={(voices) => set({ voices })}
           />
-          <Choice
+          <ChoiceRow
             label="Latency"
             hint="Higher gives a slow phone more time for each block, and delays every note. Changing it restarts the audio."
             options={LATENCY_LABELS}
@@ -201,7 +201,7 @@ export function SettingsDialog({
         </SettingGroup>
 
         <SettingGroup title="Playing">
-          <Choice
+          <ChoiceRow
             label="Velocity"
             hint="Touch: lower on a key or a pad plays louder. Full: every note at full velocity."
             options={VELOCITY_LABELS}
@@ -244,50 +244,6 @@ export function SettingsDialog({
         </SettingGroup>
       </div>
     </dialog>
-  )
-}
-
-/** A setting chosen from a row of options, the chosen one pressed */
-function Choice<T extends string | number>({
-  label,
-  hint,
-  options,
-  value,
-  onChange,
-}: {
-  label: string
-  hint?: string
-  options: readonly { value: T; label: string }[]
-  value: T
-  onChange: (value: T) => void
-}) {
-  const id = useId()
-  return (
-    <SettingRow
-      label={label}
-      labelId={`${id}-label`}
-      hint={hint}
-      hintId={`${id}-hint`}
-    >
-      <div
-        role="group"
-        aria-labelledby={`${id}-label`}
-        aria-describedby={hint === undefined ? undefined : `${id}-hint`}
-        className="flex flex-wrap gap-1"
-      >
-        {options.map((option) => (
-          <button
-            key={`${option.value}`}
-            type="button"
-            aria-pressed={option.value === value}
-            onClick={() => onChange(option.value)}
-            className={SMALL_OPTION}
-          >
-            {option.label}
-          </button>
-        ))}
-      </div>
-    </SettingRow>
   )
 }
 

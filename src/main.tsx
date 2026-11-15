@@ -97,6 +97,7 @@ engine.setVoices(settings.voices)
 engine.setLatency(settings.latency)
 engine.setClick(settings.click)
 engine.setCountIn(settings.countIn)
+engine.setRecordMode(settings.record)
 // The last session's tracks (or a synth on the first preset and the
 // factory kit), then the one played and its pad picked, are set before
 // audio starts; the engine hands every value to the worklet as it loads

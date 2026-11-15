@@ -13,6 +13,7 @@ import {
   MIN_TEMPO,
 } from '../dsp/sequencer'
 import type { Engine } from '../engine/engine'
+import type { RecordMode } from '../state/record'
 import type { AppSettings } from '../state/settings'
 import { loopOn, setLoopOn, setSwing, setTempo } from '../state/song'
 import { trackName, tracksKey } from '../state/tracks'
@@ -20,7 +21,7 @@ import { COLUMNS } from '../viz/steps'
 import { BAR_HIT, ICON_BUTTON, SECTION_HEADING, TALL_HIT } from './controls'
 import { BarIconButton, SmallIconButton } from './IconButton'
 import { Popover } from './Popover'
-import { SettingGroup, SwitchRow } from './SettingRows'
+import { ChoiceRow, SettingGroup, SwitchRow } from './SettingRows'
 import { transportKey } from './transportKeys'
 
 /** Play's triangle, and Stop's square, in an 18 px box */
@@ -52,6 +53,59 @@ export function PlayButton({
   }
   return small ? <SmallIconButton {...props} /> : <BarIconButton {...props} />
 }
+
+/** Record's button on the tab rail, the panel's 28 px: red while lit */
+const RAIL_RECORD = `${TALL_HIT} flex size-7 shrink-0 items-center justify-center rounded-md bg-(--lift) text-(--ink-200) aria-pressed:bg-(--danger)/20 aria-pressed:text-(--danger-ink)`
+
+/** The same in the play surface's header, at its 36 px */
+const BAR_RECORD = `${BAR_HIT} flex size-9 shrink-0 items-center justify-center rounded-lg bg-(--lift) text-(--ink-200) aria-pressed:bg-(--danger)/20 aria-pressed:text-(--danger-ink)`
+
+/**
+ * Records what is played into the loop of the track played, as the
+ * transport's popover says (Overdub or Replace: Engine.setRecording),
+ * its dot filled red while it does; stopped, it plays too, a bar counted
+ * in first where asked. Beside Play: on the tab rail (small), or in the
+ * play surface's header while the rail is put away.
+ */
+export function RecordButton({
+  engine,
+  small = false,
+}: {
+  engine: Engine
+  small?: boolean
+}) {
+  const recording = useSyncExternalStore(
+    engine.subscribeTransport,
+    engine.getRecording
+  )
+  const icon = small ? 14 : 16
+  return (
+    <button
+      type="button"
+      aria-label="Record"
+      aria-pressed={recording}
+      onClick={() => engine.setRecording(!recording)}
+      className={small ? RAIL_RECORD : BAR_RECORD}
+    >
+      <svg width={icon} height={icon} viewBox="0 0 18 18" aria-hidden="true">
+        <circle
+          cx="9"
+          cy="9"
+          r="4.5"
+          fill={recording ? 'currentColor' : 'none'}
+          stroke="currentColor"
+          strokeWidth="2"
+        />
+      </svg>
+    </button>
+  )
+}
+
+/** Recording's ways, as the transport's popover names them */
+const RECORD_LABELS: readonly { value: RecordMode; label: string }[] = [
+  { value: 'overdub', label: 'Overdub' },
+  { value: 'replace', label: 'Replace' },
+]
 
 /**
  * The transport's keys on the page, for a desktop (transportKeys.ts):
@@ -105,7 +159,8 @@ export function positionText(step: number, counting: boolean): string {
  * (`3.2.1`), the beats left while it counts in (`−4`), and while stopped
  * the beat Play starts from, dim. Written outside React a step at a time,
  * as the audio thread tells of them; it leads what is heard by the
- * output's latency.
+ * output's latency. Not shown under 384 px wide, where the rail has no
+ * room for it (the Seq tab follows the bar playing).
  */
 export function Position({ engine }: { engine: Engine }) {
   const textRef = useRef<HTMLSpanElement>(null)
@@ -139,7 +194,7 @@ export function Position({ engine }: { engine: Engine }) {
       ref={textRef}
       role="timer"
       aria-label="Position: bar, beat and sixteenth"
-      className="min-w-[6ch] shrink-0 text-center font-mono text-[11px] text-(--ink-200) tabular-nums data-[state=count]:text-(--accent) data-[state=stop]:text-(--ink-500)"
+      className="min-w-[6ch] shrink-0 text-center font-mono text-[11px] text-(--ink-200) tabular-nums max-[24rem]:hidden data-[state=count]:text-(--accent) data-[state=stop]:text-(--ink-500)"
     >
       1.1.1
     </span>
@@ -205,8 +260,9 @@ const SLIDER = 'h-11 min-w-0 flex-1 accent-[var(--accent)]'
  * rail, above it in the play surface's header): the song's tempo on a
  * slider with a beat down and a beat up at its ends, the swing (the
  * share of each pair of sixteenths the first takes) from straight to a
- * triplet's and a little past; the click and the count-in (the device's
- * settings); and each track with its loop on or off (the song's). Each
+ * triplet's and a little past; the click, the count-in and how
+ * recording meets a loop's notes (the device's settings); and each track
+ * with its loop on or off (the song's). Each
  * change plays at once. Escape and the cross close it; so does a tap
  * outside (the page's, App.tsx).
  */
@@ -332,6 +388,13 @@ export function TransportPicker({
           hint="A bar of beats before the first step."
           value={settings.countIn}
           onChange={(countIn) => onSettings({ ...settings, countIn })}
+        />
+        <ChoiceRow
+          label="Record"
+          hint="Overdub adds what is played. Replace first empties the loop as it plays, once round."
+          options={RECORD_LABELS}
+          value={settings.record}
+          onChange={(record) => onSettings({ ...settings, record })}
         />
       </div>
 

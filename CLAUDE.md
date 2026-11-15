@@ -8,7 +8,8 @@ kit, then a step sequencer, under way:
 `docs/plan/effects-parts-sequencer.md`; tracks (a synth or a kit each,
 as many as are added), a sequence for each, then a song, under way,
 knob lanes in a loop, the sequencer up top (a tab of the editor's
-rail), and projects (a session saved under a name):
+rail), recording what is played into a loop, and projects (a session
+saved under a name):
 `docs/plan/tracks-and-song.md`; the transport on the tab rail, then
 MIDI (notes in, learn, clock out and in), under way:
 `docs/plan/transport-and-midi.md`. What real devices did:
@@ -100,7 +101,8 @@ src/worklet/  the AudioWorkletProcessor around src/dsp; own globals and
               hand their values (TrackKnobs) (Node-testable); the
               processor keeps a part, a sequencer's lane and knob
               lanes for each track, by the track's id, and tells of
-              each step as it passes, how far
+              each step as it passes, while recording where it stands
+              as each note starts and ends, how far
               the compressor or limiter watched turns the sound down,
               and how loud the output is; the click goes out on an
               output of its own, the last; load.ts the
@@ -120,7 +122,9 @@ src/engine/   AudioContext lifecycle, unlock, node wiring; the sound,
               one the Seq tab shows, picked apart; the
               song, held here and edited, its tempo and each loop sent
               as it changes (its lanes resolved on the track's sound),
-              the transport, and the step playing; the
+              the transport, and the step playing, and recording (a
+              Recorder fed where each note was heard, the output's
+              latency taken off); the
               compressors' and limiters' reductions (reductions.ts:
               who watches which, many at once, the list told under a
               version) and the loudness, watched;
@@ -149,7 +153,10 @@ src/state/    params.ts: the knob schema and the old parameters;
               velocity, and its knob lanes, a knob's value at each
               step), its edits, kept in localStorage; lanes.ts: the
               knobs a track's lanes may move (its sound's, its
-              fader's) and its lanes as they play;
+              fader's) and its lanes as they play; record.ts: what
+              is played while recording written into a loop (on the
+              sixteenth nearest, as long as held, after its step has
+              played), Overdub or Replace;
               project.ts: a project, the session (the tracks, the mix,
               the song) kept under a name, the list of them and a
               project's file; projects.ts: the projects kept in
@@ -157,7 +164,8 @@ src/state/    params.ts: the knob schema and the old parameters;
               was edited since, and Save, Save as, Open, New, Rename,
               Delete, Export and Import;
               settings.ts: the device's settings (voices, latency,
-              velocity, what the screen shows); mix.ts: the session's
+              velocity, how recording meets a loop, what the screen
+              shows); mix.ts: the session's
               mix (each track's fader, a level and a balance, and
               whether it is muted or soloed, by the
               track's place; the buses every track sends to, lettered by
@@ -213,9 +221,10 @@ src/ui/       React components; SoundEditor.tsx the sound as tiles
               over another, drawn on, and LanePicker.tsx in its
               place adds one), or, switched to Mix,
               the session's mix, under its tab rail (Sound | Seq | Mix, then
-              the transport: Transport.tsx's Play, the position and
-              the tempo, whose popover holds the tempo, the swing, the
-              click, the count-in and each track's loop on or off;
+              the transport: Transport.tsx's Play, Record, the
+              position and the tempo, whose popover holds the tempo,
+              the swing, the click, the count-in, Overdub or Replace
+              and each track's loop on or off;
               transportKeys.ts Space, the arrows and Home on it);
               the sound's Out and the
               mix's Master hold views of the output, as many side by
@@ -284,7 +293,8 @@ src/ui/       React components; SoundEditor.tsx the sound as tiles
               closes it; Popover.tsx the shell every popover stands in
               (its header, its place by its button, its height
               measured, Escape); SettingRows.tsx a titled group of
-              settings, a setting's row and a switch's (Switch.tsx);
+              settings, a setting's row, a choice's and a switch's
+              (Switch.tsx);
               controls.ts the shared sizes, the insets, the section
               heading and the card every panel stands on; FadeRow.tsx
               a row that

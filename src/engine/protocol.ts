@@ -171,6 +171,11 @@ export type ToWorklet =
   | { t: 'seek'; beats: number }
   /** The click sounds each beat while the sequencer plays, or not */
   | { t: 'click'; on: boolean }
+  /**
+   * Tell where each note starts and ends (StampReport) while the
+   * sequencer plays, for the page to record it; or stop
+   */
+  | { t: 'record'; on: boolean }
   /** Beats a minute, and the share of a pair of sixteenths the first takes */
   | { t: 'tempo'; tempo: number; swing: number }
   /**
@@ -283,10 +288,27 @@ export interface StepReport {
   readonly step: number
 }
 
+/**
+ * Where the sequencer stood as a note started or ended while recording:
+ * the step last played and how far the next block starts into it (from
+ * -16 while it counts in), with the note's track and key (a kit's pad,
+ * on a kit), as hard as it started
+ */
+export interface StampReport {
+  readonly on: boolean
+  readonly id: number
+  readonly track: string
+  readonly key: number
+  readonly velocity: number
+  readonly kit: boolean
+  readonly at: number
+}
+
 export type FromWorklet =
   | ({ t: 'bench' } & BenchReport)
   | ({ t: 'load' } & LoadReport)
   | ({ t: 'glides' } & GlideReport)
   | ({ t: 'step' } & StepReport)
+  | ({ t: 'stamp' } & StampReport)
   | ({ t: 'reduction' } & ReductionReport)
   | ({ t: 'loudness' } & LoudnessReport)

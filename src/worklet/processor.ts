@@ -124,6 +124,18 @@ class SynthProcessor extends AudioWorkletProcessor {
   /** Whether the click's output was written last block: cleared once */
   #clicked = false
   readonly #step: { t: 'step'; step: number } = { t: 'step', step: -1 }
+  /** Whether each note's start and end is told of, for recording */
+  #recording = false
+  readonly #stamp = {
+    t: 'stamp' as const,
+    on: false,
+    id: 0,
+    track: '',
+    key: 0,
+    velocity: 0,
+    kit: false,
+    at: 0,
+  }
   /** The most voices a synth track plays, and the wheel: a new track's */
   #voices: number | undefined
   #wheel = 0
@@ -340,9 +352,16 @@ class SynthProcessor extends AudioWorkletProcessor {
           message.velocity,
           message.slide
         )
+        if (this.#recording) {
+          const key = message.pad ?? message.note
+          this.#reportStamp(true, message, key, message.velocity)
+        }
         break
       case 'noteOff':
         this.#synthOn(message.track, message.pad)?.noteOff(message.id)
+        if (this.#recording) {
+          this.#reportStamp(false, message, message.pad ?? 0, 0)
+        }
         break
       case 'slide':
         this.#synthOn(message.track, message.pad)?.slide(
@@ -441,6 +460,9 @@ class SynthProcessor extends AudioWorkletProcessor {
         break
       case 'click':
         this.#sequencer.clicking = message.on
+        break
+      case 'record':
+        this.#recording = message.on
         break
       case 'loop': {
         const playing = this.#tracks.get(message.track)
@@ -592,6 +614,30 @@ class SynthProcessor extends AudioWorkletProcessor {
     report.momentary = meter.momentary
     report.shortTerm = meter.shortTerm
     report.integrated = meter.integrated
+    this.port.postMessage(report satisfies FromWorklet)
+  }
+
+  /**
+   * Where the sequencer stands as a note starts or ends (the step last
+   * played and how far into it the next block starts), to the page,
+   * while it plays
+   */
+  #reportStamp(
+    on: boolean,
+    note: { id: number; track: string; pad?: number },
+    key: number,
+    velocity: number
+  ): void {
+    const sequencer = this.#sequencer
+    if (!sequencer.playing) return
+    const report = this.#stamp
+    report.on = on
+    report.id = note.id
+    report.track = note.track
+    report.key = key
+    report.velocity = velocity
+    report.kit = note.pad !== undefined
+    report.at = sequencer.position + sequencer.progress
     this.port.postMessage(report satisfies FromWorklet)
   }
 

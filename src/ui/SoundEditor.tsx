@@ -674,7 +674,8 @@ export function SoundEditor({
 /**
  * Sound, Seq or Mix, the three the editor shows: first in the panel over
  * the card, where it stands in each. Its buttons are of the panel's 28 px
- * class, their touch reaching 44 (TALL_HIT).
+ * class, their touch reaching 44 (TALL_HIT), and narrower on a phone
+ * under 416 px wide, so the rail's Record still fits.
  */
 function PaneSwitch({
   pane,
@@ -695,7 +696,7 @@ function PaneSwitch({
           type="button"
           aria-pressed={pane === each}
           onClick={() => onPane(each)}
-          className={`${TALL_HIT} h-7 rounded-md px-3 text-[11px] font-semibold tracking-wider text-(--ink-400) aria-pressed:bg-(--lift-2) aria-pressed:text-(--ink-0)`}
+          className={`${TALL_HIT} h-7 rounded-md px-3 text-[11px] font-semibold tracking-wider text-(--ink-400) max-[26rem]:px-2 aria-pressed:bg-(--lift-2) aria-pressed:text-(--ink-0)`}
         >
           {label}
         </button>

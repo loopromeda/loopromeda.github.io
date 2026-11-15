@@ -178,7 +178,7 @@ Built 2026-11-13.
   is put away.
 - The column lit leads what is heard by the output's latency.
 - Not built: a voice budget shared by all tracks (B, Cost), a hat's
-  choke, recording what is played into a loop.
+  choke. Recording what is played into a loop: since H.
 
 ### E. A song
 
@@ -286,6 +286,52 @@ bass's loop written above while a lead is played under it. Built
   rows than it had under the editor. On a phone on its side the editor
   is short: three rows and no lane until the surface is put away (its
   fold button), which gives the grid the height.
+
+### H. Recording
+
+Asked for by ashon, 2026-11-15, looking at the Seq tab on a phone ("여기서
+레코드 버튼을 눌러서 아래 컨트롤에서 시퀀스를 녹화할 수 있게 할 수
+있을까?"): a record button, and what is played on the play surface below
+written into a sequence. Asked, ashon chose: the notes go to the track
+played below, and the Seq tab moves to it; both Overdub and Replace, a
+choice; the button on the tab rail beside Play, which, stopped, plays
+too. Built 2026-11-15.
+
+- **Record** (`RecordButton`, `src/ui/Transport.tsx`): a dot beside Play
+  on the tab rail, and in the play surface's header while the rail is
+  put away; filled red while it records. Stopped, it plays from where
+  Play would, after a bar counted in where asked. It stops with the
+  transport, or tapped again.
+- **Overdub or Replace** (the device's `record`, `src/state/settings.ts`):
+  in the transport's popover, under the count-in, not beside the button
+  as first offered: the rail has no room for it. Overdub adds to what
+  is there, a note on the same step and key in its place. Replace first
+  empties the loop of the track played a step ahead of the sequencer,
+  one time round, keeping what is recorded on the way, then overdubs.
+- **What is written** (`src/state/record.ts`, pure): each note started
+  while recording, into the loop of the track it sounds on, the track
+  played below (Engine.setRecording shows it in the Seq tab, and the
+  tab follows a track picked while recording): on the sixteenth nearest
+  where it was heard, as long as it was held (a kit's pad a step), as
+  hard as it was played, on the semitone nearest the pitch it started
+  on (the XY pad's are between them; its bends are not kept). A beat
+  counted in holds no note, but one played just ahead of the downbeat
+  is its first step. The loop is put on as it is written.
+- **When**: the audio thread tells the page where the sequencer stands
+  as each note starts and ends (`stamp`, `src/worklet/processor.ts`);
+  the engine takes the output's latency off, so a note lands where it
+  was heard, not where the thread was. A note is written once let go,
+  and only after its step has played: one played just ahead of its step
+  sounds as played, not a second time from the loop.
+- **Room**: on a phone under 416 px wide the rail's tabs are narrower,
+  and under 384 px it leaves out the position, so Record still fits
+  (the Seq tab follows the bar playing). The play surface's header
+  holds the transport from 644 px wide, not 600, so the keys' navigator
+  keeps the room it had; a phone on its side (718 wide) still has it
+  there.
+- Not built: recording a knob turned (F); a step other than the
+  sixteenth to land on; undoing a take; recording the loops started
+  along the song's timeline (E, 3).
 
 ## Projects
 

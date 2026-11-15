@@ -1,5 +1,5 @@
 import { useId, type ReactNode } from 'react'
-import { SECTION_HEADING } from './controls'
+import { SECTION_HEADING, SMALL_OPTION } from './controls'
 import { Switch } from './Switch'
 
 /**
@@ -91,6 +91,50 @@ export function SwitchRow({
         labelledBy={`${id}-label`}
         describedBy={hint === undefined ? undefined : `${id}-hint`}
       />
+    </SettingRow>
+  )
+}
+
+/** A setting chosen from a row of options, the chosen one pressed */
+export function ChoiceRow<T extends string | number>({
+  label,
+  hint,
+  options,
+  value,
+  onChange,
+}: {
+  label: string
+  hint?: string
+  options: readonly { value: T; label: string }[]
+  value: T
+  onChange: (value: T) => void
+}) {
+  const id = useId()
+  return (
+    <SettingRow
+      label={label}
+      labelId={`${id}-label`}
+      hint={hint}
+      hintId={`${id}-hint`}
+    >
+      <div
+        role="group"
+        aria-labelledby={`${id}-label`}
+        aria-describedby={hint === undefined ? undefined : `${id}-hint`}
+        className="flex flex-wrap gap-1"
+      >
+        {options.map((option) => (
+          <button
+            key={`${option.value}`}
+            type="button"
+            aria-pressed={option.value === value}
+            onClick={() => onChange(option.value)}
+            className={SMALL_OPTION}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
     </SettingRow>
   )
 }
