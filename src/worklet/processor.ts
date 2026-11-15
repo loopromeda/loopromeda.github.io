@@ -1,3 +1,4 @@
+import { KnobLanes } from '../dsp/automation'
 import { ChainSynth, PAD_VOICES, VOICE_COUNT } from '../dsp/chainSynth'
 import { chainStressOutput, timeBlocks } from '../dsp/chainStress'
 import { EffectRack } from '../dsp/effects'
@@ -26,6 +27,7 @@ import type { Mix } from '../state/mix'
 import { LoadMeter } from './load'
 import {
   SoundPlayer,
+  TrackKnobs,
   applyKitChain,
   applyMix,
   chainEffect,
@@ -45,8 +47,9 @@ const clock = (globalThis as { performance?: { now(): number } }).performance
 const now = clock ? () => clock.now() : () => Date.now()
 
 /**
- * A synth track as it plays: its part, its one synth and its player, and
- * the lane the sequencer plays its loop on
+ * A synth track as it plays: its part, its one synth and its player, the
+ * lane the sequencer plays its loop on, and its loop's knob lanes, which
+ * move its sound's knobs and its fader
  */
 interface SynthPlaying {
   readonly kind: 'synth'
@@ -54,11 +57,14 @@ interface SynthPlaying {
   readonly synth: ChainSynth
   readonly player: SoundPlayer
   readonly lane: Lane
+  readonly knobs: TrackKnobs
+  readonly lanes: KnobLanes
 }
 
 /**
- * A kit track as it plays: a group, each pad a synth and its player, and
- * the lane its loop plays on, into the pads at the notes mapped to them
+ * A kit track as it plays: a group, each pad a synth and its player, the
+ * lane its loop plays on, into the pads at the notes mapped to them, and
+ * its loop's knob lanes, which move its fader
  */
 interface KitPlaying {
   readonly kind: 'kit'
@@ -67,6 +73,8 @@ interface KitPlaying {
   readonly players: readonly SoundPlayer[]
   readonly target: KitTarget
   readonly lane: Lane
+  readonly knobs: TrackKnobs
+  readonly lanes: KnobLanes
 }
 
 type Playing = SynthPlaying | KitPlaying
@@ -101,6 +109,8 @@ class SynthProcessor extends AudioWorkletProcessor {
   #tracks = new Map<string, Playing>()
   /** Their parts in the mix's order: what process renders */
   #parts: readonly Part[] = []
+  /** Their loops' knob lanes, which process moves with the song */
+  #lanes: readonly KnobLanes[] = []
   /**
    * The song's time, kept by the sequencer: what every synced delay and
    * LFO follows (src/dsp/clock.ts)
@@ -211,7 +221,10 @@ class SynthProcessor extends AudioWorkletProcessor {
       )
       const player = new SoundPlayer(strip)
       const lane = new Lane(new SynthTarget(strip))
-      return { kind, part: new Part([strip]), synth, player, lane }
+      const part = new Part([strip])
+      const knobs = new TrackKnobs(part, player)
+      const lanes = new KnobLanes(knobs)
+      return { kind, part, synth, player, lane, knobs, lanes }
     }
     const clock = this.#clock
     const pads = Array.from({ length: KIT_PADS }, () => {
@@ -220,13 +233,17 @@ class SynthProcessor extends AudioWorkletProcessor {
       return new Strip(synth, new EffectRack(sampleRate, undefined, clock))
     })
     const target = new KitTarget(pads)
+    const part = new Part(pads, new EffectRack(sampleRate, undefined, clock))
+    const knobs = new TrackKnobs(part)
     return {
       kind,
-      part: new Part(pads, new EffectRack(sampleRate, undefined, clock)),
+      part,
       pads,
       players: pads.map((pad) => new SoundPlayer(pad.synth)),
       target,
       lane: new Lane(target),
+      knobs,
+      lanes: new KnobLanes(knobs),
     }
   }
 
@@ -245,6 +262,7 @@ class SynthProcessor extends AudioWorkletProcessor {
     }
     this.#tracks = tracks
     this.#parts = Array.from(tracks.values(), (playing) => playing.part)
+    this.#lanes = Array.from(tracks.values(), (playing) => playing.lanes)
     this.#sequencer.setLanes(
       Array.from(tracks.values(), (playing) => playing.lane)
     )
@@ -350,7 +368,11 @@ class SynthProcessor extends AudioWorkletProcessor {
         break
       case 'sound':
         this.#playerOn(message.track, message.pad)?.load(message.sound)
-        if (message.pad === undefined) this.#aim()
+        if (message.pad === undefined) {
+          // The knobs its lanes moved went with the sound before
+          this.#tracks.get(message.track)?.lanes.forget()
+          this.#aim()
+        }
         break
       case 'knobs': {
         const player = this.#playerOn(message.track, message.pad)
@@ -395,6 +417,7 @@ class SynthProcessor extends AudioWorkletProcessor {
         break
       case 'panic':
         this.#sequencer.clear()
+        this.#release()
         for (const part of this.#parts) part.reset()
         this.#mixer.reset()
         this.#reportStep()
@@ -406,6 +429,7 @@ class SynthProcessor extends AudioWorkletProcessor {
           this.#loudness.resetIntegrated()
         } else {
           this.#sequencer.stop()
+          this.#release()
         }
         this.#reportStep()
         break
@@ -418,11 +442,20 @@ class SynthProcessor extends AudioWorkletProcessor {
       case 'click':
         this.#sequencer.clicking = message.on
         break
-      case 'loop':
-        this.#tracks
-          .get(message.track)
-          ?.lane.setLoop(message.steps, message.notes)
+      case 'loop': {
+        const playing = this.#tracks.get(message.track)
+        if (!playing) break
+        playing.lane.setLoop(message.steps, message.notes)
+        const lanes = message.lanes ?? []
+        // Knobs no lane moves now play their own values again; those
+        // still moved take their new values as the next block starts
+        if (!playing.knobs.aims(lanes)) {
+          playing.lanes.release()
+          playing.knobs.aim(lanes)
+        }
+        playing.lanes.setLanes(message.steps, lanes)
         break
+      }
       case 'padNotes': {
         const playing = this.#tracks.get(message.track)
         if (playing?.kind !== 'kit') break
@@ -443,6 +476,11 @@ class SynthProcessor extends AudioWorkletProcessor {
         this.#bench(message.voices)
         break
     }
+  }
+
+  /** Every knob a lane moved plays its own value again: the song stopped */
+  #release(): void {
+    for (const lanes of this.#lanes) lanes.release()
   }
 
   /**
@@ -480,7 +518,17 @@ class SynthProcessor extends AudioWorkletProcessor {
     const taps = this.#taps
     for (let k = 0; k < taps.length; k++) taps[k] = outputs[k + 1]
     // The steps that fall within this block, each note on its own frame
-    if (this.#sequencer.process(length)) this.#reportStep()
+    const sequencer = this.#sequencer
+    if (sequencer.process(length)) this.#reportStep()
+    // Each knob a lane moves at its value where the song stands
+    const position = sequencer.position
+    if (position >= 0) {
+      const progress = sequencer.progress
+      const lanes = this.#lanes
+      for (let k = 0; k < lanes.length; k++) {
+        ;(lanes[k] as KnobLanes).update(position, progress)
+      }
+    }
     // One channel only (never asked for): the left, the right thrown away
     this.#mixer.render(parts, left, right ?? this.#spare, taps)
     this.#loudness.process(left, right ?? this.#spare, length)

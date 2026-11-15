@@ -288,6 +288,30 @@ describe('Mixer', () => {
     expect(loudest(left)).toBe(0)
   })
 
+  it('moves a part’s fader by its lanes, never past a mute', () => {
+    const at = (part: Part) => {
+      part.level.snap()
+      part.pan.snap()
+      return [part.level.now, part.pan.now]
+    }
+    const part = new Part([strip(0.2)])
+    part.setFader(0.8, -0.5)
+    expect(at(part)).toEqual([0.8, -0.5])
+    part.moveLevel(0.25)
+    part.movePan(1)
+    expect(at(part)).toEqual([0.25, 1])
+    // The mix's fader moved meanwhile, kept for when the lane lets go
+    part.setFader(0.6, 0)
+    expect(at(part)).toEqual([0.25, 1])
+    // Muted, nothing goes on, whatever the lane says
+    part.setFader(0.6, 0, false)
+    expect(at(part)).toEqual([0, 1])
+    part.setFader(0.6, 0)
+    part.moveLevel(Number.NaN)
+    part.movePan(Number.NaN)
+    expect(at(part)).toEqual([0.6, 0])
+  })
+
   it('sums a part’s strips under its one fader, its tap the sum', () => {
     const left = new Float32Array(BLOCK)
     const right = new Float32Array(BLOCK)

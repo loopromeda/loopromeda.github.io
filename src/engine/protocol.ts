@@ -72,6 +72,22 @@ export interface LoopNote {
   readonly velocity: number
 }
 
+/**
+ * A knob lane of a loop, as the audio thread plays it (src/state/song.ts,
+ * src/dsp/automation.ts): the knob it moves (key of a part of the track's
+ * sound, or of the fader's, FADER), its value at every step in the
+ * knob's units, within its range, and how it goes between them
+ */
+export interface LoopLane {
+  readonly part: string
+  readonly key: string
+  /** A line from each step's value to the next's, not held to it */
+  readonly glide: boolean
+  /** Gliding in ratios, as the knob turns (a cutoff's, a time's) */
+  readonly log: boolean
+  readonly values: readonly number[]
+}
+
 export type ToWorklet =
   /**
    * The session's tracks, in the mix's order: a track new to the audio
@@ -159,9 +175,16 @@ export type ToWorklet =
   | { t: 'tempo'; tempo: number; swing: number }
   /**
    * The loop a track plays round (src/state/song.ts), whole: its length
-   * in steps and the notes within it; from the next step on
+   * in steps, the notes within it and the knob lanes it plays (none: its
+   * knobs as they are set); from the next step on
    */
-  | { t: 'loop'; track: string; steps: number; notes: readonly LoopNote[] }
+  | {
+      t: 'loop'
+      track: string
+      steps: number
+      notes: readonly LoopNote[]
+      lanes?: readonly LoopLane[]
+    }
   /**
    * The note each pad of a kit track plays its sound at, in the kit's
    * order: what a sequenced hit plays (a touch's brings its own)

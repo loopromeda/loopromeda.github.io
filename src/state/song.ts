@@ -2,11 +2,13 @@
  * The session's song (docs/plan/tracks-and-song.md, D): the tempo and the
  * swing, and each track's loops of notes, by the track's id, kept apart
  * from its sound (a preset loaded leaves the notes; a track removed takes
- * its own away). A loop is one to thirty-two bars of sixteenths; a note
+ * its own away). A loop is one to 256 bars of sixteenths; a note
  * stands on a step at a key (a kit's pad, a synth's note), for a length
- * in steps, at a velocity; one at most on a step and a key. The first loop
- * of a track is the one played and edited for now: more, and scenes and a
- * timeline over them, come with E. A track's loop may be put off
+ * in steps, at a velocity; one at most on a step and a key. A loop's knob
+ * lanes (F) hold a knob's value at every step, each held to the next step
+ * or gliding to it: a knob of the track's sound, or its fader. The first
+ * loop of a track is the one played and edited for now: more, and scenes
+ * and a timeline over them, come with E. A track's loop may be put off
  * (docs/plan/transport-and-midi.md, 1). Plain data, never changed in
  * place, kept in localStorage.
  */
@@ -33,6 +35,12 @@ export const MAX_KEY = 127
 /** The softest a note is written: one at nothing would not be heard */
 export const MIN_VELOCITY = 0.1
 
+/** The part a track's own fader is on, beside the parts of its sound */
+export const FADER = 'fader'
+
+/** The most knob lanes a loop may carry */
+export const MAX_LANES = 8
+
 /** One note of a loop */
 export interface Note {
   /** The step it starts on, 0 up to the loop's last */
@@ -45,11 +53,36 @@ export interface Note {
   readonly velocity: number
 }
 
-/** A loop: its length, and its notes by step, then by key */
+/** One knob's row of a loop: a value of its own at every step */
+export interface KnobLane {
+  /**
+   * The part of the track's sound the knob is on (its id, amp, voice), or
+   * FADER
+   */
+  readonly part: string
+  /** The knob's key on that part */
+  readonly key: string
+  /**
+   * Glide runs a line from each step's value to the next's; otherwise each
+   * is held to the next step
+   */
+  readonly glide: boolean
+  /** Whether it plays: off, the knob plays its own value */
+  readonly on: boolean
+  /**
+   * A value for each step, in the knob's own units: at least as many as
+   * the loop's steps
+   */
+  readonly values: readonly number[]
+}
+
+/** A loop: its length, its notes by step, then by key, and its knob lanes */
 export interface Loop {
   /** Whole bars: BAR_STEPS up to MAX_STEPS */
   readonly steps: number
   readonly notes: readonly Note[]
+  /** Its knob lanes, in the order they were added */
+  readonly lanes: readonly KnobLane[]
 }
 
 export interface Song {
@@ -70,7 +103,7 @@ export interface Song {
 }
 
 /** A bar of nothing: what a track with no loop shows */
-const EMPTY: Loop = { steps: BAR_STEPS, notes: [] }
+const EMPTY: Loop = { steps: BAR_STEPS, notes: [], lanes: [] }
 
 export function initLoop(): Loop {
   return EMPTY
@@ -189,14 +222,49 @@ export function removeNote(loop: Loop, step: number, key: number): Loop {
 
 /**
  * The loop bars long, 1..MAX_BARS. Notes past a shorter end are kept, not
- * played: a loop made longer again has them back.
+ * played: a loop made longer again has them back. A lane shorter than the
+ * new length has its values repeated from the first; made shorter, the
+ * lanes are kept as they are, like notes.
  */
 export function setBars(loop: Loop, bars: number): Loop {
   const steps = cleanSteps(bars * BAR_STEPS)
-  return steps === loop.steps ? loop : { ...loop, steps }
+  if (steps === loop.steps) return loop
+  return { ...loop, steps, lanes: growLanes(loop.lanes, steps) }
 }
 
-/** The loop with no notes, as long as it was */
+/**
+ * The lanes with those short of steps filled by repeating their own values
+ * from the first; the same lanes where none are short.
+ */
+function growLanes(
+  lanes: readonly KnobLane[],
+  steps: number
+): readonly KnobLane[] {
+  return lanes.every((lane) => fits(lane, steps))
+    ? lanes
+    : lanes.map((lane) => growLane(lane, steps))
+}
+
+/** Whether a lane's values stand as they are at steps */
+function fits(lane: KnobLane, steps: number): boolean {
+  return lane.values.length === 0 || lane.values.length >= steps
+}
+
+/** The lane, its values repeated from the first up to steps */
+function growLane(lane: KnobLane, steps: number): KnobLane {
+  if (fits(lane, steps)) return lane
+  return { ...lane, values: repeat(lane.values, steps) }
+}
+
+/** The values, in order, until steps of them; none where there is none */
+function repeat(values: readonly number[], steps: number): number[] {
+  if (values.length === 0) return []
+  const grown: number[] = []
+  while (grown.length < steps) grown.push(...values)
+  return grown.slice(0, steps)
+}
+
+/** The loop with no notes, as long as it was, its lanes kept */
 export function clearLoop(loop: Loop): Loop {
   return loop.notes.length === 0 ? loop : { ...loop, notes: [] }
 }
@@ -206,6 +274,121 @@ export function playedNotes(loop: Loop): readonly Note[] {
   return loop.notes.every((note) => note.step < loop.steps)
     ? loop.notes
     : loop.notes.filter((note) => note.step < loop.steps)
+}
+
+/** The lane of that part and key, where the loop carries one */
+export function laneAt(
+  loop: Loop,
+  part: string,
+  key: string
+): KnobLane | undefined {
+  return loop.lanes.find((lane) => lane.part === part && lane.key === key)
+}
+
+/**
+ * The loop with a lane of that part and key added at the end, every step
+ * at value. A loop with the lane already, one full of lanes, a value that
+ * is no number, or no part or key to name, is the loop it was.
+ */
+export function addLane(
+  loop: Loop,
+  part: string,
+  key: string,
+  value: number
+): Loop {
+  if (!part || !key) return loop
+  if (!Number.isFinite(value)) return loop
+  if (loop.lanes.length >= MAX_LANES) return loop
+  if (laneAt(loop, part, key)) return loop
+  const lane: KnobLane = {
+    part,
+    key,
+    glide: false,
+    on: true,
+    values: new Array<number>(loop.steps).fill(value),
+  }
+  return { ...loop, lanes: [...loop.lanes, lane] }
+}
+
+/** The loop without the lane of that part and key */
+export function removeLane(loop: Loop, part: string, key: string): Loop {
+  const lanes = loop.lanes.filter(
+    (lane) => lane.part !== part || lane.key !== key
+  )
+  return lanes.length === loop.lanes.length ? loop : { ...loop, lanes }
+}
+
+/**
+ * The loop with its lane of that part and key replaced by what edit makes
+ * of it; the loop it was where there is no such lane, or edit gives back
+ * the same lane.
+ */
+export function editLane(
+  loop: Loop,
+  part: string,
+  key: string,
+  edit: (lane: KnobLane) => KnobLane
+): Loop {
+  const from = laneAt(loop, part, key)
+  if (!from) return loop
+  const to = edit(from)
+  if (to === from) return loop
+  return {
+    ...loop,
+    lanes: loop.lanes.map((lane) => (lane === from ? to : lane)),
+  }
+}
+
+/**
+ * The lane with values written at step from, from + 1, and on. A from that
+ * is no whole step, a step outside the lane's own values, and a value that
+ * is no number are all passed over.
+ */
+export function setLaneValues(
+  lane: KnobLane,
+  from: number,
+  values: readonly number[]
+): KnobLane {
+  if (!Number.isInteger(from)) return lane
+  let wrote: number[] | undefined
+  for (const [each, value] of values.entries()) {
+    const step = from + each
+    if (step < 0 || step >= lane.values.length) continue
+    if (!Number.isFinite(value)) continue
+    if (lane.values[step] === value) continue
+    if (!wrote) wrote = [...lane.values]
+    wrote[step] = value
+  }
+  return wrote ? { ...lane, values: wrote } : lane
+}
+
+/** The lane that glides, or holds each value to the next step */
+export function setLaneGlide(lane: KnobLane, glide: boolean): KnobLane {
+  return lane.glide === glide ? lane : { ...lane, glide }
+}
+
+/** The lane that plays, or is off and lets the knob alone */
+export function setLaneOn(lane: KnobLane, on: boolean): KnobLane {
+  return lane.on === on ? lane : { ...lane, on }
+}
+
+/** The lanes the loop plays: those on, at the loop's own length */
+export function playedLanes(loop: Loop): readonly KnobLane[] {
+  if (
+    loop.lanes.every((lane) => lane.on && lane.values.length === loop.steps)
+  ) {
+    return loop.lanes
+  }
+  return loop.lanes
+    .filter((lane) => lane.on)
+    .map((lane) => cutLane(lane, loop.steps))
+}
+
+/** The lane at steps: itself where its values are already that long */
+function cutLane(lane: KnobLane, steps: number): KnobLane {
+  return lane.values.length === steps
+    ? lane
+    : { ...lane, values: lane.values.slice(0, steps) }
 }
 
 /** The song with the track's loop edited (its first; made if it has none) */
@@ -279,7 +462,7 @@ export function readSong(value: unknown): Song {
 
 function readLoop(value: unknown): Loop {
   const given = record(value)
-  let loop: Loop = { steps: cleanSteps(given.steps), notes: [] }
+  let loop: Loop = { steps: cleanSteps(given.steps), notes: [], lanes: [] }
   if (Array.isArray(given.notes)) {
     for (const each of given.notes) {
       const note = record(each)
@@ -291,7 +474,42 @@ function readLoop(value: unknown): Loop {
       })
     }
   }
+  if (Array.isArray(given.lanes)) {
+    for (const each of given.lanes) {
+      if (loop.lanes.length >= MAX_LANES) break
+      const lane = readLane(each, loop.steps)
+      if (!lane || laneAt(loop, lane.part, lane.key)) continue
+      loop = { ...loop, lanes: [...loop.lanes, lane] }
+    }
+  }
   return loop
+}
+
+/**
+ * The lane kept: none where it has no part, no key, or no value that is a
+ * number. Its values are what was kept of them, up to MAX_STEPS, repeated
+ * from the first where they fall short of the loop's steps.
+ */
+function readLane(value: unknown, steps: number): KnobLane | undefined {
+  const given = record(value)
+  const part = text(given.part)
+  const key = text(given.key)
+  if (!part || !key) return
+  const values: number[] = []
+  if (Array.isArray(given.values)) {
+    for (const each of given.values) {
+      if (values.length >= MAX_STEPS) break
+      if (typeof each === 'number' && Number.isFinite(each)) values.push(each)
+    }
+  }
+  if (values.length === 0) return
+  return {
+    part,
+    key,
+    glide: given.glide === true,
+    on: given.on !== false,
+    values: values.length < steps ? repeat(values, steps) : values,
+  }
 }
 
 /** Where the song is kept */
@@ -376,6 +594,11 @@ function cleanSwing(value: unknown): number {
 /** Value where it is a number, fallback where it is not one */
 function number(value: unknown, fallback: number): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback
+}
+
+/** The text where it is text, nothing at all where it is not */
+function text(value: unknown): string {
+  return typeof value === 'string' ? value : ''
 }
 
 function record(value: unknown): Readonly<Record<string, unknown>> {

@@ -9,9 +9,11 @@ import {
   type PointerEvent,
 } from 'react'
 import type { Engine } from '../engine/engine'
+import { laneGroups, ownValue, type LaneKnob } from '../state/lanes'
 import {
   MAX_BARS,
   MIN_VELOCITY,
+  addLane,
   barsOf,
   clearLoop,
   noteAt,
@@ -20,6 +22,7 @@ import {
   removeNote,
   roomAt,
   setBars,
+  type KnobLane,
   type Loop,
 } from '../state/song'
 import { HIGHEST_NOTE, LOWEST_NOTE, isBlack, noteName } from '../viz/keyboard'
@@ -37,6 +40,8 @@ import {
 import { ConfirmDialog } from './ConfirmDialog'
 import { SMALL_BUTTON, TALL_HIT } from './controls'
 import { SmallIconButton } from './IconButton'
+import { LanePicker } from './LanePicker'
+import { LaneStrip } from './LaneStrip'
 import { RowNavigator } from './RowNavigator'
 
 /** The most rows a synth's grid shows: two octaves */
@@ -69,6 +74,10 @@ const PAD_LABEL =
   'flex min-h-0 min-w-0 items-center rounded-sm px-1 text-left text-[10px] leading-none text-(--ink-400) active:bg-(--lift-2)'
 const PICKED_LABEL =
   'flex min-h-0 min-w-0 items-center rounded-sm px-1 text-left text-[10px] leading-none text-(--secondary) active:bg-(--lift-2)'
+
+/** A lane's knob, as the lane shown is kept: its part and key */
+const laneId = (lane: { part: string; key: string }) =>
+  `${lane.part}\t${lane.key}`
 
 /** A finger on the grid: the note it holds, and what it had as it took it */
 interface Drag {
@@ -106,7 +115,10 @@ interface Drag {
  * camera at the grid's left frames the rows shown over the whole reach:
  * a tap or a drag brings another part of it on screen. A row's name at
  * the left plays it, and picks a kit's pad. A dot marks a row another
- * track of the same kind plays.
+ * track of the same kind plays. Under the grid, one of the loop's knob
+ * lanes (LaneStrip), its steps in line with the grid's; its name lists
+ * them all in the grid's place (LanePicker), and adds one: Lane in the
+ * header while there are none.
  * The step playing is lit outside React, as the audio thread tells of
  * it; edits go to the engine, which sends the loop whole.
  */
@@ -134,6 +146,7 @@ export function StepGrid({
   const song = useSyncExternalStore(subscribe, engine.getSong)
   const tracks = useSyncExternalStore(subscribe, engine.getTracks)
   const picked = useSyncExternalStore(engine.subscribeSound, engine.getPad)
+  const mix = useSyncExternalStore(engine.subscribeMix, engine.getMix)
   const loopRef = useRef<Loop>(loop)
   useLayoutEffect(() => {
     loopRef.current = loop
@@ -196,6 +209,23 @@ export function StepGrid({
   const dragRef = useRef<Drag | null>(null)
   const [hint, setHint] = useState('')
   const [clearing, setClearing] = useState(false)
+
+  // The knobs a lane may move: a synth's sound's and its fader's, or a
+  // kit's fader's (its pads each a sound of its own)
+  const track = engine.getTrack()
+  const voice = track.kind === 'synth' ? track.sound : undefined
+  const groups = useMemo(() => laneGroups(voice), [voice])
+  const [shownLane, setShownLane] = useState('')
+  const [picking, setPicking] = useState(false)
+  const lane =
+    loop.lanes.find((each) => laneId(each) === shownLane) ?? loop.lanes[0]
+  const knobOf = (each: KnobLane) =>
+    groups
+      .find((group) => group.part === each.part)
+      ?.knobs.find((knob) => knob.key === each.key)
+  const laneKnobShown = lane && knobOf(lane)
+  const own = (knob: LaneKnob) => ownValue(knob, voice, mix, engine.getPlace())
+  const closePicker = useCallback(() => setPicking(false), [])
 
   // As many rows as the grid's height gives a finger
   useLayoutEffect(() => {
@@ -373,7 +403,7 @@ export function StepGrid({
   }
 
   return (
-    <div className="absolute inset-0 flex flex-col gap-2">
+    <div className="absolute inset-0 flex flex-col gap-2 overflow-hidden">
       <div className="flex h-7 shrink-0 items-center gap-1.5">
         <SmallIconButton
           label="A bar shorter"
@@ -418,6 +448,16 @@ export function StepGrid({
         >
           {hint}
         </span>
+        {loop.lanes.length === 0 && (
+          <button
+            type="button"
+            aria-haspopup="dialog"
+            onClick={() => setPicking(true)}
+            className={SMALL_BUTTON}
+          >
+            Lane
+          </button>
+        )}
         <button
           type="button"
           disabled={loop.notes.length === 0}
@@ -428,7 +468,8 @@ export function StepGrid({
         </button>
       </div>
 
-      <div className="flex min-h-0 flex-1 gap-1">
+      {/* A lane under it, the grid keeps three rows: the lane gives way */}
+      <div className={`flex flex-1 gap-1 ${lane ? 'min-h-16' : 'min-h-0'}`}>
         {reach > rows && (
           <RowNavigator
             position={first}
@@ -537,6 +578,44 @@ export function StepGrid({
           })}
         </div>
       </div>
+
+      {lane && (
+        <LaneStrip
+          engine={engine}
+          loop={loop}
+          lane={lane}
+          knob={laneKnobShown}
+          own={laneKnobShown ? own(laneKnobShown) : 0}
+          bar={bar}
+          aside={reach > rows}
+          label={kit ? 'w-14' : 'w-9'}
+          onPick={() => setPicking(true)}
+          onHint={setHint}
+        />
+      )}
+
+      {picking && (
+        <LanePicker
+          groups={groups}
+          lanes={loop.lanes.map((each) => ({
+            lane: each,
+            name: knobOf(each)?.name ?? `${each.part} · ${each.key}`,
+          }))}
+          shown={lane}
+          onShow={(each) => {
+            setShownLane(laneId(each))
+            setPicking(false)
+          }}
+          onAdd={(knob) => {
+            engine.editLoop((each) =>
+              addLane(each, knob.part, knob.key, own(knob))
+            )
+            setShownLane(laneId(knob))
+            setPicking(false)
+          }}
+          onClose={closePicker}
+        />
+      )}
 
       {clearing && (
         <ConfirmDialog

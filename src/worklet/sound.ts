@@ -8,6 +8,7 @@
  * session's mix (applyMix) and the kit's chain (applyKitChain); tests run
  * them to hear what a sound does. No AudioWorklet globals.
  */
+import type { LaneTarget } from '../dsp/automation'
 import { ChainSynth } from '../dsp/chainSynth'
 import type { EffectRack } from '../dsp/effects'
 import type { Mixer, Part, Strip } from '../dsp/output'
@@ -54,6 +55,7 @@ import {
 } from '../dsp/slots'
 import type { KitChain } from '../state/kit'
 import { masterLimited, stripHeard, type Mix } from '../state/mix'
+import { FADER } from '../state/song'
 import {
   BUS_IDS,
   BUS_SPEC,
@@ -107,9 +109,13 @@ type Values = Record<string, number>
 /** A knob's value by key, or missing if the part has no such knob */
 type Read = (key: string, missing?: number) => number
 
-/** A part's knobs as the player holds them, and how it hands them over */
+/**
+ * A part's knobs as the player holds them: their own values, and where a
+ * lane moves one its value instead (NaN, none); and how it hands them over
+ */
 interface Held {
   readonly values: Values
+  readonly moved: Values
   readonly apply: () => void
 }
 
@@ -146,8 +152,15 @@ export class SoundPlayer {
     this.#inserts.clear()
     /** Keeps a part's knobs and how to hand them over, and hands them over */
     const hold = (id: string, values: Values, apply: (value: Read) => void) => {
-      const read: Read = (key, missing = 0) => values[key] ?? missing
-      const held: Held = { values, apply: () => apply(read) }
+      const moved: Values = {}
+      for (const key of Object.keys(values)) moved[key] = Number.NaN
+      const read: Read = (key, missing = 0) => {
+        const lane = moved[key]
+        return lane !== undefined && !Number.isNaN(lane)
+          ? lane
+          : (values[key] ?? missing)
+      }
+      const held: Held = { values, moved, apply: () => apply(read) }
       parts.set(id, held)
       held.apply()
     }
@@ -351,6 +364,90 @@ export class SoundPlayer {
     held.values[key] = value
     held.apply()
   }
+
+  /**
+   * Knob key of part as a lane moves it, in place of its own value, until
+   * let go (unmove); its own value set meanwhile is kept for then. Like
+   * set, a part or key the sound does not have is let be; allocates
+   * nothing. A sound loaded forgets every lane's value.
+   */
+  move(part: string, key: string, value: number): void {
+    const held = this.#parts.get(part)
+    if (!held || !Object.hasOwn(held.moved, key) || !Number.isFinite(value)) {
+      return
+    }
+    held.moved[key] = value
+    held.apply()
+  }
+
+  /** Knob key of part at its own value again, no lane moving it */
+  unmove(part: string, key: string): void {
+    const held = this.#parts.get(part)
+    if (!held || !Object.hasOwn(held.moved, key)) return
+    if (Number.isNaN(held.moved[key])) return
+    held.moved[key] = Number.NaN
+    held.apply()
+  }
+}
+
+/** The knob a lane moves: key of a part of the sound, or of FADER's */
+export interface LaneKnobAt {
+  readonly part: string
+  readonly key: string
+}
+
+/**
+ * Where a track's lanes (src/dsp/automation.ts) hand their values, by
+ * each lane's place: a knob of the track's sound, through its player
+ * (none for a kit's, its pads each a sound of their own), or its fader
+ * (FADER: its level, its balance under pan). A lane past those aimed, or
+ * at a knob the track has not, is let be. Allocates nothing as it hands.
+ */
+export class TrackKnobs implements LaneTarget {
+  readonly #part: Part
+  readonly #player: SoundPlayer | undefined
+  #knobs: readonly LaneKnobAt[] = []
+
+  constructor(part: Part, player?: SoundPlayer) {
+    this.#part = part
+    this.#player = player
+  }
+
+  /** Whether knobs, place by place, are the knobs it hands to already */
+  aims(knobs: readonly LaneKnobAt[]): boolean {
+    const own = this.#knobs
+    return (
+      own.length === knobs.length &&
+      own.every(
+        (knob, l) => knob.part === knobs[l]?.part && knob.key === knobs[l].key
+      )
+    )
+  }
+
+  /** Hands lane l's value to knobs[l] instead: let those before go first */
+  aim(knobs: readonly LaneKnobAt[]): void {
+    this.#knobs = knobs.map(({ part, key }) => ({ part, key }))
+  }
+
+  set(lane: number, value: number): void {
+    const knob = this.#knobs[lane]
+    if (!knob) return
+    if (knob.part !== FADER) {
+      this.#player?.move(knob.part, knob.key, value)
+    } else if (knob.key === 'level') {
+      if (Number.isFinite(value)) this.#part.moveLevel(value)
+    } else if (knob.key === 'pan') {
+      if (Number.isFinite(value)) this.#part.movePan(value)
+    }
+  }
+
+  release(lane: number): void {
+    const knob = this.#knobs[lane]
+    if (!knob) return
+    if (knob.part !== FADER) this.#player?.unmove(knob.part, knob.key)
+    else if (knob.key === 'level') this.#part.moveLevel(Number.NaN)
+    else if (knob.key === 'pan') this.#part.movePan(Number.NaN)
+  }
 }
 
 /** Gives synth all of sound: its structure, every knob, every route */
@@ -463,8 +560,7 @@ export function applyMix(
     const value = reader(STRIP_SPEC.knobs, mix.strips[k]?.values)
     // Muted, or silent for another's solo: its fader down, so nothing of
     // it goes on to its sends, while it plays on in time
-    const level = stripHeard(mix, k) ? value('level') : 0
-    part.setFader(level, value('pan'))
+    part.setFader(value('level'), value('pan'), stripHeard(mix, k))
   })
   BUS_IDS.forEach((id, k) => {
     const bus = mix.buses.find((each) => each.id === id)

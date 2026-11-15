@@ -261,6 +261,8 @@ export class Sequencer {
   #counting = 0
   /** Frames from the next block's start until it does */
   #until = 0
+  /** The frames of the step last fired, from it to the next */
+  #stepFrames = 0
   #tempo = 120
   #swing = MIN_SWING
   /** The step last fired, counted from play: -1 stopped, or before one */
@@ -283,6 +285,17 @@ export class Sequencer {
 
   get playing(): boolean {
     return this.#playing
+  }
+
+  /**
+   * How far the next block starts into the step last fired (position),
+   * 0..1: what a lane gliding to the next step's value reads (automation.ts)
+   */
+  get progress(): number {
+    const frames = this.#stepFrames
+    if (!(frames > 0)) return 0
+    const done = 1 - this.#until / frames
+    return done > 0 ? (done < 1 ? done : 1) : 0
   }
 
   /**
@@ -336,6 +349,7 @@ export class Sequencer {
     this.#step = 0
     this.#counting = 0
     this.#until = 0
+    this.#stepFrames = 0
     this.position = -1
   }
 
@@ -375,7 +389,8 @@ export class Sequencer {
       // A pair of sixteenths is an eighth, split by the swing
       const pair = (this.#sampleRate * 30) / this.#tempo
       const share = step % 2 === 0 ? this.#swing : 1 - this.#swing
-      this.#until += pair * share
+      this.#stepFrames = pair * share
+      this.#until += this.#stepFrames
       if (counting) this.#counting--
       else this.#step = step + 1
     }

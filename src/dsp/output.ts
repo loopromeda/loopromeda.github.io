@@ -171,6 +171,13 @@ export class Part {
   /** Its fader, after the inserts: a gain, 0..1, and a balance, -1..1 */
   readonly level = new Ramp(1)
   readonly pan = new Ramp(0)
+  /** The fader as the mix sets it, and whether it is heard at all */
+  #level = 1
+  #pan = 0
+  #heard = true
+  /** The fader as its track's lanes move it: NaN, as the mix sets it */
+  #laneLevel = Number.NaN
+  #lanePan = Number.NaN
 
   constructor(strips: readonly Strip[], inserts?: EffectRack) {
     this.strips = strips
@@ -179,10 +186,32 @@ export class Part {
 
   /**
    * Its fader: how loud it goes on, 0..1, and where it stands, -1 (left)
-   * to 1 (right), a balance (sideGain)
+   * to 1 (right), a balance (sideGain); not heard (muted, or silent for
+   * another's solo), nothing goes on, whatever a lane moves it to
    */
-  setFader(level: number, pan = 0): void {
-    this.level.goal = gain(level)
+  setFader(level: number, pan = 0, heard = true): void {
+    this.#level = level
+    this.#pan = pan
+    this.#heard = heard
+    this.#aim()
+  }
+
+  /** Its level as a lane moves it, in place of the mix's; NaN, the mix's */
+  moveLevel(level: number): void {
+    this.#laneLevel = level
+    this.#aim()
+  }
+
+  /** Its balance as a lane moves it, in place of the mix's; NaN, the mix's */
+  movePan(pan: number): void {
+    this.#lanePan = pan
+    this.#aim()
+  }
+
+  #aim(): void {
+    const level = Number.isNaN(this.#laneLevel) ? this.#level : this.#laneLevel
+    const pan = Number.isNaN(this.#lanePan) ? this.#pan : this.#lanePan
+    this.level.goal = this.#heard ? gain(level) : 0
     this.pan.goal = balance(pan)
   }
 

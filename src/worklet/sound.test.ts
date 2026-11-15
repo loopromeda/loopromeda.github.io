@@ -32,8 +32,10 @@ import {
 } from '../state/mix'
 import { AMP, SENDS, VOICE, initSound, type Sound } from '../state/sound/sound'
 import { initKitChain } from '../state/kit'
+import { FADER } from '../state/song'
 import {
   SoundPlayer,
+  TrackKnobs,
   applyKitChain,
   applyMix,
   applySound,
@@ -507,6 +509,100 @@ describe('SoundPlayer', () => {
     expect(knobChanges(before, after)).toHaveLength(1)
     expect(maxDifference(render(after), render(before))).toBeGreaterThan(0)
     expect(maxDifference(turned(before, after), render(after))).toBe(0)
+  })
+
+  it('moves a knob by a lane, its own value kept for when it lets go', () => {
+    const play = (move?: (player: SoundPlayer) => void) => {
+      const synth = new ChainSynth(SAMPLE_RATE)
+      const player = new SoundPlayer(synth)
+      player.load(busy())
+      move?.(player)
+      return phrase(synth)
+    }
+    const at = (cutoff: number) =>
+      render(setValue(busy(), 'x1', 'cutoff', cutoff))
+    // Moved, it plays as if set so
+    const moved = play((player) => player.move('x1', 'cutoff', 600))
+    expect(maxDifference(moved, at(600))).toBe(0)
+    // Its own value set meanwhile goes unheard, until the lane lets go
+    const owned = (player: SoundPlayer) => {
+      player.move('x1', 'cutoff', 600)
+      player.set('x1', 'cutoff', 2400)
+    }
+    expect(maxDifference(play(owned), at(600))).toBe(0)
+    const released = (player: SoundPlayer) => {
+      owned(player)
+      player.unmove('x1', 'cutoff')
+    }
+    expect(maxDifference(play(released), at(2400))).toBe(0)
+    // A part or key the sound lacks, or no number, is let be
+    const none = (player: SoundPlayer) => {
+      player.move('x9', 'cutoff', 600)
+      player.move('x1', 'colour', 600)
+      player.move('x1', 'cutoff', Number.NaN)
+      player.unmove('x9', 'cutoff')
+    }
+    expect(maxDifference(play(none), render(busy()))).toBe(0)
+    // A sound loaded forgets what lanes moved
+    const reloaded = (player: SoundPlayer) => {
+      player.move('x1', 'cutoff', 600)
+      player.load(busy())
+    }
+    expect(maxDifference(play(reloaded), render(busy()))).toBe(0)
+  })
+
+  it('hands a track’s lanes to its knobs and its fader, by place', () => {
+    const track = () => {
+      const synth = new ChainSynth(SAMPLE_RATE)
+      const player = new SoundPlayer(synth)
+      player.load(busy())
+      // Its own strip, for the fader: a strip's synth plays unclipped
+      const strip = () =>
+        new Strip(new ChainSynth(SAMPLE_RATE), new EffectRack(SAMPLE_RATE))
+      const part = new Part([strip()])
+      part.setFader(0.8, -0.5)
+      const knobs = new TrackKnobs(part, player)
+      knobs.aim(aimed)
+      return { synth, part, knobs }
+    }
+    const aimed = [
+      { part: 'x1', key: 'cutoff' },
+      { part: FADER, key: 'level' },
+      { part: FADER, key: 'pan' },
+      { part: FADER, key: 'colour' },
+    ]
+    const fader = (part: Part) => {
+      part.level.snap()
+      part.pan.snap()
+      return [part.level.now, part.pan.now]
+    }
+    const moved = track()
+    expect(moved.knobs.aims(aimed)).toBe(true)
+    expect(moved.knobs.aims(aimed.slice(1))).toBe(false)
+    moved.knobs.set(0, 600)
+    moved.knobs.set(1, 0.25)
+    moved.knobs.set(2, 1)
+    // A key the fader has not, a lane past those aimed: let be
+    moved.knobs.set(3, 5)
+    moved.knobs.set(9, 5)
+    expect(fader(moved.part)).toEqual([0.25, 1])
+    const at600 = render(setValue(busy(), 'x1', 'cutoff', 600))
+    expect(maxDifference(phrase(moved.synth), at600)).toBe(0)
+    // Let go, each plays its own value again
+    const released = track()
+    for (let l = 0; l < 3; l++) released.knobs.set(l, 600)
+    for (let l = 0; l < 5; l++) released.knobs.release(l)
+    expect(fader(released.part)).toEqual([0.8, -0.5])
+    expect(maxDifference(phrase(released.synth), render(busy()))).toBe(0)
+    // A kit's: its fader alone
+    const kit = new Part([
+      new Strip(new ChainSynth(SAMPLE_RATE), new EffectRack(SAMPLE_RATE)),
+    ])
+    const knobs = new TrackKnobs(kit)
+    knobs.aim(aimed)
+    knobs.set(0, 600)
+    knobs.set(1, 0.5)
+    expect(fader(kit)).toEqual([0.5, 0])
   })
 
   it('sets every kind of knob at once', () => {

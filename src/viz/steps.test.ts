@@ -138,6 +138,7 @@ describe('shiftWindow', () => {
 describe('rows other tracks play', () => {
   const other = (steps: number, ...notes: [number, number][]): Loop => ({
     steps,
+    lanes: [],
     notes: notes.map(([step, key]) => ({
       step,
       key,

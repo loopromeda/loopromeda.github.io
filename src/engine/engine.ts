@@ -26,6 +26,7 @@ import {
   type Loop,
   type Song,
 } from '../state/song'
+import { lanesPlayed, sameLanes, type PlayedLane } from '../state/lanes'
 import { knobChanges } from '../state/sound/diff'
 import { initSound, type Sound } from '../state/sound/sound'
 import {
@@ -241,9 +242,21 @@ export class Engine {
   /** The session's song (src/state/song.ts): the tempo and the loops */
   #song: Song = initSong()
   readonly #songListeners = new Set<() => void>()
-  /** The tempo and swing, and each track's loop, as the worklet has them */
+  /**
+   * The tempo and swing, and each track's loop, as the worklet has them:
+   * a loop with the sound its lanes were found on (none, a kit's) and
+   * the lanes as they play
+   */
   #sentTempo: { tempo: number; swing: number } | undefined
-  readonly #sentLoops = new Map<string, { loop: Loop; on: boolean }>()
+  readonly #sentLoops = new Map<
+    string,
+    {
+      loop: Loop
+      on: boolean
+      sound: Sound | undefined
+      lanes: readonly PlayedLane[]
+    }
+  >()
   /** Whether the click sounds each beat, and Play counts a bar in */
   #click = false
   #countIn = false
@@ -882,7 +895,8 @@ export class Engine {
     this.#song = song
     const laid = tracksChanged && this.#lay()
     if (tracksChanged) this.#sync()
-    if (laid) this.#syncSong()
+    // A sound changed may take away a knob a lane moves, or bring it back
+    if (tracksChanged) this.#syncSong()
     if (mixChanged || laid) this.#post({ t: 'mix', mix: fitted })
     if (pickChanged && this.#glideListeners.size > 0) {
       this.#post({ t: 'watchGlides', on: true, track: picked.track })
@@ -1150,8 +1164,9 @@ export class Engine {
   /**
    * Brings the worklet's song up to date: the tempo and the swing if
    * they moved, and each track's loop that is not the one last sent
-   * there, whole (the notes within its length; none, put off). Nothing
-   * before the worklet exists; start() catches it up.
+   * there, whole (the notes within its length and the lanes that play;
+   * none, put off), or whose lanes move other knobs now its sound
+   * changed. Nothing before the worklet exists; start() catches it up.
    */
   #syncSong(): void {
     if (!this.#node) return
@@ -1161,15 +1176,28 @@ export class Engine {
       this.#post({ t: 'tempo', tempo, swing })
       this.#sentTempo = { tempo, swing }
     }
-    for (const { id } of this.#tracks) {
+    for (const track of this.#tracks) {
+      const { id } = track
       const loop = loopOf(this.#song, id)
       const on = loopOn(this.#song, id)
+      const sound = track.kind === 'synth' ? track.sound : undefined
       const sent = this.#sentLoops.get(id)
-      if (sent?.loop === loop && sent.on === on) continue
-      // A loop put off: its length, none of its notes
+      if (sent?.loop === loop && sent.on === on && sent.sound === sound) {
+        continue
+      }
+      // A loop put off: its length, none of its notes or lanes
+      const lanes = on ? lanesPlayed(loop, sound) : []
+      this.#sentLoops.set(id, { loop, on, sound, lanes })
+      // The same loop, its lanes as they were on the sound before
+      if (
+        sent?.loop === loop &&
+        sent.on === on &&
+        sameLanes(sent.lanes, lanes)
+      ) {
+        continue
+      }
       const notes = on ? playedNotes(loop) : []
-      this.#post({ t: 'loop', track: id, steps: loop.steps, notes })
-      this.#sentLoops.set(id, { loop, on })
+      this.#post({ t: 'loop', track: id, steps: loop.steps, notes, lanes })
     }
   }
 

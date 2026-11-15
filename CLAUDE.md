@@ -7,7 +7,7 @@ modulators: `docs/plan/sound-chains.md`; effects, then parts and a drum
 kit, then a step sequencer, under way:
 `docs/plan/effects-parts-sequencer.md`; tracks (a synth or a kit each,
 as many as are added), a sequence for each, then a song, under way,
-and projects (a session saved under a name):
+knob lanes in a loop, and projects (a session saved under a name):
 `docs/plan/tracks-and-song.md`; the transport on the tab rail, then
 MIDI (notes in, learn, clock out and in), under way:
 `docs/plan/transport-and-midi.md`. What real devices did:
@@ -68,8 +68,8 @@ src/dsp/      pure DSP (oscillators, envelopes, LFOs, filters, voices);
               output.ts a sound's strip
               (its synth, inserts and sends), a part (a fader over
               strips: the synth's one; the kit's sixteen, a group
-              summed through the kit's chain, its inserts and sends)
-              and the mixer
+              summed through the kit's chain, its inserts and sends;
+              a lane moves its fader in the mix's place) and the mixer
               after them (up to four buses, the master, the clip, only
               a guard at full scale after a limiter last); clip.ts
               the soft
@@ -87,16 +87,19 @@ src/dsp/      pure DSP (oscillators, envelopes, LFOs, filters, voices);
               song's time the sequencer keeps (the tempo, and the
               beat each block starts on), which a synced delay and
               LFO follow; click.ts the transport's click, a blip on
-              each beat
+              each beat; automation.ts a track's knob lanes, each
+              knob's value where the song stands, held or gliding
 src/worklet/  the AudioWorkletProcessor around src/dsp; own globals and
               tsconfig (tsconfig.worklet.json), loaded via ?worker&url;
               sound.ts loads a sound document onto the ChainSynth and
-              its effects, and sets its knobs one by one, the mix (a
+              its effects, and sets its knobs one by one (a lane's
+              value in place of a knob's own, kept: move), the mix (a
               track muted, or silent for another's solo, its fader at
-              nothing) and the kit's chain (Node-testable); the
-              processor keeps a
-              part and a sequencer's lane for each track, by the
-              track's id, and tells of each step as it passes, how far
+              nothing), the kit's chain, and where a track's lanes
+              hand their values (TrackKnobs) (Node-testable); the
+              processor keeps a part, a sequencer's lane and knob
+              lanes for each track, by the track's id, and tells of
+              each step as it passes, how far
               the compressor or limiter watched turns the sound down,
               and how loud the output is; the click goes out on an
               output of its own, the last; load.ts the
@@ -114,7 +117,8 @@ src/engine/   AudioContext lifecycle, unlock, node wiring; the sound,
               never the click's (the last, straight to the speakers);
               the tracks, the one picked edited and played; the
               song, held here and edited, its tempo and each loop sent
-              as it changes, the transport, and the step playing; the
+              as it changes (its lanes resolved on the track's sound),
+              the transport, and the step playing; the
               compressors' and limiters' reductions (reductions.ts:
               who watches which, many at once, the list told under a
               version) and the loudness, watched;
@@ -141,7 +145,10 @@ src/state/    params.ts: the knob schema and the old parameters;
               each track's loops, by the track's id; a loop one to
               thirty-two bars of sixteenths and its notes, each a step, a
               key (a synth's note, a kit's pad), a length and a
-              velocity), its edits, kept in localStorage;
+              velocity, and its knob lanes, a knob's value at each
+              step), its edits, kept in localStorage; lanes.ts: the
+              knobs a track's lanes may move (its sound's, its
+              fader's) and its lanes as they play;
               project.ts: a project, the session (the tracks, the mix,
               the song) kept under a name, the list of them and a
               project's file; projects.ts: the projects kept in
@@ -189,6 +196,8 @@ src/viz/      pure display math (scope trigger and decimation, envelope
               xy.ts, where a popover stands by its
               button in popover.ts, the step grid's cells, a note's
               box and what a drag from a note makes of it in steps.ts,
+              a knob lane's strip (a stroke's steps, Fill's shapes,
+              its outline) in laneStrip.ts,
               and the app's mark, on the icons' grid and the
               favicon's, in mark.ts)
 src/ui/       React components; SoundEditor.tsx the sound as tiles
@@ -243,7 +252,9 @@ src/ui/       React components; SoundEditor.tsx the sound as tiles
               the bar playing followed (a tap puts a note or takes
               it away, a drag from one
               sets how hard and how long; RowNavigator.tsx a camera
-              over its rows), with the lights for the bar's steps in
+              over its rows; under it LaneStrip.tsx one of its knob
+              lanes, drawn on, and LanePicker.tsx in its place lists
+              them and adds one), with the lights for the bar's steps in
               its header, or in a row under a narrow one (Play and the
               tempo there too while the rail is put away);
               KeysNavigator.tsx moves the keys a white key at a

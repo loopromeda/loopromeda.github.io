@@ -513,6 +513,28 @@ describe('the clock it keeps', () => {
   })
 })
 
+describe('how far into its step it is', () => {
+  it('runs from 0 to 1 through each step, a swung pair’s each its own', () => {
+    const { sequencer } = clock([[16, []]])
+    expect(sequencer.progress).toBe(0)
+    sequencer.setTempo(120, 0.75)
+    sequencer.play()
+    // The first step 9000 frames swung long, the second 3000
+    sequencer.process(3000)
+    expect(sequencer.position).toBe(0)
+    expect(sequencer.progress).toBeCloseTo(3000 / 9000, 9)
+    // The next block starts on the second step, not yet fired
+    sequencer.process(6000)
+    expect(sequencer.position).toBe(0)
+    expect(sequencer.progress).toBe(1)
+    sequencer.process(1500)
+    expect(sequencer.position).toBe(1)
+    expect(sequencer.progress).toBeCloseTo(0.5, 9)
+    sequencer.stop()
+    expect(sequencer.progress).toBe(0)
+  })
+})
+
 describe('Lane', () => {
   it('leaves out notes past the loop’s end, or not whole', () => {
     const tape = new Tape()

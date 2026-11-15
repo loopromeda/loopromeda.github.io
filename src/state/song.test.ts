@@ -2,29 +2,40 @@ import { describe, expect, it } from 'vitest'
 import { MAX_STEPS } from '../dsp/sequencer'
 import {
   BAR_STEPS,
+  FADER,
   MAX_BARS,
+  MAX_LANES,
   SONG_KEY,
+  addLane,
   barsOf,
   clearLoop,
+  editLane,
   editLoop,
   fitSong,
   initLoop,
   initSong,
+  laneAt,
   loadSong,
   loopOf,
   loopOn,
   noteAt,
   noteOver,
+  playedLanes,
   playedNotes,
   putNote,
   readSong,
+  removeLane,
   removeNote,
   roomAt,
   saveSong,
   setBars,
+  setLaneGlide,
+  setLaneOn,
+  setLaneValues,
   setLoopOn,
   setSwing,
   setTempo,
+  type KnobLane,
   type Loop,
   type Note,
   type SongStorage,
@@ -51,7 +62,7 @@ function note(step: number, key = 0, length = 1, velocity = 1): Note {
 }
 
 function loop(notes: readonly Note[], steps = BAR_STEPS): Loop {
-  return notes.reduce(putNote, { steps, notes: [] })
+  return notes.reduce(putNote, { steps, notes: [], lanes: [] })
 }
 
 /** Each note as step:key:length */
@@ -59,9 +70,37 @@ function shape(of: Loop): string[] {
   return of.notes.map((each) => `${each.step}:${each.key}:${each.length}`)
 }
 
+/** A lane of a part's knob, as kept */
+function lane(
+  part: string,
+  key: string,
+  values: readonly number[],
+  glide = false,
+  on = true
+): KnobLane {
+  return { part, key, glide, on, values }
+}
+
+/** value at each of steps */
+function held(value: number, steps = BAR_STEPS): number[] {
+  return new Array<number>(steps).fill(value)
+}
+
+/** A loop of one bar carrying those lanes */
+function laneLoop(lanes: readonly KnobLane[]): Loop {
+  return { steps: BAR_STEPS, notes: [], lanes }
+}
+
+/** The values, in order, until steps of them */
+function until(values: readonly number[], steps: number): number[] {
+  const grown: number[] = []
+  while (grown.length < steps) grown.push(...values)
+  return grown.slice(0, steps)
+}
+
 describe('a loop', () => {
   it('starts as a bar of nothing', () => {
-    expect(initLoop()).toEqual({ steps: 16, notes: [] })
+    expect(initLoop()).toEqual({ steps: 16, notes: [], lanes: [] })
     expect(barsOf(initLoop())).toBe(1)
   })
 
@@ -118,7 +157,9 @@ describe('a loop', () => {
       note(1, 1, 1, 1),
       note(2, 1, 1, 0.1),
     ])
-    expect(loop([note(0, 1, 1000)]).notes).toEqual([note(0, 1, MAX_STEPS)])
+    expect(loop([note(0, 1, MAX_STEPS + 1000)]).notes).toEqual([
+      note(0, 1, MAX_STEPS),
+    ])
     expect(loop([note(0, 1, NaN, NaN)]).notes).toEqual([note(0, 1, 1, 1)])
   })
 
@@ -143,7 +184,7 @@ describe('a loop', () => {
     expect(removeNote(from, 5, 0)).toBe(from)
   })
 
-  it('is one to thirty-two bars long', () => {
+  it('is one to 256 bars long', () => {
     const from = loop([note(0)])
     expect(setBars(from, 2).steps).toBe(32)
     expect(setBars(from, 4).steps).toBe(64)
@@ -164,9 +205,141 @@ describe('a loop', () => {
 
   it('clears to no notes, as long as it was', () => {
     const from = loop([note(0), note(20)], 32)
-    expect(clearLoop(from)).toEqual({ steps: 32, notes: [] })
+    expect(clearLoop(from)).toEqual({ steps: 32, notes: [], lanes: [] })
     const empty = clearLoop(from)
     expect(clearLoop(empty)).toBe(empty)
+  })
+})
+
+describe('a loop’s lanes', () => {
+  it('starts with none and takes one at the loop’s own length', () => {
+    const from = initLoop()
+    expect(from.lanes).toEqual([])
+    const made = addLane(from, 'amp', 'cutoff', 0.4)
+    expect(made.lanes).toEqual([lane('amp', 'cutoff', held(0.4))])
+    expect(from.lanes).toEqual([])
+    expect(laneAt(made, 'amp', 'cutoff')).toEqual(
+      lane('amp', 'cutoff', held(0.4))
+    )
+    expect(laneAt(made, 'amp', 'level')).toBeUndefined()
+    expect(laneAt(from, 'amp', 'cutoff')).toBeUndefined()
+    const fader = addLane(setBars(from, 2), FADER, 'level', 0.75)
+    expect(fader.lanes).toEqual([lane(FADER, 'level', held(0.75, 32))])
+  })
+
+  it('takes no lane twice, no more than eight, and no value that is none', () => {
+    const from = addLane(initLoop(), 'amp', 'cutoff', 0.4)
+    expect(addLane(from, 'amp', 'cutoff', 0.9)).toBe(from)
+    expect(addLane(from, '', 'cutoff', 0.4)).toBe(from)
+    expect(addLane(from, 'amp', '', 0.4)).toBe(from)
+    expect(addLane(from, 'amp', 'level', NaN)).toBe(from)
+    expect(addLane(from, 'amp', 'level', Infinity)).toBe(from)
+    expect(addLane(from, 'amp', 'level', 0.4).lanes).toHaveLength(2)
+    let full = initLoop()
+    for (let at = 0; at < MAX_LANES; at++) {
+      full = addLane(full, 'amp', `k${at}`, at / MAX_LANES)
+    }
+    expect(full.lanes).toHaveLength(MAX_LANES)
+    expect(addLane(full, 'voice', 'k9', 0)).toBe(full)
+  })
+
+  it('is itself where a lane is not there, or is not changed', () => {
+    const from = addLane(initLoop(), 'amp', 'cutoff', 0.4)
+    expect(removeLane(from, 'amp', 'level')).toBe(from)
+    expect(removeLane(from, 'voice', 'cutoff')).toBe(from)
+    expect(editLane(from, 'amp', 'level', (each) => each)).toBe(from)
+    expect(
+      editLane(from, 'amp', 'level', (each) => ({ ...each, on: false }))
+    ).toBe(from)
+    expect(editLane(from, 'amp', 'cutoff', (each) => each)).toBe(from)
+    const lone = lane('amp', 'cutoff', [1, 2, 3, 4])
+    expect(setLaneValues(lone, 0, [])).toBe(lone)
+    expect(setLaneValues(lone, 0, [1, 2, 3, 4])).toBe(lone)
+    expect(setLaneGlide(lone, false)).toBe(lone)
+    expect(setLaneOn(lone, true)).toBe(lone)
+  })
+
+  it('changes one lane at a time, and none of the loop beside it', () => {
+    const from = addLane(initLoop(), 'amp', 'cutoff', 0.4)
+    expect(removeLane(from, 'amp', 'cutoff').lanes).toEqual([])
+    const off = editLane(from, 'amp', 'cutoff', (each) =>
+      setLaneOn(each, false)
+    )
+    expect(off.lanes).toEqual([lane('amp', 'cutoff', held(0.4), false, false)])
+    const glided = editLane(from, 'amp', 'cutoff', (each) =>
+      setLaneGlide(each, true)
+    )
+    expect(glided.lanes[0]?.glide).toBe(true)
+    expect(glided.lanes[0]?.values).toBe(from.lanes[0]?.values)
+    const wrote = editLane(from, 'amp', 'cutoff', (each) =>
+      setLaneValues(each, 2, [0, 0])
+    )
+    expect(wrote.lanes[0]?.values.slice(1, 5)).toEqual([0.4, 0, 0, 0.4])
+    expect(wrote.lanes[0]?.values).not.toBe(from.lanes[0]?.values)
+    expect(from.lanes).toEqual([lane('amp', 'cutoff', held(0.4))])
+  })
+
+  it('writes a lane’s values from a step, over what it cannot reach', () => {
+    const four = lane('amp', 'cutoff', [1, 2, 3, 4])
+    expect(setLaneValues(four, 1, [9, 8, 7])).toEqual(
+      lane('amp', 'cutoff', [1, 9, 8, 7])
+    )
+    expect(setLaneValues(four, 1, [2, NaN, 3])).toEqual(
+      lane('amp', 'cutoff', [1, 2, 3, 3])
+    )
+    expect(setLaneValues(four, -2, [0, 0])).toBe(four)
+    expect(setLaneValues(four, -1, [7])).toBe(four)
+    expect(setLaneValues(four, 4, [1, 2])).toBe(four)
+    expect(setLaneValues(four, 1.5, [1])).toBe(four)
+    expect(setLaneValues(four, NaN, [1])).toBe(four)
+    expect(setLaneValues(four, 0, [Infinity])).toBe(four)
+    expect(four.values).toEqual([1, 2, 3, 4])
+  })
+
+  it('repeats a lane’s first bar as the loop grows, and keeps it as it shrinks', () => {
+    const bar = Array.from({ length: BAR_STEPS }, (_, at) => at)
+    const one = editLane(
+      addLane(initLoop(), 'amp', 'cutoff', 0),
+      'amp',
+      'cutoff',
+      (each) => setLaneValues(each, 0, bar)
+    )
+    expect(one.lanes[0]?.values).toEqual(bar)
+    const two = setBars(one, 2)
+    expect(two.lanes[0]?.values).toEqual([...bar, ...bar])
+    const back = setBars(two, 1)
+    expect(back.steps).toBe(BAR_STEPS)
+    expect(back.lanes[0]?.values).toHaveLength(2 * BAR_STEPS)
+    expect(back.lanes[0]?.values).toEqual([...bar, ...bar])
+    expect(setBars(one, 1)).toBe(one)
+  })
+
+  it('plays the lanes that are on, cut to the loop’s length', () => {
+    const on = lane('amp', 'cutoff', held(1))
+    const off = lane('amp', 'level', held(0.5), true, false)
+    const long = lane('voice', 'tone', held(0.25, BAR_STEPS + 4))
+    const short = lane('voice', 'shape', held(0.75, 8))
+    const played = playedLanes(laneLoop([on, off, long, short]))
+    expect(played).toEqual([
+      on,
+      lane('voice', 'tone', held(0.25)),
+      lane('voice', 'shape', held(0.75, 8)),
+    ])
+    expect(played[0]).toBe(on)
+    expect(played[1]).not.toBe(long)
+    expect(played[2]).not.toBe(short)
+    const both = laneLoop([on, lane('amp', 'level', held(0.5), true)])
+    expect(playedLanes(both)).toBe(both.lanes)
+    expect(playedLanes(laneLoop([off]))).toEqual([])
+    expect(playedLanes(initLoop())).toBe(initLoop().lanes)
+  })
+
+  it('keeps its lanes when its notes are cleared', () => {
+    const from = addLane(loop([note(0), note(20)], 32), 'amp', 'cutoff', 0.4)
+    const cleared = clearLoop(from)
+    expect(cleared.notes).toEqual([])
+    expect(cleared.lanes).toBe(from.lanes)
+    expect(cleared.steps).toBe(32)
   })
 })
 
@@ -181,7 +354,11 @@ describe('a song', () => {
   })
 
   it('gives a track with no loop a bar of nothing', () => {
-    expect(loopOf(initSong(), 't1')).toEqual({ steps: 16, notes: [] })
+    expect(loopOf(initSong(), 't1')).toEqual({
+      steps: 16,
+      notes: [],
+      lanes: [],
+    })
     expect(loopOf(initSong(), 't1')).toBe(loopOf(initSong(), 't2'))
   })
 
@@ -202,7 +379,7 @@ describe('a song', () => {
   })
 
   it('keeps a track’s later loops through an edit of its first', () => {
-    const second: Loop = { steps: 32, notes: [note(3)] }
+    const second: Loop = { steps: 32, notes: [note(3)], lanes: [] }
     const song = { ...initSong(), loops: { t1: [initLoop(), second] } }
     const edited = editLoop(song, 't1', (from) => putNote(from, note(0)))
     expect(edited.loops.t1?.[1]).toBe(second)
@@ -303,7 +480,7 @@ describe('a song kept', () => {
               { step: 'x', key: 60 },
               { step: 2, key: 300 },
               'note',
-              { step: 0, key: 62, length: 1000 },
+              { step: 0, key: 62, length: MAX_STEPS + 1000 },
             ],
           },
           'loop',
@@ -315,9 +492,81 @@ describe('a song kept', () => {
     expect(read.tempo).toBe(90)
     expect(Object.keys(read.loops)).toEqual(['t1'])
     expect(read.loops.t1).toEqual([
-      { steps: 16, notes: [note(0, 62, MAX_STEPS), note(4, 60)] },
-      { steps: 16, notes: [] },
+      { steps: 16, notes: [note(0, 62, MAX_STEPS), note(4, 60)], lanes: [] },
+      { steps: 16, notes: [], lanes: [] },
     ])
+  })
+
+  it('keeps its lanes, and drops the ones that are none', () => {
+    let song = initSong()
+    song = editLoop(song, 't1', (from) =>
+      addLane(
+        setBars(addLane(from, 'amp', 'cutoff', 0.2), 2),
+        FADER,
+        'level',
+        0.6
+      )
+    )
+    expect(readSong(JSON.parse(JSON.stringify(song)))).toEqual(song)
+    const read = readSong({
+      loops: {
+        t1: [
+          {
+            steps: BAR_STEPS,
+            lanes: [
+              { part: '', key: 'cutoff', values: [1] },
+              { part: 'amp', key: '', values: [1] },
+              { part: 'amp', key: 'level', values: ['x', null, NaN] },
+              { part: 'amp', key: 'level', values: [] },
+              'lane',
+              { part: 'amp', key: 'cutoff', values: [1, 2] },
+              { part: 'amp', key: 'cutoff', values: [9] },
+              { part: 'voice', key: 'tone', values: [3], glide: 'yes', on: 0 },
+              {
+                part: 'voice',
+                key: 'shape',
+                values: [4],
+                glide: true,
+                on: false,
+              },
+            ],
+          },
+        ],
+      },
+    })
+    expect(read.loops.t1?.[0]?.lanes).toEqual([
+      lane('amp', 'cutoff', until([1, 2], BAR_STEPS)),
+      lane('voice', 'tone', until([3], BAR_STEPS)),
+      lane('voice', 'shape', until([4], BAR_STEPS), true, false),
+    ])
+    const none = readSong({ loops: { t1: [{ lanes: 'lanes' }] } })
+    expect(none.loops.t1?.[0]?.lanes).toEqual([])
+    const most = readSong({
+      loops: {
+        t1: [
+          {
+            steps: MAX_STEPS,
+            lanes: Array.from({ length: MAX_LANES + 3 }, (_, at) => ({
+              part: 'amp',
+              key: `k${at}`,
+              values: [1],
+            })),
+          },
+        ],
+      },
+    })
+    expect(most.loops.t1?.[0]?.lanes).toHaveLength(MAX_LANES)
+    const longest = readSong({
+      loops: {
+        t1: [
+          {
+            steps: MAX_STEPS,
+            lanes: [{ part: 'amp', key: 'k', values: held(1, MAX_STEPS + 8) }],
+          },
+        ],
+      },
+    })
+    expect(longest.loops.t1?.[0]?.lanes[0]?.values).toHaveLength(MAX_STEPS)
   })
 
   it('falls back to an empty song when storage fails or holds nonsense', () => {

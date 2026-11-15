@@ -198,6 +198,60 @@ the last:
 What is recorded is the starting of loops and scenes, not sound: to be
 confirmed with ashon. To be built in that order, each usable by itself.
 
+### F. Knob lanes
+
+Asked for by ashon, 2026-11-15 ("트랙에서 각종 노브 다이나믹도 컨트롤
+가능하게 만들어 보면 좋겠네"), and chosen from options: automation lanes,
+drawn in Seq, one knob's value at every sixteenth of a track's loop;
+not per-step locks, not a Steps modulator, not recording alone. A demo
+came first; ashon took its defaults ("좋아"): a new lane at Step, a lane
+as long as its loop, drawn with a finger or filled, and each lane its
+own Step or Glide, on or off, and removed. Built 2026-11-15.
+
+- **A loop's lanes** (`src/state/song.ts`): up to eight, each a knob (a
+  part of the track's sound and a key, or `FADER`, the track's fader),
+  Step or Glide, on or off, and a value for each step in the knob's
+  own units. A new lane is flat at the knob's own value. A loop made
+  longer repeats its lanes' values from the first; made shorter, it
+  keeps them, as it keeps its notes. Clear takes the notes, not the
+  lanes.
+- **The knobs a lane may move** (`src/state/lanes.ts`): a synth track's
+  sound, part by part in the editor's order (its inputs, its chains'
+  levels and sends, their items, its modulators, its inserts, the amp,
+  the voice, its sends), every knob that turns and is shown (not a
+  choice, not a synced delay's time), then the fader's level and
+  balance. A kit's pads are each a sound of their own: a kit's lanes
+  move its fader.
+- **On the audio thread** (`src/dsp/automation.ts`): each block, once
+  the sequencer has moved, each lane hands its knob its value where the
+  song stands: held to the next step, or a line to it (in ratios for a
+  knob that turns so, a cutoff, a time). A lane's value stands in place
+  of the knob's own (`SoundPlayer.move`, `Part.moveLevel`), which is
+  kept: a knob turned while its lane plays is heard once the lane lets
+  go, as the song stops, a lane is put off or removed, or panic. A muted
+  track stays silent whatever its fader's lane says. Lanes play only
+  while the loop is on, and the engine sends them with the loop,
+  resolved on the track's sound, again when a sound changed moves them
+  elsewhere.
+- **In Seq** (`src/ui/LaneStrip.tsx`, `src/viz/laneStrip.ts`): one lane
+  under the grid, the bar shown, its sixteen columns in line with the
+  grid's, the knob's own value dashed across it, the step playing lit;
+  at its left, under the grid's names, the value playing, or stopped the
+  knob's own. A finger drawn over it writes each step it passes, a quick
+  stroke on a line; a lane off is put on by it. Over it: its name (a tap
+  lists the loop's lanes and the knobs a lane may take, in the grid's
+  place, `src/ui/LanePicker.tsx`), Step or Glide, on or off, Fill (Flat
+  at the knob's own value, Rise, Fall, Peak, Random, over the whole
+  loop) and remove, which asks first. With no lanes, Lane stands in the
+  grid's header.
+- **Room**: a lane under it, the grid keeps three rows and the lane's
+  strip gives way to 24 px; where even that does not fit (a phone
+  upright with the sound editor open) the lane is cut off: the surface
+  raised shows it whole.
+- Not built: recording a knob turned while it plays into its lane;
+  lanes for a kit's chain (its inserts, its sends), the buses or the
+  master; the panel's knob turning with its lane; a route's amount.
+
 ## Projects
 
 Asked for by ashon, 2026-11-13 ("시퀀스와 현재 악기 구성을 전부 저장할
