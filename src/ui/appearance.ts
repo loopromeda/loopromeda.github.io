@@ -1,10 +1,13 @@
 import { useLayoutEffect, useSyncExternalStore } from 'react'
 import type { Appearance } from '../state/settings'
+import { FAVICON_GRID, markSvg } from '../viz/mark'
 import {
   ground,
+  markInks,
   palette,
   setTheme,
   surfaces,
+  themeOf,
   type Mode,
   type ThemeId,
 } from './theme'
@@ -25,10 +28,9 @@ const deviceLight = () => window.matchMedia?.(LIGHT).matches ?? false
  * read (App): the palette and the ground JS draws with at once, in the
  * render (src/ui/theme.ts), so the render that follows a change reads
  * them; the page's mode (index.css's tokens), the roles' colours, the
- * surfaces (a pop theme's own, tinted) and the browser's bar before
- * paint, so that no frame shows the old ones. The
- * system appearance follows the device, as it changes too. Returns the
- * mode.
+ * surfaces (a pop theme's own, tinted), the browser's bar and the tab's
+ * icon before paint, so that no frame shows the old ones. The system
+ * appearance follows the device, as it changes too. Returns the mode.
  */
 export function useTheme(theme: ThemeId, appearance: Appearance): Mode {
   const light = useSyncExternalStore(subscribe, deviceLight, () => false)
@@ -51,6 +53,12 @@ export function useTheme(theme: ThemeId, appearance: Appearance): Mode {
     document
       .querySelector('meta[name="theme-color"]')
       ?.setAttribute('content', ground().page)
+    // The favicon in the theme's colours, on its page (index.html's is
+    // the default's, until this runs)
+    const svg = markSvg(FAVICON_GRID, markInks(themeOf(theme), mode))
+    document
+      .querySelector('link[rel="icon"][type="image/svg+xml"]')
+      ?.setAttribute('href', `data:image/svg+xml,${encodeURIComponent(svg)}`)
   }, [theme, mode])
   return mode
 }

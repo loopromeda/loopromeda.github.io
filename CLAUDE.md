@@ -188,7 +188,9 @@ src/viz/      pure display math (scope trigger and decimation, envelope
               a glide's dot (where the note sounds, across and up) in
               xy.ts, where a popover stands by its
               button in popover.ts, the step grid's cells, a note's
-              box and what a drag from a note makes of it in steps.ts)
+              box and what a drag from a note makes of it in steps.ts,
+              and the app's mark, on the icons' grid and the
+              favicon's, in mark.ts)
 src/ui/       React components; SoundEditor.tsx the sound as tiles
               (editor.ts: their names, lines, pictograms and colours),
               with the kit its pads and its chain, or, switched to Mix,
@@ -257,12 +259,13 @@ src/ui/       React components; SoundEditor.tsx the sound as tiles
               SettingsDialog.tsx, a modal dialog, holds the settings
               (the theme in Dropdown.tsx, the app's own select),
               Measure CPU and the browser's checks; Splash.tsx the
-              name a moment as the page opens, and the first tap
-              anywhere starting audio held back; theme.ts the
+              mark and the name a moment as the page opens, and the
+              first tap anywhere starting audio held back; theme.ts the
               colour roles and the themes that give them values, in
               the dark and the light (a pop theme its surfaces too),
-              appearance.ts setting them and the mode (index.css's
-              tokens) on the page; pages.ts gives each
+              and the mark's inks from the accent; appearance.ts
+              setting them, the mode (index.css's tokens) and the
+              favicon on the page; pages.ts gives each
               sheet an address (#/presets), so a reload keeps it and Back
               closes it; Popover.tsx the shell every popover stands in
               (its header, its place by its button, its height
@@ -277,7 +280,9 @@ scripts/      dev tooling: tailnet.sh, the device-report Vite plugin,
               of what the site ships into licences.txt, vite-offline.ts,
               which builds sw.js and lists in it everything else the
               build ships, and icons.ts, which draws public/'s icons
-public/       copied beside index.html: the manifest and the icons
+              and the favicon
+public/       copied beside index.html: the manifest, the icons and
+              the favicon
 ```
 
 Dev-only device reports: every page load, every audio state change and,

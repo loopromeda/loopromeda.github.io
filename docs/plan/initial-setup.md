@@ -689,6 +689,17 @@ dragging knobs during notes.
       emerald-300 to 600; a maskable one for Android, an apple-touch-icon
       for iOS, and a 32 px favicon.ico beside the SVG favicon for browsers
       that take no SVG).
+      2026-11-15, asked for by ashon ("파비콘을 svg로 하자는 것은 좀 더
+      깔끔하게 표현하면 좋겠다는 생각에서"): the favicon is drawn on its
+      own 32-unit grid (`src/viz/mark.ts`, `FAVICON_GRID`), every straight
+      edge on an even unit, so its strands and holes stand on whole pixels
+      at 16 and 32 px where the icons' mark smeared; thinner, with wider
+      holes and a pixel's gap at the crossing. The page redraws it in the
+      theme's accent on its page (`markInks`, `src/ui/appearance.ts`), so
+      Neon's tab is yellow on violet; index.html's is the default's until
+      then, and favicon.ico is drawn from it. The splash shows the mark
+      over the name ("Loopromeda 첫 화면에서도 아이콘이 잘 나오면
+      좋겠네"), in the theme's inks too. The app's icons stay emerald.
       `scripts/vite-offline.ts` builds `src/sw/sw.ts` into `sw.js` and
       writes into it every other file the build ships (public/ and
       licences.txt too) and a hash of them all as its version. The worker

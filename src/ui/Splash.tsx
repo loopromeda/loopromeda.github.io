@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { Engine } from '../engine/engine'
+import { ICON_GRID, markPaths } from '../viz/mark'
+import { markInks, mode, themeId, themeOf } from './theme'
 
 /**
  * What the page shows as it opens (asked for by ashon, 2026-11-15:
@@ -8,7 +10,9 @@ import type { Engine } from '../engine/engine'
  * the audio started).
  *
  * The audio starts with the page where the browser lets it (main.tsx).
- * The splash, the name alone, stands until the worklet has loaded and at
+ * The splash, the mark over the name (asked for by ashon, 2026-11-15:
+ * "Loopromeda 첫 화면에서도 아이콘이 잘 나오면 좋겠네"; the name alone
+ * before), stands until the worklet has loaded and at
  * least SPLASH_MS from the page's start, seen rather than flashed, then
  * fades into the instrument as it stands. A tap lets it go at once, once
  * loaded. Where the browser holds the audio back for a tap (iOS always;
@@ -56,6 +60,7 @@ export function Splash({
       onClick={() => setTapped(true)}
       className={`fixed inset-0 z-[60] flex flex-col items-center justify-center gap-3 bg-(--bg) px-8 transition-opacity duration-250 motion-reduce:transition-none ${leaving ? 'pointer-events-none opacity-0' : ''}`}
     >
+      <Mark />
       <h1 className="text-3xl font-semibold tracking-tight">Loopromeda</h1>
       {/* Only long past its time, still loading: a first visit, a slow
           phone (not flashed for a moment as the worklet comes) */}
@@ -65,6 +70,46 @@ export function Splash({
         Starting…
       </p>
     </div>
+  )
+}
+
+/**
+ * The mark as the icons draw it, in the page's theme, on the page itself:
+ * no square of its own, the gap at its crossing the page's colour
+ */
+function Mark() {
+  const { loop, stroke, cut, cutWidth, over, from, to } = markPaths(ICON_GRID)
+  const { ground, light, deep } = markInks(themeOf(themeId()), mode())
+  const { size } = ICON_GRID
+  return (
+    <svg
+      viewBox={`0 0 ${size} ${size}`}
+      className="size-28 shrink-0"
+      aria-hidden
+    >
+      <defs>
+        <linearGradient
+          id="splash-ink"
+          gradientUnits="userSpaceOnUse"
+          x1={from[0]}
+          y1={from[1]}
+          x2={to[0]}
+          y2={to[1]}
+        >
+          <stop offset={0} stopColor={light} />
+          <stop offset={1} stopColor={deep} />
+        </linearGradient>
+      </defs>
+      <path
+        d={loop}
+        fill="none"
+        stroke="url(#splash-ink)"
+        strokeWidth={stroke}
+        strokeLinejoin="round"
+      />
+      <path d={cut} stroke={ground} strokeWidth={cutWidth} />
+      <path d={over} stroke="url(#splash-ink)" strokeWidth={stroke} />
+    </svg>
   )
 }
 

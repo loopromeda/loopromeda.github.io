@@ -387,6 +387,72 @@ export function groundOf(mode: Mode): Ground {
   return THEMED[current.id][mode]
 }
 
+/**
+ * The mark's two ends about a mode's accent, in OKLab: the lightness
+ * added (taken, below 0) and the share of the chroma kept
+ */
+const MARK_STEPS: Readonly<
+  Record<Mode, Readonly<Record<'light' | 'deep', readonly [number, number]>>>
+> = {
+  // The icons' emerald, 300 down to 600 about the default's accent, 400
+  dark: { light: [0.072, 0.85], deep: [-0.177, 0.83] },
+  // About the light's deeper accent, nearer it and as vivid: in the
+  // icons' steps they came out muddy, and the upper end too pale for a
+  // light page
+  light: { light: [0.06, 1], deep: [-0.1, 1] },
+}
+
+/**
+ * The app's mark in a theme and mode (src/viz/mark.ts): on the page's
+ * colour, its ink from the accent lightened a little to the accent
+ * deepened (MARK_STEPS), its hue kept. So the favicon and the splash
+ * follow the theme (asked for by ashon, 2026-11-15); the icons a home
+ * screen keeps stay the default's.
+ */
+export function markInks(
+  theme: Theme,
+  mode: Mode
+): { readonly ground: string; readonly light: string; readonly deep: string } {
+  const { accent } = theme[mode]
+  const steps = MARK_STEPS[mode]
+  return {
+    ground: surfacesOf(theme, mode).page,
+    light: shade(accent, ...steps.light),
+    deep: shade(accent, ...steps.deep),
+  }
+}
+
+/** A colour lighter by lift in OKLab (darker below 0), its chroma scaled */
+function shade(hex: string, lift: number, chroma: number): string {
+  const [l, a, b] = oklab(hex)
+  return fromOklab(Math.min(1, Math.max(0, l + lift)), a * chroma, b * chroma)
+}
+
+/** An OKLab colour as #rrggbb, each channel held inside sRGB */
+function fromOklab(l: number, a: number, b: number): string {
+  const lms = [
+    l + 0.3963377774 * a + 0.2158037573 * b,
+    l - 0.1055613458 * a - 0.0638541728 * b,
+    l - 0.0894841775 * a - 1.291485548 * b,
+  ].map((v) => v * v * v)
+  const [x = 0, y = 0, z = 0] = lms
+  const rgb = [
+    4.0767416621 * x - 3.3077115913 * y + 0.2309699292 * z,
+    -1.2684380046 * x + 2.6097574011 * y - 0.3413193965 * z,
+    -0.0041960863 * x - 0.7034186147 * y + 1.707614701 * z,
+  ]
+  return `#${rgb
+    .map((v) => {
+      const c = Math.min(1, Math.max(0, v))
+      const encoded =
+        c <= 0.0031308 ? 12.92 * c : 1.055 * c ** (1 / 2.4) - 0.055
+      return Math.round(encoded * 255)
+        .toString(16)
+        .padStart(2, '0')
+    })
+    .join('')}`
+}
+
 /** An #rrggbb as rgba() at the given share: what the canvases fill with */
 export function alpha(hex: string, share: number): string {
   const value = Number.parseInt(hex.slice(1), 16)

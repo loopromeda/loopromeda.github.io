@@ -7,6 +7,7 @@ import {
   ground,
   groundOf,
   isThemeId,
+  markInks,
   mode,
   oklabDistance,
   palette,
@@ -172,6 +173,34 @@ describe('a ground', () => {
       expect(contrastRatio(neutral, tile)).toBeGreaterThanOrEqual(10)
       expect(contrastRatio(quiet, tile)).toBeGreaterThanOrEqual(7)
       expect(contrastRatio(dim, tile)).toBeGreaterThanOrEqual(4.5)
+    }
+  })
+})
+
+describe('markInks', () => {
+  it('gives the default the icons’ emerald, near enough to see none', () => {
+    const { ground, light, deep } = markInks(themeOf(DEFAULT_THEME), 'dark')
+    expect(ground).toBe('#0b0b10')
+    expect(oklabDistance(light, '#6ee7b7')).toBeLessThan(1.5)
+    expect(oklabDistance(deep, '#059669')).toBeLessThan(1.5)
+  })
+
+  it('stands out of its page in every theme and mode', () => {
+    for (const theme of THEMES) {
+      for (const tone of ['dark', 'light'] as const) {
+        const { ground, light, deep } = markInks(theme, tone)
+        expect(contrastRatio(light, ground)).toBeGreaterThanOrEqual(3)
+        expect(contrastRatio(deep, ground)).toBeGreaterThanOrEqual(3)
+      }
+    }
+  })
+
+  it('shades from lighter to deeper, its hue the accent’s', () => {
+    for (const theme of THEMES) {
+      const { light, deep } = markInks(theme, 'dark')
+      expect(contrastRatio(light, '#000000')).toBeGreaterThan(
+        contrastRatio(deep, '#000000')
+      )
     }
   })
 })
