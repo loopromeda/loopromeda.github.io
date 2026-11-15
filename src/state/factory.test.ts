@@ -95,12 +95,12 @@ describe('FACTORY_PRESETS', () => {
   })
 
   it('writes a route amount in its destination units', () => {
-    // 36 semitones on Pitch, which spans 48 at full amount
+    // 30 semitones on Pitch, which spans 48 at full amount
     const kick = named('Kick')
     const drop = kick.sound.routes.find(
       (route) => route.target === VOICE && route.key === 'pitch'
     )
-    expect(drop?.amount).toBe(0.75)
+    expect(drop?.amount).toBe(0.625)
   })
 
   it.each(FACTORY_PRESETS.map((preset) => [preset.name, preset] as const))(
@@ -178,13 +178,13 @@ describe('FACTORY_PRESETS', () => {
     }
   })
 
-  it('drops the Kick from three octaves up to the key', () => {
+  it('drops the Kick to 27 semitones under the key', () => {
     const synth = loaded(named('Kick'))
     synth.noteOn(1, 60, 1)
     const out = render(synth, 0.3)
-    // Near 1 kHz in its first cycle, down to the key's own C3 by 0.1 s
-    expect(frequencyAt(out, 0)).toBeGreaterThan(700)
-    expect(frequencyAt(out, at(0.2))).toBeCloseTo(130.81, -0.5)
+    // Still falling 30 ms in, at A1 (55 Hz) under C4 by 0.2 s
+    expect(frequencyAt(out, at(0.03))).toBeGreaterThan(75)
+    expect(frequencyAt(out, at(0.2))).toBeCloseTo(55, -0.5)
   })
 
   it('stops the Closed Hat while the key is still held', () => {

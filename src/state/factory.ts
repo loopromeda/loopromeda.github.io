@@ -19,6 +19,68 @@ function preset(
   }
 }
 
+/*
+ * The chip presets (Chip Bass, Chip Sub, Chip Lead, Chip Chords, Chip
+ * Pulse 12 and 25), and the Kick and the Snare, are the sounds a 2A03 and
+ * N163 chiptune was ported to Loopromeda with, matched to its recording
+ * (2026-11-15): dry, as the chips are, each a tracker's note, struck at
+ * once and cut when it ends.
+ */
+
+/** The chip presets' amp: struck at once, held a little under full */
+const CHIP_AMP = {
+  attack: 0.001,
+  decay: 0.1,
+  sustain: 0.85,
+  release: 0.005,
+  velocity: 1,
+} as const
+
+/** The chip pulses' EQ: the top past 2.5 kHz 4 dB down */
+const CHIP_PULSE_EQ = { kind: 'eq', high: -4, highFreq: 2500 } as const
+
+/** A chip pulse at a duty, the share of its cycle spent high */
+function chipPulse(width: number): WrittenSound {
+  return {
+    inputs: { pulse: { kind: 'osc', wave: 'Square', width } },
+    chains: { main: { sends: { pulse: 1 } } },
+    amp: CHIP_AMP,
+    effects: [CHIP_PULSE_EQ],
+  }
+}
+
+/**
+ * The chip basses: a saw, a pulse at 6% and a sine, octaves down, the
+ * lows and the top of them lifted and the middle a little down
+ */
+function chipBass(
+  octave: number,
+  items?: WrittenSound['chains'][string]['items']
+): WrittenSound {
+  return {
+    inputs: {
+      saw: { kind: 'osc', wave: 'Saw', octave },
+      pulse: { kind: 'osc', wave: 'Square', width: 0.06, octave },
+      sine: { kind: 'osc', wave: 'Sine', octave },
+    },
+    chains: {
+      main: { sends: { saw: 0.7, pulse: 1, sine: 1 }, ...(items && { items }) },
+    },
+    amp: CHIP_AMP,
+    effects: [
+      {
+        kind: 'eq',
+        low: 2,
+        lowFreq: 55,
+        mid: -2.5,
+        midFreq: 893,
+        high: 5,
+        highFreq: 6205,
+      },
+    ],
+  }
+}
+
 /**
  * The presets the app ships with, across the categories. The keyboard
  * starts at C4, and a phone's speaker barely plays below 200 Hz, so the
@@ -185,6 +247,13 @@ export const FACTORY_PRESETS: readonly Preset[] = [
     amp: { attack: 0.002, decay: 0.4, sustain: 0.8, release: 0.1 },
     voice: { mode: 'Mono' },
   }),
+  preset('Chip Bass', 'Bass', chipBass(-1)),
+  // The same two octaves down, through a lowpass: the bass's lowest notes
+  preset(
+    'Chip Sub',
+    'Bass',
+    chipBass(-2, { filter: { kind: 'filter', cutoff: 1500 } })
+  ),
 
   preset('Saw Lead', 'Lead', {
     inputs: {
@@ -218,12 +287,10 @@ export const FACTORY_PRESETS: readonly Preset[] = [
     sends: { b: 0.4 },
   }),
   preset('Chip Lead', 'Lead', {
-    inputs: { square: { kind: 'osc', wave: 'Square', width: 0.25 } },
-    chains: { main: { sends: { square: 1 } } },
+    ...chipPulse(0.25),
     // The vibrato sets in after the note starts
-    modulators: { vibrato: { kind: 'lfo', rate: 6.5, fade: 0.35 } },
-    routes: [{ from: 'vibrato', to: 'voice.pitch', by: 0.35 }],
-    amp: { attack: 0.002, decay: 0.1, sustain: 0.8, release: 0.1 },
+    modulators: { vibrato: { kind: 'lfo', rate: 5.5, fade: 0.25 } },
+    routes: [{ from: 'vibrato', to: 'voice.pitch', by: 0.3 }],
     voice: { mode: 'Mono' },
   }),
   preset('Fifth Lead', 'Lead', {
@@ -620,34 +687,73 @@ export const FACTORY_PRESETS: readonly Preset[] = [
     amp: { attack: 0.001, decay: 2.5, sustain: 0, release: 0.8, velocity: 0.6 },
     sends: { c: 0.5 },
   }),
+  preset('Chip Chords', 'Keys', {
+    // A saw falling to under half over a second, its lows lifted hard
+    inputs: { saw: { kind: 'osc', wave: 'Saw' } },
+    chains: { main: { sends: { saw: 1 } } },
+    amp: { ...CHIP_AMP, decay: 1.2, sustain: 0.45 },
+    effects: [
+      {
+        kind: 'eq',
+        low: 15,
+        lowFreq: 82,
+        mid: -0.3,
+        midFreq: 2404,
+        high: 2.7,
+        highFreq: 4469,
+      },
+    ],
+  }),
+  preset('Chip Pulse 12', 'Keys', chipPulse(0.125)),
+  preset('Chip Pulse 25', 'Keys', chipPulse(0.25)),
 
   preset('Kick', 'Drums', {
-    inputs: { sine: { kind: 'osc', wave: 'Sine', octave: -1 } },
-    chains: { main: { sends: { sine: 1 } } },
-    modulators: { drop: { kind: 'env', attack: 0.001, decay: 0.09 } },
-    // Three octaves down to the key's pitch in a tenth of a second
-    routes: [{ from: 'drop', to: 'voice.pitch', by: 36 }],
-    amp: { attack: 0.001, decay: 0.4, sustain: 0, velocity: 0.6 },
-  }),
-  preset('Snare', 'Drums', {
+    // A triangle 27 semitones under the key (A1 at C4), struck 30 higher
+    // and falling to it in about a tenth of a second, then held; dark
+    // noise at the strike
     inputs: {
-      body: { kind: 'osc', wave: 'Triangle' },
+      body: { kind: 'osc', wave: 'Triangle', octave: -2, semi: -3 },
       noise: { kind: 'noise' },
     },
     chains: {
-      main: {
-        sends: { body: 0.6, noise: 0.75 },
-        items: { filter: { kind: 'filter', cutoff: 9000 } },
+      main: { sends: { body: 0.7 } },
+      click: {
+        level: 0,
+        sends: { noise: 0.8 },
+        items: { filter: { kind: 'filter', cutoff: 2200 } },
       },
     },
-    modulators: { drop: { kind: 'env', attack: 0.001, decay: 0.04 } },
-    routes: [{ from: 'drop', to: 'voice.pitch', by: 12 }],
+    modulators: {
+      drop: { kind: 'env', attack: 0.001, decay: 0.3 },
+      strike: { kind: 'env', attack: 0.001, decay: 0.25 },
+    },
+    routes: [
+      { from: 'drop', to: 'voice.pitch', by: 30 },
+      { from: 'strike', to: 'click.level', by: 1 },
+    ],
+    amp: { attack: 0.001, decay: 2, sustain: 0, release: 0.03, velocity: 0.8 },
+  }),
+  preset('Snare', 'Drums', {
+    // Mostly a triangle near G3, falling a little, with dark noise under it
+    inputs: {
+      body: { kind: 'osc', wave: 'Triangle', semi: -5 },
+      noise: { kind: 'noise' },
+    },
+    chains: {
+      tone: { sends: { body: 0.9 } },
+      main: {
+        sends: { noise: 0.8 },
+        items: { filter: { kind: 'filter', cutoff: 2800 } },
+      },
+    },
+    modulators: { drop: { kind: 'env', attack: 0.001, decay: 0.4 } },
+    routes: [{ from: 'drop', to: 'voice.pitch', by: 2 }],
     amp: {
       attack: 0.001,
-      decay: 0.2,
+      decay: 0.8,
       sustain: 0,
-      release: 0.18,
-      velocity: 0.6,
+      release: 0.05,
+      velocity: 0.8,
     },
   }),
   preset('Closed Hat', 'Drums', {
@@ -883,8 +989,8 @@ export const FACTORY_PRESETS: readonly Preset[] = [
     sends: { c: 0.3 },
   }),
   preset('Boom', 'Drums', {
-    // The Kick's sine, falling only an octave and ringing on, a little
-    // driven: a long, low kick
+    // A sine, falling only an octave and ringing on, a little driven: a
+    // long, low kick
     inputs: { sine: { kind: 'osc', wave: 'Sine', octave: -1 } },
     chains: {
       main: {
