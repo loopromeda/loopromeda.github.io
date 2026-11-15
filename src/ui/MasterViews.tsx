@@ -1,4 +1,10 @@
-import { useEffect, useRef, useState, type CSSProperties } from 'react'
+import {
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from 'react'
 import type { Engine, OutputSource } from '../engine/engine'
 import { masterLimited } from '../state/mix'
 import {
@@ -335,6 +341,99 @@ export function ViewsAcross({
         />
       ))}
     </span>
+  )
+}
+
+/**
+ * The views' grid, the sheet's and the compact one (4 px apart, not 8).
+ * Its columns read the box's height (cqh) and width (cqw), and its shape
+ * picks the layout (broad). Two rows; the meters a column at the right.
+ * The stereo a square: under the spectrum, beside the spectrogram, as
+ * tall as a row, and no wider than 45% of the views' width (an upright
+ * phone's is narrower than tall); or, broad, between the views and the
+ * meters, as tall as both (broad, the height is at most 40% of the
+ * width).
+ */
+const BOARD_GRID = {
+  sheet:
+    'grid h-full grid-cols-[minmax(0,1fr)_min(calc((100cqh_-_0.5rem)/2),calc((100cqw_-_4.5rem)*0.45))_4rem] grid-rows-2 gap-2 broad:grid-cols-[minmax(0,1fr)_min(100cqh,40cqw)_4rem]',
+  compact:
+    'grid h-full grid-cols-[minmax(0,1fr)_min(calc((100cqh_-_0.25rem)/2),calc((100cqw_-_4.25rem)*0.45))_4rem] grid-rows-2 gap-1 broad:grid-cols-[minmax(0,1fr)_min(100cqh,40cqw)_4rem]',
+} as const
+
+/**
+ * The master's views as its sheet stands them (#/master): the spectrum
+ * with its decades and levels named, the spectrogram with its decades and
+ * its colours named, the two sides against each other with their
+ * correlation, and the levels going into the clip with the highest peak
+ * named, each view's name in a corner over it. In a box that names
+ * itself master, for its shape to pick the layout (broad, index.css).
+ * Compact, in the Mix's master where it has the room (boardFits): 4 px
+ * apart, rounded as a tile's views are.
+ */
+export function MasterBoard({
+  engine,
+  compact = false,
+  className = '',
+}: {
+  engine: Engine
+  compact?: boolean
+  className?: string
+}) {
+  const round = compact ? 'rounded-[4px]' : 'rounded-lg'
+  return (
+    <div className={`[container:master/size] ${className}`}>
+      <div className={compact ? BOARD_GRID.compact : BOARD_GRID.sheet}>
+        <Named
+          name="Spectrum"
+          className="col-span-2 col-start-1 row-start-1 broad:col-span-1"
+        >
+          <Spectrum engine={engine} labelled className={`h-full ${round}`} />
+        </Named>
+        <Named name="Spectrogram" className="col-start-1 row-start-2">
+          <Spectrogram engine={engine} labelled className={`h-full ${round}`} />
+        </Named>
+        <Named
+          name="Stereo"
+          className="col-start-2 row-start-2 broad:row-span-2 broad:row-start-1"
+        >
+          <Vectorscope
+            engine={engine}
+            correlated
+            className={`h-full ${round}`}
+          />
+        </Named>
+        {/* Its readout names it: no name over the meters' top */}
+        <Meters
+          engine={engine}
+          readout
+          className="col-start-3 row-span-2 row-start-1"
+        />
+      </div>
+    </div>
+  )
+}
+
+/** A view, its name in a corner over it */
+function Named({
+  name,
+  className = '',
+  children,
+}: {
+  name: string
+  className?: string
+  children: ReactNode
+}) {
+  return (
+    <div className={`relative min-h-0 min-w-0 ${className}`}>
+      {children}
+      <span
+        aria-hidden
+        className="pointer-events-none absolute top-1 right-1.5 text-[9px] font-medium tracking-widest text-(--ink-600) uppercase"
+      >
+        {name}
+      </span>
+    </div>
   )
 }
 

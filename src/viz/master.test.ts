@@ -26,6 +26,8 @@ import {
   unclippedLevels,
   vectorPoint,
   viewsSideBySide,
+  BOARD_LEAST,
+  boardFits,
   xToHz,
 } from './master'
 import { SCALES } from './colourScale'
@@ -582,5 +584,19 @@ describe('viewsSideBySide', () => {
 
   it('shows every view across a wide, short master', () => {
     expect(viewsSideBySide(ORDER, 1070, 75, 4)).toBe(4)
+  })
+})
+
+describe('boardFits', () => {
+  it('stands the views as the sheet does in a box wide and tall enough', () => {
+    expect(boardFits(BOARD_LEAST.w, BOARD_LEAST.h)).toBe(true)
+    expect(boardFits(1200, 360)).toBe(true)
+  })
+
+  it('leaves them side by side in a box short or narrow', () => {
+    // The Mix's master at rest on a phone: 137 by 69
+    expect(boardFits(137, 69)).toBe(false)
+    expect(boardFits(1200, BOARD_LEAST.h - 1)).toBe(false)
+    expect(boardFits(BOARD_LEAST.w - 1, 300)).toBe(false)
   })
 })

@@ -554,6 +554,25 @@ the same height, so the keys under them stay put.
   412 px phone (a frame of 396) six tracks, A's three effects, B's none
   and two on the master fit without panning; at 344 px the icons pan 2
   px, as they did.
+- **The master's views with room**, 2026-11-15, asked for by ashon
+  with the Mix on a tablet in view (the master's four views squeezed
+  side by side along a strip 200 px tall, its "+ FX" a dashed bar the
+  rest of its line long): "마스터링이 공간이 충분하면 풀스크린이 되었을 때
+  처럼 시각화 배치를 깔끔하게 다듬어 보자". Where its view is 280 × 140
+  or more (`boardFits`, `src/viz/master.ts`), the master's group stands
+  its views as its sheet (#/master) stands them, the same grid
+  (`MasterBoard`): the spectrum over the spectrogram, the stereo square
+  beside the spectrogram (or, broad, as tall as both), the meters with
+  their peak at the right, each named and labelled, 4 px apart. Smaller,
+  as on a phone, the views stand side by side as before. The view, 200
+  px tall at most at rest, grows with a taller frame, or beside groups
+  taller than the master, up to half as tall as it is wide and 360 px;
+  the strips grow with the frame up to twice theirs, as before, not on
+  past that with it, the "+" for a track under the last. The master's
+  "+" after its effects takes one place, as an effect would; alone in
+  its line it fills it, as before. Seen at 1100 × 720, 1400 × 560,
+  720 × 860 and 412 × 780 with six tracks, A's three effects and two on
+  the master.
 - **Into the master as into a bus**, 2026-11-15, asked for by ashon:
   "버스에서 마스터링으로 갈 때도, 인풋에서 버스로 가는 메커니즘과
   동일하게 맞춰보면 좋겠는데". Each bus's level leaves its group by a

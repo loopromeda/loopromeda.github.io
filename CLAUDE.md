@@ -172,7 +172,8 @@ src/viz/      pure display math (scope trigger and decimation, envelope
               (a hole for each, a run across each seam) in threads.ts,
               the master's views (spectrum,
               spectrogram, stereo, meters, how many stand side by
-              side) and the mastering tools'
+              side, and whether a box holds them as the master's sheet
+              stands them) and the mastering tools'
               readouts (a reduction, a loudness) in master.ts, the
               colour scales the spectrogram's levels take, the dark's
               and the light's, in colourScale.ts, and where a
@@ -195,14 +196,17 @@ src/ui/       React components; SoundEditor.tsx the sound as tiles
               transportKeys.ts Space, the arrows and Home on it);
               the sound's Out and the
               mix's Master hold views of the output, as many side by
-              side as keep their shapes (ViewsAcross; MasterViews.tsx:
+              side as keep their shapes (ViewsAcross), or the Master
+              with room as its sheet stands them (MasterBoard;
+              MasterViews.tsx:
               Scope.tsx's waveform, the spectrum, the spectrogram and
               its colours' key within it, the stereo, the meters; frames.ts
               draws them a display frame at a time, the output read
               once a frame), its filters,
               drives and modulators their pictures (Picture.tsx, drawn
               from outline.ts); MasterSheet.tsx all the views at size
-              (#/master), under the tab rail, with the loudness and the
+              (MasterBoard, #/master), under the tab rail, with the
+              loudness and the
               master's knobs (its level, its effects', one added);
               Dynamics.tsx a compressor's or limiter's gain reduction
               (in its panel, in a knob's cell on the master's sheet,

@@ -27,7 +27,7 @@ import { EFFECT_GLYPHS, GLYPHS, effectInRow } from './editor'
 import { FadeRow } from './FadeRow'
 import { IconButton } from './IconButton'
 import { MixKnob, neutralArc } from './Knob'
-import { Meters, Spectrogram, Spectrum, Vectorscope } from './MasterViews'
+import { MasterBoard } from './MasterViews'
 
 /**
  * The master's views at size, opened from its panel (#/master): the
@@ -90,48 +90,7 @@ export function MasterSheet({
           />
         </div>
       </div>
-      {/*
-       * A size container: the grid's columns read its height (cqh) and
-       * width (cqw), and its shape picks the layout (broad). Two rows;
-       * the meters a column at the right. The stereo a square: under the
-       * spectrum, beside the spectrogram, as tall as a row, and no wider
-       * than 45% of the views' width (an upright phone's is narrower
-       * than tall); or, broad, between the views and the meters, as tall
-       * as both (broad, the height is at most 40% of the width).
-       */}
-      <div className="min-h-36 flex-1 [container:master/size]">
-        <div className="grid h-full grid-cols-[minmax(0,1fr)_min(calc((100cqh_-_0.5rem)/2),calc((100cqw_-_4.5rem)*0.45))_4rem] grid-rows-2 gap-2 broad:grid-cols-[minmax(0,1fr)_min(100cqh,40cqw)_4rem]">
-          <Named
-            name="Spectrum"
-            className="col-span-2 col-start-1 row-start-1 broad:col-span-1"
-          >
-            <Spectrum engine={engine} labelled className="h-full rounded-lg" />
-          </Named>
-          <Named name="Spectrogram" className="col-start-1 row-start-2">
-            <Spectrogram
-              engine={engine}
-              labelled
-              className="h-full rounded-lg"
-            />
-          </Named>
-          <Named
-            name="Stereo"
-            className="col-start-2 row-start-2 broad:row-span-2 broad:row-start-1"
-          >
-            <Vectorscope
-              engine={engine}
-              correlated
-              className="h-full rounded-lg"
-            />
-          </Named>
-          {/* Its readout names it: no name over the meters' top */}
-          <Meters
-            engine={engine}
-            readout
-            className="col-start-3 row-span-2 row-start-1"
-          />
-        </div>
-      </div>
+      <MasterBoard engine={engine} className="min-h-36 flex-1" />
       <MasterKnobs engine={engine} />
     </section>
   )
@@ -293,29 +252,6 @@ function Group({
         {name}
       </span>
       <div className="flex items-start gap-2">{children}</div>
-    </div>
-  )
-}
-
-/** A view, its name in a corner over it */
-function Named({
-  name,
-  className = '',
-  children,
-}: {
-  name: string
-  className?: string
-  children: ReactNode
-}) {
-  return (
-    <div className={`relative min-h-0 min-w-0 ${className}`}>
-      {children}
-      <span
-        aria-hidden
-        className="pointer-events-none absolute top-1 right-1.5 text-[9px] font-medium tracking-widest text-(--ink-600) uppercase"
-      >
-        {name}
-      </span>
     </div>
   )
 }

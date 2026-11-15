@@ -51,6 +51,7 @@ import {
   type Room,
 } from '../viz/graph'
 import { noteName } from '../viz/keyboard'
+import { boardFits } from '../viz/master'
 import { kitGeometry } from '../viz/kitGraph'
 import {
   mixGeometry,
@@ -98,6 +99,7 @@ import {
 import { CARD, CARD_FACE, RAISED, TALL_HIT } from './controls'
 import { TileReduction } from './Dynamics'
 import {
+  MasterBoard,
   ViewsAcross,
   Meters,
   keepView,
@@ -1798,8 +1800,12 @@ function MixGraph({
         }
         aria="Master: every bus, through its effects, then the soft clip"
         onClick={() => pick(master)}
+        // Room enough, its views as its sheet stands them, named
         view={
-          showView && (
+          showView &&
+          (boardFits(geometry.view.w, geometry.view.h) ? (
+            <MasterBoard engine={engine} compact className="h-full w-full" />
+          ) : (
             <OutputAside
               engine={engine}
               view={viewOf('master')}
@@ -1807,7 +1813,7 @@ function MixGraph({
               scope={scope}
               meter="w-3.5"
             />
-          )
+          ))
         }
         viewBox={geometry.view}
       />

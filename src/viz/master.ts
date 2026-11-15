@@ -474,3 +474,21 @@ export function viewsSideBySide(
   }
   return Math.max(1, count)
 }
+
+/**
+ * The least box the master's views stand in as its sheet stands them
+ * (MasterBoard): the spectrum over the spectrogram, the stereo square
+ * beside them and the meters at the right, each named. Asked for by
+ * ashon, 2026-11-15, of the Mix's master on a tablet, its four views
+ * squeezed side by side along a strip ("마스터링이 공간이 충분하면
+ * 풀스크린이 되었을 때 처럼 시각화 배치를 깔끔하게 다듬어 보자"): two rows,
+ * each about 68 tall (a level's name and a decade's under a line), and
+ * the spectrogram, beside the stereo and the meters, twice as wide as its
+ * row is tall.
+ */
+export const BOARD_LEAST = { w: 280, h: 140 } as const
+
+/** Whether a box width by height holds the master's views as its sheet */
+export function boardFits(width: number, height: number): boolean {
+  return width >= BOARD_LEAST.w && height >= BOARD_LEAST.h
+}

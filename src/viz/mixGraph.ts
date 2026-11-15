@@ -53,7 +53,8 @@ import { across, holes, THREAD, type Point, type Run } from './threads'
  * between lines (room for the thread turning across); 12 between the
  * groups and the master, where the buses' threads bend (THREAD.gap); the
  * master 96 wide at least, its view half as tall as it is wide, from 56
- * to 200, and in a taller frame up to 360; the "+" row 30 tall.
+ * to 200, and in a taller frame up to 360 (its views then standing as
+ * the master's sheet stands them, MasterBoard); the "+" row 30 tall.
  *
  * At rest each bus's group holds its squares in one line, as long as the
  * longest bus's, and the master's in one line too. A frame narrower than
