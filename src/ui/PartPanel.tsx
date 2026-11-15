@@ -39,6 +39,7 @@ import {
 } from '../state/tracks'
 import {
   AMP_SPEC,
+  GHOST_KNOBS,
   CHAIN_SPEC,
   EFFECT_KINDS,
   shownKnobs,
@@ -90,6 +91,7 @@ import {
   knobRow,
   KNOB_SIZE,
   PANEL_BODY,
+  SECTION_HEADING,
   SMALL_BUTTON,
   SMALL_CONFIRM,
   SMALL_FIELD,
@@ -316,6 +318,14 @@ interface View {
   readonly fm?: readonly FmInto[]
   /** Destinations no knob holds (the voice's pitch), routed by a tap */
   readonly knobless?: readonly Knobless[]
+  /**
+   * Under the knobs, more of the part's under a heading of their own,
+   * as big as those above: the Amp's, how a ghost note sounds
+   */
+  readonly group?: {
+    readonly title: string
+    readonly knobs: readonly { part: string; key: string }[]
+  }
   /** A modulator's routes, by where each goes; it routes from source */
   readonly targets?: { source: string; to: readonly Target[] }
   readonly note?: string
@@ -485,6 +495,14 @@ export function PartPanel({
       color={view.color}
     />
   ))
+  /** The knob row's cells, the group's row as many across */
+  const cells =
+    view.knobs.length +
+    (view.knobless?.length ?? 0) +
+    (view.mixKnobs?.length ?? 0) +
+    (view.views ? 1 : 0) +
+    (view.views && view.mutes ? 1 : 0) +
+    (view.loudness ? LOUDNESS_SPAN : 0)
   /** The action being asked about, and the part it was for */
   const [asking, setAsking] = useState<{ id: string; action: Action }>()
   const question = asking?.id === picked ? asking.action : undefined
@@ -657,16 +675,7 @@ export function PartPanel({
               {view.knobs.length > 0 ||
               view.knobless?.length ||
               view.mixKnobs?.length ? (
-                <div
-                  className={knobRow(
-                    view.knobs.length +
-                      (view.knobless?.length ?? 0) +
-                      (view.mixKnobs?.length ?? 0) +
-                      (view.views ? 1 : 0) +
-                      (view.views && view.mutes ? 1 : 0) +
-                      (view.loudness ? LOUDNESS_SPAN : 0)
-                  )}
-                >
+                <div className={knobRow(cells)}>
                   {view.mixFirst && mixKnobs}
                   {view.knobs.map(({ part, key, hot, label, color }) => (
                     <Knob
@@ -730,6 +739,27 @@ export function PartPanel({
                     {view.note}
                   </p>
                 )
+              )}
+              {view.group && (
+                <div
+                  role="group"
+                  aria-label={view.group.title}
+                  className="flex flex-col gap-1.5"
+                >
+                  <h3 className={SECTION_HEADING}>{view.group.title}</h3>
+                  <div className={knobRow(Math.max(cells, 4))}>
+                    {view.group.knobs.map(({ part, key }) => (
+                      <Knob
+                        key={`${part} ${key}`}
+                        engine={engine}
+                        part={part}
+                        knob={key}
+                        color={view.color}
+                        onHold={(dest) => onRoute(part, dest)}
+                      />
+                    ))}
+                  </div>
+                </div>
               )}
               {view.reduction && (
                 <Reduction
@@ -1486,10 +1516,14 @@ function viewOf(
   if (picked === AMP) {
     return {
       title: 'Amp',
-      kind: 'Each voice’s envelope, velocity and pan',
+      kind: 'Each voice’s envelope, velocity and pan, and its ghost notes',
       chip: { look: neutralLook(), glyph: GLYPHS.env },
-      knobs: knobsOf(AMP, AMP_SPEC.knobs),
+      knobs: knobsOf(
+        AMP,
+        AMP_SPEC.knobs.filter((knob) => !GHOST_KNOBS.includes(knob))
+      ),
       knobless: knoblessOf(AMP),
+      group: { title: 'Ghost notes', knobs: knobsOf(AMP, GHOST_KNOBS) },
       color: neutralArc(),
     }
   }

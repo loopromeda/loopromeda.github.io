@@ -24,6 +24,7 @@ import {
   removeNote,
   roomAt,
   setBars,
+  setGhost,
   setOrnament,
   type KnobLane,
   type Loop,
@@ -43,7 +44,7 @@ import {
   shiftWindow,
 } from '../viz/steps'
 import { ConfirmDialog } from './ConfirmDialog'
-import { HOLD, SMALL_BUTTON, TALL_HIT } from './controls'
+import { GHOST_ICON, HOLD, SMALL_BUTTON, TALL_HIT } from './controls'
 import { SmallIconButton } from './IconButton'
 import { LanePicker } from './LanePicker'
 import { LaneStrip } from './LaneStrip'
@@ -66,8 +67,18 @@ const NOTE = 'absolute inset-px rounded-[3px] bg-(--accent)'
 /** One held in from the bar before: no start to it, so no rounded left */
 const HELD_NOTE = 'absolute inset-px rounded-r-[3px] bg-(--accent)'
 
+/**
+ * A ghost note's: hollow, an x in its first step (GhostMark) unless its
+ * ornament marks its box
+ */
+const GHOST = 'absolute inset-px rounded-[3px] border-[1.5px] border-(--accent)'
+const HELD_GHOST =
+  'absolute inset-px rounded-r-[3px] border-y-[1.5px] border-r-[1.5px] border-(--accent)'
+
 /** A grace note's face, half a row tall (src/viz/ornament.ts) */
 const GRACE = 'absolute inset-px rounded-[2px] bg-(--accent)'
+/** A ghost's grace note's, hollow */
+const GHOST_GRACE = 'absolute inset-px rounded-[2px] border border-(--accent)'
 
 /** The note picked for its ornament: ringed */
 const PICKED =
@@ -139,7 +150,12 @@ interface Drag {
  * is on, sets it, and while the sequencer is stopped each change is
  * heard (Engine.auditionNote). With Ornaments on a tap no longer takes
  * a note away; one put is picked. A note's ornament marks its box and
- * the rows its graces play on (src/viz/ornament.ts).
+ * the rows its graces play on (src/viz/ornament.ts). With Ghost on
+ * instead, a tap on an empty step puts a ghost note (a synth's played
+ * muted, a kit's pad hit softly), hollow with an x in its first step
+ * (none where its ornament marks the box), and a tap on a note makes it
+ * a ghost or a note again, heard while stopped; OrnamentPanel turns the
+ * note picked into one too.
  * The step playing is lit outside React, as the audio thread tells of
  * it; edits go to the engine, which sends the loop whole.
  */
@@ -250,12 +266,15 @@ export function StepGrid({ engine }: { engine: Engine }) {
     setOrnamenting(false)
     setPicked(undefined)
   }, [])
+  // Ghost: a tap puts a ghost note, or turns a note into one and back
+  const [ghosting, setGhosting] = useState(false)
   /**
    * Picks the note on step at key for its ornament, the panel opened;
    * heard, unless it sounds already (put by the touch picking it)
    */
   const pickNote = (step: number, key: number, heard: boolean) => {
     setOrnamenting(true)
+    setGhosting(false)
     setPicked({ track: track.id, step, key })
     const note = noteAt(loopRef.current, step, key)
     if (heard && note) engine.auditionNote(note)
@@ -364,11 +383,15 @@ export function StepGrid({ engine }: { engine: Engine }) {
     const key = first + cell.row
     const was = loopRef.current
     const over = noteOver(was, step, key)
-    const note = over ?? { step, key, length: 1, velocity: 1 }
+    const put: Note = { step, key, length: 1, velocity: 1 }
+    const note = over ?? (ghosting ? { ...put, ghost: true } : put)
     if (!over) {
       engine.editSeqLoop((each) => putNote(each, note))
       // Heard as it is put, unless the sequencer is about to play it
-      if (!engine.getPlaying()) sound(event.pointerId, key)
+      if (!engine.getPlaying()) {
+        if (ghosting) engine.auditionNote(note)
+        else sound(event.pointerId, key)
+      }
     }
     dragRef.current = {
       pointer: event.pointerId,
@@ -426,20 +449,32 @@ export function StepGrid({ engine }: { engine: Engine }) {
     engine.noteOff(drag.pointer)
     setHint('')
     if (drag.held || drag.axis || event.type !== 'pointerup') return
-    // A tap: with Ornaments on, the note picked; otherwise one there goes
+    // A tap: with Ornaments on, the note picked; with Ghost, a note there
+    // made a ghost or a note again; otherwise one there goes
     if (ornamenting) pickNote(drag.step, drag.key, !drag.added)
-    else if (!drag.added) {
-      engine.editSeqLoop((each) => removeNote(each, drag.step, drag.key))
-    }
+    else if (drag.added) return
+    else if (ghosting) ghost(drag.step, drag.key)
+    else engine.editSeqLoop((each) => removeNote(each, drag.step, drag.key))
   }
 
-  /** The picked note's ornament changed: heard, while stopped */
+  /** The loop changed by edit at the note on step at key: heard, stopped */
+  const edit = (step: number, key: number, edit: (loop: Loop) => Loop) => {
+    engine.editSeqLoop(edit)
+    const note = noteAt(edit(loopRef.current), step, key)
+    if (note) engine.auditionNote(note)
+  }
+  /** The picked note's ornament changed */
   const ornament = (to: Note['ornament']) => {
     if (!pickedNote) return
-    const { step, key, length, velocity } = pickedNote
-    engine.editSeqLoop((each) => setOrnament(each, step, key, to))
-    const plain: Note = { step, key, length, velocity }
-    engine.auditionNote(to ? { ...plain, ornament: to } : plain)
+    const { step, key } = pickedNote
+    edit(step, key, (each) => setOrnament(each, step, key, to))
+  }
+  /** The note on step at key a ghost (to), or the other of what it is */
+  const ghost = (step: number, key: number, to?: boolean) => {
+    const note = noteAt(loopRef.current, step, key)
+    if (!note) return
+    const next = to ?? !note.ghost
+    edit(step, key, (each) => setGhost(each, step, key, next))
   }
 
   const synth = kit === undefined
@@ -470,13 +505,19 @@ export function StepGrid({ engine }: { engine: Engine }) {
 
   // The ornaments' marks in the bar shown, each note's as faint as it is
   const marks = useMemo(() => {
-    const out: { id: string; opacity: number; marks: OrnamentMarks }[] = []
+    const out: {
+      id: string
+      opacity: number
+      ghost: boolean
+      marks: OrnamentMarks
+    }[] = []
     for (const note of loop.notes) {
       if (!note.ornament) continue
       const each = ornamentMarks(note, bar, first, rows, loop.steps, synth)
       if (!each) continue
       const opacity = 0.35 + 0.65 * note.velocity
-      out.push({ id: `${note.step}:${note.key}`, opacity, marks: each })
+      const id = `${note.step}:${note.key}`
+      out.push({ id, opacity, ghost: !!note.ghost, marks: each })
     }
     return out
   }, [loop, bar, first, rows, synth])
@@ -533,12 +574,23 @@ export function StepGrid({ engine }: { engine: Engine }) {
           {hint}
         </span>
         <SmallIconButton
+          label="Ghost notes"
+          path={GHOST_ICON}
+          pressed={ghosting}
+          onClick={() => {
+            if (!ghosting) closeOrnaments()
+            setGhosting(!ghosting)
+          }}
+        />
+        <SmallIconButton
           label="Ornaments"
           path={TRILL}
           pressed={ornamenting}
-          onClick={() =>
-            ornamenting ? closeOrnaments() : setOrnamenting(true)
-          }
+          onClick={() => {
+            if (ornamenting) closeOrnaments()
+            else setOrnamenting(true)
+            setGhosting(false)
+          }}
         />
         <button
           type="button"
@@ -666,11 +718,21 @@ export function StepGrid({ engine }: { engine: Engine }) {
                   opacity: 0.35 + 0.65 * note.velocity,
                 }}
               >
-                <div className={box.head ? NOTE : HELD_NOTE} />
+                {note.ghost ? (
+                  <>
+                    <div className={box.head ? GHOST : HELD_GHOST} />
+                    {box.head &&
+                      (!note.ornament || note.ornament.kind === 'grace') && (
+                        <GhostMark steps={box.width * COLUMNS} />
+                      )}
+                  </>
+                ) : (
+                  <div className={box.head ? NOTE : HELD_NOTE} />
+                )}
               </div>
             )
           })}
-          {marks.map(({ id, opacity, marks: each }) =>
+          {marks.map(({ id, opacity, ghost: hollow, marks: each }) =>
             each.graces.map((grace, k) => (
               <div
                 key={`${id}:${k}`}
@@ -680,10 +742,10 @@ export function StepGrid({ engine }: { engine: Engine }) {
                   top: `${grace.top * 100}%`,
                   width: `${grace.width * 100}%`,
                   height: `${grace.height * 100}%`,
-                  opacity: 0.6 * opacity,
+                  opacity: (hollow ? 1 : 0.6) * opacity,
                 }}
               >
-                <div className={GRACE} />
+                <div className={hollow ? GHOST_GRACE : GRACE} />
               </div>
             ))
           )}
@@ -694,12 +756,13 @@ export function StepGrid({ engine }: { engine: Engine }) {
               preserveAspectRatio="none"
               className="pointer-events-none absolute inset-0 size-full"
             >
-              {marks.map(({ id, opacity, marks: each }) => (
+              {marks.map(({ id, opacity, ghost: hollow, marks: each }) => (
                 <g
                   key={id}
                   opacity={opacity}
                   fill="none"
-                  stroke="var(--on-colour)"
+                  // Over a ghost's hollow, the accent; over a note, on it
+                  stroke={hollow ? 'var(--accent)' : 'var(--on-colour)'}
                   strokeWidth={1.5}
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -739,6 +802,9 @@ export function StepGrid({ engine }: { engine: Engine }) {
           tempo={song.tempo}
           keyName={keyName}
           onChange={ornament}
+          onGhost={(to) =>
+            pickedNote && ghost(pickedNote.step, pickedNote.key, to)
+          }
           onClose={closeOrnaments}
         />
       )}
@@ -820,6 +886,28 @@ function Ring({
       }}
     >
       <div className={PICKED} />
+    </div>
+  )
+}
+
+/** A ghost note's x, in the first step of its box, steps long */
+function GhostMark({ steps }: { steps: number }) {
+  return (
+    <div
+      className="absolute inset-y-0 left-0 flex items-center justify-center"
+      style={{ width: `${100 / steps}%` }}
+    >
+      <svg
+        aria-hidden
+        viewBox="0 0 10 10"
+        className="aspect-square h-[45%] max-h-3"
+        fill="none"
+        stroke="var(--accent)"
+        strokeWidth={1.5}
+        strokeLinecap="round"
+      >
+        <path d="M2 2l6 6M8 2l-6 6" vectorEffect="non-scaling-stroke" />
+      </svg>
     </div>
   )
 }

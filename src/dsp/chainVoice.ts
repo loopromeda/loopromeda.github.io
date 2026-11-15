@@ -1,4 +1,4 @@
-import { Adsr, AdsrShape } from './adsr'
+import { Adsr, AdsrShape, SUSTAIN } from './adsr'
 import { sinCycles, tanhApprox } from './fastMath'
 import { Filter, LOWPASS } from './filter'
 import { LFO_MAX_RATE, LFO_MIN_RATE, Lfo } from './lfo'
@@ -72,6 +72,30 @@ const LFO_SEEDS = [
   0xc2b2ae35, 0x27d4eb2f, 0x165667b1, 0xcc9e2d51, 0x1b873593, 0xe6546b65,
   0x85ebca77, 0xc2b2ae3d,
 ]
+
+/** How a note starts (ChainVoice.start): as itself */
+export const GHOST_NONE = 0
+/**
+ * A ghost note muted, as a synth plays one (docs/plan/tracks-and-song.md,
+ * J): the voice's own sound shut down to the ghost's Tone and gone
+ * within its Decay, whatever the amp's envelope, with its Click of a
+ * pick's scrape, as loud as its Level beside the note
+ */
+export const GHOST_MUTE = 1
+/** A ghost note hit softly, as a kit's pad plays one: at the ghost's Level */
+export const GHOST_SOFT = 2
+/** A muted ghost's rise, in seconds: a pick's */
+const GHOST_ATTACK = 0.0015
+/** How sharp a muted ghost's lowpass is: a little under flat */
+const MUTE_Q = 0.7
+/** The pick's scrape: a band of noise this high, so wide */
+const SCRAPE_HZ = 2600
+const SCRAPE_Q = 0.9
+/** The scrape's time constant, in seconds, and its peak at a Click of 1 */
+const SCRAPE_TIME = 0.004
+const SCRAPE_GAIN = 3
+/** Below this the scrape is over */
+const SCRAPE_LAND = 1e-5
 
 /**
  * What every voice plays by: the sound's structure (which inputs, chains,
@@ -163,6 +187,22 @@ export class ChainSettings {
   readonly amp: AdsrShape
   /** How far velocity sets loudness: 0 not at all, 1 fully */
   ampVelocity = 0.5
+  /** A muted ghost's envelope, in the amp's place: gone within Decay */
+  readonly ghostShape: AdsrShape
+  /** How loud a ghost is beside its note, 0..1 */
+  ghostLevel = 0.55
+  /** How loud a muted ghost's scrape is, 0..1 */
+  ghostClick = 0.35
+  /**
+   * A muted ghost's lowpass at its Tone, and its scrape's band: each a
+   * state variable filter's coefficients (svf); the band's gain k
+   */
+  readonly mute = new Float64Array(3)
+  readonly scrape = new Float64Array(3)
+  readonly scrapeK = 1 / SCRAPE_Q
+  /** What the scrape's level is multiplied by each sample */
+  readonly scrapeFall: number
+  readonly #sampleRate: number
   /**
    * Per sample: where the voices stand between the sides, -1 (left) to 1
    * (right), before routes; and per chunk, 1 while it glides
@@ -222,6 +262,11 @@ export class ChainSettings {
       this.envShape.push(new AdsrShape(sampleRate))
     }
     this.amp = new AdsrShape(sampleRate)
+    this.#sampleRate = sampleRate
+    this.ghostShape = new AdsrShape(sampleRate)
+    this.setGhost(this.ghostLevel, 0.1, 760, this.ghostClick)
+    svf(this.scrape, SCRAPE_HZ, SCRAPE_Q, sampleRate)
+    this.scrapeFall = Math.exp(-1 / (SCRAPE_TIME * sampleRate))
     buffers(MAX_ROUTES, this.routeAmount)
     buffers(SOURCE_COUNT, this.sources)
     buffers(DEST_COUNT, this.dests)
@@ -234,6 +279,24 @@ export class ChainSettings {
     this.glide = new Float32Array(chunk)
     this.octaves = new Float32Array(chunk)
     this.resonances = new Float32Array(chunk)
+  }
+
+  /**
+   * How a ghost sounds: as loud as level (0..1) beside its note; muted,
+   * shut down to tone (hertz), gone within decay (seconds), with click
+   * (0..1) of a pick's scrape. A time or a tone that is no number, or
+   * not above 0, leaves the one before. Allocates nothing: a knob lane
+   * moves it as the audio plays.
+   */
+  setGhost(level: number, decay: number, tone: number, click: number): void {
+    this.ghostLevel = clamp01(level)
+    this.ghostClick = clamp01(click)
+    if (decay > 0 && Number.isFinite(decay)) {
+      this.ghostShape.set(GHOST_ATTACK, decay, 0, decay)
+    }
+    if (tone > 0 && Number.isFinite(tone)) {
+      svf(this.mute, tone, MUTE_Q, this.#sampleRate)
+    }
   }
 }
 
@@ -263,6 +326,21 @@ export class ChainVoice {
   readonly #lfos: Lfo[] = []
   readonly #random: Noise
   readonly #amp: Adsr
+  /** A muted ghost's envelope, in the amp's place while it plays */
+  readonly #mute: Adsr
+  /** The envelope the note plays through: the amp's, or a muted ghost's */
+  #env: Adsr
+  /** How the note plays: GHOST_NONE, GHOST_MUTE or GHOST_SOFT */
+  #ghost = GHOST_NONE
+  /** A muted ghost's lowpass, its two states; its scrape's band's */
+  #low1 = 0
+  #low2 = 0
+  #band1 = 0
+  #band2 = 0
+  /** The scrape's level, falling from 1 as the ghost starts */
+  #scrapeLevel = 0
+  /** The scrape's noise, its own */
+  readonly #scrape: Noise
   /** The velocity's share of the loudness, gliding (a mono retrigger) */
   readonly #gain: Smoother
   /**
@@ -309,6 +387,8 @@ export class ChainVoice {
   /** Its Slide, and the Slide that glides from (NaN: from nowhere) */
   #nextSlide = 0
   #nextSlideFrom = Number.NaN
+  /** How it plays */
+  #nextGhost = GHOST_NONE
 
   /**
    * seed tells this voice's noise and random numbers from the others' (same
@@ -333,6 +413,9 @@ export class ChainVoice {
     }
     this.#random = new Noise(Math.imul(seed, 0x85ebca6b))
     this.#amp = new Adsr(settings.amp)
+    this.#mute = new Adsr(settings.ghostShape)
+    this.#env = this.#amp
+    this.#scrape = new Noise(Math.imul(seed, 0x27d4eb2f) ^ 0x5bd1e995)
     this.#gain = new Smoother(sampleRate, SMOOTHING, 1)
     this.#slide = new Smoother(sampleRate, SMOOTHING, 0)
     this.#note0Step = midiToFrequency(0) / sampleRate
@@ -340,7 +423,12 @@ export class ChainVoice {
 
   /** True while the voice sounds or a note waits to start on it */
   get active(): boolean {
-    return this.#amp.active || this.#waiting
+    return this.#env.active || this.#waiting
+  }
+
+  /** How the note plays, or the one waiting to: GHOST_NONE and the rest */
+  get ghost(): number {
+    return this.#waiting ? this.#nextGhost : this.#ghost
   }
 
   /**
@@ -353,7 +441,7 @@ export class ChainVoice {
       const left = this.#nextNote - this.#nextFrom
       return Number.isFinite(left) ? left : 0
     }
-    return this.#amp.active ? this.#note - this.#base : 0
+    return this.#env.active ? this.#note - this.#base : 0
   }
 
   /**
@@ -368,7 +456,7 @@ export class ChainVoice {
       const left = this.#nextSlide - this.#nextSlideFrom
       return Number.isFinite(left) ? left : 0
     }
-    return this.#amp.active && this.#slideLeft !== 0 ? -this.#slideLeft : 0
+    return this.#env.active && this.#slideLeft !== 0 ? -this.#slideLeft : 0
   }
 
   /**
@@ -389,16 +477,17 @@ export class ChainVoice {
    * Starts a note (MIDI number, velocity in [0, 1]), its pitch gliding from
    * `from` (a MIDI number; the note itself: no glide), its Slide at slide,
    * gliding there from slideFrom at the same pace (NaN: from nowhere, it
-   * starts there)
+   * starts there); played as ghost says (GHOST_NONE, as itself)
    */
   start(
     note: number,
     velocity: number,
     from = note,
     slide = 0,
-    slideFrom = Number.NaN
+    slideFrom = Number.NaN,
+    ghost = GHOST_NONE
   ): void {
-    if (this.#amp.active) {
+    if (this.#env.active) {
       this.#waiting = true
       this.#nextNote = note
       this.#nextVelocity = velocity
@@ -407,9 +496,10 @@ export class ChainVoice {
       this.#nextBendNow = false
       this.#nextSlide = slide
       this.#nextSlideFrom = slideFrom
-      this.#amp.choke()
+      this.#nextGhost = ghost
+      this.#env.choke()
     } else {
-      this.#begin(note, velocity, from, slide, slideFrom)
+      this.#begin(note, velocity, from, slide, slideFrom, ghost)
     }
   }
 
@@ -439,6 +529,8 @@ export class ChainVoice {
    * (legato). A silent voice starts the note instead. Given slide (the
    * note's finger is placed there, on the XY pad), the Slide glides to it
    * from where it sounds, as the pitch does; without, it is left alone.
+   * A ghost sounding goes on as one; a silent voice starts the note as
+   * itself (the synth starts a ghost, or a note after one, afresh).
    */
   move(
     note: number,
@@ -454,8 +546,9 @@ export class ChainVoice {
       if (slide !== undefined) this.#nextSlide = slide
       return
     }
-    if (!this.#amp.active) {
-      this.#begin(note, velocity, this.#pitch, slide ?? 0, Number.NaN)
+    if (!this.#env.active) {
+      const from = this.#pitch
+      this.#begin(note, velocity, from, slide ?? 0, Number.NaN, GHOST_NONE)
       return
     }
     // The glide starts from the pitch sounding, bend and all
@@ -476,7 +569,7 @@ export class ChainVoice {
     if (!retrigger) return
     this.#velocity = velocity
     this.#randomValue = this.#random.next()
-    this.#amp.gateOn()
+    this.#env.gateOn()
     for (let m = 0; m < MAX_MODULATORS; m++) (this.#envs[m] as Adsr).gateOn()
     this.#triggerLfos()
   }
@@ -489,7 +582,7 @@ export class ChainVoice {
     if (this.#waiting) {
       this.#waiting = false
     } else {
-      this.#amp.gateOff()
+      this.#env.gateOff()
       for (let m = 0; m < MAX_MODULATORS; m++) {
         ;(this.#envs[m] as Adsr).gateOff()
       }
@@ -509,14 +602,15 @@ export class ChainVoice {
     end: number,
     right?: Float32Array
   ): void {
-    if (this.#waiting && !this.#amp.active) {
+    if (this.#waiting && !this.#env.active) {
       this.#waiting = false
       this.#begin(
         this.#nextNote,
         this.#nextVelocity,
         this.#nextFrom,
         this.#nextSlide,
-        this.#nextSlideFrom
+        this.#nextSlideFrom,
+        this.#nextGhost
       )
       this.#bendTarget = this.#nextBend
       if (this.#nextBendNow) {
@@ -524,7 +618,7 @@ export class ChainVoice {
         this.#pitch = this.#base + this.#bend
       }
     }
-    if (!this.#amp.active) return
+    if (!this.#env.active) return
     const settings = this.#settings
     const length = end - start
     this.#modulate(length)
@@ -532,8 +626,12 @@ export class ChainVoice {
     this.#inputs(length, gliding)
     const mix = this.#chains(length)
 
-    this.#amp.apply(mix, 0, length)
-    this.#gain.target = 1 - settings.ampVelocity * (1 - this.#velocity) || 0
+    const muted = this.#ghost === GHOST_MUTE
+    if (muted) this.#damp(mix, length)
+    this.#env.apply(mix, 0, length)
+    // A muted ghost gone, at nothing: the voice is free, its key held or not
+    if (muted && this.#mute.stage === SUSTAIN) this.#mute.reset()
+    this.#gain.target = this.#loudness()
     this.#gain.apply(mix, 0, length)
     if (settings.destUsed[DEST_AMP] === 1) {
       const amp = settings.dests[DEST_AMP] as Float32Array
@@ -949,20 +1047,89 @@ export class ChainVoice {
     }
   }
 
+  /**
+   * The note's loudness: as much of it as its velocity has a say in, at
+   * a ghost's Level for a ghost
+   */
+  #loudness(): number {
+    const settings = this.#settings
+    const share = 1 - settings.ampVelocity * (1 - this.#velocity)
+    const level = this.#ghost === GHOST_NONE ? 1 : settings.ghostLevel
+    return share * level || 0
+  }
+
+  /**
+   * A muted ghost's sound over [0, length) of mix: shut down to the
+   * ghost's Tone, and a pick's scrape (a band of noise, falling away)
+   * added while it lasts, before its envelope
+   */
+  #damp(mix: Float32Array, length: number): void {
+    const settings = this.#settings
+    const mute = settings.mute
+    const a1 = mute[0] as number
+    const a2 = mute[1] as number
+    const a3 = mute[2] as number
+    let s1 = this.#low1
+    let s2 = this.#low2
+    for (let i = 0; i < length; i++) {
+      const v3 = (mix[i] as number) - s2
+      const v1 = a1 * s1 + a2 * v3
+      const v2 = s2 + a2 * s1 + a3 * v3
+      s1 = 2 * v1 - s1
+      s2 = 2 * v2 - s2
+      mix[i] = v2
+    }
+    this.#low1 = s1
+    this.#low2 = s2
+    let level = this.#scrapeLevel
+    if (level < SCRAPE_LAND) return
+    const band = settings.scrape
+    const b1 = band[0] as number
+    const b2 = band[1] as number
+    const b3 = band[2] as number
+    // k: the band's peak at 1, as loud as the noise at its middle
+    const gain = settings.ghostClick * SCRAPE_GAIN * settings.scrapeK
+    const fall = settings.scrapeFall
+    const noise = this.#scrape
+    let c1 = this.#band1
+    let c2 = this.#band2
+    for (let i = 0; i < length; i++) {
+      const v3 = noise.next() - c2
+      const v1 = b1 * c1 + b2 * v3
+      const v2 = c2 + b2 * c1 + b3 * v3
+      c1 = 2 * v1 - c1
+      c2 = 2 * v2 - c2
+      mix[i] = (mix[i] as number) + v1 * gain * level
+      level *= fall
+    }
+    this.#band1 = c1
+    this.#band2 = c2
+    this.#scrapeLevel = level
+  }
+
   #begin(
     note: number,
     velocity: number,
     from: number,
     slide: number,
-    slideFrom: number
+    slideFrom: number,
+    ghost: number
   ): void {
+    // The other envelope is silent: a voice starts only once it is
+    this.#ghost = ghost
+    this.#env = ghost === GHOST_MUTE ? this.#mute : this.#amp
+    this.#low1 = 0
+    this.#low2 = 0
+    this.#band1 = 0
+    this.#band2 = 0
+    this.#scrapeLevel = ghost === GHOST_MUTE ? 1 : 0
     this.#note = note
     this.#base = Number.isFinite(from) ? from : note
     this.#bend = 0
     this.#bendTarget = 0
     this.#pitch = this.#base
     this.#velocity = velocity
-    this.#gain.target = 1 - this.#settings.ampVelocity * (1 - velocity) || 0
+    this.#gain.target = this.#loudness()
     this.#gain.snap()
     this.#slide.target = slide
     this.#slide.snap()
@@ -979,7 +1146,7 @@ export class ChainVoice {
     }
     for (let m = 0; m < MAX_MODULATORS; m++) (this.#envs[m] as Adsr).reset()
     this.#triggerLfos()
-    this.#amp.gateOn()
+    this.#env.gateOn()
     for (let m = 0; m < MAX_MODULATORS; m++) (this.#envs[m] as Adsr).gateOn()
   }
 }
@@ -1090,4 +1257,23 @@ function clampPan(value: number): number {
 /** value within [0, 1] */
 function clamp01(value: number): number {
   return value > 0 ? (value < 1 ? value : 1) : 0
+}
+
+/**
+ * Into a: a state variable filter's coefficients (Zavalishin's, its
+ * integrators trapezoidal) at hertz, sharp as q, a little under the
+ * highest frequency at most
+ */
+function svf(
+  a: Float64Array,
+  hertz: number,
+  q: number,
+  sampleRate: number
+): void {
+  const top = 0.45 * sampleRate
+  const g = Math.tan((Math.PI * (hertz < top ? hertz : top)) / sampleRate)
+  const a1 = 1 / (1 + g * (g + 1 / q))
+  a[0] = a1
+  a[1] = g * a1
+  a[2] = g * g * a1
 }

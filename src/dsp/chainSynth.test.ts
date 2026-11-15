@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { ChainSynth, MONO } from './chainSynth'
+import { ChainSynth, LEGATO, MONO } from './chainSynth'
+import { GHOST_MUTE, GHOST_SOFT } from './chainVoice'
 import { Clock } from './clock'
 import { LOWPASS } from './filter'
 import { LFO_MAX_RATE, LFO_MIN_RATE, LFO_SINE } from './lfo'
@@ -601,6 +602,100 @@ describe('ChainSynth', () => {
     const block = new Float32Array(128)
     synth.process(block)
     expect(block.every((x) => x === 0)).toBe(true)
+  })
+})
+
+describe('ChainSynth’s ghost notes', () => {
+  /** twoSaws as a pad: slow to rise, held at full, slow to fall */
+  function pad(): ChainSynth {
+    const synth = twoSaws()
+    synth.setAmp(0.5, 0.3, 1, 1)
+    return synth
+  }
+
+  /** How much of a render is in its highs: its first difference's share */
+  function highs(samples: Float32Array): number {
+    const steps = samples.map((x, i) => x - (samples[i - 1] ?? 0))
+    return energy(steps) / energy(samples)
+  }
+
+  it('plays a muted ghost at once and briefly, whatever the amp', () => {
+    const note = pad()
+    const muted = pad()
+    note.noteOn(1, 48, 1)
+    muted.noteOn(1, 48, 1, undefined, GHOST_MUTE)
+    const rise = loudestOf(render(note, 0.02), 0)
+    expect(loudestOf(render(muted, 0.02), 0)).toBeGreaterThan(2 * rise)
+    // Gone within its Decay, a tenth of a second: free, its key held
+    render(muted, 0.1)
+    expect(muted.activeVoices).toBe(0)
+    expect(loudestOf(render(muted, 0.05), 0)).toBe(0)
+    expect(note.activeVoices).toBe(1)
+  })
+
+  it('shuts a muted ghost down to its Tone', () => {
+    const dull = twoSaws()
+    const bright = twoSaws()
+    dull.setGhost(1, 0.4, 250, 0)
+    bright.setGhost(1, 0.4, 4000, 0)
+    dull.noteOn(1, 48, 1, undefined, GHOST_MUTE)
+    bright.noteOn(1, 48, 1, undefined, GHOST_MUTE)
+    const a = render(dull, 0.05)
+    const b = render(bright, 0.05)
+    expect(highs(a)).toBeLessThan(highs(b) / 4)
+  })
+
+  it('adds a pick’s scrape at its Click, gone in a few ms', () => {
+    /** A ghost of a sound with nothing heard, but for its scrape */
+    const scrape = (click: number) => {
+      const synth = twoSaws()
+      synth.setSend(0, 0, 0)
+      synth.setGhost(1, 0.4, 760, click)
+      synth.noteOn(1, 60, 1, undefined, GHOST_MUTE)
+      return render(synth, 0.06)
+    }
+    expect(loudestOf(scrape(0), 0)).toBe(0)
+    const scraped = scrape(1)
+    const peak = loudestOf(scraped, 0)
+    expect(peak).toBeGreaterThan(0.05)
+    expect(loudestOf(scraped, 0.04 * SAMPLE_RATE)).toBeLessThan(peak / 100)
+  })
+
+  it('plays a soft ghost as the note is, at its Level', () => {
+    const note = sine()
+    const soft = sine()
+    note.clip = false
+    soft.clip = false
+    soft.setGhost(0.3, 0.1, 760, 1)
+    note.noteOn(1, 60, 1)
+    soft.noteOn(1, 60, 1, undefined, GHOST_SOFT)
+    const scaled = render(note, 0.1).map((x) => x * 0.3)
+    expect(furthest(render(soft, 0.1), scaled)).toBeLessThan(1e-6)
+  })
+
+  it('strikes a ghost afresh in legato, and the note under it after', () => {
+    const synth = sine()
+    synth.mode = LEGATO
+    synth.noteOn(1, 60, 1)
+    render(synth, 0.05)
+    synth.noteOn(2, 67, 1, undefined, GHOST_MUTE)
+    render(synth, 0.15)
+    // The ghost gone; the note under it held, not heard
+    expect(synth.activeVoices).toBe(0)
+    synth.noteOff(2)
+    const back = render(synth, 0.3)
+    expect(loudestOf(back, 0.25 * SAMPLE_RATE)).toBeGreaterThan(0.1)
+    expect(hertz(back) / midiToFrequency(60)).toBeCloseTo(1, 2)
+  })
+
+  it('plays the note after a ghost as itself, legato or not', () => {
+    const synth = sine()
+    synth.mode = LEGATO
+    synth.noteOn(1, 60, 1, undefined, GHOST_MUTE)
+    render(synth, 0.02)
+    synth.noteOn(2, 64, 1)
+    const after = render(synth, 0.3)
+    expect(loudestOf(after, 0.25 * SAMPLE_RATE)).toBeGreaterThan(0.1)
   })
 })
 

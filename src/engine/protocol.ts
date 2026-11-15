@@ -73,6 +73,8 @@ export interface LoopNote {
   readonly velocity: number
   /** What it plays around and within its step (src/dsp/ornament.ts) */
   readonly ornament?: Ornament
+  /** A ghost note: a synth's muted, a kit's pad hit softly */
+  readonly ghost?: boolean
 }
 
 /**

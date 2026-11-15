@@ -17,6 +17,7 @@
  * both render through it. Allocates nothing in render.
  */
 import type { ChainSynth } from './chainSynth'
+import { GHOST_NONE } from './chainVoice'
 import { softClip } from './clip'
 import { Clock } from './clock'
 import { EffectRack, Ramp } from './effects'
@@ -60,6 +61,8 @@ export class Strip {
   readonly #note = new Float32Array(EVENTS)
   /** How hard a note starts, 0..1; below 0 it ends, or at MOVE it moves */
   readonly #velocity = new Float32Array(EVENTS)
+  /** How a note starting plays (ChainSynth.noteOn's ghost) */
+  readonly #ghost = new Uint8Array(EVENTS)
   #count = 0
 
   constructor(synth: ChainSynth, inserts: EffectRack) {
@@ -75,14 +78,16 @@ export class Strip {
 
   /**
    * Key starts note at velocity on frame offset of the next block, after
-   * what is queued already (never before it): whether there was room.
-   * A note with none is not played.
+   * what is queued already (never before it), played as ghost says (a
+   * ghost note's, ChainSynth.noteOn): whether there was room. A note
+   * with none is not played.
    */
   queueOn(
     offset: number,
     key: number,
     note: number,
-    velocity: number
+    velocity: number,
+    ghost = GHOST_NONE
   ): boolean {
     const k = this.#count
     if (k === EVENTS) return false
@@ -90,6 +95,7 @@ export class Strip {
     this.#key[k] = key
     this.#note[k] = note
     this.#velocity[k] = velocity > 0 ? velocity : 0
+    this.#ghost[k] = ghost
     this.#count = k + 1
     return true
   }
@@ -158,7 +164,10 @@ export class Strip {
       const velocity = this.#velocity[k] as number
       if (velocity === MOVE) synth.bend(key, this.#note[k] as number, true)
       else if (velocity < 0) synth.noteOff(key)
-      else synth.noteOn(key, this.#note[k] as number, velocity)
+      else {
+        const note = this.#note[k] as number
+        synth.noteOn(key, note, velocity, undefined, this.#ghost[k])
+      }
     }
     this.#count = 0
     // Nothing left of the block: the synth still takes a new structure

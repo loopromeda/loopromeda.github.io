@@ -90,6 +90,12 @@ export const OPTION_CELL = `flex h-11 min-w-0 items-center justify-center rounde
 export const SECTION_HEADING =
   'text-[11px] font-medium tracking-widest text-(--ink-500) uppercase'
 
+/**
+ * A ghost note's icon, in an icon button's 18×18 box: a hollow note with
+ * an x in it, as the step grid draws one (StepGrid, OrnamentPanel)
+ */
+export const GHOST_ICON = 'M2.5 4.5h13v9h-13zM6.5 6.5l5 5M11.5 6.5l-5 5'
+
 /** A 44 px square button holding an 18 px icon */
 export const ICON_BUTTON =
   'flex size-11 shrink-0 items-center justify-center rounded-[10px] bg-(--lift) text-(--ink-200) disabled:opacity-40 aria-pressed:bg-(--lift-2)'

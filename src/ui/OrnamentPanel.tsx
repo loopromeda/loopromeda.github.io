@@ -15,7 +15,7 @@ import {
   type Speed,
 } from '../dsp/ornament'
 import { soundMs, stepInterval } from '../viz/ornament'
-import { SMALL_OPTION } from './controls'
+import { GHOST_ICON, SMALL_OPTION } from './controls'
 import { FadeRow } from './FadeRow'
 import { SmallIconButton } from './IconButton'
 
@@ -77,7 +77,8 @@ const EACH: readonly [boolean, string][] = [
  * sideways where it is longer than the grid is wide. A kind left keeps
  * what it was set to, for as long as the panel is open. With no note
  * picked it asks for one. As tall whatever it shows, so the grid's rows
- * stay under a finger. Escape or the cross closes it.
+ * stay under a finger. Beside the kinds, Ghost makes the note a ghost
+ * note or a note again. Escape or the cross closes it.
  */
 export function OrnamentPanel({
   note,
@@ -85,10 +86,17 @@ export function OrnamentPanel({
   tempo,
   keyName,
   onChange,
+  onGhost,
   onClose,
 }: {
-  /** The note picked: its key and its ornament, or none picked */
-  note: { readonly key: number; readonly ornament?: Ornament } | undefined
+  /** The note picked: its key, its ornament and whether a ghost, or none */
+  note:
+    | {
+        readonly key: number
+        readonly ornament?: Ornament
+        readonly ghost?: boolean
+      }
+    | undefined
   /** A synth's note (its pitch moves), or a kit's pad */
   pitched: boolean
   /** The song's, for how long a sound lasts */
@@ -96,6 +104,8 @@ export function OrnamentPanel({
   /** A key's name: a synth's note, a kit's pad */
   keyName: (key: number) => string
   onChange: (ornament: Ornament | undefined) => void
+  /** The note made a ghost, or a note again */
+  onGhost: (ghost: boolean) => void
   onClose: () => void
 }) {
   useEffect(() => {
@@ -147,6 +157,13 @@ export function OrnamentPanel({
             />
           ))}
         </FadeRow>
+        <SmallIconButton
+          label="Ghost note"
+          path={GHOST_ICON}
+          pressed={!!note?.ghost}
+          disabled={!note}
+          onClick={() => onGhost(!note?.ghost)}
+        />
         <SmallIconButton
           label="Close the ornaments"
           path={CROSS}

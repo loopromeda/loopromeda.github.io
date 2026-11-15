@@ -1,5 +1,5 @@
 import { VoiceAllocator } from './allocator'
-import { ChainSettings, ChainVoice } from './chainVoice'
+import { ChainSettings, ChainVoice, GHOST_NONE } from './chainVoice'
 import { softClip } from './clip'
 import { Clock } from './clock'
 import { Smoother } from './smoother'
@@ -122,6 +122,8 @@ export class ChainSynth {
   readonly #slides = new Float64Array(STACK)
   /** 1 for a key whose note started with a Slide given (noteOn's slide) */
   readonly #given = new Uint8Array(STACK)
+  /** How each plays (noteOn's ghost) */
+  readonly #ghosts = new Uint8Array(STACK)
   #held = 0
   /** The song's time, which a synced LFO follows (clock.ts) */
   readonly #clock: Clock
@@ -378,6 +380,15 @@ export class ChainSynth {
   }
 
   /**
+   * How a ghost note sounds (noteOn's ghost): as loud as level (0..1)
+   * beside a note; muted, shut down to tone (hertz) and gone within decay
+   * (seconds), with click (0..1) of a pick's scrape
+   */
+  setGhost(level: number, decay: number, tone: number, click: number): void {
+    this.#settings.setGhost(level, decay, tone, click)
+  }
+
+  /**
    * Where the voices stand between the sides in stereo (process given
    * right): -1 left, 0 the middle, 1 right, a route to DEST_PAN moving each
    * voice from there. Glides there, as a knob turned does.
@@ -444,9 +455,17 @@ export class ChainSynth {
    * where the Slide is a place on the pad), the note starts with that
    * Slide, which glides there from the last note's as its pitch does;
    * without, its Slide starts at 0 (a key's, counted from where the
-   * finger pressed) and glides from nowhere.
+   * finger pressed) and glides from nowhere. Given ghost (GHOST_MUTE, a
+   * synth's ghost note; GHOST_SOFT, a kit's), it plays as one, struck
+   * afresh in mono play too, as is the note after it.
    */
-  noteOn(key: number, note: number, velocity: number, slide?: number): void {
+  noteOn(
+    key: number,
+    note: number,
+    velocity: number,
+    slide?: number,
+    ghost = GHOST_NONE
+  ): void {
     // A setting changed while silent is not a change to glide through
     if (this.activeVoices === 0) this.#snap()
     const gliding = this.#glideTime > 0 && Number.isFinite(this.#lastNote)
@@ -458,9 +477,9 @@ export class ChainSynth {
       this.noteOff(key)
       const index = this.#allocator.noteOn(key)
       const voice = this.#voices[index] as ChainVoice
-      voice.start(note, velocity, from, placed ?? 0, slideFrom)
+      voice.start(note, velocity, from, placed ?? 0, slideFrom, ghost)
     } else {
-      this.#monoOn(key, note, velocity, from, placed, slideFrom)
+      this.#monoOn(key, note, velocity, from, placed, slideFrom, ghost)
     }
     this.#lastNote = note
     this.#lastKey = key
@@ -835,7 +854,7 @@ export class ChainSynth {
 
   /**
    * Mono play: key holds note, on the one voice; with slide, its finger
-   * is placed there (noteOn)
+   * is placed there, and played as ghost says (noteOn)
    */
   #monoOn(
     key: number,
@@ -843,7 +862,8 @@ export class ChainSynth {
     velocity: number,
     from: number,
     slide: number | undefined,
-    slideFrom: number
+    slideFrom: number,
+    ghost: number
   ): void {
     const at = this.#find(key)
     if (at >= 0) this.#removeAt(at)
@@ -856,13 +876,15 @@ export class ChainSynth {
     this.#velocities[top] = velocity
     this.#slides[top] = slide ?? 0
     this.#given[top] = slide === undefined ? 0 : 1
+    this.#ghosts[top] = ghost
     const voice = this.#voices[0] as ChainVoice
-    if (voice.active) {
+    // A ghost strikes afresh, as does a note after one: none is legato
+    if (voice.active && ghost === GHOST_NONE && voice.ghost === GHOST_NONE) {
       // Legato plays on while another key is held
       voice.move(note, velocity, this.#mode === MONO || !held, slide)
       if (slide === undefined) voice.slide = 0
     } else {
-      voice.start(note, velocity, from, slide ?? 0, slideFrom)
+      voice.start(note, velocity, from, slide ?? 0, slideFrom, ghost)
     }
   }
 
@@ -882,16 +904,20 @@ export class ChainSynth {
     const note = this.#notes[top] as number
     const bent = this.#bent[top] as number
     const slide = this.#slides[top] as number
-    // A finger placed on the pad is glided back to, pitch and Slide
-    const given = this.#given[top] === 1
-    voice.move(
-      note,
-      this.#velocities[top] as number,
-      this.#mode === MONO,
-      given ? slide : undefined
-    )
-    if (bent !== note) voice.bend(bent)
-    if (!given) voice.slide = slide
+    const velocity = this.#velocities[top] as number
+    const ghost = this.#ghosts[top] as number
+    if (ghost !== GHOST_NONE || voice.ghost !== GHOST_NONE) {
+      // Back to a ghost, or from one: struck afresh, from the last note
+      const from = this.#glideTime > 0 ? this.#lastNote : note
+      voice.start(note, velocity, from, slide, Number.NaN, ghost)
+      if (bent !== note) voice.bend(bent)
+    } else {
+      // A finger placed on the pad is glided back to, pitch and Slide
+      const given = this.#given[top] === 1
+      voice.move(note, velocity, this.#mode === MONO, given ? slide : undefined)
+      if (bent !== note) voice.bend(bent)
+      if (!given) voice.slide = slide
+    }
     this.#lastNote = bent
     this.#lastKey = this.#keys[top] as number
     this.#lastSlide = slide
@@ -912,6 +938,7 @@ export class ChainSynth {
     this.#velocities.copyWithin(at, at + 1, this.#held)
     this.#slides.copyWithin(at, at + 1, this.#held)
     this.#given.copyWithin(at, at + 1, this.#held)
+    this.#ghosts.copyWithin(at, at + 1, this.#held)
     this.#held--
   }
 }

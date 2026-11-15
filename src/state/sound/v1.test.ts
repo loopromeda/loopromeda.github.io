@@ -63,8 +63,12 @@ describe('soundFromV1', () => {
       sustain: 0.7,
       release: 0.3,
       velocity: 0.5,
-      // The old parameters had none: in the middle
+      // The old parameters had none: in the middle, and ghosts as made
       pan: 0,
+      ghostLevel: 0.55,
+      ghostDecay: 0.1,
+      ghostTone: 760,
+      ghostClick: 0.35,
     })
     expect(sound.voice).toEqual({ mode: 0, glide: 0 })
   })

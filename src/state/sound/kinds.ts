@@ -918,8 +918,57 @@ export const SEND_DEST: DestSpec = {
 }
 
 /**
- * The output, always there: the amp envelope, velocity's say, and where
- * each voice stands between the sides
+ * How a ghost note of the sound sounds (docs/plan/tracks-and-song.md, J):
+ * as loud as Level beside a note; on a synth, muted, its own sound shut
+ * down to Tone and gone within Decay, with Click of a pick's scrape (a
+ * kit's pad, hit softly, takes only Level)
+ */
+export const GHOST_KNOBS: readonly KnobSpec[] = [
+  {
+    key: 'ghostLevel',
+    label: 'Level',
+    min: 0,
+    max: 1,
+    default: 0.55,
+    curve: 'linear',
+    step: 0,
+    unit: '%',
+  },
+  {
+    key: 'ghostDecay',
+    label: 'Decay',
+    min: 0.02,
+    max: 0.4,
+    default: 0.1,
+    curve: 'exponential',
+    step: 0,
+    unit: 's',
+  },
+  {
+    key: 'ghostTone',
+    label: 'Tone',
+    min: 250,
+    max: 4000,
+    default: 760,
+    curve: 'exponential',
+    step: 0,
+    unit: 'Hz',
+  },
+  {
+    key: 'ghostClick',
+    label: 'Click',
+    min: 0,
+    max: 1,
+    default: 0.35,
+    curve: 'linear',
+    step: 0,
+    unit: '%',
+  },
+]
+
+/**
+ * The output, always there: the amp envelope, velocity's say, where
+ * each voice stands between the sides, and how a ghost note sounds
  */
 export const AMP_SPEC: KindSpec = {
   label: 'Amp',
@@ -936,6 +985,7 @@ export const AMP_SPEC: KindSpec = {
       unit: '%',
     },
     PAN,
+    ...GHOST_KNOBS,
   ],
   dests: [
     // The voice's gain: 1 plus this, never below 0

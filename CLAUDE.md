@@ -8,8 +8,8 @@ kit, then a step sequencer, under way:
 `docs/plan/effects-parts-sequencer.md`; tracks (a synth or a kit each,
 as many as are added), a sequence for each, then a song, under way,
 knob lanes in a loop, the sequencer up top (a tab of the editor's
-rail), recording what is played into a loop, a note's ornaments, and
-projects (a session saved under a name):
+rail), recording what is played into a loop, a note's ornaments, ghost
+notes, and projects (a session saved under a name):
 `docs/plan/tracks-and-song.md`; the transport on the tab rail, then
 MIDI (notes in, learn, clock out and in), under way:
 `docs/plan/transport-and-midi.md`. What real devices did:
@@ -58,7 +58,9 @@ src/dsp/      pure DSP (oscillators, envelopes, LFOs, filters, voices);
               chainSynth.ts is the whole instrument, a sound built from
               parts: voice pool, allocator, mono/legato, routes, mix;
               chainVoice.ts one voice of it (its glide, in pitch, and
-              in Slide for a note placed on the XY pad); slots.ts
+              in Slide for a note placed on the XY pad; a ghost note
+              muted, its own envelope, lowpass and scrape, or soft,
+              a kit's); slots.ts
               numbers the parts,
               sources and destinations; effects.ts the chorus, delay
               and reverb, the stereo tools (a Haas delay, a doubler
@@ -91,7 +93,8 @@ src/dsp/      pure DSP (oscillators, envelopes, LFOs, filters, voices);
               for each track playing its loop into the track's
               strips, each note and each sound of its ornament on
               its own frame (a strip's queue of what starts, stops
-              and moves its pitch within a block), and, stopped, a
+              and moves its pitch within a block), a ghost's muted
+              on a synth and soft on a kit's pad, and, stopped, a
               note on its own, auditioned; clock.ts the
               song's time the sequencer keeps (the tempo, and the
               beat each block starts on), which a synced delay and
@@ -159,7 +162,8 @@ src/state/    params.ts: the knob schema and the old parameters;
               each track's loops, by the track's id; a loop one to
               256 bars of sixteenths and its notes, each a step, a
               key (a synth's note, a kit's pad), a length, a
-              velocity and an ornament or none, and its knob lanes,
+              velocity, an ornament or none and whether it is a
+              ghost, and its knob lanes,
               a knob's value at each
               step), its edits, kept in localStorage; lanes.ts: the
               knobs a track's lanes may move (its sound's, its
@@ -236,7 +240,9 @@ src/ui/       React components; SoundEditor.tsx the sound as tiles
               how hard and how long, one held (or tapped with
               Ornaments on) is picked for its ornament, which
               OrnamentPanel.tsx sets in the lanes' place, heard
-              while stopped; RowNavigator.tsx a camera over
+              while stopped; with Ghost on a tap puts a ghost note,
+              hollow with an x, or makes a note one and back;
+              RowNavigator.tsx a camera over
               its rows; under it LaneStrip.tsx its knob lanes, one
               over another, drawn on, and LanePicker.tsx in its
               place adds one), or, switched to Mix,
@@ -274,7 +280,8 @@ src/ui/       React components; SoundEditor.tsx the sound as tiles
               the master's knob row), drawn as the audio thread tells
               them;
               PartPanel.tsx the
-              picked tile's knobs, adds and moves (ConfirmDialog.tsx asks
+              picked tile's knobs (the Amp's ghost notes' under a
+              heading of their own), adds and moves (ConfirmDialog.tsx asks
               before a removal), after an output's knobs
               OutputCells.tsx's cells, each a knob's size: its track's
               Mute and Solo, and the views its tiles show;

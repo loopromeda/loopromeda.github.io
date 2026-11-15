@@ -5,7 +5,8 @@
  * its own away). A loop is one to 256 bars of sixteenths; a note
  * stands on a step at a key (a kit's pad, a synth's note), for a length
  * in steps, at a velocity, with an ornament or none (I: a grace, a
- * mordent, a trill, a roll or an arpeggio, src/dsp/ornament.ts); one at
+ * mordent, a trill, a roll or an arpeggio, src/dsp/ornament.ts), and
+ * may be a ghost (J: a synth's muted, a kit's pad hit softly); one at
  * most on a step and a key. A loop's knob
  * lanes (F) hold a knob's value at every step, each held to the next step
  * or gliding to it: a knob of the track's sound, or its fader. The first
@@ -58,6 +59,11 @@ export interface Note {
   readonly velocity: number
   /** What it plays around and within its step: none, the note alone */
   readonly ornament?: Ornament
+  /**
+   * A ghost note (J): a synth's played muted (the sound's Amp says how),
+   * a kit's pad hit softly; its ornament's sounds too. Only ever true.
+   */
+  readonly ghost?: true
 }
 
 /** One knob's row of a loop: a value of its own at every step */
@@ -232,8 +238,37 @@ export function setOrnament(
   const note = noteAt(loop, step, key)
   if (!note || sameOrnament(note.ornament, ornament)) return loop
   const { length, velocity } = note
-  const plain: Note = { step, key, length, velocity }
-  return putNote(loop, ornament ? { ...plain, ornament } : plain)
+  const kept: Note = {
+    step,
+    key,
+    length,
+    velocity,
+    ...(note.ghost && { ghost: true }),
+  }
+  return putNote(loop, ornament ? { ...kept, ornament } : kept)
+}
+
+/**
+ * The loop with the note on step at key a ghost, or no longer one; with
+ * no note there, as it was
+ */
+export function setGhost(
+  loop: Loop,
+  step: number,
+  key: number,
+  ghost: boolean
+): Loop {
+  const note = noteAt(loop, step, key)
+  if (!note || !!note.ghost === ghost) return loop
+  const { length, velocity, ornament } = note
+  const kept: Note = {
+    step,
+    key,
+    length,
+    velocity,
+    ...(ornament && { ornament }),
+  }
+  return putNote(loop, ghost ? { ...kept, ghost: true } : kept)
 }
 
 /** The loop without the note on step at key */
@@ -496,6 +531,7 @@ function readLoop(value: unknown): Loop {
         length: number(note.length, 1),
         velocity: number(note.velocity, 1),
         ornament: note.ornament as Ornament | undefined,
+        ...(note.ghost === true && { ghost: true }),
       })
     }
   }
@@ -595,6 +631,7 @@ function cleanNote(note: Note): Note | undefined {
     length: Math.max(1, Math.min(MAX_STEPS, length)),
     velocity: Math.max(MIN_VELOCITY, Math.min(1, velocity)),
     ...(ornament && { ornament }),
+    ...(note.ghost === true && { ghost: true }),
   }
 }
 

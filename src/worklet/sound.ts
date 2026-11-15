@@ -261,6 +261,12 @@ export class SoundPlayer {
       )
       synth.ampVelocity = value('velocity')
       synth.pan = value('pan')
+      synth.setGhost(
+        value('ghostLevel'),
+        value('ghostDecay'),
+        value('ghostTone'),
+        value('ghostClick')
+      )
     })
     hold(VOICE, { ...sound.voice }, (value) => {
       synth.mode = value('mode')

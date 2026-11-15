@@ -11,6 +11,7 @@
  * message's handler.
  */
 import type { Click } from './click'
+import { GHOST_MUTE, GHOST_NONE, GHOST_SOFT } from './chainVoice'
 import { Clock } from './clock'
 import { expand, voiceEnds, type Ornament } from './ornament'
 import type { Strip } from './output'
@@ -62,9 +63,9 @@ export interface Target {
   readonly pitched?: boolean
   /**
    * Key (a synth's note, a kit's pad) starts at velocity on frame offset
-   * of the next block: whether it will
+   * of the next block, a ghost note's if ghost: whether it will
    */
-  on(offset: number, key: number, velocity: number): boolean
+  on(offset: number, key: number, velocity: number, ghost?: boolean): boolean
   /** Key lets go on frame offset of the next block */
   off(offset: number, key: number): void
   /**
@@ -74,7 +75,7 @@ export interface Target {
   bend?(offset: number, key: number, note: number): void
 }
 
-/** A synth's strip: a key is the note it plays */
+/** A synth's strip: a key is the note it plays, a ghost muted */
 export class SynthTarget implements Target {
   readonly pitched = true
   readonly #strip: Strip
@@ -83,8 +84,9 @@ export class SynthTarget implements Target {
     this.#strip = strip
   }
 
-  on(offset: number, key: number, velocity: number): boolean {
-    return this.#strip.queueOn(offset, SEQ_KEY - key, key, velocity)
+  on(offset: number, key: number, velocity: number, ghost = false): boolean {
+    const plays = ghost ? GHOST_MUTE : GHOST_NONE
+    return this.#strip.queueOn(offset, SEQ_KEY - key, key, velocity, plays)
   }
 
   off(offset: number, key: number): void {
@@ -96,7 +98,10 @@ export class SynthTarget implements Target {
   }
 }
 
-/** A kit's strips: a key is a pad, played at the note mapped to it */
+/**
+ * A kit's strips: a key is a pad, played at the note mapped to it, a
+ * ghost hit softly
+ */
 export class KitTarget implements Target {
   readonly pitched = false
   readonly #pads: readonly Strip[]
@@ -108,10 +113,12 @@ export class KitTarget implements Target {
     this.notes = new Float32Array(pads.length).fill(60)
   }
 
-  on(offset: number, key: number, velocity: number): boolean {
+  on(offset: number, key: number, velocity: number, ghost = false): boolean {
     const pad = this.#pads[key]
     if (!pad) return false
-    return pad.queueOn(offset, SEQ_KEY, this.notes[key] as number, velocity)
+    const note = this.notes[key] as number
+    const plays = ghost ? GHOST_SOFT : GHOST_NONE
+    return pad.queueOn(offset, SEQ_KEY, note, velocity, plays)
   }
 
   off(offset: number, key: number): void {
@@ -129,6 +136,8 @@ export interface LaneNote {
   readonly velocity: number
   /** What it plays around and within its step (ornament.ts) */
   readonly ornament?: Ornament
+  /** A ghost note: muted on a synth, soft on a kit's pad, its ornament too */
+  readonly ghost?: boolean
 }
 
 /**
@@ -148,6 +157,8 @@ const MAX_WINDOW = 1024
 const OFF = 0
 const BEND = 1
 const ON = 2
+/** As ON, a ghost note's */
+const GHOST = 3
 
 /**
  * The sounds of some notes (ornament.ts), by note: note n's are first[n]
@@ -155,12 +166,13 @@ const ON = 2
  * each sound's start (t, in steps from its note's), when the note it
  * strikes lets go (end: its pitch moved by the sounds after it, after
  * theirs), its semitones from the key, its velocity, and whether it
- * strikes.
+ * strikes; and whether each note is a ghost.
  */
 interface Sounds {
   readonly first: Uint32Array
   readonly step: Uint32Array
   readonly key: Int16Array
+  readonly ghost: Uint8Array
   readonly t: Float64Array
   readonly end: Float64Array
   readonly off: Int16Array
@@ -178,6 +190,7 @@ function soundsOf(notes: readonly LaneNote[], pitched: boolean): Sounds {
   const first = new Uint32Array(notes.length + 1)
   const step = new Uint32Array(notes.length)
   const key = new Int16Array(notes.length)
+  const ghost = new Uint8Array(notes.length)
   const t = new Float64Array(total)
   const end = new Float64Array(total)
   const off = new Int16Array(total)
@@ -189,6 +202,7 @@ function soundsOf(notes: readonly LaneNote[], pitched: boolean): Sounds {
     first[n] = k
     step[n] = note.step
     key[n] = note.key
+    ghost[n] = note.ghost ? 1 : 0
     const ends = voiceEnds(sounds)
     sounds.forEach((sound, s) => {
       t[k] = sound.t
@@ -201,7 +215,7 @@ function soundsOf(notes: readonly LaneNote[], pitched: boolean): Sounds {
     })
   })
   first[notes.length] = k
-  return { first, step, key, t, end, off, v, strike }
+  return { first, step, key, ghost, t, end, off, v, strike }
 }
 
 /** Whether note a of one set of sounds plays as note b of another */
@@ -210,7 +224,7 @@ function sameSounds(x: Sounds, a: number, y: Sounds, b: number): boolean {
   const count = (x.first[a + 1] as number) - from
   const to = y.first[b] as number
   if ((y.first[b + 1] as number) - to !== count) return false
-  if (x.key[a] !== y.key[b]) return false
+  if (x.key[a] !== y.key[b] || x.ghost[a] !== y.ghost[b]) return false
   for (let k = 0; k < count; k++) {
     if (
       x.t[from + k] !== y.t[to + k] ||
@@ -488,6 +502,7 @@ export class Lane {
       const start = this.#activeStart[e] as number
       const last = sounds.first[n + 1] as number
       const key = sounds.key[n] as number
+      const starts = sounds.ghost[n] === 1 ? GHOST : ON
       let k = this.#activeNext[e] as number
       for (; k < last; k++) {
         const u = start + (sounds.t[k] as number) - step
@@ -499,7 +514,8 @@ export class Lane {
           if (u < 0) this.#activeHold[e] = 0
           else {
             const end = start + (sounds.end[k] as number)
-            this.#strike(e, when, sounded, sounds.v[k] as number, end, step + u)
+            const v = sounds.v[k] as number
+            this.#strike(e, when, sounded, v, end, step + u, starts)
           }
         } else {
           const hold = this.#activeHold[e] as number
@@ -516,14 +532,18 @@ export class Lane {
     }
   }
 
-  /** Active note e strikes key on frame when, held until end */
+  /**
+   * Active note e strikes key on frame when, held until end: an ON, or
+   * a GHOST
+   */
   #strike(
     e: number,
     when: number,
     key: number,
     velocity: number,
     end: number,
-    now: number
+    now: number,
+    starts: number
   ): void {
     const heldKey = this.#heldKey
     // The synth lets a key playing go as it starts it again
@@ -544,7 +564,7 @@ export class Lane {
     this.#heldHold[h] = hold
     this.#activeKey[e] = key
     this.#activeHold[e] = hold
-    this.#push(when, ON, key, velocity, hold)
+    this.#push(when, starts, key, velocity, hold)
   }
 
   /** The notes sounding that end within step's let go, each on its frame */
@@ -567,7 +587,7 @@ export class Lane {
     if (w === MAX_WINDOW) {
       // No room: a note still lets go, early rather than never
       if (kind === OFF) this.#target.off(this.#offset(at), key)
-      else if (kind === ON) this.#unhold(hold)
+      else if (kind >= ON) this.#unhold(hold)
       return
     }
     this.#windowAt[w] = at
@@ -630,7 +650,7 @@ export class Lane {
     }
     if (this.#pending === MAX_PENDING) {
       if (kind === OFF) this.#target.off(this.#offset(at), key)
-      else if (kind === ON) this.#unhold(hold)
+      else if (kind >= ON) this.#unhold(hold)
       return
     }
     const p = this.#pending++
@@ -672,7 +692,9 @@ export class Lane {
     const offset = this.#offset(at)
     if (kind === OFF) this.#target.off(offset, key)
     else if (kind === BEND) this.#target.bend?.(offset, key, value)
-    else if (!this.#target.on(offset, key, value)) this.#unhold(hold)
+    else if (!this.#target.on(offset, key, value, kind === GHOST)) {
+      this.#unhold(hold)
+    }
   }
 
   /** A frame as an offset into the next block: whole, never before it */

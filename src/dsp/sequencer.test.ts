@@ -28,6 +28,8 @@ interface Event {
   readonly on: boolean
   readonly key: number
   readonly velocity: number
+  /** A ghost note's start: only there for one */
+  readonly ghost?: true
 }
 
 /** A target that writes down what it is told, by the frame since start */
@@ -46,9 +48,11 @@ class Tape implements Target {
     this.bends.push({ frame: this.base + offset, key, note })
   }
 
-  on(offset: number, key: number, velocity: number): boolean {
+  on(offset: number, key: number, velocity: number, ghost = false): boolean {
     if (!this.room) return false
-    this.events.push({ frame: this.base + offset, on: true, key, velocity })
+    const frame = this.base + offset
+    const event = { frame, on: true, key, velocity }
+    this.events.push(ghost ? { ...event, ghost: true } : event)
     return true
   }
 
@@ -952,5 +956,87 @@ describe('ornaments', () => {
     sequencer.play()
     sequencer.audition(lane, note(0, 64))
     expect(lane.busy).toBe(false)
+  })
+})
+
+describe('ghost notes', () => {
+  /** A ghost note on step at key, with ornament if given */
+  const ghost = (step: number, key: number, ornament?: Ornament) => ({
+    ...note(step, key, ornament ? 2 : 1, 0.8, ornament),
+    ghost: true,
+  })
+
+  it('start as ghosts, every sound of their ornaments too', () => {
+    const roll = { ...ORNAMENT_DEFAULTS.trill, restart: true }
+    const { sequencer, tape, run } = clock([
+      [16, [note(0, 60), ghost(2, 60), ghost(4, 62, roll)]],
+    ])
+    sequencer.play()
+    run(STEP * 6)
+    const ons = tape.events.filter((event) => event.on)
+    expect(ons.map((event) => [event.frame / STEP, !!event.ghost])).toEqual([
+      [0, false],
+      [2, true],
+      [4, true],
+      [4.25, true],
+      [4.5, true],
+      [4.75, true],
+      [5, true],
+      [5.25, true],
+      [5.5, true],
+      [5.75, true],
+    ])
+    // Let go as a note is
+    expect(tape.offs(60)).toEqual([STEP, STEP * 3])
+  })
+
+  it('are told apart from the notes they were, as the loop changes', () => {
+    const roll = { ...ORNAMENT_DEFAULTS.trill, restart: true }
+    const { sequencer, tape, lanes, run } = clock([
+      [16, [note(0, 60, 2, 1, roll)]],
+    ])
+    sequencer.play()
+    run(STEP)
+    ;(lanes[0] as Lane).setLoop(16, [ghost(0, 60, roll)])
+    run(STEP * 16)
+    // The rest of the note not played, the ghost played the next time
+    const ons = tape.events.filter((event) => event.on)
+    expect(ons.map((event) => [event.frame / STEP, !!event.ghost])).toEqual([
+      [0, false],
+      [0.25, false],
+      [0.5, false],
+      [0.75, false],
+      [16, true],
+      [16.25, true],
+      [16.5, true],
+      [16.75, true],
+    ])
+  })
+
+  it('play muted on a synth, gone while held', () => {
+    const played = strip()
+    const target = new SynthTarget(played)
+    expect(target.on(0, 60, 1, true)).toBe(true)
+    expect(block(played)).toBeGreaterThan(0)
+    // The ghost's decay (a tenth of a second) and a little more
+    for (let b = 0; b < 48; b++) block(played)
+    expect(played.synth.activeVoices).toBe(0)
+    expect(block(played)).toBe(0)
+  })
+
+  it('play softly on a kit’s pad, at the ghost’s Level', () => {
+    const pads = [strip(), strip()]
+    const target = new KitTarget(pads)
+    target.on(0, 0, 1, true)
+    target.on(0, 1, 1)
+    let soft = 0
+    let full = 0
+    for (let b = 0; b < 8; b++) {
+      soft = Math.max(soft, block(pads[0] as Strip))
+      full = Math.max(full, block(pads[1] as Strip))
+    }
+    expect(soft / full).toBeCloseTo(0.55, 2)
+    // Held as long as a hit is
+    expect((pads[0] as Strip).synth.activeVoices).toBe(1)
   })
 })

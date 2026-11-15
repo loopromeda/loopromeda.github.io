@@ -404,6 +404,52 @@ a demo of the editor and its marks was approved with the EQ's ("둘다
   ornament for several notes at once; a trill to the scale's next note
   (semitones only); swing within an ornament.
 
+### J. Ghost notes
+
+Asked for by ashon, 2026-11-15, after the ornaments, for a guitar's
+ghost notes ("꾸밈음 말고 꾸밈음효과를 가지고 고스트 노트같은것도 넣어보고
+싶어. 기타를 표현하는 경우 고스트 노트가 필요할 수 있거든."). Asked, ashon
+chose a note that is itself a ghost (not a mark beside one), played as a
+real mute rather than only softer, and a demo first; the demo's proposals
+were approved ("좋아"). Built 2026-11-16.
+
+- **A note may be a ghost** (`src/state/song.ts`: `ghost`, set only when
+  true, read back only where it is true): it keeps its step, key, length,
+  velocity and ornament, and an ornament given or a drag keeps it a
+  ghost. A loop of no ghosts reads as before.
+- **How a ghost sounds** is the sound's: four knobs on its Amp part
+  (`GHOST_KNOBS` in `src/state/sound/kinds.ts`), under a Ghost notes
+  heading of their own in its panel. Level (55%): how loud beside a
+  note; on a synth, Decay (0.1 s): the time it takes to fall away; Tone
+  (760 Hz): the lowpass it is shut down to; Click (35%): a pick's
+  scrape. A sound saved before them plays its ghosts at these.
+- **A synth plays a ghost muted** (`src/dsp/chainVoice.ts`,
+  `GHOST_MUTE`): the voice's own sound through a lowpass at Tone (a state
+  variable filter, Q 0.7) with a scrape added (noise in a band at
+  2.6 kHz, falling with a 4 ms time constant), through an envelope of its
+  own in the amp's place (1.5 ms up, to nothing within Decay), whatever
+  the amp's envelope, at Level. Gone, the voice is free while its key is
+  still held. In mono play a ghost strikes afresh, never legato, and so
+  does the note after one, or the note held under it once it ends.
+- **A kit's pad plays a ghost softly** (`GHOST_SOFT`): the hit as it
+  is, at the Level of the preset mapped onto it (set on a synth's Amp,
+  kept with the preset; Decay, Tone and Click unheard there).
+- **Played** (`src/dsp/sequencer.ts`): a ghost note's start, and each
+  sound of its ornament (a roll of muted scrapes), goes to the target as
+  a ghost (`Target.on`'s ghost): a synth's strip queues it muted, a kit's
+  pad soft (`src/dsp/output.ts`). A note made a ghost as the loop plays
+  is a note of its own: what was being played out of it stops.
+- **Edited** (`src/ui/StepGrid.tsx`): Ghost (a hollow note with an x,
+  beside Ornaments, the one or the other) makes a tap on an empty step
+  put a ghost, and a tap on a note make it a ghost or a note again;
+  drags set a ghost's velocity and length as a note's. The ornament
+  panel's first row has a Ghost switch for the note picked. Stopped,
+  each change is heard (Engine.auditionNote). A ghost is drawn hollow
+  with an x in its first step (none where its ornament marks the box),
+  its graces hollow, its ornament's marks in the accent.
+- Not built: a ghost recorded or played by hand (a take writes notes);
+  a ghost's own velocity curve; a ghost on a kit muted.
+
 ## Projects
 
 Asked for by ashon, 2026-11-13 ("시퀀스와 현재 악기 구성을 전부 저장할

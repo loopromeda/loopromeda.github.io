@@ -29,6 +29,7 @@ import {
   roomAt,
   saveSong,
   setBars,
+  setGhost,
   setLaneGlide,
   setLaneOn,
   setLaneValues,
@@ -273,6 +274,63 @@ describe('a note’s ornament', () => {
       false,
       false,
     ])
+  })
+})
+
+describe('a ghost note', () => {
+  const roll = { kind: 'roll', speed: 4, shape: 'flat' } as const
+
+  it('is made of the note on a step and a key, and made a note again', () => {
+    const plain = loop([note(0, 60, 2, 0.5), note(4, 62)])
+    const ghosted = setGhost(plain, 0, 60, true)
+    expect(noteAt(ghosted, 0, 60)).toEqual({
+      ...note(0, 60, 2, 0.5),
+      ghost: true,
+    })
+    expect(noteAt(ghosted, 4, 62)).toBe(noteAt(plain, 4, 62))
+    expect(setGhost(ghosted, 0, 60, false)).toEqual(plain)
+    expect(setGhost(ghosted, 0, 60, true)).toBe(ghosted)
+    expect(setGhost(plain, 1, 60, true)).toBe(plain)
+  })
+
+  it('keeps its ornament, and an ornament given keeps it a ghost', () => {
+    const ghosted = setGhost(loop([note(0, 60)]), 0, 60, true)
+    const rolled = setOrnament(ghosted, 0, 60, roll)
+    expect(noteAt(rolled, 0, 60)).toEqual({
+      ...note(0, 60),
+      ornament: roll,
+      ghost: true,
+    })
+    const plain = setGhost(rolled, 0, 60, false)
+    expect(noteAt(plain, 0, 60)).toEqual({ ...note(0, 60), ornament: roll })
+    const held = noteAt(rolled, 0, 60) as Note
+    const longer = putNote(rolled, { ...held, length: 3 })
+    expect(noteAt(longer, 0, 60)?.ghost).toBe(true)
+  })
+
+  it('is kept, and read back as one only where it is', () => {
+    const song = editLoop(initSong(), 't1', () =>
+      setGhost(loop([note(0, 60), note(4, 62)]), 4, 62, true)
+    )
+    const kept = storage()
+    saveSong(kept, song)
+    expect(loadSong(kept)).toEqual(song)
+    const read = readSong({
+      loops: {
+        t1: [
+          {
+            steps: 16,
+            notes: [
+              { ...note(0, 60), ghost: true },
+              { ...note(1, 60), ghost: 'yes' },
+              { ...note(2, 60), ghost: false },
+            ],
+          },
+        ],
+      },
+    })
+    const notes = loopOf(read, 't1').notes
+    expect(notes.map((each) => 'ghost' in each)).toEqual([true, false, false])
   })
 })
 
