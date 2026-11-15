@@ -161,4 +161,14 @@ describe('shownKnobs', () => {
     ])
     expect(shownKnobs(AMP_SPEC.knobs, {})).toBe(AMP_SPEC.knobs)
   })
+
+  it("shows an oscillator's Bits only while its Steps is on", () => {
+    const osc = INPUT_KINDS.osc.knobs
+    expect(keys(shownKnobs(osc, { steps: 0 }))).not.toContain('bits')
+    expect(keys(shownKnobs(osc, {}))).not.toContain('bits')
+    expect(keys(shownKnobs(osc, { steps: 4 })).slice(-2)).toEqual([
+      'steps',
+      'bits',
+    ])
+  })
 })

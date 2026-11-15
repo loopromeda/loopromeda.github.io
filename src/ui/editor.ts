@@ -27,6 +27,7 @@ import {
   type MixOwner,
 } from '../state/mix'
 import { isCut } from '../dsp/eq'
+import { OSC_STEPS } from '../dsp/oscillator'
 import { formatValue } from '../state/params'
 import { setRef, setValue } from '../state/sound/edit'
 import {
@@ -152,6 +153,10 @@ export const GLYPHS = {
   triangle: 'M1 9 L5 3 L9 9 L13 3 L17 9',
   saw: 'M1 10 L7 2 L7 10 L13 2 L13 10 L17 4',
   square: 'M1 10 V2 H6 V10 H11 V2 H16 V10',
+  // The waves held in steps, a chip's wave table
+  steppedSine: 'M1 6 H3 V2.5 H7 V6 H9 V9.5 H13 V6 H17',
+  steppedTriangle: 'M1 9 H3 V6 H5 V3 H7 V6 H9 V9 H11 V6 H13 V3 H15 V6 H17',
+  steppedSaw: 'M1 10 H3 V7.3 H5 V4.7 H7 V2 H9 V10 H11 V7.3 H13 V4.7 H15 V2 H17',
   noise: 'M1 6 L3 3 L4 9 L6 2 L7 8 L9 4 L10 10 L12 3 L13 7 L15 2 L17 6',
   ring: 'M2 6 a4 4 0 1 0 8 0 a4 4 0 1 0 -8 0 M8 6 a4 4 0 1 0 8 0 a4 4 0 1 0 -8 0',
   lowpass: 'M1 4 H9 C12 4 13 6 17 11',
@@ -207,6 +212,13 @@ export const GLYPHS = {
 } as const
 
 const WAVE_GLYPHS = [GLYPHS.sine, GLYPHS.triangle, GLYPHS.saw, GLYPHS.square]
+/** The waves in steps: the square's steps change only its width */
+const STEPPED_GLYPHS = [
+  GLYPHS.steppedSine,
+  GLYPHS.steppedTriangle,
+  GLYPHS.steppedSaw,
+  GLYPHS.square,
+]
 const FILTER_GLYPHS = [GLYPHS.lowpass, GLYPHS.highpass, GLYPHS.bandpass]
 const LFO_GLYPHS = [
   GLYPHS.sine,
@@ -250,7 +262,8 @@ export function glyphOf(sound: Sound, id: string): string {
       const { kind, values } = found.part
       if (kind === 'noise') return GLYPHS.noise
       if (kind === 'ring') return GLYPHS.ring
-      return WAVE_GLYPHS[values.wave ?? 0] ?? GLYPHS.saw
+      const glyphs = (values.steps ?? 0) > 0 ? STEPPED_GLYPHS : WAVE_GLYPHS
+      return glyphs[values.wave ?? 0] ?? GLYPHS.saw
     }
     case 'item':
       return found.part.kind === 'drive'
@@ -512,14 +525,20 @@ export function heardThrough(sound: Sound, id: string): string | undefined {
     .join(' and ')
 }
 
-/** An input's own line: its wave, or its kind */
+/**
+ * An input's own line: its wave, or its kind; a wave held in steps with
+ * their count, and the bits their levels take: Triangle 32, Sine 32·4b
+ */
 export function inputLine(sound: Sound, id: string): string {
   const found = findPart(sound, id)
   if (found?.type !== 'input') return ''
   const { kind, values } = found.part
-  return kind === 'osc'
-    ? (WAVE_NAMES[values.wave ?? 0] ?? '')
-    : INPUT_KINDS[kind].label
+  if (kind !== 'osc') return INPUT_KINDS[kind].label
+  const wave = WAVE_NAMES[values.wave ?? 0] ?? ''
+  const steps = OSC_STEPS[Math.round(values.steps ?? 0)] ?? 0
+  if (steps === 0) return wave
+  const bits = Math.round(values.bits ?? 0)
+  return bits > 0 ? `${wave} ${steps}·${bits}b` : `${wave} ${steps}`
 }
 
 /**
@@ -684,6 +703,10 @@ export function shapeKey(sound: Sound): string {
       input.kind,
       input.refs,
       input.values.wave,
+      // Its steps (on, a pictogram in steps, and Bits in its panel) and
+      // their bits, which its tile's name for a screen reader holds
+      input.values.steps,
+      input.values.bits,
     ]),
     sound.chains.map((chain) => [
       chain.id,

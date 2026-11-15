@@ -26,9 +26,11 @@ routes      source → any knob × amount            slide, random, wheel
 ```
 
 - **Inputs** make sound: an oscillator (wave, octave, semi, fine, width,
-  and FM from another input), noise, or a ring (the product of two other
-  inputs). An input is heard only through the chains that take it, and
-  read raw by the inputs that name it.
+  and FM from another input; its cycle held in 4 to 64 steps and their
+  levels rounded to a few bits, as a chip's wave table is, since
+  2026-11-15), noise, or a ring (the product of two other inputs). An
+  input is heard only through the chains that take it, and read raw by
+  the inputs that name it.
 - **Chains** each take a mix of inputs (a send level per input; an input
   can feed several chains, or none) and pass it through their items in
   order. Items process: a filter, drive, more later. The chains are summed.

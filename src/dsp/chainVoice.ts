@@ -113,6 +113,12 @@ export class ChainSettings {
   /** An oscillator's wave (an index into WAVES), and pitch in semitones */
   readonly wave = new Int32Array(MAX_INPUTS)
   readonly transpose = new Float64Array(MAX_INPUTS)
+  /**
+   * An oscillator's steps a cycle (0: smooth) and the bits each step's
+   * level is rounded to (0: not rounded)
+   */
+  readonly steps = new Int32Array(MAX_INPUTS)
+  readonly bits = new Int32Array(MAX_INPUTS)
   /** The inputs an oscillator's FM, and a ring's two sides, read */
   readonly fmSource = new Int8Array(MAX_INPUTS).fill(NO_INPUT)
   readonly ringA = new Int8Array(MAX_INPUTS).fill(NO_INPUT)
@@ -843,6 +849,8 @@ export class ChainVoice {
       (settings.widthMoving[i] === 1 || used[widthDest] === 1)
     const width = settings.width[i] as Float32Array
     oscillator.width = width[0] as number
+    oscillator.steps = settings.steps[i] as number
+    oscillator.bits = settings.bits[i] as number
 
     let offsets: Float32Array | undefined
     let feedback = false

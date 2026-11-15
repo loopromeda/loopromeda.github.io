@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   MAX_WIDTH,
   MIN_WIDTH,
+  OSC_STEPS,
   Oscillator,
   SAW,
   SINE,
@@ -42,6 +43,50 @@ function naive(wave: number, frequency: number, length: number) {
               ? 4 * t - 1
               : 3 - 4 * t
             : Math.sin(2 * Math.PI * t)
+    t += dt
+    t -= Math.floor(t)
+  }
+  return out
+}
+
+/** The wave held in steps (and its levels rounded to bits), at a frequency */
+function renderStepped(
+  wave: number,
+  frequency: number,
+  length: number,
+  steps: number,
+  bits = 0,
+  width = 0.5
+) {
+  const out = new Float32Array(length)
+  const oscillator = new Oscillator(SAMPLE_RATE)
+  oscillator.steps = steps
+  oscillator.bits = bits
+  oscillator.width = width
+  oscillator.process(out, frequency, wave)
+  return out
+}
+
+/** The stepped wave with its jumps left sharp: each step the wave's middle */
+function naiveStepped(
+  wave: number,
+  frequency: number,
+  length: number,
+  steps: number
+) {
+  const out = new Float32Array(length)
+  const dt = frequency / SAMPLE_RATE
+  let t = 0
+  for (let i = 0; i < length; i++) {
+    const m = (Math.floor(t * steps) + 0.5) / steps
+    out[i] =
+      wave === SAW
+        ? 2 * m - 1
+        : wave === TRIANGLE
+          ? m < 0.5
+            ? 4 * m - 1
+            : 3 - 4 * m
+          : Math.sin(2 * Math.PI * m)
     t += dt
     t -= Math.floor(t)
   }
@@ -278,6 +323,115 @@ describe('Oscillator', () => {
     )
     for (let i = 0; i < out.length; i++) {
       expect(out[i]).toBeCloseTo(Math.cos(2 * Math.PI * 0.01 * i), 5)
+    }
+  })
+
+  it('lists the step counts the Steps knob turns through, Off first', () => {
+    expect(OSC_STEPS).toEqual([0, 4, 8, 16, 32, 64])
+  })
+
+  it("holds the triangle in 32 steps of 16 levels, as the 2A03's", () => {
+    // 60 Hz: 800 samples a cycle, 25 a step
+    const out = renderStepped(TRIANGLE, 60, 800, 32)
+    const levels = new Set<number>()
+    for (let i = 0; i < 800; i++) {
+      const u = (i % 25) / 25
+      if (u < 0.1 || u > 0.9) continue
+      const k = Math.floor(i / 25)
+      // The chip counts 15 down to 0 and up again
+      const count = k < 16 ? k : 31 - k
+      expect(out[i]).toBeCloseTo((2 * count - 15) / 16, 6)
+      levels.add(Math.round((out[i] as number) * 16))
+    }
+    expect(levels.size).toBe(16)
+  })
+
+  it('holds the square high for whole steps: 8, as the 2A03 pulse', () => {
+    // A width of 13% is one step of eight: the pulse's 12.5%
+    const out = renderStepped(SQUARE, 60, 800, 8, 0, 0.13)
+    // High is 1.75 and low -0.25, the pulse's mean taken off; a sample of
+    // each rounded jump stands either side of the middle
+    let high = 0
+    for (let i = 0; i < 800; i++) {
+      if ((out[i] as number) > 0.75) high++
+    }
+    expect(Math.abs(high - 100)).toBeLessThanOrEqual(1)
+    const mean = out.reduce((sum, v) => sum + v, 0) / out.length
+    expect(Math.abs(mean)).toBeLessThan(1e-3)
+  })
+
+  it("rounds each step's level to 2^bits levels across -1..1", () => {
+    const out = renderStepped(SINE, 60, 800, 32, 4)
+    const levels = new Set<number>()
+    for (let i = 0; i < 800; i++) {
+      const u = (i % 25) / 25
+      if (u < 0.1 || u > 0.9) continue
+      const level = (((out[i] as number) + 1) / 2) * 15
+      expect(level).toBeCloseTo(Math.round(level), 4)
+      levels.add(Math.round(level))
+    }
+    // A sine in 32 steps reaches every one of 16 levels but the middle two
+    expect(levels.size).toBeGreaterThanOrEqual(12)
+    expect(Math.max(...levels)).toBe(15)
+    expect(Math.min(...levels)).toBe(0)
+  })
+
+  it.each(SHAPES)(
+    'keeps %s in steps within [-1, 1] and free of DC',
+    (_, wave) => {
+      if (wave !== SQUARE) {
+        for (const frequency of [20, 110, 440, 3520, 12000]) {
+          for (const v of renderStepped(wave, frequency, 4800, 32)) {
+            expect(Number.isFinite(v)).toBe(true)
+            expect(Math.abs(v)).toBeLessThanOrEqual(1 + 1e-6)
+          }
+        }
+      }
+      // 480 Hz: exactly 100 samples a cycle, ten whole cycles
+      const out = renderStepped(wave, 480, 1000, 16)
+      const mean = out.reduce((sum, v) => sum + v, 0) / out.length
+      expect(Math.abs(mean)).toBeLessThan(1e-3)
+    }
+  )
+
+  it.each([
+    ['sine', SINE],
+    ['saw', SAW],
+    ['triangle', TRIANGLE],
+  ] as const)(
+    'aliases at least 10 dB less than a %s in sharp steps',
+    (_, wave) => {
+      // 620 Hz in 2400 samples: 31 whole cycles; 16 steps a cycle, a step
+      // every 4.8 samples
+      const length = 2400
+      const bin = (620 * length) / SAMPLE_RATE
+      const sharp = inharmonicShare(naiveStepped(wave, 620, length, 16), bin)
+      const rounded = inharmonicShare(renderStepped(wave, 620, length, 16), bin)
+      expect(10 * Math.log10(sharp / rounded)).toBeGreaterThan(10)
+    }
+  )
+
+  it.each(SHAPES)(
+    'plays the smooth %s once its steps come faster than two samples',
+    (_, wave) => {
+      // 32 steps at 1500 Hz: a step every 1.0 samples
+      expect(renderStepped(wave, 1500, 480, 32)).toEqual(
+        render(wave, 1500, 480)
+      )
+    }
+  )
+
+  it('plays the same steps through render as through process', () => {
+    const increments = new Float32Array(384).fill(220 / SAMPLE_RATE)
+    const out = new Float32Array(384)
+    const oscillator = new Oscillator(SAMPLE_RATE)
+    oscillator.steps = 16
+    oscillator.bits = 4
+    oscillator.render(out, increments, SAW)
+    // The increments are single precision, process's step a double
+    const processed = renderStepped(SAW, 220, 384, 16, 4)
+    for (let i = 0; i < 384; i++) {
+      expect(out[i]).toBeCloseTo(processed[i] as number, 4)
     }
   })
 

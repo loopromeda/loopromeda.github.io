@@ -11,6 +11,7 @@
 import type { LaneTarget } from '../dsp/automation'
 import { ChainSynth } from '../dsp/chainSynth'
 import type { EffectRack } from '../dsp/effects'
+import { OSC_STEPS } from '../dsp/oscillator'
 import type { Mixer, Part, Strip } from '../dsp/output'
 import {
   DEST_AMP,
@@ -186,7 +187,9 @@ export class SoundPlayer {
             value('wave'),
             12 * value('octave') + value('semi') + value('fine') / 100,
             value('width'),
-            value('fm')
+            value('fm'),
+            OSC_STEPS[Math.round(value('steps'))] ?? 0,
+            value('bits')
           )
         )
       } else if (input.kind === 'ring') {

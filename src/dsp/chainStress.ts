@@ -60,8 +60,9 @@ import {
 /**
  * A chain synth of `voices` voices on the heaviest sound it can hold, with
  * `playing` of them held: what a block costs at worst. Every slot is
- * full: six inputs (four oscillators, one of them FM'd by another in
- * turn and one feeding back on itself, a noise and a ring), four chains
+ * full: six inputs (four oscillators, each held in steps, which costs
+ * more than a smooth wave, one of them FM'd by another in turn and one
+ * feeding back on itself, a noise and a ring), four chains
  * each taking all six through six items (filters and drives), four
  * envelopes still in their attack and four LFOs, and sixteen routes, most
  * through a via, moving pitch, widths, FM, levels, sends, cutoffs,
@@ -86,15 +87,15 @@ export function chainStressSynth(
   ]
   synth.inputCount = MAX_INPUTS
   kinds.forEach((kind, i) => synth.setInputKind(i, kind))
-  synth.setOsc(0, SQUARE, 0, 0.3, 0.2)
+  synth.setOsc(0, SQUARE, 0, 0.3, 0.2, 8)
   synth.setFmSource(0, 1)
-  synth.setOsc(1, SAW, 7.02, 0.5, 0.3)
+  synth.setOsc(1, SAW, 7.02, 0.5, 0.3, 32, 4)
   synth.setFmSource(1, 2)
   // Feedback: the oscillator renders a sample at a time
-  synth.setOsc(2, SINE, 12, 0.5, 0.4)
+  synth.setOsc(2, SINE, 12, 0.5, 0.4, 32, 4)
   synth.setFmSource(2, 2)
   synth.setRing(4, 0, 1)
-  synth.setOsc(5, TRIANGLE, -12, 0.5, 0.25)
+  synth.setOsc(5, TRIANGLE, -12, 0.5, 0.25, 16)
   synth.setFmSource(5, 0)
 
   synth.chainCount = MAX_CHAINS

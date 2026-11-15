@@ -444,8 +444,9 @@ describe('the chain engine', () => {
 })
 
 /**
- * Two oscillators (a square and a saw), a noise and a ring of the two into
- * two chains, a filter and a drive, an LFO, an envelope and two routes
+ * Two oscillators (a square and a saw in 8 steps), a noise and a ring of
+ * the two into two chains, a filter and a drive, an LFO, an envelope and
+ * two routes
  */
 function busy(): Sound {
   let sound = setValue(initSound(), 'i1', 'wave', SQUARE)
@@ -454,6 +455,7 @@ function busy(): Sound {
     return added.id as string
   }
   const osc2 = step(addInput(sound, 'osc'))
+  sound = setValue(sound, osc2, 'steps', 2)
   const noise = step(addInput(sound, 'noise'))
   const ring = step(addInput(sound, 'ring'))
   sound = setRef(setRef(sound, ring, 'a', 'i1'), ring, 'b', osc2)
@@ -473,6 +475,8 @@ function busy(): Sound {
 const TURNS: readonly (readonly [string, (sound: Sound) => Sound])[] = [
   ["an oscillator's pitch", (s) => setValue(s, 'i2', 'semi', 7)],
   ["an oscillator's width", (s) => setValue(s, 'i1', 'width', 0.2)],
+  ["an oscillator's steps", (s) => setValue(s, 'i2', 'steps', 3)],
+  ["an oscillator's bits", (s) => setValue(s, 'i2', 'bits', 3)],
   ['a send', (s) => setSend(s, 'c1', 'i2', 0.8)],
   ['a send to nothing', (s) => setSend(s, 'c2', 'i4', 0)],
   ['a send from nothing', (s) => setSend(s, 'c2', 'i1', 0.4)],

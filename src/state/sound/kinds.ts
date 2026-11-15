@@ -15,6 +15,7 @@ import {
   EQ_MIN_Q,
   EQ_TYPE_NAMES,
 } from '../../dsp/eq'
+import { MAX_BITS, OSC_STEPS } from '../../dsp/oscillator'
 import { LFO_SHAPE_NAMES, type ValueSpec } from '../params'
 
 /** One knob of a part, keyed within the part */
@@ -23,11 +24,15 @@ export interface KnobSpec extends ValueSpec {
   /** Short name under the knob */
   readonly label: string
   /**
-   * Shown only while another knob of its part stands at a value: a
-   * synced time's note value with Sync on, its own time with it off
-   * (shownKnobs)
+   * Shown only while another knob of its part stands at a value (or, not,
+   * anywhere else): a synced time's note value with Sync on, its own time
+   * with it off, an oscillator's Bits with Steps on (shownKnobs)
    */
-  readonly when?: { readonly key: string; readonly is: number }
+  readonly when?: {
+    readonly key: string
+    readonly is: number
+    readonly not?: boolean
+  }
   /**
    * The knob whose place it takes while shown, holding it opening that
    * one's routes: a synced LFO's note value, its Rate's
@@ -147,7 +152,7 @@ export function shownKnobs(
     if (!when) return true
     const read =
       values[when.key] ?? knobs.find(({ key }) => key === when.key)?.default
-    return read === when.is
+    return when.not ? read !== when.is : read === when.is
   })
 }
 
@@ -314,6 +319,32 @@ export const INPUT_KINDS = {
         unit: '%',
       },
       level('fm', 'FM', 0),
+      // A chip's wave table: the cycle held in steps, their levels in a few
+      // bits (asked for by ashon, 2026-11-15: "파형을 만들어 낼 때 계단형으로
+      // 파형을 만들어 내도록 하는 기능을 넣어보면 어때?")
+      {
+        key: 'steps',
+        label: 'Steps',
+        min: 0,
+        max: OSC_STEPS.length - 1,
+        default: 0,
+        curve: 'linear',
+        step: 1,
+        unit: '',
+        choices: OSC_STEPS.map((n) => (n === 0 ? 'Off' : String(n))),
+      },
+      {
+        key: 'bits',
+        label: 'Bits',
+        min: 0,
+        max: MAX_BITS,
+        default: 0,
+        curve: 'linear',
+        step: 1,
+        unit: '',
+        atMin: 'Off',
+        when: { key: 'steps', is: 0, not: true },
+      },
     ],
     dests: [
       { key: 'pitch', label: 'Pitch', scale: 48, unit: 'st' },

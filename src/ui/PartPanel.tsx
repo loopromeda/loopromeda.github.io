@@ -1758,7 +1758,10 @@ function viewOf(
       if (part.kind === 'osc') {
         return {
           ...base,
-          knobs: [...knobsOf(picked, INPUT_KINDS.osc.knobs), ...into],
+          knobs: [
+            ...knobsOf(picked, shownKnobs(INPUT_KINDS.osc.knobs, part.values)),
+            ...into,
+          ],
           refs: (
             <RefPicker
               engine={engine}

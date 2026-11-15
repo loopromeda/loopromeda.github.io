@@ -249,18 +249,24 @@ export class ChainSynth {
 
   /**
    * Oscillator input i: wave (an index into WAVES), pitch above the note
-   * in semitones, pulse width (its square), FM depth 0..1
+   * in semitones, pulse width (its square), FM depth 0..1, the steps a
+   * cycle is held in (0: smooth) and the bits each step's level is
+   * rounded to (0: not rounded)
    */
   setOsc(
     i: number,
     wave: number,
     transpose: number,
     width: number,
-    fm: number
+    fm: number,
+    steps = 0,
+    bits = 0
   ): void {
     if (!isIndex(i, MAX_INPUTS)) return
     const settings = this.#settings
     settings.wave[i] = wave
+    settings.steps[i] = Number.isFinite(steps) ? steps : 0
+    settings.bits[i] = Number.isFinite(bits) ? bits : 0
     settings.transpose[i] = Number.isFinite(transpose) ? transpose : 0
     target(this.#width[i], width)
     target(this.#fm[i], fm)

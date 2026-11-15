@@ -67,6 +67,8 @@ describe('readSound', () => {
       fine: 0,
       width: 0.5,
       fm: 0,
+      steps: 0,
+      bits: 0,
     })
   })
 

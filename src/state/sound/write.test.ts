@@ -57,6 +57,8 @@ describe('writeSound', () => {
       fine: 0,
       width: 0.5,
       fm: 0,
+      steps: 0,
+      bits: 0,
     })
     expect(sound.modulators[1]?.values.shape).toBe(4)
     expect(sound.voice).toEqual({ mode: 1, glide: 0.05 })
