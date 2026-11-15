@@ -9,6 +9,7 @@
  * src/worklet (AudioWorkletGlobalScope), so it stays free of either: plain
  * data only.
  */
+import type { Ornament } from '../dsp/ornament'
 import type { KitChain, PartKind } from '../state/kit'
 import type { Mix } from '../state/mix'
 import type { KnobChange } from '../state/sound/diff'
@@ -70,6 +71,8 @@ export interface LoopNote {
   /** Steps it sounds for */
   readonly length: number
   readonly velocity: number
+  /** What it plays around and within its step (src/dsp/ornament.ts) */
+  readonly ornament?: Ornament
 }
 
 /**
@@ -190,6 +193,12 @@ export type ToWorklet =
       notes: readonly LoopNote[]
       lanes?: readonly LoopLane[]
     }
+  /**
+   * A track's note played on its own while the sequencer is stopped (its
+   * step aside: now), its ornament's sounds too, a sixteenth at the tempo
+   * a step: an edit heard (the step grid's). Playing, nothing.
+   */
+  | { t: 'audition'; track: string; note: LoopNote }
   /**
    * The note each pad of a kit track plays its sound at, in the kit's
    * order: what a sequenced hit plays (a touch's brings its own)

@@ -352,6 +352,58 @@ too. Built 2026-11-15.
   sixteenth to land on; undoing a take; recording the loops started
   along the song's timeline (E, 3).
 
+### I. Ornaments
+
+Asked for by ashon, 2026-11-15 ("루프에서 꾸밈음같은것도 넣도록
+바꿔보고 싶은디 가능할까?"). Asked, ashon chose an ornament attached to a
+note ("노트에 붙이기"), not notes of its own, and all four kinds offered;
+a demo of the editor and its marks was approved with the EQ's ("둘다
+좋네"), and the work begun after it was committed ("좋아 커밋하고 꾸밈음
+작업 진행하자"). Built 2026-11-15.
+
+- **What a note plays** (`src/dsp/ornament.ts`, pure): none, the note
+  alone; a **grace**, one to three notes a semitone or more (to an
+  octave) from it, up or down, before its step or on it, the note after
+  them; a **mordent** (the note, its neighbour, the note) or a **trill**
+  (on and on, to the note's end); a **roll**, strokes flat, rising or
+  falling; an **arpeggio** of a chord (eight: Maj, Min, Sus4, 5th, Oct,
+  Maj7, Min7, Dim), up, down or up and down. Each at 2, 3, 4, 6 or 8
+  sounds a sixteenth. A trill or an arpeggio moves the pitch of the note
+  sounding, as a tracker does, or strikes each sound anew. A kit's pad
+  has no pitch to move: it takes a grace (a flam, a drag, a ruff, softer)
+  and a roll only. A note expands to its sounds, 1024 at most.
+- **Kept** (`src/state/song.ts`): a note's `ornament`, read back
+  cleaned; a note made longer, softer or harder keeps it.
+- **Played** (`src/dsp/sequencer.ts`): each note's sounds on their own
+  frames within the step's swung length, a grace before the step taken
+  from the step before (looked for two steps ahead); a pitch moved is a
+  move on its strip's queue (`src/dsp/output.ts`), the voice's pitch
+  jumping at once (ChainSynth.bend). A note going on as its loop is
+  edited goes on where the same note is still there. At Play, a grace
+  before the first step is not heard; the second time round it is.
+- **Heard while edited**: stopped, each change plays the note alone, its
+  ornament and all, at the song's tempo (Engine.auditionNote,
+  Sequencer.audition); playing, the loop plays it in its turn.
+- **Edited** (`src/ui/StepGrid.tsx`, `src/ui/OrnamentPanel.tsx`): a note
+  held still, or tapped with Ornaments on (a trill's zigzag beside
+  Lane), is picked and ringed. The panel stands in the lanes' place
+  while Ornaments is on: the kinds, then what the kind plays (the
+  interval, with the note it reaches; how many graces; the speed, with
+  a sound's length in ms; where; the chord and its order; whether each
+  sound restarts), each row panned sideways where it is longer than the
+  grid is wide. It is as tall whatever it shows, so a row of the grid
+  stays under a finger. With Ornaments on a tap picks a note instead of
+  taking it away, and an empty step gets a note, picked. A kind left
+  keeps what it was set to while the panel is open.
+- **Marks** (`src/viz/ornament.ts`): a grace a box half a row tall on
+  its own row (a flam on its pad's, before it), a stroke where the note
+  strikes again (a roll, a restart, the note after graces on the beat),
+  a zigzag through a mordent or a trill, stairs through an arpeggio; a
+  grace before the loop's first step shown at its end, where it plays.
+- Not built: a recorded note's ornament (a take writes none); an
+  ornament for several notes at once; a trill to the scale's next note
+  (semitones only); swing within an ornament.
+
 ## Projects
 
 Asked for by ashon, 2026-11-13 ("시퀀스와 현재 악기 구성을 전부 저장할

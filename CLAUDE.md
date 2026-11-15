@@ -8,8 +8,8 @@ kit, then a step sequencer, under way:
 `docs/plan/effects-parts-sequencer.md`; tracks (a synth or a kit each,
 as many as are added), a sequence for each, then a song, under way,
 knob lanes in a loop, the sequencer up top (a tab of the editor's
-rail), recording what is played into a loop, and projects (a session
-saved under a name):
+rail), recording what is played into a loop, a note's ornaments, and
+projects (a session saved under a name):
 `docs/plan/tracks-and-song.md`; the transport on the tab rail, then
 MIDI (notes in, learn, clock out and in), under way:
 `docs/plan/transport-and-midi.md`. What real devices did:
@@ -82,12 +82,17 @@ src/dsp/      pure DSP (oscillators, envelopes, LFOs, filters, voices);
               heaviest sound it can hold, and the effects after it,
               for measuring; fastMath.ts the
               cheaper tanh and sine the voices call per sample;
+              ornament.ts a loop note's ornament (a grace or a
+              kit's flam, a mordent, a trill, a roll, an arpeggio)
+              and the sounds it expands to;
               sequencer.ts the step sequencer's clock, counted in
               frames (from a beat given, moved by beats in time, a
               bar counted in first, if asked), and a lane
               for each track playing its loop into the track's
-              strips, each note on its own frame (a strip's queue of
-              what starts and stops within a block); clock.ts the
+              strips, each note and each sound of its ornament on
+              its own frame (a strip's queue of what starts, stops
+              and moves its pitch within a block), and, stopped, a
+              note on its own, auditioned; clock.ts the
               song's time the sequencer keeps (the tempo, and the
               beat each block starts on), which a synced delay and
               LFO follow; click.ts the transport's click, a blip on
@@ -102,7 +107,8 @@ src/worklet/  the AudioWorkletProcessor around src/dsp; own globals and
               nothing), the kit's chain, and where a track's lanes
               hand their values (TrackKnobs) (Node-testable); the
               processor keeps a part, a sequencer's lane and knob
-              lanes for each track, by the track's id, and tells of
+              lanes for each track, by the track's id, auditions a
+              note of one's loop while stopped, and tells of
               each step as it passes, while recording where it stands
               as each note starts and ends, how far
               the compressor or limiter watched turns the sound down,
@@ -126,7 +132,8 @@ src/engine/   AudioContext lifecycle, unlock, node wiring; the sound,
               as it changes (its lanes resolved on the track's sound),
               the transport, and the step playing, and recording (a
               Recorder fed where each note was heard, the output's
-              latency taken off); the
+              latency taken off), and a note of the Seq tab's loop
+              heard on its own while stopped (auditionNote); the
               compressors' and limiters' reductions (reductions.ts:
               who watches which, many at once, the list told under a
               version) and the loudness, watched;
@@ -151,8 +158,9 @@ src/state/    params.ts: the knob schema and the old parameters;
               song.ts: the session's song (the tempo, the swing and
               each track's loops, by the track's id; a loop one to
               256 bars of sixteenths and its notes, each a step, a
-              key (a synth's note, a kit's pad), a length and a
-              velocity, and its knob lanes, a knob's value at each
+              key (a synth's note, a kit's pad), a length, a
+              velocity and an ornament or none, and its knob lanes,
+              a knob's value at each
               step), its edits, kept in localStorage; lanes.ts: the
               knobs a track's lanes may move (its sound's, its
               fader's) and its lanes as they play; record.ts: what
@@ -209,7 +217,11 @@ src/viz/      pure display math (scope trigger and decimation, envelope
               button in popover.ts, the step grid's cells, a note's
               box and what a drag from a note makes of it in steps.ts,
               a knob lane's strip (a stroke's steps, Fill's shapes,
-              its outline) in laneStrip.ts, an EQ's curve, where its
+              its outline) in laneStrip.ts, a note's ornament's
+              marks on the grid (a grace's box on its row, a
+              stroke, a trill's zigzag, an arpeggio's stairs) and its
+              editor's interval and a sound's ms in ornament.ts, an
+              EQ's curve, where its
               points stand and what a drag or a pinch makes of one in
               eq.ts,
               and the app's mark, on the icons' grid and the
@@ -221,7 +233,10 @@ src/ui/       React components; SoundEditor.tsx the sound as tiles
               there apart from the one played, and its StepGrid.tsx:
               its loop a bar at a time, the bar playing followed, a
               tap puts a note or takes it away, a drag from one sets
-              how hard and how long; RowNavigator.tsx a camera over
+              how hard and how long, one held (or tapped with
+              Ornaments on) is picked for its ornament, which
+              OrnamentPanel.tsx sets in the lanes' place, heard
+              while stopped; RowNavigator.tsx a camera over
               its rows; under it LaneStrip.tsx its knob lanes, one
               over another, drawn on, and LanePicker.tsx in its
               place adds one), or, switched to Mix,

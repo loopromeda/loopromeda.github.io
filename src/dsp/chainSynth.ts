@@ -501,15 +501,16 @@ export class ChainSynth {
    * key's finger moved its note to note (a MIDI number, between semitones
    * too: the XY pad), which it bends to, a glide under way carrying on
    * beneath; a key not held bends nothing. A note played next glides from
-   * there, and from its finger's Slide.
+   * there, and from its finger's Slide. Now, it is there at once (an
+   * ornament's pitch moving: sequencer.ts), not at the bend's pace.
    */
-  bend(key: number, note: number): void {
+  bend(key: number, note: number, now = false): void {
     if (!Number.isFinite(note)) return
     if (this.#mode === POLY) {
       const index = this.#allocator.voiceOf(key)
       if (index < 0) return
       const voice = this.#voices[index] as ChainVoice
-      voice.bend(note)
+      voice.bend(note, now)
       this.#lastNote = note
       this.#lastKey = key
       this.#lastSlide = voice.slide
@@ -519,7 +520,7 @@ export class ChainSynth {
     if (at < 0) return
     this.#bent[at] = note
     if (at !== this.#held - 1) return
-    ;(this.#voices[0] as ChainVoice).bend(note)
+    ;(this.#voices[0] as ChainVoice).bend(note, now)
     this.#lastNote = note
     this.#lastKey = key
     this.#lastSlide = this.#slides[at] as number

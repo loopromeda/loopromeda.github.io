@@ -464,6 +464,11 @@ class SynthProcessor extends AudioWorkletProcessor {
       case 'record':
         this.#recording = message.on
         break
+      case 'audition': {
+        const playing = this.#tracks.get(message.track)
+        if (playing) this.#sequencer.audition(playing.lane, message.note)
+        break
+      }
       case 'loop': {
         const playing = this.#tracks.get(message.track)
         if (!playing) break

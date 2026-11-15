@@ -4,7 +4,9 @@
  * from its sound (a preset loaded leaves the notes; a track removed takes
  * its own away). A loop is one to 256 bars of sixteenths; a note
  * stands on a step at a key (a kit's pad, a synth's note), for a length
- * in steps, at a velocity; one at most on a step and a key. A loop's knob
+ * in steps, at a velocity, with an ornament or none (I: a grace, a
+ * mordent, a trill, a roll or an arpeggio, src/dsp/ornament.ts); one at
+ * most on a step and a key. A loop's knob
  * lanes (F) hold a knob's value at every step, each held to the next step
  * or gliding to it: a knob of the track's sound, or its fader. The first
  * loop of a track is the one played and edited for now: more, and scenes
@@ -12,6 +14,7 @@
  * (docs/plan/transport-and-midi.md, 1). Plain data, never changed in
  * place, kept in localStorage.
  */
+import { readOrnament, sameOrnament, type Ornament } from '../dsp/ornament'
 import {
   BAR_STEPS,
   MAX_STEPS,
@@ -20,6 +23,8 @@ import {
   MIN_SWING,
   MIN_TEMPO,
 } from '../dsp/sequencer'
+
+export type { Ornament }
 
 /** A bar's steps: sixteenths in four-four */
 export { BAR_STEPS }
@@ -51,6 +56,8 @@ export interface Note {
   readonly length: number
   /** How hard it starts, MIN_VELOCITY..1 */
   readonly velocity: number
+  /** What it plays around and within its step: none, the note alone */
+  readonly ornament?: Ornament
 }
 
 /** One knob's row of a loop: a value of its own at every step */
@@ -210,6 +217,23 @@ function roomFor(loop: Loop, note: Note): number {
     }
   }
   return end - note.step
+}
+
+/**
+ * The loop with the note on step at key given ornament, or none; with no
+ * note there, as it was
+ */
+export function setOrnament(
+  loop: Loop,
+  step: number,
+  key: number,
+  ornament: Ornament | undefined
+): Loop {
+  const note = noteAt(loop, step, key)
+  if (!note || sameOrnament(note.ornament, ornament)) return loop
+  const { length, velocity } = note
+  const plain: Note = { step, key, length, velocity }
+  return putNote(loop, ornament ? { ...plain, ornament } : plain)
 }
 
 /** The loop without the note on step at key */
@@ -471,6 +495,7 @@ function readLoop(value: unknown): Loop {
         key: number(note.key, -1),
         length: number(note.length, 1),
         velocity: number(note.velocity, 1),
+        ornament: note.ornament as Ornament | undefined,
       })
     }
   }
@@ -563,11 +588,13 @@ function cleanNote(note: Note): Note | undefined {
   if (note.key < 0 || note.key > MAX_KEY) return
   const length = Math.floor(number(note.length, 1))
   const velocity = number(note.velocity, 1)
+  const ornament = readOrnament(note.ornament)
   return {
     step: note.step,
     key: note.key,
     length: Math.max(1, Math.min(MAX_STEPS, length)),
     velocity: Math.max(MIN_VELOCITY, Math.min(1, velocity)),
+    ...(ornament && { ornament }),
   }
 }
 

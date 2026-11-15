@@ -24,10 +24,13 @@ import {
   removeNote,
   roomAt,
   setBars,
+  setOrnament,
   type KnobLane,
   type Loop,
+  type Note,
 } from '../state/song'
 import { HIGHEST_NOTE, LOWEST_NOTE, isBlack, noteName } from '../viz/keyboard'
+import { ornamentMarks, type OrnamentMarks } from '../viz/ornament'
 import {
   COLUMNS,
   cellAt,
@@ -40,10 +43,11 @@ import {
   shiftWindow,
 } from '../viz/steps'
 import { ConfirmDialog } from './ConfirmDialog'
-import { SMALL_BUTTON, TALL_HIT } from './controls'
+import { HOLD, SMALL_BUTTON, TALL_HIT } from './controls'
 import { SmallIconButton } from './IconButton'
 import { LanePicker } from './LanePicker'
 import { LaneStrip } from './LaneStrip'
+import { OrnamentPanel } from './OrnamentPanel'
 import { RowNavigator } from './RowNavigator'
 
 /** The most rows a synth's grid shows: two octaves */
@@ -61,6 +65,16 @@ const BLACK_BEAT_CELL = 'border-r border-b border-(--under)/50 bg-(--over)/7'
 const NOTE = 'absolute inset-px rounded-[3px] bg-(--accent)'
 /** One held in from the bar before: no start to it, so no rounded left */
 const HELD_NOTE = 'absolute inset-px rounded-r-[3px] bg-(--accent)'
+
+/** A grace note's face, half a row tall (src/viz/ornament.ts) */
+const GRACE = 'absolute inset-px rounded-[2px] bg-(--accent)'
+
+/** The note picked for its ornament: ringed */
+const PICKED =
+  'absolute inset-0 rounded-[4px] shadow-[0_0_0_1.5px_var(--ink-0)]'
+
+/** The ornaments' toggle: a trill's zigzag */
+const TRILL = 'M2.5 11.5l2.2-5 2.2 5 2.2-5 2.2 5 2.2-5 2 5'
 
 /**
  * A bar's chip: the bar shown pressed, the bar playing ringed within and
@@ -94,6 +108,8 @@ interface Drag {
   readonly room: number
   /** Which way it is dragged, once it is */
   axis?: 'x' | 'y'
+  /** Held still: picked for its ornament, neither taken away nor dragged */
+  held?: boolean
 }
 
 /**
@@ -118,6 +134,12 @@ interface Drag {
  * the loop's knob lanes (LaneStrip), one over another, their steps in
  * line with the grid's, panned up and down past what fits; Lane lists
  * the knobs one may be added for (LanePicker) in the grid's place.
+ * A note held still, or tapped with Ornaments on, is picked for its
+ * ornament, ringed: OrnamentPanel, in the lanes' place while Ornaments
+ * is on, sets it, and while the sequencer is stopped each change is
+ * heard (Engine.auditionNote). With Ornaments on a tap no longer takes
+ * a note away; one put is picked. A note's ornament marks its box and
+ * the rows its graces play on (src/viz/ornament.ts).
  * The step playing is lit outside React, as the audio thread tells of
  * it; edits go to the engine, which sends the loop whole.
  */
@@ -210,6 +232,34 @@ export function StepGrid({ engine }: { engine: Engine }) {
   const dragRef = useRef<Drag | null>(null)
   const [hint, setHint] = useState('')
   const [clearing, setClearing] = useState(false)
+  // A touch held still: its timer
+  const holdRef = useRef<number | undefined>(undefined)
+
+  // Ornaments: the panel open, and the note picked in it, of its track
+  const [ornamenting, setOrnamenting] = useState(false)
+  const [picked, setPicked] = useState<{
+    readonly track: string
+    readonly step: number
+    readonly key: number
+  }>()
+  const pickedNote =
+    picked?.track === track.id
+      ? noteAt(loop, picked.step, picked.key)
+      : undefined
+  const closeOrnaments = useCallback(() => {
+    setOrnamenting(false)
+    setPicked(undefined)
+  }, [])
+  /**
+   * Picks the note on step at key for its ornament, the panel opened;
+   * heard, unless it sounds already (put by the touch picking it)
+   */
+  const pickNote = (step: number, key: number, heard: boolean) => {
+    setOrnamenting(true)
+    setPicked({ track: track.id, step, key })
+    const note = noteAt(loopRef.current, step, key)
+    if (heard && note) engine.auditionNote(note)
+  }
 
   // The knobs a lane may move: a synth's sound's and its fader's, or a
   // kit's fader's (its pads each a sound of its own)
@@ -289,6 +339,7 @@ export function StepGrid({ engine }: { engine: Engine }) {
   // A finger still down as the grid goes lets its note go
   useEffect(
     () => () => {
+      window.clearTimeout(holdRef.current)
       const drag = dragRef.current
       if (drag) engine.noteOff(drag.pointer)
     },
@@ -331,15 +382,26 @@ export function StepGrid({ engine }: { engine: Engine }) {
       column: box.width / COLUMNS,
       room: roomAt(was, note.step, key),
     }
+    // Held still, the note is picked for its ornament
+    const pointer = event.pointerId
+    window.clearTimeout(holdRef.current)
+    holdRef.current = window.setTimeout(() => {
+      const drag = dragRef.current
+      if (!drag || drag.pointer !== pointer || drag.axis) return
+      drag.held = true
+      setHint('')
+      pickNote(drag.step, drag.key, !drag.added)
+    }, HOLD)
   }
 
   const move = (event: PointerEvent<HTMLDivElement>) => {
     const drag = dragRef.current
-    if (!drag || drag.pointer !== event.pointerId) return
+    if (!drag || drag.pointer !== event.pointerId || drag.held) return
     const dx = event.clientX - drag.x
     const dy = event.clientY - drag.y
     drag.axis ??= dragAxis(dx, dy)
     if (!drag.axis) return
+    window.clearTimeout(holdRef.current)
     const note = noteAt(loopRef.current, drag.step, drag.key)
     if (!note) return
     if (drag.axis === 'y') {
@@ -360,11 +422,24 @@ export function StepGrid({ engine }: { engine: Engine }) {
     const drag = dragRef.current
     if (!drag || drag.pointer !== event.pointerId) return
     dragRef.current = null
+    window.clearTimeout(holdRef.current)
     engine.noteOff(drag.pointer)
     setHint('')
-    if (!drag.added && !drag.axis && event.type === 'pointerup') {
+    if (drag.held || drag.axis || event.type !== 'pointerup') return
+    // A tap: with Ornaments on, the note picked; otherwise one there goes
+    if (ornamenting) pickNote(drag.step, drag.key, !drag.added)
+    else if (!drag.added) {
       engine.editSeqLoop((each) => removeNote(each, drag.step, drag.key))
     }
+  }
+
+  /** The picked note's ornament changed: heard, while stopped */
+  const ornament = (to: Note['ornament']) => {
+    if (!pickedNote) return
+    const { step, key, length, velocity } = pickedNote
+    engine.editSeqLoop((each) => setOrnament(each, step, key, to))
+    const plain: Note = { step, key, length, velocity }
+    engine.auditionNote(to ? { ...plain, ornament: to } : plain)
   }
 
   const synth = kit === undefined
@@ -392,6 +467,20 @@ export function StepGrid({ engine }: { engine: Engine }) {
     }
     return out
   }, [rows, first, synth])
+
+  // The ornaments' marks in the bar shown, each note's as faint as it is
+  const marks = useMemo(() => {
+    const out: { id: string; opacity: number; marks: OrnamentMarks }[] = []
+    for (const note of loop.notes) {
+      if (!note.ornament) continue
+      const each = ornamentMarks(note, bar, first, rows, loop.steps, synth)
+      if (!each) continue
+      const opacity = 0.35 + 0.65 * note.velocity
+      out.push({ id: `${note.step}:${note.key}`, opacity, marks: each })
+    }
+    return out
+  }, [loop, bar, first, rows, synth])
+  const keyName = (key: number) => (kit ? (kit[key] ?? '') : noteName(key))
 
   const template = {
     gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))`,
@@ -443,6 +532,14 @@ export function StepGrid({ engine }: { engine: Engine }) {
         >
           {hint}
         </span>
+        <SmallIconButton
+          label="Ornaments"
+          path={TRILL}
+          pressed={ornamenting}
+          onClick={() =>
+            ornamenting ? closeOrnaments() : setOrnamenting(true)
+          }
+        />
         <button
           type="button"
           aria-haspopup="dialog"
@@ -465,7 +562,7 @@ export function StepGrid({ engine }: { engine: Engine }) {
 
       {/* Lanes under it, the grid keeps three rows: they pan instead */}
       <div
-        className={`flex flex-1 gap-1 ${loop.lanes.length > 0 ? 'min-h-16' : 'min-h-0'}`}
+        className={`flex flex-1 gap-1 ${ornamenting || loop.lanes.length > 0 ? 'min-h-16' : 'min-h-0'}`}
       >
         {reach > rows && (
           <RowNavigator
@@ -573,10 +670,80 @@ export function StepGrid({ engine }: { engine: Engine }) {
               </div>
             )
           })}
+          {marks.map(({ id, opacity, marks: each }) =>
+            each.graces.map((grace, k) => (
+              <div
+                key={`${id}:${k}`}
+                className="pointer-events-none absolute"
+                style={{
+                  left: `${grace.left * 100}%`,
+                  top: `${grace.top * 100}%`,
+                  width: `${grace.width * 100}%`,
+                  height: `${grace.height * 100}%`,
+                  opacity: 0.6 * opacity,
+                }}
+              >
+                <div className={GRACE} />
+              </div>
+            ))
+          )}
+          {marks.length > 0 && (
+            <svg
+              aria-hidden
+              viewBox="0 0 1 1"
+              preserveAspectRatio="none"
+              className="pointer-events-none absolute inset-0 size-full"
+            >
+              {marks.map(({ id, opacity, marks: each }) => (
+                <g
+                  key={id}
+                  opacity={opacity}
+                  fill="none"
+                  stroke="var(--on-colour)"
+                  strokeWidth={1.5}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  {each.ticks.map((tick, k) => (
+                    <line
+                      key={k}
+                      x1={tick.x}
+                      x2={tick.x}
+                      y1={tick.top}
+                      y2={tick.bottom}
+                      vectorEffect="non-scaling-stroke"
+                    />
+                  ))}
+                  {each.path.length > 1 && (
+                    <polyline
+                      points={each.path
+                        .map((point) => `${point.x},${point.y}`)
+                        .join(' ')}
+                      vectorEffect="non-scaling-stroke"
+                    />
+                  )}
+                </g>
+              ))}
+            </svg>
+          )}
+          {ornamenting && pickedNote && (
+            <Ring note={pickedNote} bar={bar} first={first} rows={rows} />
+          )}
         </div>
       </div>
 
-      {loop.lanes.length > 0 && (
+      {ornamenting && (
+        <OrnamentPanel
+          note={pickedNote}
+          pitched={synth}
+          tempo={song.tempo}
+          keyName={keyName}
+          onChange={ornament}
+          onClose={closeOrnaments}
+        />
+      )}
+
+      {!ornamenting && loop.lanes.length > 0 && (
         <div className="flex max-h-[45%] shrink-0 flex-col gap-2 overflow-y-auto overscroll-contain [scrollbar-width:none]">
           {loop.lanes.map((lane) => {
             const knob = knobOf(lane)
@@ -624,6 +791,35 @@ export function StepGrid({ engine }: { engine: Engine }) {
           onCancel={() => setClearing(false)}
         />
       )}
+    </div>
+  )
+}
+
+/** The ring round the note picked for its ornament, where it is shown */
+function Ring({
+  note,
+  bar,
+  first,
+  rows,
+}: {
+  note: Note
+  bar: number
+  first: number
+  rows: number
+}) {
+  const box = noteBox(note, bar, first, rows)
+  if (!box) return null
+  return (
+    <div
+      className="pointer-events-none absolute"
+      style={{
+        left: `${box.left * 100}%`,
+        top: `${box.top * 100}%`,
+        width: `${box.width * 100}%`,
+        height: `${box.height * 100}%`,
+      }}
+    >
+      <div className={PICKED} />
     </div>
   )
 }

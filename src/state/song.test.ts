@@ -33,6 +33,7 @@ import {
   setLaneOn,
   setLaneValues,
   setLoopOn,
+  setOrnament,
   setSwing,
   setTempo,
   type KnobLane,
@@ -208,6 +209,70 @@ describe('a loop', () => {
     expect(clearLoop(from)).toEqual({ steps: 32, notes: [], lanes: [] })
     const empty = clearLoop(from)
     expect(clearLoop(empty)).toBe(empty)
+  })
+})
+
+describe('a note’s ornament', () => {
+  const trill = {
+    kind: 'trill',
+    interval: 2,
+    speed: 4,
+    restart: false,
+  } as const
+
+  it('is given to the note on a step and a key, and taken away', () => {
+    const plain = loop([note(0, 60, 4, 0.5), note(4, 62)])
+    const ornamented = setOrnament(plain, 0, 60, trill)
+    expect(noteAt(ornamented, 0, 60)).toEqual({
+      ...note(0, 60, 4, 0.5),
+      ornament: trill,
+    })
+    expect(noteAt(ornamented, 4, 62)).toBe(noteAt(plain, 4, 62))
+    expect(setOrnament(ornamented, 0, 60, undefined)).toEqual(plain)
+  })
+
+  it('leaves the loop itself where no note is, or nothing changes', () => {
+    const plain = loop([note(0, 60)])
+    expect(setOrnament(plain, 1, 60, trill)).toBe(plain)
+    expect(setOrnament(plain, 0, 60, undefined)).toBe(plain)
+    const ornamented = setOrnament(plain, 0, 60, trill)
+    expect(setOrnament(ornamented, 0, 60, { ...trill })).toBe(ornamented)
+  })
+
+  it('stays with its note as it is moved, made longer or softer', () => {
+    const ornamented = setOrnament(loop([note(0, 60)]), 0, 60, trill)
+    const held = noteAt(ornamented, 0, 60) as Note
+    const longer = putNote(ornamented, { ...held, length: 3, velocity: 0.4 })
+    expect(noteAt(longer, 0, 60)?.ornament).toEqual(trill)
+  })
+
+  it('is kept, and read back cleaned or as none', () => {
+    let song = editLoop(initSong(), 't1', () =>
+      setOrnament(loop([note(0, 60, 2), note(4, 62)]), 0, 60, trill)
+    )
+    const kept = storage()
+    saveSong(kept, song)
+    expect(loadSong(kept)).toEqual(song)
+    song = readSong({
+      loops: {
+        t1: [
+          {
+            steps: 16,
+            notes: [
+              { ...note(0, 60), ornament: { kind: 'trill', interval: 40 } },
+              { ...note(1, 60), ornament: { kind: 'shake' } },
+              { ...note(2, 60), ornament: 'grace' },
+            ],
+          },
+        ],
+      },
+    })
+    const notes = loopOf(song, 't1').notes
+    expect(notes[0]?.ornament).toEqual({ ...trill, interval: 12 })
+    expect(notes.slice(1).map((each) => 'ornament' in each)).toEqual([
+      false,
+      false,
+    ])
   })
 })
 

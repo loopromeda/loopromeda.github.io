@@ -657,6 +657,25 @@ describe('Strip', () => {
     }
   })
 
+  it('moves a note’s pitch on the frame queued, at once', () => {
+    const queued = new Strip(saw(), new EffectRack(SAMPLE_RATE))
+    queued.queueBend(50, 1, 60)
+    expect(queued.pending).toBe(1)
+    const left = new Float32Array(BLOCK)
+    queued.render(left, new Float32Array(BLOCK))
+    expect(queued.pending).toBe(0)
+    const reference = saw()
+    const before = voices(reference, [50])
+    reference.bend(1, 60, true)
+    const after = voices(reference, [BLOCK - 50])
+    for (let i = 0; i < 50; i++) {
+      expect(left[i]).toBeCloseTo(before[i] as number, 5)
+    }
+    for (let i = 0; i < after.length; i++) {
+      expect(left[50 + i]).toBeCloseTo(after[i] as number, 5)
+    }
+  })
+
   it('takes a block’s worth of notes and no more', () => {
     const full = new Strip(still(), new EffectRack(SAMPLE_RATE))
     let taken = 0

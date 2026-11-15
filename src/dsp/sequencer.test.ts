@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { ChainSynth } from './chainSynth'
 import { Click } from './click'
 import { EffectRack } from './effects'
+import { ORNAMENT_DEFAULTS, type Ornament } from './ornament'
 import { SAW } from './oscillator'
 import { Strip } from './output'
 import {
@@ -32,10 +33,18 @@ interface Event {
 /** A target that writes down what it is told, by the frame since start */
 class Tape implements Target {
   readonly events: Event[] = []
+  /** The pitches moved: when, the key sounding, and the note it moved to */
+  readonly bends: { frame: number; key: number; note: number }[] = []
   /** The frame the next block starts on */
   base = 0
   /** Whether a note starts when told to */
   room = true
+
+  constructor(readonly pitched = true) {}
+
+  bend(offset: number, key: number, note: number): void {
+    this.bends.push({ frame: this.base + offset, key, note })
+  }
 
   on(offset: number, key: number, velocity: number): boolean {
     if (!this.room) return false
@@ -62,8 +71,14 @@ class Tape implements Target {
   }
 }
 
-function note(step: number, key = 0, length = 1, velocity = 1): LaneNote {
-  return { step, key, length, velocity }
+function note(
+  step: number,
+  key = 0,
+  length = 1,
+  velocity = 1,
+  ornament?: Ornament
+): LaneNote {
+  return { step, key, length, velocity, ...(ornament && { ornament }) }
 }
 
 /** A clock over one lane for each loop given, written down on tapes */
@@ -760,3 +775,182 @@ function crossings(of: Strip): number {
   }
   return count
 }
+
+describe('ornaments', () => {
+  const grace = ORNAMENT_DEFAULTS.grace
+  const trill = ORNAMENT_DEFAULTS.trill
+
+  it('plays a grace note before the step, in the step before it', () => {
+    const { sequencer, tape, run } = clock([[16, [note(4, 60, 2, 1, grace)]]])
+    sequencer.play()
+    run(STEP * 7)
+    // A quarter of a step early, a semitone under, softer
+    expect(tape.ons(59)).toEqual([STEP * 3.75])
+    expect(tape.offs(59)).toEqual([STEP * 4])
+    expect(tape.events.find((event) => event.key === 59)?.velocity).toBeCloseTo(
+      0.7,
+      6
+    )
+    expect(tape.ons(60)).toEqual([STEP * 4])
+    expect(tape.offs(60)).toEqual([STEP * 6])
+  })
+
+  it('spreads a sound over its own step’s length, swung', () => {
+    const { sequencer, tape, run } = clock([[16, [note(4, 60, 1, 1, grace)]]])
+    sequencer.setTempo(120, 0.6)
+    sequencer.play()
+    run(STEP * 6)
+    // Step 3, the second of a pair, is 0.4 of two steps long, from 3.2
+    expect(tape.ons(59)).toEqual([STEP * 3.2 + STEP * 0.8 * 0.75])
+    expect(tape.ons(60)).toEqual([STEP * 4])
+  })
+
+  it('plays a grace two steps early, three of them at ×2', () => {
+    const ruff = { ...grace, count: 3, speed: 2 } as const
+    const { sequencer, tape, run } = clock([[16, [note(8, 60, 1, 1, ruff)]]])
+    sequencer.play()
+    run(STEP * 10)
+    expect(tape.ons()).toEqual([STEP * 6.5, STEP * 7, STEP * 7.5, STEP * 8])
+    expect(
+      tape.events.filter((event) => event.on).map((event) => event.key)
+    ).toEqual([57, 58, 59, 60])
+  })
+
+  it('plays graces on the step, the note after them', () => {
+    const on = { ...grace, place: 'on', interval: 2 } as const
+    const { sequencer, tape, run } = clock([[16, [note(2, 60, 2, 1, on)]]])
+    sequencer.play()
+    run(STEP * 5)
+    expect(tape.ons(62)).toEqual([STEP * 2])
+    expect(tape.offs(62)).toEqual([STEP * 2.25])
+    expect(tape.ons(60)).toEqual([STEP * 2.25])
+    expect(tape.offs(60)).toEqual([STEP * 4])
+  })
+
+  it('moves a trill’s pitch, the note struck once', () => {
+    const { sequencer, tape, run } = clock([[16, [note(0, 60, 1, 1, trill)]]])
+    sequencer.play()
+    run(STEP * 2)
+    expect(tape.ons()).toEqual([0])
+    expect(tape.bends).toEqual([
+      { frame: STEP * 0.25, key: 60, note: 62 },
+      { frame: STEP * 0.5, key: 60, note: 60 },
+      { frame: STEP * 0.75, key: 60, note: 62 },
+    ])
+    expect(tape.offs(60)).toEqual([STEP])
+  })
+
+  it('strikes each sound of a trill that restarts', () => {
+    const struck = { ...trill, restart: true }
+    const { sequencer, tape, run } = clock([[16, [note(0, 60, 1, 1, struck)]]])
+    sequencer.play()
+    run(STEP * 2)
+    expect(tape.ons(60)).toEqual([0, STEP * 0.5])
+    expect(tape.ons(62)).toEqual([STEP * 0.25, STEP * 0.75])
+    expect(tape.offs(60)).toEqual([STEP * 0.25 * 0.85, STEP * (0.5 + 0.2125)])
+    expect(tape.bends).toEqual([])
+  })
+
+  it('cycles an arpeggio’s chord over the note’s length', () => {
+    const arp = { ...ORNAMENT_DEFAULTS.arp, order: 'down' } as const
+    const { sequencer, tape, run } = clock([[16, [note(0, 60, 2, 1, arp)]]])
+    sequencer.play()
+    run(STEP * 3)
+    // Struck at its top, moved down the chord and round again
+    expect(tape.ons()).toEqual([0])
+    expect(tape.events[0]?.key).toBe(67)
+    expect(tape.bends.map((bend) => bend.note)).toEqual([
+      63, 60, 67, 63, 60, 67, 63,
+    ])
+    expect(tape.bends.every((bend) => bend.key === 67)).toBe(true)
+    expect(tape.offs(67)).toEqual([STEP * 2])
+  })
+
+  it('plays the same frames whatever the block’s length', () => {
+    const notes = [note(3, 60, 2, 1, trill), note(8, 62, 1, 1, grace)]
+    const a = clock([[16, notes]])
+    const b = clock([[16, notes]])
+    a.sequencer.play()
+    b.sequencer.play()
+    a.run(STEP * 10, 128)
+    b.run(STEP * 10, 37)
+    expect(b.tape.events).toEqual(a.tape.events)
+    expect(b.tape.bends).toEqual(a.tape.bends)
+  })
+
+  it('leaves out graces whose time went by as it starts', () => {
+    const { sequencer, tape, run } = clock([[16, [note(0, 60, 1, 1, grace)]]])
+    sequencer.play()
+    run(STEP * 17)
+    // None before the first step; the second time round, in step 15
+    expect(tape.ons(59)).toEqual([STEP * 15.75])
+    expect(tape.ons(60)).toEqual([0, STEP * 16])
+  })
+
+  it('rolls a kit’s pad, and plays no pitch on one', () => {
+    const pad = new Tape(false)
+    const sequencer = new Sequencer(SAMPLE_RATE)
+    const lane = new Lane(pad)
+    const rise = { ...ORNAMENT_DEFAULTS.roll, shape: 'rise' } as const
+    lane.setLoop(16, [
+      note(0, 1, 1, 1, rise),
+      note(2, 2, 1, 1, trill),
+      note(4, 3, 1, 1, grace),
+    ])
+    sequencer.setLanes([lane])
+    sequencer.play()
+    for (let frame = 0; frame < STEP * 6; frame += BLOCK) {
+      pad.base = frame
+      sequencer.process(BLOCK)
+    }
+    expect(pad.ons(1)).toEqual([0, STEP / 2])
+    const rolled = pad.events.filter((e) => e.on && e.key === 1)
+    expect(rolled.map((e) => Math.round(e.velocity * 100))).toEqual([30, 100])
+    // A trill on a pad is the hit alone
+    expect(pad.ons(2)).toEqual([STEP * 2])
+    expect(pad.bends).toEqual([])
+    // A grace on a pad is a flam: the same pad, softer, just before
+    expect(pad.ons(3)).toEqual([STEP * 3.75, STEP * 4])
+    expect(pad.events.find((e) => e.key === 3)?.velocity).toBeCloseTo(0.45, 6)
+  })
+
+  it('goes on with a note being played out as the loop changes around it', () => {
+    const arp = ORNAMENT_DEFAULTS.arp
+    const { sequencer, tape, lanes, run } = clock([
+      [16, [note(0, 60, 2, 1, arp)]],
+    ])
+    sequencer.play()
+    run(STEP)
+    ;(lanes[0] as Lane).setLoop(16, [note(0, 60, 2, 1, arp), note(5, 72)])
+    run(STEP * 2)
+    expect(tape.bends.length).toBe(7)
+    // Changed under it, it stops moving and ends as it was going to
+    const again = clock([[16, [note(0, 60, 2, 1, arp)]]])
+    again.sequencer.play()
+    again.run(STEP)
+    ;(again.lanes[0] as Lane).setLoop(16, [note(0, 60, 2, 0.5, arp)])
+    again.run(STEP * 2)
+    expect(again.tape.bends.length).toBe(3)
+    expect(again.tape.offs(60)).toEqual([STEP * 2])
+  })
+
+  it('auditions a note while stopped, its graces first, then is done', () => {
+    const tape = new Tape()
+    const lane = new Lane(tape)
+    const sequencer = new Sequencer(SAMPLE_RATE)
+    sequencer.setLanes([lane])
+    sequencer.audition(lane, note(9, 60, 1, 0.5, grace))
+    for (let frame = 0; frame < STEP * 3; frame += BLOCK) {
+      tape.base = frame
+      sequencer.process(BLOCK)
+    }
+    expect(tape.ons(59)).toEqual([STEP * 0.75])
+    expect(tape.ons(60)).toEqual([STEP])
+    expect(tape.offs(60)).toEqual([STEP * 2])
+    expect(lane.busy).toBe(false)
+    // Playing, it leaves the note to the loop
+    sequencer.play()
+    sequencer.audition(lane, note(0, 64))
+    expect(lane.busy).toBe(false)
+  })
+})

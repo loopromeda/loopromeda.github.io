@@ -304,6 +304,8 @@ export class ChainVoice {
   #nextFrom = 0
   /** The bend of the note waiting, from its note, semitones */
   #nextBend = 0
+  /** Whether the bend waiting is there at once */
+  #nextBendNow = false
   /** Its Slide, and the Slide that glides from (NaN: from nowhere) */
   #nextSlide = 0
   #nextSlideFrom = Number.NaN
@@ -402,6 +404,7 @@ export class ChainVoice {
       this.#nextVelocity = velocity
       this.#nextFrom = from
       this.#nextBend = 0
+      this.#nextBendNow = false
       this.#nextSlide = slide
       this.#nextSlideFrom = slideFrom
       this.#amp.choke()
@@ -414,14 +417,18 @@ export class ChainVoice {
    * Bends the note to note (a MIDI number, between semitones too): the
    * pitch follows it at the bend's pace, and nothing restarts. A glide
    * under way carries on beneath it, to the note bent. A note waiting to
-   * start bends once it starts.
+   * start bends once it starts. Now, the pitch is there at once.
    */
-  bend(note: number): void {
+  bend(note: number, now = false): void {
     if (this.#waiting) {
       this.#nextBend = note - this.#nextNote
+      this.#nextBendNow = now
       return
     }
     this.#bendTarget = note - this.#note
+    if (!now) return
+    this.#bend = this.#bendTarget
+    this.#pitch = this.#base + this.#bend
   }
 
   /**
@@ -443,6 +450,7 @@ export class ChainVoice {
       this.#nextNote = note
       this.#nextVelocity = velocity
       this.#nextBend = 0
+      this.#nextBendNow = false
       if (slide !== undefined) this.#nextSlide = slide
       return
     }
@@ -511,6 +519,10 @@ export class ChainVoice {
         this.#nextSlideFrom
       )
       this.#bendTarget = this.#nextBend
+      if (this.#nextBendNow) {
+        this.#bend = this.#bendTarget
+        this.#pitch = this.#base + this.#bend
+      }
     }
     if (!this.#amp.active) return
     const settings = this.#settings

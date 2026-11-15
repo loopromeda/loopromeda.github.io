@@ -342,6 +342,20 @@ describe('ChainSynth', () => {
     expect(hertz(rest(b)) / hertz(rest(a))).toBeCloseTo(2, 1)
   })
 
+  it('bends at once when asked, an ornament’s pitch moving', () => {
+    const still = sine()
+    const moved = sine()
+    still.noteOn(1, 72, 1)
+    moved.noteOn(1, 60, 1)
+    render(still, 0.05)
+    render(moved, 0.05)
+    moved.bend(1, 72, true)
+    const a = render(still, 0.05)
+    const b = render(moved, 0.05)
+    // An octave up from its first samples: the same pitch as the note's
+    expect(hertz(b.subarray(0, b.length / 2)) / hertz(a)).toBeCloseTo(1, 1)
+  })
+
   it('bends the key named, in mono the one it plays once it is back', () => {
     const reference = sine()
     const synth = sine()

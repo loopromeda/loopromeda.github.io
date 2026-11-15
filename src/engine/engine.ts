@@ -25,6 +25,7 @@ import {
   playedNotes,
   setLoopOn,
   type Loop,
+  type Note,
   type Song,
 } from '../state/song'
 import { Recorder, type RecordMode } from '../state/record'
@@ -1069,6 +1070,16 @@ export class Engine {
   /** Plays what edit makes of the loop of the Seq tab's track */
   editSeqLoop(edit: (loop: Loop) => Loop): void {
     this.setSong(editLoop(this.#song, this.getSeqTrack().id, edit))
+  }
+
+  /**
+   * Plays note of the Seq tab's track once, its ornament and all, at the
+   * song's tempo, as an ornament is edited: only while the song is
+   * stopped (playing, the loop plays it in its turn)
+   */
+  auditionNote(note: Note): void {
+    if (this.#playing) return
+    this.#post({ t: 'audition', track: this.getSeqTrack().id, note })
   }
 
   /** Calls listener after each change to the song; returns the way to stop */

@@ -6,11 +6,13 @@
  * track has a lane: its loop of notes, played round at the loop's own
  * length, into the track's strips (output.ts's queue), each note on the
  * frame its step falls on and let go on the frame of the step it ends
- * at. Allocates nothing in process: a loop is set, and a lane made, in a
+ * at, and its ornament's sounds (ornament.ts) on frames between them.
+ * Allocates nothing in process: a loop is set, and a lane made, in a
  * message's handler.
  */
 import type { Click } from './click'
 import { Clock } from './clock'
+import { expand, voiceEnds, type Ornament } from './ornament'
 import type { Strip } from './output'
 
 /**
@@ -54,16 +56,27 @@ export const SEQ_KEY = -1_000_000
 /** What a lane plays: a track's strips, by the keys of its loop */
 export interface Target {
   /**
+   * Whether its keys are notes, whose pitch an ornament moves (a kit's
+   * pads are not): unless false, they are
+   */
+  readonly pitched?: boolean
+  /**
    * Key (a synth's note, a kit's pad) starts at velocity on frame offset
    * of the next block: whether it will
    */
   on(offset: number, key: number, velocity: number): boolean
   /** Key lets go on frame offset of the next block */
   off(offset: number, key: number): void
+  /**
+   * Key, sounding, moves to note on frame offset of the next block, at
+   * once and nothing restarting: a tracker's arpeggio
+   */
+  bend?(offset: number, key: number, note: number): void
 }
 
 /** A synth's strip: a key is the note it plays */
 export class SynthTarget implements Target {
+  readonly pitched = true
   readonly #strip: Strip
 
   constructor(strip: Strip) {
@@ -77,10 +90,15 @@ export class SynthTarget implements Target {
   off(offset: number, key: number): void {
     this.#strip.queueOff(offset, SEQ_KEY - key)
   }
+
+  bend(offset: number, key: number, note: number): void {
+    this.#strip.queueBend(offset, SEQ_KEY - key, note)
+  }
 }
 
 /** A kit's strips: a key is a pad, played at the note mapped to it */
 export class KitTarget implements Target {
+  readonly pitched = false
   readonly #pads: readonly Strip[]
   /** The note each pad plays its sound at: middle C until told */
   readonly notes: Float32Array
@@ -109,28 +127,175 @@ export interface LaneNote {
   readonly length: number
   /** How hard it starts, 0..1 */
   readonly velocity: number
+  /** What it plays around and within its step (ornament.ts) */
+  readonly ornament?: Ornament
 }
+
+/**
+ * The most steps before its own a note's sounds start: three grace notes
+ * at ×2 are a step and a half early
+ */
+const MAX_LEAD = 2
+
+/** The notes of a lane being played out at once, their sounds to come */
+const MAX_ACTIVE = 64
+
+/** The events a lane may hold for later frames, and work out in a step */
+const MAX_PENDING = 1024
+const MAX_WINDOW = 1024
+
+/** What an event does, in the order those on one frame go */
+const OFF = 0
+const BEND = 1
+const ON = 2
+
+/**
+ * The sounds of some notes (ornament.ts), by note: note n's are first[n]
+ * up to first[n + 1], in the order they start. Each note's step and key;
+ * each sound's start (t, in steps from its note's), when the note it
+ * strikes lets go (end: its pitch moved by the sounds after it, after
+ * theirs), its semitones from the key, its velocity, and whether it
+ * strikes.
+ */
+interface Sounds {
+  readonly first: Uint32Array
+  readonly step: Uint32Array
+  readonly key: Int16Array
+  readonly t: Float64Array
+  readonly end: Float64Array
+  readonly off: Int16Array
+  readonly v: Float32Array
+  readonly strike: Uint8Array
+}
+
+/** Notes' sounds, as expand gives them, for a target pitched or not */
+function soundsOf(notes: readonly LaneNote[], pitched: boolean): Sounds {
+  const expanded = notes.map((note) =>
+    expand(Math.floor(note.length), note.velocity, note.ornament, pitched)
+  )
+  let total = 0
+  for (const each of expanded) total += each.length
+  const first = new Uint32Array(notes.length + 1)
+  const step = new Uint32Array(notes.length)
+  const key = new Int16Array(notes.length)
+  const t = new Float64Array(total)
+  const end = new Float64Array(total)
+  const off = new Int16Array(total)
+  const v = new Float32Array(total)
+  const strike = new Uint8Array(total)
+  let k = 0
+  expanded.forEach((sounds, n) => {
+    const note = notes[n] as LaneNote
+    first[n] = k
+    step[n] = note.step
+    key[n] = note.key
+    const ends = voiceEnds(sounds)
+    sounds.forEach((sound, s) => {
+      t[k] = sound.t
+      // Only a struck sound's: 0 for one moving a pitch
+      end[k] = sound.strike ? (ends[s] as number) : 0
+      off[k] = sound.off
+      v[k] = sound.v
+      strike[k] = sound.strike ? 1 : 0
+      k++
+    })
+  })
+  first[notes.length] = k
+  return { first, step, key, t, end, off, v, strike }
+}
+
+/** Whether note a of one set of sounds plays as note b of another */
+function sameSounds(x: Sounds, a: number, y: Sounds, b: number): boolean {
+  const from = x.first[a] as number
+  const count = (x.first[a + 1] as number) - from
+  const to = y.first[b] as number
+  if ((y.first[b + 1] as number) - to !== count) return false
+  if (x.key[a] !== y.key[b]) return false
+  for (let k = 0; k < count; k++) {
+    if (
+      x.t[from + k] !== y.t[to + k] ||
+      x.end[from + k] !== y.end[to + k] ||
+      x.off[from + k] !== y.off[to + k] ||
+      x.v[from + k] !== y.v[to + k] ||
+      x.strike[from + k] !== y.strike[to + k]
+    ) {
+      return false
+    }
+  }
+  return true
+}
+
+const NO_SOUNDS = soundsOf([], true)
 
 /**
  * One track's loop and the notes of it sounding. The loop plays round at
  * its own length, counted from the clock's first step, so loops of 16
- * and 32 steps stay in line.
+ * and 32 steps stay in line. A note plays as its sounds (ornament.ts):
+ * as each step fires, the sounds that fall within it are worked out, on
+ * frames spread over the step's own length (a swung step's, longer or
+ * shorter), with those of the notes a step or two on that start before
+ * their own; what falls on the step's frame goes to the target at once,
+ * the rest as advance reaches its frame. A note started is held until
+ * its end; one held by another lets go as that starts the same key.
  */
 export class Lane {
   readonly #target: Target
+  readonly #pitched: boolean
   #steps = 0
-  /** The loop's notes by step: step s's are first[s] up to first[s + 1] */
-  #first = new Uint32Array(1)
-  #keys = new Int16Array(0)
-  #lengths = new Uint32Array(0)
-  #velocities = new Float32Array(0)
-  /** The notes sounding: their keys, and the step each ends at */
+  /** The loop's notes by step: step s's are by[s] up to by[s + 1] */
+  #by = new Uint32Array(1)
+  #sounds: Sounds = NO_SOUNDS
+  /** How many steps early the loop's earliest sound is */
+  #lead = 0
+  /** The note auditioned, as its sounds (audition) */
+  #trial: Sounds = NO_SOUNDS
+  /** The step the next fire is expected on: another is a jump */
+  #expect = Number.NaN
+  /**
+   * The notes being played out: each one's note (of the trial's sounds
+   * or the loop's), its step, the next of its sounds, and the key it
+   * holds and by what, 0 for none
+   */
+  readonly #activeNote = new Uint32Array(MAX_ACTIVE)
+  readonly #activeTrial = new Uint8Array(MAX_ACTIVE)
+  readonly #activeStart = new Float64Array(MAX_ACTIVE)
+  readonly #activeNext = new Uint32Array(MAX_ACTIVE)
+  readonly #activeKey = new Int16Array(MAX_ACTIVE)
+  readonly #activeHold = new Uint32Array(MAX_ACTIVE)
+  #active = 0
+  /** The notes sounding: their keys, the step each ends at, and its hold */
   readonly #heldKey = new Int16Array(MAX_HELD)
   readonly #heldEnd = new Float64Array(MAX_HELD)
+  readonly #heldHold = new Uint32Array(MAX_HELD)
   #held = 0
+  /** A new hold's number: never 0 */
+  #hold = 0
+  /**
+   * The events for later frames, in order: each one's frame (counted as
+   * base is), what it does, its key, its velocity or the note it moves
+   * to, and its hold; from head on
+   */
+  readonly #pendingAt = new Float64Array(MAX_PENDING)
+  readonly #pendingKind = new Uint8Array(MAX_PENDING)
+  readonly #pendingKey = new Int16Array(MAX_PENDING)
+  readonly #pendingValue = new Float32Array(MAX_PENDING)
+  readonly #pendingHold = new Uint32Array(MAX_PENDING)
+  #head = 0
+  #pending = 0
+  /** The frame the next block starts on, counted by advance */
+  #base = 0
+  /** A step's events, worked out, and the order they go in */
+  readonly #windowAt = new Float64Array(MAX_WINDOW)
+  readonly #windowKind = new Uint8Array(MAX_WINDOW)
+  readonly #windowKey = new Int16Array(MAX_WINDOW)
+  readonly #windowValue = new Float32Array(MAX_WINDOW)
+  readonly #windowHold = new Uint32Array(MAX_WINDOW)
+  readonly #order = new Uint16Array(MAX_WINDOW)
+  #window = 0
 
   constructor(target: Target) {
     this.#target = target
+    this.#pitched = target.pitched !== false
   }
 
   /** Its notes sounding now */
@@ -138,90 +303,140 @@ export class Lane {
     return this.#held
   }
 
+  /** Whether anything of it sounds, or is still to */
+  get busy(): boolean {
+    return this.#active > 0 || this.#held > 0 || this.#pending > this.#head
+  }
+
   /**
    * Plays notes round every steps steps instead (none: silence), from
-   * the next step on; a note sounding ends where it was going to. Notes
+   * the next step on; a note sounding ends where it was going to, and one
+   * being played out goes on where the new loop has it as it was. Notes
    * past the loop's end, or not whole, are left out. Allocates: for a
    * message's handler, not process.
    */
   setLoop(steps: number, notes: readonly LaneNote[]): void {
     const length = Math.max(0, Math.min(MAX_STEPS, Math.floor(steps) || 0))
-    const kept = notes.filter(
-      (note) =>
-        Number.isInteger(note.step) &&
-        note.step >= 0 &&
-        note.step < length &&
-        Number.isInteger(note.key) &&
-        note.length >= 1
-    )
-    const first = new Uint32Array(length + 1)
-    for (const note of kept) {
-      first[note.step + 1] = (first[note.step + 1] as number) + 1
-    }
+    const kept = notes
+      .filter(
+        (note) =>
+          Number.isInteger(note.step) &&
+          note.step >= 0 &&
+          note.step < length &&
+          Number.isInteger(note.key) &&
+          note.length >= 1
+      )
+      .sort((a, b) => a.step - b.step)
+    const by = new Uint32Array(length + 1)
+    for (const note of kept)
+      by[note.step + 1] = (by[note.step + 1] as number) + 1
     for (let s = 0; s < length; s++) {
-      first[s + 1] = (first[s + 1] as number) + (first[s] as number)
+      by[s + 1] = (by[s + 1] as number) + (by[s] as number)
     }
-    const keys = new Int16Array(kept.length)
-    const lengths = new Uint32Array(kept.length)
-    const velocities = new Float32Array(kept.length)
-    const next = first.slice(0, length)
-    for (const note of kept) {
-      const k = next[note.step] as number
-      next[note.step] = k + 1
-      keys[k] = note.key
-      lengths[k] = Math.floor(note.length)
-      velocities[k] = note.velocity
+    const sounds = soundsOf(kept, this.#pitched)
+    let lead = 0
+    for (let n = 0; n < kept.length; n++) {
+      const early = -(sounds.t[sounds.first[n] as number] as number)
+      if (early > lead) lead = early
+    }
+    // The notes being played out, found again in the new loop or let be
+    const was = this.#sounds
+    for (let e = 0; e < this.#active;) {
+      if (this.#activeTrial[e] === 1) {
+        e++
+        continue
+      }
+      const n = this.#activeNote[e] as number
+      const step = was.step[n] as number
+      let found = -1
+      if (step < length) {
+        const end = by[step + 1] as number
+        for (let m = by[step] as number; m < end && found < 0; m++) {
+          if (sameSounds(was, n, sounds, m)) found = m
+        }
+      }
+      if (found < 0) {
+        this.#retire(e)
+        continue
+      }
+      this.#activeNote[e] = found
+      this.#activeNext[e] =
+        (this.#activeNext[e] as number) -
+        (was.first[n] as number) +
+        (sounds.first[found] as number)
+      e++
     }
     this.#steps = length
-    this.#first = first
-    this.#keys = keys
-    this.#lengths = lengths
-    this.#velocities = velocities
+    this.#by = by
+    this.#sounds = sounds
+    this.#lead = Math.min(MAX_LEAD, Math.ceil(lead))
   }
 
   /**
-   * The clock's step falls on frame offset of the next block: the notes
-   * ending by it let go, then its own start (a key still sounding from
-   * an earlier step starts again, its old end forgotten)
+   * Plays note on its own (a step of 0 meaning now), on a clock's steps
+   * firing with loop false (Sequencer.audition): its sounds before its
+   * step too, from the first step. Allocates: for a message's handler.
    */
-  fire(step: number, offset: number): void {
-    const target = this.#target
-    const heldKey = this.#heldKey
-    const heldEnd = this.#heldEnd
-    for (let h = 0; h < this.#held;) {
-      if ((heldEnd[h] as number) > step) {
-        h++
-        continue
-      }
-      target.off(offset, heldKey[h] as number)
-      this.#drop(h)
+  audition(note: LaneNote): void {
+    for (let e = 0; e < this.#active;) {
+      if (this.#activeTrial[e] === 1) this.#retire(e)
+      else e++
     }
-    if (this.#steps === 0) return
-    const local = step % this.#steps
-    const end = this.#first[local + 1] as number
-    for (let n = this.#first[local] as number; n < end; n++) {
-      const key = this.#keys[n] as number
-      // The synth lets a key playing go as it starts it again
-      for (let h = 0; h < this.#held; h++) {
-        if (heldKey[h] !== key) continue
-        this.#drop(h)
-        break
-      }
-      if (this.#held === MAX_HELD) continue
-      if (!target.on(offset, key, this.#velocities[n] as number)) continue
-      heldKey[this.#held] = key
-      heldEnd[this.#held] = step + (this.#lengths[n] as number)
-      this.#held++
-    }
+    const length = Math.max(1, Math.floor(note.length) || 1)
+    this.#trial = soundsOf([{ ...note, step: 0, length }], this.#pitched)
+    if (this.#active === MAX_ACTIVE) return
+    const early = -(this.#trial.t[0] as number)
+    const e = this.#active++
+    this.#activeNote[e] = 0
+    this.#activeTrial[e] = 1
+    this.#activeStart[e] = Math.min(MAX_LEAD, Math.ceil(early))
+    this.#activeNext[e] = 0
+    this.#activeKey[e] = -1
+    this.#activeHold[e] = 0
+    this.#expect = 0
+  }
+
+  /**
+   * The clock's step falls on frame offset of the next block and lasts
+   * frames: the notes ending by it let go, then its own start, each
+   * sound of the notes being played out that falls within it on its
+   * frame; with loop false, only the notes already being played out (an
+   * audition's). A key still sounding from an earlier step starts again,
+   * its old end forgotten.
+   */
+  fire(step: number, offset: number, frames = 0, loop = true): void {
+    const at = this.#base + offset
+    this.#flush(at)
+    this.#window = 0
+    const jumped = step !== this.#expect
+    this.#expect = step + 1
+    if (loop && this.#steps > 0) this.#admit(step, jumped)
+    this.#play(step, at, frames)
+    this.#ends(step, at, frames)
+    this.#send(at)
+  }
+
+  /**
+   * The next block of length frames: the events waiting for its frames
+   * go, each on its own
+   */
+  advance(length: number): void {
+    const end = this.#base + length
+    this.#flush(end)
+    this.#base = end
   }
 
   /**
    * The clock moved by steps: each note sounding ends as many steps on,
-   * after as long as it was going to sound
+   * after as long as it was going to sound, and each being played out
+   * goes on as many steps on
    */
   shift(steps: number): void {
     for (let h = 0; h < this.#held; h++) {
       this.#heldEnd[h] = (this.#heldEnd[h] as number) + steps
+    }
+    for (let e = 0; e < this.#active; e++) {
+      this.#activeStart[e] = (this.#activeStart[e] as number) + steps
     }
   }
 
@@ -230,12 +445,269 @@ export class Lane {
     for (let h = 0; h < this.#held; h++) {
       this.#target.off(offset, this.#heldKey[h] as number)
     }
-    this.#held = 0
+    this.forget()
   }
 
   /** Forgets the notes sounding: their voices were stopped elsewhere */
   forget(): void {
     this.#held = 0
+    this.#active = 0
+    this.#head = 0
+    this.#pending = 0
+    this.#expect = Number.NaN
+  }
+
+  /** The notes of the loop whose first sound falls within step's */
+  #admit(step: number, jumped: boolean): void {
+    const sounds = this.#sounds
+    const steps = this.#steps
+    for (let a = 0; a <= this.#lead; a++) {
+      const local = (step + a) % steps
+      const end = this.#by[local + 1] as number
+      for (let n = this.#by[local] as number; n < end; n++) {
+        const u = a + (sounds.t[sounds.first[n] as number] as number)
+        // Later: a step on. Earlier: taken a step before, unless jumped
+        if (u >= 1 || (u < 0 && !jumped)) continue
+        if (this.#active === MAX_ACTIVE) return
+        const e = this.#active++
+        this.#activeNote[e] = n
+        this.#activeTrial[e] = 0
+        this.#activeStart[e] = step + a
+        this.#activeNext[e] = sounds.first[n] as number
+        this.#activeKey[e] = -1
+        this.#activeHold[e] = 0
+      }
+    }
+  }
+
+  /** The sounds of the notes being played out that fall within step's */
+  #play(step: number, at: number, frames: number): void {
+    for (let e = 0; e < this.#active;) {
+      const sounds = this.#activeTrial[e] === 1 ? this.#trial : this.#sounds
+      const n = this.#activeNote[e] as number
+      const start = this.#activeStart[e] as number
+      const last = sounds.first[n + 1] as number
+      const key = sounds.key[n] as number
+      let k = this.#activeNext[e] as number
+      for (; k < last; k++) {
+        const u = start + (sounds.t[k] as number) - step
+        if (u >= 1) break
+        const when = at + (u > 0 ? u * frames : 0)
+        const sounded = clampKey(key + (sounds.off[k] as number))
+        if (sounds.strike[k] === 1) {
+          // One whose time went by (a jump) is not played
+          if (u < 0) this.#activeHold[e] = 0
+          else {
+            const end = start + (sounds.end[k] as number)
+            this.#strike(e, when, sounded, sounds.v[k] as number, end, step + u)
+          }
+        } else {
+          const hold = this.#activeHold[e] as number
+          if (hold !== 0 && this.#holds(hold)) {
+            this.#push(when, BEND, this.#activeKey[e] as number, sounded, hold)
+          }
+        }
+      }
+      if (k >= last) this.#retire(e)
+      else {
+        this.#activeNext[e] = k
+        e++
+      }
+    }
+  }
+
+  /** Active note e strikes key on frame when, held until end */
+  #strike(
+    e: number,
+    when: number,
+    key: number,
+    velocity: number,
+    end: number,
+    now: number
+  ): void {
+    const heldKey = this.#heldKey
+    // The synth lets a key playing go as it starts it again
+    for (let h = 0; h < this.#held; h++) {
+      if (heldKey[h] !== key || (this.#heldEnd[h] as number) <= now) continue
+      this.#drop(h)
+      break
+    }
+    if (this.#held === MAX_HELD) {
+      this.#activeHold[e] = 0
+      return
+    }
+    this.#hold = this.#hold === 0xffffffff ? 1 : this.#hold + 1
+    const hold = this.#hold
+    const h = this.#held++
+    heldKey[h] = key
+    this.#heldEnd[h] = end
+    this.#heldHold[h] = hold
+    this.#activeKey[e] = key
+    this.#activeHold[e] = hold
+    this.#push(when, ON, key, velocity, hold)
+  }
+
+  /** The notes sounding that end within step's let go, each on its frame */
+  #ends(step: number, at: number, frames: number): void {
+    for (let h = 0; h < this.#held;) {
+      const u = (this.#heldEnd[h] as number) - step
+      if (u >= 1) {
+        h++
+        continue
+      }
+      const when = at + (u > 0 ? u * frames : 0)
+      this.#push(when, OFF, this.#heldKey[h] as number, 0, 0)
+      this.#drop(h)
+    }
+  }
+
+  /** An event of the step being worked out */
+  #push(at: number, kind: number, key: number, value: number, hold: number) {
+    const w = this.#window
+    if (w === MAX_WINDOW) {
+      // No room: a note still lets go, early rather than never
+      if (kind === OFF) this.#target.off(this.#offset(at), key)
+      else if (kind === ON) this.#unhold(hold)
+      return
+    }
+    this.#windowAt[w] = at
+    this.#windowKind[w] = kind
+    this.#windowKey[w] = key
+    this.#windowValue[w] = value
+    this.#windowHold[w] = hold
+    this.#window = w + 1
+  }
+
+  /**
+   * The step's events in order of frame (and on one frame, the notes
+   * letting go first, then those moving, then those starting): those on
+   * at's go now, the rest wait
+   */
+  #send(at: number): void {
+    const count = this.#window
+    const order = this.#order
+    const when = this.#windowAt
+    const kind = this.#windowKind
+    for (let i = 0; i < count; i++) {
+      let j = i
+      while (j > 0) {
+        const o = order[j - 1] as number
+        const a = when[o] as number
+        const b = when[i] as number
+        if (a < b || (a === b && (kind[o] as number) <= (kind[i] as number))) {
+          break
+        }
+        order[j] = o
+        j--
+      }
+      order[j] = i
+    }
+    for (let i = 0; i < count; i++) {
+      const w = order[i] as number
+      const frame = when[w] as number
+      const what = kind[w] as number
+      const key = this.#windowKey[w] as number
+      const value = this.#windowValue[w] as number
+      const hold = this.#windowHold[w] as number
+      if (frame <= at) this.#dispatch(frame, what, key, value, hold)
+      else this.#wait(frame, what, key, value, hold)
+    }
+    this.#window = 0
+  }
+
+  /** An event kept for its frame */
+  #wait(at: number, kind: number, key: number, value: number, hold: number) {
+    if (this.#pending === MAX_PENDING && this.#head > 0) {
+      const head = this.#head
+      const count = this.#pending
+      this.#pendingAt.copyWithin(0, head, count)
+      this.#pendingKind.copyWithin(0, head, count)
+      this.#pendingKey.copyWithin(0, head, count)
+      this.#pendingValue.copyWithin(0, head, count)
+      this.#pendingHold.copyWithin(0, head, count)
+      this.#pending = count - head
+      this.#head = 0
+    }
+    if (this.#pending === MAX_PENDING) {
+      if (kind === OFF) this.#target.off(this.#offset(at), key)
+      else if (kind === ON) this.#unhold(hold)
+      return
+    }
+    const p = this.#pending++
+    this.#pendingAt[p] = at
+    this.#pendingKind[p] = kind
+    this.#pendingKey[p] = key
+    this.#pendingValue[p] = value
+    this.#pendingHold[p] = hold
+  }
+
+  /** The events waiting for frames before before go, in order */
+  #flush(before: number): void {
+    let p = this.#head
+    const count = this.#pending
+    while (p < count && (this.#pendingAt[p] as number) < before) {
+      this.#dispatch(
+        this.#pendingAt[p] as number,
+        this.#pendingKind[p] as number,
+        this.#pendingKey[p] as number,
+        this.#pendingValue[p] as number,
+        this.#pendingHold[p] as number
+      )
+      p++
+    }
+    if (p === count) {
+      this.#head = 0
+      this.#pending = 0
+    } else this.#head = p
+  }
+
+  /** An event to the target, on its frame of the next block */
+  #dispatch(
+    at: number,
+    kind: number,
+    key: number,
+    value: number,
+    hold: number
+  ) {
+    const offset = this.#offset(at)
+    if (kind === OFF) this.#target.off(offset, key)
+    else if (kind === BEND) this.#target.bend?.(offset, key, value)
+    else if (!this.#target.on(offset, key, value)) this.#unhold(hold)
+  }
+
+  /** A frame as an offset into the next block: whole, never before it */
+  #offset(at: number): number {
+    const offset = Math.floor(at - this.#base)
+    return offset > 0 ? offset : 0
+  }
+
+  /** Whether hold still holds its key */
+  #holds(hold: number): boolean {
+    for (let h = 0; h < this.#held; h++) {
+      if (this.#heldHold[h] === hold) return true
+    }
+    return false
+  }
+
+  /** Hold's note never started: it is not held */
+  #unhold(hold: number): void {
+    for (let h = 0; h < this.#held; h++) {
+      if (this.#heldHold[h] !== hold) continue
+      this.#drop(h)
+      return
+    }
+  }
+
+  /** Active note e out of the list, those after it moved up: in order */
+  #retire(e: number): void {
+    const count = this.#active
+    this.#activeNote.copyWithin(e, e + 1, count)
+    this.#activeTrial.copyWithin(e, e + 1, count)
+    this.#activeStart.copyWithin(e, e + 1, count)
+    this.#activeNext.copyWithin(e, e + 1, count)
+    this.#activeKey.copyWithin(e, e + 1, count)
+    this.#activeHold.copyWithin(e, e + 1, count)
+    this.#active = count - 1
   }
 
   /** Held note h out of the list, the last in its place */
@@ -243,8 +715,14 @@ export class Lane {
     const last = this.#held - 1
     this.#heldKey[h] = this.#heldKey[last] as number
     this.#heldEnd[h] = this.#heldEnd[last] as number
+    this.#heldHold[h] = this.#heldHold[last] as number
     this.#held = last
   }
+}
+
+/** A key within MIDI's notes */
+function clampKey(key: number): number {
+  return key < 0 ? 0 : key > 127 ? 127 : key
 }
 
 /**
@@ -254,12 +732,17 @@ export class Lane {
  * before the one it starts on, told as -COUNT_IN_STEPS up to -1, the
  * lanes silent and the click sounding; the click otherwise sounds each
  * beat while it is on (click). Moved by beats while it plays (seek), it
- * keeps its time.
+ * keeps its time. Stopped, it plays a note on its own (audition), on
+ * even steps at the tempo.
  */
 export class Sequencer {
   readonly #sampleRate: number
   #lanes: readonly Lane[] = []
   #playing = false
+  /** The lane playing a note on its own while stopped, its step, and when */
+  #trial: Lane | undefined
+  #trialStep = 0
+  #trialUntil = 0
   /** The next step to fire, counted from the first: once counted in */
   #step = 0
   /** The steps of the count-in still to come */
@@ -347,8 +830,26 @@ export class Sequencer {
     for (const lane of this.#lanes) lane.shift(by)
   }
 
+  /**
+   * Stopped, lane plays note on its own (an ornament's sounds before its
+   * step too) from the start of the next block, a note auditioned before
+   * it let go; playing, nothing: the loop plays it. Allocates: for a
+   * message's handler.
+   */
+  audition(lane: Lane, note: LaneNote): void {
+    if (this.#playing) return
+    this.#trial?.release(0)
+    lane.release(0)
+    lane.audition(note)
+    this.#trial = lane
+    this.#trialStep = 0
+    this.#trialUntil = 0
+  }
+
   /** Stops: every note sounding lets go at the start of the next block */
   stop(): void {
+    this.#trial?.release(0)
+    this.#trial = undefined
     for (const lane of this.#lanes) lane.release(0)
     this.#playing = false
     this.#step = 0
@@ -360,6 +861,8 @@ export class Sequencer {
 
   /** Stops, the notes sounding forgotten: every voice was stopped */
   clear(): void {
+    this.#trial?.forget()
+    this.#trial = undefined
     for (const lane of this.#lanes) lane.forget()
     this.click?.reset()
     this.stop()
@@ -372,7 +875,10 @@ export class Sequencer {
    */
   process(length: number): boolean {
     this.clock.beats = this.#beats()
-    if (!this.#playing) return false
+    if (!this.#playing) {
+      this.#audition(length)
+      return false
+    }
     const lanes = this.#lanes
     let fired = false
     while (this.#until < length) {
@@ -380,9 +886,13 @@ export class Sequencer {
       // Counting in: the count's steps, -COUNT_IN_STEPS up to -1
       const step = counting ? -this.#counting : this.#step
       const offset = Math.floor(this.#until)
+      // A pair of sixteenths is an eighth, split by the swing
+      const pair = (this.#sampleRate * 30) / this.#tempo
+      const share = step % 2 === 0 ? this.#swing : 1 - this.#swing
+      const frames = pair * share
       if (!counting) {
         for (let l = 0; l < lanes.length; l++) {
-          ;(lanes[l] as Lane).fire(step, offset)
+          ;(lanes[l] as Lane).fire(step, this.#until, frames)
         }
       }
       // A beat: every fourth step, counting in or clicking
@@ -391,16 +901,32 @@ export class Sequencer {
       }
       this.position = step
       fired = true
-      // A pair of sixteenths is an eighth, split by the swing
-      const pair = (this.#sampleRate * 30) / this.#tempo
-      const share = step % 2 === 0 ? this.#swing : 1 - this.#swing
-      this.#stepFrames = pair * share
-      this.#until += this.#stepFrames
+      this.#stepFrames = frames
+      this.#until += frames
       if (counting) this.#counting--
       else this.#step = step + 1
     }
     this.#until -= length
+    // What falls between steps, on its frames
+    for (let l = 0; l < lanes.length; l++) {
+      ;(lanes[l] as Lane).advance(length)
+    }
     return fired
+  }
+
+  /** The note auditioned, its steps within the next block of length frames */
+  #audition(length: number): void {
+    const lane = this.#trial
+    if (!lane) return
+    const frames = (this.#sampleRate * 15) / this.#tempo
+    while (this.#trialUntil < length) {
+      lane.fire(this.#trialStep, this.#trialUntil, frames, false)
+      this.#trialStep++
+      this.#trialUntil += frames
+    }
+    this.#trialUntil -= length
+    lane.advance(length)
+    if (!lane.busy) this.#trial = undefined
   }
 
   /**

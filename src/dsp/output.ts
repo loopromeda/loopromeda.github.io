@@ -26,10 +26,14 @@ import { MAX_BUSES } from './slots'
 const BLOCK = 128
 
 /**
- * The notes a strip can be told to start or end within one block
- * (queueOn, queueOff): a step's worth of a sequence, with room to spare
+ * The notes a strip can be told to start, end or move within one block
+ * (queueOn, queueOff, queueBend): a step's worth of a sequence, with
+ * room to spare
  */
 const EVENTS = 128
+
+/** A queued event's velocity: below 0 a note ends, this one it moves */
+const MOVE = -2
 
 /**
  * One sound's channel: its voices in stereo (synth.clip off, for the
@@ -37,10 +41,11 @@ const EVENTS = 128
  * to each bus, 0..1, each set as a knob turns and glided over the next
  * block: all of it to the first bus and none to the others, until set.
  *
- * It keeps the notes to start and end within the next block, each on
- * its frame (the sequencer's, sequencer.ts: a note played by hand
+ * It keeps the notes to start, end and move within the next block, each
+ * on its frame (the sequencer's, sequencer.ts: a note played by hand
  * starts with the block): render plays the voices up to each, then
- * starts or ends it, so a step lands on its own sample.
+ * starts, ends or moves it, so a step lands on its own sample, and an
+ * ornament's sounds on theirs.
  */
 export class Strip {
   readonly synth: ChainSynth
@@ -53,7 +58,7 @@ export class Strip {
   readonly #at = new Uint16Array(EVENTS)
   readonly #key = new Float64Array(EVENTS)
   readonly #note = new Float32Array(EVENTS)
-  /** How hard a note starts, 0..1; below 0, it ends */
+  /** How hard a note starts, 0..1; below 0 it ends, or at MOVE it moves */
   readonly #velocity = new Float32Array(EVENTS)
   #count = 0
 
@@ -105,6 +110,22 @@ export class Strip {
     this.#count = k + 1
   }
 
+  /**
+   * Key's note moves to note (a MIDI number) on frame offset of the next
+   * block, after what is queued already: at once, nothing restarting (a
+   * tracker's arpeggio, an ornament's pitch moving); with no room left,
+   * it does not
+   */
+  queueBend(offset: number, key: number, note: number): void {
+    const k = this.#count
+    if (k === EVENTS) return
+    this.#at[k] = this.#after(offset)
+    this.#key[k] = key
+    this.#note[k] = note
+    this.#velocity[k] = MOVE
+    this.#count = k + 1
+  }
+
   /** Offset as a frame, no earlier than the last queued */
   #after(offset: number): number {
     const last = this.#count > 0 ? (this.#at[this.#count - 1] as number) : 0
@@ -135,7 +156,8 @@ export class Strip {
       }
       const key = this.#key[k] as number
       const velocity = this.#velocity[k] as number
-      if (velocity < 0) synth.noteOff(key)
+      if (velocity === MOVE) synth.bend(key, this.#note[k] as number, true)
+      else if (velocity < 0) synth.noteOff(key)
       else synth.noteOn(key, this.#note[k] as number, velocity)
     }
     this.#count = 0
