@@ -149,10 +149,11 @@ export function moveStrip(mix: Mix, from: number, to: number): Mix {
 }
 
 /**
- * The mix a session starts with, which sounds as the mix before buses
- * did: each part's strip at full, A dry, B a delay, C a reverb, each wet
- * only (returns: a sound's dry reaches the master through A), each bus
- * at a level of 1, the master at 1 with no effects
+ * The mix a session starts with, laid out as the mix before buses was:
+ * each part's strip at full, A dry, B a delay (synced, a dotted eighth:
+ * 375 ms at 120, where that mix's was 350 ms), C a reverb, each wet only
+ * (returns: a sound's dry reaches the master through A), each bus at a
+ * level of 1, the master at 1 with no effects
  */
 export function initMix(): Mix {
   const level = defaults(BUS_SPEC.knobs)
@@ -493,10 +494,14 @@ function nextEffectId(mix: Mix, taken = effectIds(mix)): string {
  * MAX_EFFECTS known effects each, every knob clamped and a default for
  * one missing; the master the same. A mix kept before buses (version 1:
  * a delay, a reverb and the master, each a record of knobs) becomes the
- * buses that sound as it did: A dry, B its delay, C its reverb, each at
- * its return's level.
+ * buses that sound as it did: A dry, B its delay (unsynced, as it was),
+ * C its reverb, each at its return's level. Nothing kept, the starting
+ * mix.
  */
 export function readMix(value: unknown): Mix {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return initMix()
+  }
   const given = record(value)
   if (!Array.isArray(given.buses)) return fromReturns(given)
   const taken = new Set<string>()

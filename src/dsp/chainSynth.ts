@@ -1,6 +1,7 @@
 import { VoiceAllocator } from './allocator'
 import { ChainSettings, ChainVoice } from './chainVoice'
 import { softClip } from './clip'
+import { Clock } from './clock'
 import { Smoother } from './smoother'
 import {
   INPUT_FM,
@@ -122,9 +123,17 @@ export class ChainSynth {
   /** 1 for a key whose note started with a Slide given (noteOn's slide) */
   readonly #given = new Uint8Array(STACK)
   #held = 0
+  /** The song's time, which a synced LFO follows (clock.ts) */
+  readonly #clock: Clock
+  /** Each LFO's rate as its knob set it, in hertz, while not synced */
+  readonly #lfoHertz = new Float64Array(MAX_MODULATORS).fill(5)
+  /** The note value each LFO is synced to, in whole notes; 0, none */
+  readonly #lfoSync = new Float64Array(MAX_MODULATORS)
 
-  constructor(sampleRate: number, voices = VOICE_COUNT) {
+  /** clock: the song's time, which a synced LFO follows */
+  constructor(sampleRate: number, voices = VOICE_COUNT, clock = new Clock()) {
     this.#sampleRate = sampleRate
+    this.#clock = clock
     this.#settings = new ChainSettings(sampleRate, CHUNK)
     for (let i = 0; i < voices; i++) {
       this.#voices.push(new ChainVoice(sampleRate, this.#settings, i + 1))
@@ -309,21 +318,53 @@ export class ChainSynth {
 
   /**
    * Modulator m, an LFO: shape (LFO_SHAPES), rate in hertz, fade-in in
-   * seconds, and free (all notes in step) or restarted by each note
+   * seconds, and free (all notes in step) or restarted by each note.
+   * Given sync, a note value in whole notes, it comes round once each at
+   * the clock's tempo instead, and free, while the song plays, in step
+   * with it: at its start as each of them starts from the song's first
+   * beat (#follow).
    */
   setLfo(
     m: number,
     shape: number,
     rate: number,
     fade: number,
-    free: boolean
+    free: boolean,
+    sync = 0
   ): void {
     if (!isIndex(m, MAX_MODULATORS)) return
     const settings = this.#settings
     settings.lfoShape[m] = shape
-    settings.lfoRate[m] = rate
+    this.#lfoHertz[m] = rate
+    this.#lfoSync[m] = sync > 0 && Number.isFinite(sync) ? sync : 0
+    settings.lfoRate[m] = this.#lfoRate(m)
     settings.lfoFade[m] = fade
     settings.lfoFree[m] = free ? 1 : 0
+  }
+
+  /** LFO m's rate in hertz: its knob's, or its note value's at the tempo */
+  #lfoRate(m: number): number {
+    const sync = this.#lfoSync[m] as number
+    return sync > 0 ? this.#clock.hertz(sync) : (this.#lfoHertz[m] as number)
+  }
+
+  /**
+   * As a block starts, the synced LFOs' rates at the tempo, and while the
+   * song plays the free ones' phase where the song is: as many of their
+   * cycles from its first beat
+   */
+  #follow(): void {
+    const settings = this.#settings
+    const beats = this.#clock.beats
+    for (let m = 0; m < settings.modulatorCount; m++) {
+      const sync = this.#lfoSync[m] as number
+      if (settings.modulatorKind[m] !== MOD_LFO || !(sync > 0)) continue
+      settings.lfoRate[m] = this.#clock.hertz(sync)
+      if (settings.lfoFree[m] === 1 && Number.isFinite(beats)) {
+        const cycles = beats / (sync * 4)
+        settings.lfoPhase[m] = cycles - Math.floor(cycles)
+      }
+    }
   }
 
   /** The amp envelope: times in seconds, sustain in [0, 1] */
@@ -568,6 +609,7 @@ export class ChainSynth {
       this.#order()
       this.#snap()
     }
+    if (from === 0) this.#follow()
     out.fill(0, from, to)
     right?.fill(0, from, to)
     if (this.activeVoices > 0) {

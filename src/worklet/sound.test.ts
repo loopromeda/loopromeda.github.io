@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { ChainSynth } from '../dsp/chainSynth'
+import { Clock } from '../dsp/clock'
 import { EffectRack } from '../dsp/effects'
 import { SQUARE } from '../dsp/oscillator'
 import * as slots from '../dsp/slots'
@@ -136,8 +137,8 @@ describe('the chain engine', () => {
   })
 
   it('hands the session’s mix to the strips, the buses and the master', () => {
-    const echo = (mix: Mix): number => {
-      const mixer = new Mixer(SAMPLE_RATE)
+    const echo = (mix: Mix, clock?: Clock): number => {
+      const mixer = new Mixer(SAMPLE_RATE, clock)
       const strip = new Strip(
         new ChainSynth(SAMPLE_RATE),
         new EffectRack(SAMPLE_RATE)
@@ -167,7 +168,9 @@ describe('the chain engine', () => {
       }
       return Math.abs(left[loudest] ?? 0) > 1e-3 ? loudest / SAMPLE_RATE : 0
     }
-    let mix = setMixValue(initMix(), 'e1', 'time', 0.1)
+    // Unsynced, at its own time
+    let mix = setMixValue(initMix(), 'e1', 'sync', 0)
+    mix = setMixValue(mix, 'e1', 'time', 0.1)
     mix = setMixValue(mix, 'e1', 'feedback', 0)
     expect(echo(mix)).toBeGreaterThan(0.1)
     expect(echo(mix)).toBeLessThan(0.13)
@@ -184,9 +187,25 @@ describe('the chain engine', () => {
     expect(echo(removeMixPart(removeMixPart(mix, 'c'), 'b'))).toBe(0)
     // Its delay moved to the master, after a dry bus: heard again, later
     const moved = addMixEffect(removeMixPart(mix, 'e1'), 'master', 'delay')
-    const later = setMixValue(moved.mix, moved.id ?? '', 'time', 0.15)
+    const unsynced = setMixValue(moved.mix, moved.id ?? '', 'sync', 0)
+    const later = setMixValue(unsynced, moved.id ?? '', 'time', 0.15)
     const dry = setMixValue(later, moved.id ?? '', 'mix', 1)
     expect(echo(dry)).toBeGreaterThan(0.15)
+    // Synced to a sixteenth, its own time unheard: an eighth of a second
+    // at 120, 0.15 at 100, as the clock's tempo moves
+    const sixteenth = kinds.DELAY_NOTES.findIndex(({ name }) => name === '1/16')
+    const synced = setMixValue(
+      setMixValue(mix, 'e1', 'sync', 1),
+      'e1',
+      'beat',
+      sixteenth
+    )
+    expect(echo(synced)).toBeGreaterThan(0.125)
+    expect(echo(synced)).toBeLessThan(0.155)
+    const slower = new Clock()
+    slower.tempo = 100
+    expect(echo(synced, slower)).toBeGreaterThan(0.15)
+    expect(echo(synced, slower)).toBeLessThan(0.18)
   })
 
   it('drops the soft clip for a guard once the master ends in a limiter', () => {
@@ -459,7 +478,8 @@ const TURNS: readonly (readonly [string, (sound: Sound) => Sound])[] = [
   ["a filter's cutoff", (s) => setValue(s, 'x1', 'cutoff', 600)],
   ["a filter's resonance", (s) => setValue(s, 'x1', 'resonance', 0.6)],
   ["a drive's amount", (s) => setValue(s, 'x2', 'drive', 0.8)],
-  ["an LFO's rate", (s) => setValue(s, 'm1', 'rate', 6)],
+  ["an LFO's note value", (s) => setValue(s, 'm1', 'beat', 12)],
+  ["an LFO's Sync", (s) => setValue(s, 'm1', 'sync', 0)],
   ["an envelope's attack", (s) => setValue(s, 'm2', 'attack', 0.05)],
   ["a route's amount", (s) => setRoute(s, 'r2', { amount: -0.3 })],
   ["the amp's release", (s) => setValue(s, AMP, 'release', 0.1)],

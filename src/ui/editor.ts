@@ -536,11 +536,11 @@ export function tileLine(sound: Sound, id: string): string {
 }
 
 /**
- * An effect's line, from its knobs: a chorus's rate, a delay's time, a
- * reverb's decay; an EQ's boldest band (Low +3.0 dB), else its low cut,
- * else Flat; a compressor's threshold and ratio, a limiter's ceiling; a
- * Haas's time and the side it holds back (15 ms R), a doubler's detune
- * (±9 ct), a width's
+ * An effect's line, from its knobs: a chorus's rate, a delay's time (its
+ * note value, synced), a reverb's decay; an EQ's boldest band (Low +3.0
+ * dB), else its low cut, else Flat; a compressor's threshold and ratio, a
+ * limiter's ceiling; a Haas's time and the side it holds back (15 ms R),
+ * a doubler's detune (±9 ct), a width's
  */
 export function effectLine(effect: {
   readonly kind: EffectKind
@@ -551,7 +551,10 @@ export function effectLine(effect: {
     case 'chorus':
       return `${(values.rate ?? 0).toFixed(2)} Hz`
     case 'delay':
-      return shortTime(values.time ?? 0)
+      // Synced, its note value (1/8D)
+      return values.sync === 1
+        ? shown('delay', 'beat', values)
+        : shortTime(values.time ?? 0)
     case 'reverb':
       return shortTime(values.decay ?? 0)
     case 'eq':
@@ -631,12 +634,15 @@ export function modulated(sound: Sound): Set<string> {
 
 /**
  * What a redraw of the mix follows: its buses and the effects on each and
- * on the master, by id and kind, in order. A knob (a level, a time)
- * changes the knob and a tile's line, never the whole editor.
+ * on the master, by id and kind, in order, and each one's Sync, which
+ * puts another knob in its panel. A knob (a level, a time) changes the
+ * knob and a tile's line, never the whole editor.
  */
 export function mixShapeKey(mix: Mix): string {
   const row = (effects: Mix['master']['effects']) =>
-    effects.map((effect) => `${effect.id}:${effect.kind}`).join(',')
+    effects
+      .map((effect) => `${effect.id}:${effect.kind}:${effect.values.sync ?? 0}`)
+      .join(',')
   return [
     ...mix.buses.map((bus) => `${bus.id}[${row(bus.effects)}]`),
     `master[${row(mix.master.effects)}]`,
@@ -645,9 +651,10 @@ export function mixShapeKey(mix: Mix): string {
 
 /**
  * What a redraw of the editor follows: its parts and their order, kinds,
- * references and routes, which inputs feed which chains, and the choices
- * its pictograms show. A knob that turns through none of these (a cutoff,
- * a level) changes the knob and a tile's line, never the whole editor.
+ * references and routes, which inputs feed which chains, the choices its
+ * pictograms show, and each Sync, which puts another knob in its part's
+ * panel. A knob that turns through none of these (a cutoff, a level)
+ * changes the knob and a tile's line, never the whole editor.
  */
 export function shapeKey(sound: Sound): string {
   return JSON.stringify([
@@ -668,6 +675,7 @@ export function shapeKey(sound: Sound): string {
       modulator.id,
       modulator.kind,
       modulator.values.shape,
+      modulator.values.sync,
     ]),
     sound.routes.map((route) => [
       route.id,
@@ -676,7 +684,7 @@ export function shapeKey(sound: Sound): string {
       route.target,
       route.key,
     ]),
-    sound.effects.map((effect) => [effect.id, effect.kind]),
+    sound.effects.map((effect) => [effect.id, effect.kind, effect.values.sync]),
   ])
 }
 

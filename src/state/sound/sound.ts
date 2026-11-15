@@ -153,8 +153,9 @@ export function defaults(knobs: readonly KnobSpec[]): Values {
 }
 
 /**
- * Every knob of spec from given, clamped and snapped, its default where
- * given has no number for it; keys spec does not know are dropped
+ * Every knob of spec from given, clamped and snapped, where given has no
+ * number for it what a part saved without it reads (its absent, else its
+ * default); keys spec does not know are dropped
  */
 export function valuesFor(
   knobs: readonly KnobSpec[],
@@ -165,7 +166,9 @@ export function valuesFor(
       const value = given[knob.key]
       return [
         knob.key,
-        typeof value === 'number' ? clampValue(knob, value) : knob.default,
+        typeof value === 'number'
+          ? clampValue(knob, value)
+          : (knob.absent ?? knob.default),
       ]
     })
   )

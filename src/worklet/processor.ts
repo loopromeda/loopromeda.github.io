@@ -4,6 +4,7 @@ import { EffectRack } from '../dsp/effects'
 import { LoudnessMeter } from '../dsp/loudness'
 import { Mixer, Part, Strip } from '../dsp/output'
 import { Click } from '../dsp/click'
+import { Clock } from '../dsp/clock'
 import { KitTarget, Lane, Sequencer, SynthTarget } from '../dsp/sequencer'
 import {
   BENCH_MAX_VOICES,
@@ -100,9 +101,14 @@ class SynthProcessor extends AudioWorkletProcessor {
   #tracks = new Map<string, Playing>()
   /** Their parts in the mix's order: what process renders */
   #parts: readonly Part[] = []
-  readonly #mixer = new Mixer(sampleRate)
+  /**
+   * The song's time, kept by the sequencer: what every synced delay and
+   * LFO follows (src/dsp/clock.ts)
+   */
+  readonly #clock = new Clock()
+  readonly #mixer = new Mixer(sampleRate, this.#clock)
   /** The clock, and each track's loop on its lane */
-  readonly #sequencer = new Sequencer(sampleRate)
+  readonly #sequencer = new Sequencer(sampleRate, this.#clock)
   /** The transport's click, which the sequencer starts on each beat */
   readonly #click = new Click(sampleRate)
   /** Whether the click's output was written last block: cleared once */
@@ -195,23 +201,28 @@ class SynthProcessor extends AudioWorkletProcessor {
   /** A track of kind, silent: the wheel and the voices as they are set */
   #build(kind: TrackLayout['kind']): Playing {
     if (kind === 'synth') {
-      const synth = new ChainSynth(sampleRate)
+      const clock = this.#clock
+      const synth = new ChainSynth(sampleRate, undefined, clock)
       if (this.#voices !== undefined) synth.voiceLimit = this.#voices
       synth.wheel = this.#wheel
-      const strip = new Strip(synth, new EffectRack(sampleRate))
+      const strip = new Strip(
+        synth,
+        new EffectRack(sampleRate, undefined, clock)
+      )
       const player = new SoundPlayer(strip)
       const lane = new Lane(new SynthTarget(strip))
       return { kind, part: new Part([strip]), synth, player, lane }
     }
+    const clock = this.#clock
     const pads = Array.from({ length: KIT_PADS }, () => {
-      const synth = new ChainSynth(sampleRate, PAD_VOICES)
+      const synth = new ChainSynth(sampleRate, PAD_VOICES, clock)
       synth.wheel = this.#wheel
-      return new Strip(synth, new EffectRack(sampleRate))
+      return new Strip(synth, new EffectRack(sampleRate, undefined, clock))
     })
     const target = new KitTarget(pads)
     return {
       kind,
-      part: new Part(pads, new EffectRack(sampleRate)),
+      part: new Part(pads, new EffectRack(sampleRate, undefined, clock)),
       pads,
       players: pads.map((pad) => new SoundPlayer(pad.synth)),
       target,

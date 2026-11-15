@@ -41,6 +41,7 @@ import {
   AMP_SPEC,
   CHAIN_SPEC,
   EFFECT_KINDS,
+  shownKnobs,
   EFFECT_KIND_ORDER,
   INPUT_KINDS,
   ITEM_KINDS,
@@ -1240,10 +1241,11 @@ function mixView(
         kind: `${EFFECT_HINTS[effect.kind]} · ${where}`,
         chip: { look, glyph: EFFECT_GLYPHS[effect.kind] },
         knobs: [],
-        mixKnobs: EFFECT_KINDS[effect.kind].knobs.map(({ key }) => ({
-          part: effect.id,
-          key,
-        })),
+        // Its Sync puts its note value in its time's place
+        mixKnobs: shownKnobs(
+          EFFECT_KINDS[effect.kind].knobs,
+          effect.values
+        ).map(({ key }) => ({ part: effect.id, key })),
         color: owner === MASTER ? neutralArc() : look.ink,
         reduction: reduces(effect.kind) ? { id: effect.id } : undefined,
         actions: [
@@ -1577,7 +1579,10 @@ function viewOf(
         title,
         kind: `${kind} · ${count === 0 ? 'routed nowhere yet' : count === 1 ? '1 route' : `${count} routes`}`,
         chip: { look: modLook(), glyph: glyphOf(sound, picked) },
-        knobs: knobsOf(picked, MODULATOR_KINDS[found.part.kind].knobs),
+        knobs: knobsOf(
+          picked,
+          shownKnobs(MODULATOR_KINDS[found.part.kind].knobs, found.part.values)
+        ),
         targets: {
           source: picked,
           to: routes.map((route) => ({
@@ -1611,7 +1616,10 @@ function viewOf(
         title: kit ? `Kit ${title}` : title,
         kind: `${EFFECT_HINTS[kind]} · ${kit ? 'on the kit, after every pad’s amp' : 'after the amp'}`,
         chip: { look: neutralLook(), glyph: EFFECT_GLYPHS[kind] },
-        knobs: knobsOf(picked, EFFECT_KINDS[kind].knobs),
+        knobs: knobsOf(
+          picked,
+          shownKnobs(EFFECT_KINDS[kind].knobs, found.part.values)
+        ),
         color: neutralArc(),
         reduction: reduces(kind)
           ? { track: engine.getTrack().id, id: picked }

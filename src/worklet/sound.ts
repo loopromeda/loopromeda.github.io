@@ -57,10 +57,13 @@ import { masterLimited, stripHeard, type Mix } from '../state/mix'
 import {
   BUS_IDS,
   BUS_SPEC,
+  DELAY_NOTES,
   EFFECT_KINDS,
+  LFO_NOTES,
   MASTER_SPEC,
   SENDS_SPEC,
   STRIP_SPEC,
+  noteWholes,
   type EffectKind,
   type KnobSpec,
   type NoteSource,
@@ -228,7 +231,8 @@ export class SoundPlayer {
             value('shape'),
             value('rate'),
             value('fade'),
-            value('trigger') === 1
+            value('trigger') === 1,
+            value('sync') === 1 ? noteWholes(LFO_NOTES, value('beat')) : 0
           )
         }
       })
@@ -372,7 +376,8 @@ function setEffect(
         value('feedback'),
         value('tone'),
         value('mode') === 1,
-        value('mix')
+        value('mix'),
+        value('sync') === 1 ? noteWholes(DELAY_NOTES, value('beat')) : 0
       )
       return
     case 'reverb':

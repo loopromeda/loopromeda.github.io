@@ -9,6 +9,7 @@
  * A knob's change glides: a level or depth over the block it arrives in,
  * a time over a few tens of milliseconds. Allocates nothing in process.
  */
+import { Clock } from './clock'
 import { sinCycles } from './fastMath'
 import {
   FX_CHORUS,
@@ -206,13 +207,29 @@ const DELAY_GLIDE = 0.05
 export const MAX_FEEDBACK = 0.95
 
 /**
- * A delay, each side its own line: time in seconds, feedback 0..1 of
- * MAX_FEEDBACK, tone 0..1 (a lowpass in the feedback, 500 Hz to 20 kHz,
- * each echo darker than the last), ping-pong (the two sides summed into
- * the left, its echoes crossing to the right and back) and mix 0..1
+ * A synced delay's time: wholes, a note value in whole notes, at the
+ * clock's tempo, halved until it is no longer than MAX_DELAY_TIME, so
+ * that one too long for the line at a slow tempo still falls on the beat
+ */
+export function syncedTime(clock: Clock, wholes: number): number {
+  let seconds = clock.seconds(wholes)
+  while (seconds > MAX_DELAY_TIME) seconds /= 2
+  return seconds
+}
+
+/**
+ * A delay, each side its own line: time in seconds, or synced, a note
+ * value at the clock's tempo (syncedTime), followed as it changes;
+ * feedback 0..1 of MAX_FEEDBACK, tone 0..1 (a lowpass in the feedback,
+ * 500 Hz to 20 kHz, each echo darker than the last), ping-pong (the two
+ * sides summed into the left, its echoes crossing to the right and back)
+ * and mix 0..1
  */
 export class Delay {
   readonly #sampleRate: number
+  readonly #clock: Clock
+  /** The note value it is synced to, in whole notes; 0, its own time */
+  #sync = 0
   readonly #left: Line
   readonly #right: Line
   /** The time in samples, gliding to the one set */
@@ -227,8 +244,9 @@ export class Delay {
   readonly #mix = new Ramp(0.3)
   #fresh = true
 
-  constructor(sampleRate: number) {
+  constructor(sampleRate: number, clock = new Clock()) {
     this.#sampleRate = sampleRate
+    this.#clock = clock
     const most = MAX_DELAY_TIME * sampleRate + 2
     this.#left = new Line(most)
     this.#right = new Line(most)
@@ -236,17 +254,17 @@ export class Delay {
     this.set(0.35, 0.4, 0.6, false, 0.3)
   }
 
+  /** sync: a note value in whole notes, the time then unheard; 0, none */
   set(
     time: number,
     feedback: number,
     tone: number,
     pingPong: boolean,
-    mix: number
+    mix: number,
+    sync = 0
   ): void {
-    const seconds = Math.min(Math.max(time, 0.001), MAX_DELAY_TIME)
-    this.#timeGoal = Number.isFinite(seconds)
-      ? seconds * this.#sampleRate
-      : this.#timeGoal
+    this.#sync = sync > 0 && Number.isFinite(sync) ? sync : 0
+    this.#retime(this.#sync > 0 ? syncedTime(this.#clock, this.#sync) : time)
     this.#feedback.goal = clamp01(feedback) * MAX_FEEDBACK
     const hertz = 500 * 40 ** clamp01(tone)
     this.#tone = 1 - Math.exp((-2 * Math.PI * hertz) / this.#sampleRate)
@@ -262,7 +280,17 @@ export class Delay {
     this.#fresh = true
   }
 
+  /** The time to glide to, in seconds, held within the line */
+  #retime(time: number): void {
+    const seconds = Math.min(Math.max(time, 0.001), MAX_DELAY_TIME)
+    this.#timeGoal = Number.isFinite(seconds)
+      ? seconds * this.#sampleRate
+      : this.#timeGoal
+  }
+
   process(left: Float32Array, right: Float32Array, length: number): void {
+    // Synced, the tempo is followed as it moves, the time gliding there
+    if (this.#sync > 0) this.#retime(syncedTime(this.#clock, this.#sync))
     if (this.#fresh) {
       this.#fresh = false
       this.#time = this.#timeGoal
@@ -1346,6 +1374,8 @@ const SILENT = 1e-6
  */
 export class EffectRack {
   readonly #sampleRate: number
+  /** What a synced delay follows (clock.ts) */
+  readonly #clock: Clock
   readonly #chorus: (Chorus | null)[] = []
   readonly #delay: (Delay | null)[] = []
   readonly #reverb: (Reverb | null)[] = []
@@ -1362,9 +1392,13 @@ export class EffectRack {
   /** Samples its input and output have been silent for */
   #quiet = 0
 
-  /** slots: how many effects it holds at most, MAX_EFFECTS unless fewer */
-  constructor(sampleRate: number, slots = MAX_EFFECTS) {
+  /**
+   * slots: how many effects it holds at most, MAX_EFFECTS unless fewer;
+   * clock, the song's time, which a synced delay follows
+   */
+  constructor(sampleRate: number, slots = MAX_EFFECTS, clock = new Clock()) {
     this.#sampleRate = sampleRate
+    this.#clock = clock
     this.#slots = Math.min(Math.max(Math.round(slots), 1), MAX_EFFECTS)
     this.#kind = new Int8Array(this.#slots).fill(NO_EFFECT)
     for (let k = 0; k < this.#slots; k++) {
@@ -1406,7 +1440,7 @@ export class EffectRack {
         made(this.#chorus, k, () => new Chorus(rate))
         return
       case FX_DELAY:
-        made(this.#delay, k, () => new Delay(rate))
+        made(this.#delay, k, () => new Delay(rate, this.#clock))
         return
       case FX_REVERB:
         made(this.#reverb, k, () => new Reverb(rate))
@@ -1440,15 +1474,17 @@ export class EffectRack {
     this.#chorus[k]?.set(rate, depth, mix)
   }
 
+  /** sync: a note value in whole notes, for the tempo to time it; 0, none */
   setDelay(
     k: number,
     time: number,
     feedback: number,
     tone: number,
     pingPong: boolean,
-    mix: number
+    mix: number,
+    sync = 0
   ): void {
-    this.#delay[k]?.set(time, feedback, tone, pingPong, mix)
+    this.#delay[k]?.set(time, feedback, tone, pingPong, mix, sync)
   }
 
   setReverb(

@@ -69,7 +69,16 @@ describe('the mix', () => {
     expect(mix.buses[1]?.effects[0]).toEqual({
       id: 'e1',
       kind: 'delay',
-      values: { time: 0.35, feedback: 0.4, tone: 0.6, mode: 0, mix: 1 },
+      // Synced, a dotted eighth; its own time kept for Sync off
+      values: {
+        time: 0.35,
+        beat: 9,
+        sync: 1,
+        feedback: 0.4,
+        tone: 0.6,
+        mode: 0,
+        mix: 1,
+      },
     })
     expect(mix.buses[2]?.effects[0]?.values).toEqual({
       size: 0.6,
@@ -351,6 +360,19 @@ describe('the mix', () => {
     // Letters missing between: those after move up, as on a removal
     const gap = readMix({ version: 2, buses: [{ id: 'a' }, { id: 'c' }] })
     expect(gap.buses.map((bus) => bus.id)).toEqual(['a', 'b'])
+  })
+
+  it('reads a delay kept before Sync with its own time', () => {
+    const kept = (mix: Mix): unknown => JSON.parse(JSON.stringify(mix))
+    const beforeSync = JSON.parse(
+      JSON.stringify(initMix()),
+      (key, held: unknown) => (key === 'sync' ? undefined : held)
+    ) as unknown
+    expect(mixValue(readMix(beforeSync), 'e1', 'sync')).toBe(0)
+    expect(mixValue(readMix(kept(initMix())), 'e1', 'sync')).toBe(1)
+    // One added starts synced
+    const added = addMixEffect(initMix(), 'a', 'delay')
+    expect(mixValue(added.mix, added.id ?? '', 'sync')).toBe(1)
   })
 
   it('reads a mix kept before buses as the buses that sound as it did', () => {

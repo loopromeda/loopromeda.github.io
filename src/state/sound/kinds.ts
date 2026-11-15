@@ -11,6 +11,133 @@ export interface KnobSpec extends ValueSpec {
   readonly key: string
   /** Short name under the knob */
   readonly label: string
+  /**
+   * Shown only while another knob of its part stands at a value: a
+   * synced time's note value with Sync on, its own time with it off
+   * (shownKnobs)
+   */
+  readonly when?: { readonly key: string; readonly is: number }
+  /**
+   * The knob whose place it takes while shown, holding it opening that
+   * one's routes: a synced LFO's note value, its Rate's
+   */
+  readonly standsFor?: string
+  /**
+   * What a part saved without it reads, where that is not its default: a
+   * knob added after parts were saved, which keeps them as they sounded
+   * (valuesFor)
+   */
+  readonly absent?: number
+}
+
+/**
+ * A note value as the tempo times it: its name and its length in whole
+ * notes (a bar of 4/4 is one), a triplet's (T) two thirds of the
+ * note's, a dotted one's (D) half as long again
+ */
+export interface NoteValue {
+  readonly name: string
+  readonly wholes: number
+}
+
+/** 1/32 to 1/1, each with its triplet and dotted, shortest first */
+const NOTES: readonly NoteValue[] = [32, 16, 8, 4, 2, 1]
+  .flatMap((d) => [
+    { name: `1/${d}T`, wholes: 2 / (3 * d) },
+    { name: `1/${d}`, wholes: 1 / d },
+    { name: `1/${d}D`, wholes: 3 / (2 * d) },
+  ])
+  .filter(({ wholes }) => wholes <= 1)
+  .sort((a, b) => a.wholes - b.wholes)
+
+/**
+ * A synced delay's times, shortest first, as its Time turns: 1/32T to
+ * 1/1 (ashon, 2026-11-15, the Sync and the note values chosen over a time
+ * always in beats)
+ */
+export const DELAY_NOTES: readonly NoteValue[] = NOTES
+
+/**
+ * A synced LFO's rates, slowest first, as its Rate turns: four bars to
+ * 1/32T
+ */
+export const LFO_NOTES: readonly NoteValue[] = [
+  { name: '4 bars', wholes: 4 },
+  { name: '2 bars', wholes: 2 },
+  ...[...NOTES].reverse(),
+]
+
+/** The note value at index of notes, in whole notes; 0 for none there */
+export function noteWholes(notes: readonly NoteValue[], index: number): number {
+  return notes[Math.round(index)]?.wholes ?? 0
+}
+
+/**
+ * A part's Sync: Off, its own time or rate; On, a note value's at the
+ * song's tempo instead. On for a part added (asked for by ashon,
+ * 2026-11-15: "딜레이와 LFO 싱크는 기본값을 On 으로 두자"), off for one
+ * saved before Sync was, which had its own time
+ */
+const SYNC: KnobSpec = {
+  key: 'sync',
+  label: 'Sync',
+  min: 0,
+  max: 1,
+  default: 1,
+  absent: 0,
+  curve: 'linear',
+  step: 1,
+  unit: '',
+  choices: ['Off', 'On'],
+}
+
+/** What a knob of a part takes while Sync is off, its own time or rate */
+const UNSYNCED = { key: 'sync', is: 0 } as const
+
+/**
+ * The note value a synced part takes, among notes (initial its first
+ * place), shown under label while Sync is on, in its unsynced knob's
+ * place
+ */
+function beat(
+  label: string,
+  notes: readonly NoteValue[],
+  initial: string,
+  standsFor?: string
+): KnobSpec {
+  return {
+    key: 'beat',
+    label,
+    min: 0,
+    max: notes.length - 1,
+    default: Math.max(
+      0,
+      notes.findIndex(({ name }) => name === initial)
+    ),
+    curve: 'linear',
+    step: 1,
+    unit: '',
+    choices: notes.map(({ name }) => name),
+    when: { key: 'sync', is: 1 },
+    ...(standsFor === undefined ? {} : { standsFor }),
+  }
+}
+
+/**
+ * The knobs of a part shown at values: each whose when holds, the knob
+ * it reads at its default where values has none
+ */
+export function shownKnobs(
+  knobs: readonly KnobSpec[],
+  values: Readonly<Record<string, number>>
+): readonly KnobSpec[] {
+  if (!knobs.some(({ when }) => when)) return knobs
+  return knobs.filter(({ when }) => {
+    if (!when) return true
+    const read =
+      values[when.key] ?? knobs.find(({ key }) => key === when.key)?.default
+    return read === when.is
+  })
 }
 
 /**
@@ -398,7 +525,10 @@ export const EFFECT_KINDS = {
         curve: 'exponential',
         step: 0,
         unit: 's',
+        when: UNSYNCED,
       },
+      beat('Time', DELAY_NOTES, '1/8D'),
+      SYNC,
       {
         key: 'feedback',
         label: 'Feedback',
@@ -677,7 +807,10 @@ export const MODULATOR_KINDS = {
         curve: 'exponential',
         step: 0,
         unit: 'Hz',
+        when: UNSYNCED,
       },
+      beat('Rate', LFO_NOTES, '1/4', 'rate'),
+      SYNC,
       {
         key: 'fade',
         label: 'Fade',

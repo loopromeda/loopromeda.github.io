@@ -4,6 +4,8 @@ import { clampValue } from '../params'
 import {
   AMP_SPEC,
   CHAIN_SPEC,
+  DELAY_NOTES,
+  EFFECT_KINDS,
   INPUT_KINDS,
   ITEM_KINDS,
   MAX_CHAINS,
@@ -11,8 +13,11 @@ import {
   MAX_ITEMS,
   MAX_MODULATORS,
   MAX_ROUTES,
+  LFO_NOTES,
   MODULATOR_KINDS,
   VOICE_SPEC,
+  noteWholes,
+  shownKnobs,
   type KindSpec,
 } from './kinds'
 
@@ -72,5 +77,88 @@ describe('the kinds of part', () => {
     expect(scale(INPUT_KINDS.osc, 'width')).toBe(0.5)
     expect(scale(ITEM_KINDS.filter, 'cutoff')).toBe(10)
     expect(scale(MODULATOR_KINDS.lfo, 'rate')).toBe(4)
+  })
+})
+
+describe('the note values a synced part takes', () => {
+  it('runs a delay’s from 1/32T to a bar, shortest first', () => {
+    const names = DELAY_NOTES.map(({ name }) => name)
+    expect(names[0]).toBe('1/32T')
+    expect(names.at(-1)).toBe('1/1')
+    expect(names).toHaveLength(17)
+    expect(names.slice(7, 12)).toEqual(['1/8', '1/4T', '1/8D', '1/4', '1/2T'])
+    const lengths = DELAY_NOTES.map(({ wholes }) => wholes)
+    expect(lengths).toEqual([...lengths].sort((a, b) => a - b))
+  })
+
+  it('runs an LFO’s from four bars to 1/32T, slowest first', () => {
+    const names = LFO_NOTES.map(({ name }) => name)
+    expect(names.slice(0, 3)).toEqual(['4 bars', '2 bars', '1/1'])
+    expect(names.at(-1)).toBe('1/32T')
+    const lengths = LFO_NOTES.map(({ wholes }) => wholes)
+    expect(lengths).toEqual([...lengths].sort((a, b) => b - a))
+  })
+
+  it('reads a note value by its place, none past the ends', () => {
+    expect(noteWholes(DELAY_NOTES, 9)).toBe(3 / 16)
+    expect(noteWholes(LFO_NOTES, 0)).toBe(4)
+    expect(noteWholes(DELAY_NOTES, 99)).toBe(0)
+  })
+
+  it('starts a delay at a dotted eighth and an LFO at a beat, synced', () => {
+    const delay = EFFECT_KINDS.delay.knobs
+    const lfo = MODULATOR_KINDS.lfo.knobs
+    const at = (knobs: KindSpec['knobs'], key: string) =>
+      knobs.find((knob) => knob.key === key)
+    // Added synced; saved before Sync was, read with their own time
+    for (const knobs of [delay, lfo]) {
+      expect(at(knobs, 'sync')?.default).toBe(1)
+      expect(at(knobs, 'sync')?.absent).toBe(0)
+    }
+    expect(at(delay, 'beat')?.choices?.[at(delay, 'beat')?.default ?? 0]).toBe(
+      '1/8D'
+    )
+    expect(at(lfo, 'beat')?.choices?.[at(lfo, 'beat')?.default ?? 0]).toBe(
+      '1/4'
+    )
+    // Held, a synced LFO's Rate opens its rate's routes
+    expect(at(lfo, 'beat')?.standsFor).toBe('rate')
+  })
+})
+
+describe('shownKnobs', () => {
+  const keys = (knobs: KindSpec['knobs']) => knobs.map(({ key }) => key)
+  const delay = EFFECT_KINDS.delay.knobs
+
+  it('shows a delay’s own time unsynced, its note value synced', () => {
+    expect(keys(shownKnobs(delay, { sync: 0 }))).toEqual([
+      'time',
+      'sync',
+      'feedback',
+      'tone',
+      'mode',
+      'mix',
+    ])
+    expect(keys(shownKnobs(delay, { sync: 1 }))).toEqual([
+      'beat',
+      'sync',
+      'feedback',
+      'tone',
+      'mode',
+      'mix',
+    ])
+  })
+
+  it('reads a knob not given at its default, and lets others be', () => {
+    expect(keys(shownKnobs(delay, {}))[0]).toBe('beat')
+    const lfo = MODULATOR_KINDS.lfo.knobs
+    expect(keys(shownKnobs(lfo, { sync: 1 }))).toEqual([
+      'shape',
+      'beat',
+      'sync',
+      'fade',
+      'trigger',
+    ])
+    expect(shownKnobs(AMP_SPEC.knobs, {})).toBe(AMP_SPEC.knobs)
   })
 })

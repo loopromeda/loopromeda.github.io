@@ -115,7 +115,7 @@ part: voices → inserts → fader ─┬─ send A → Bus A: its effects → l
 | part       | knobs                                                                                                                                                         |
 | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Chorus     | Rate 0.05–5 Hz (0.6), Depth (50%), Mix (50%)                                                                                                                  |
-| Delay      | Time 0.01–2 s (0.35), Feedback (40%), Tone (60%), Mode: Stereo or Ping-pong, Mix (30%)                                                                        |
+| Delay      | Time 0.01–2 s (0.35), or synced 1/32T–1/1 (1/8D), Sync (On), Feedback (40%), Tone (60%), Mode: Stereo or Ping-pong, Mix (30%)                                 |
 | Reverb     | Size (60%), Decay 0.2–10 s (2), Damp (50%), Mix (30%)                                                                                                         |
 | Haas       | Time 1–40 ms (15), Later: Right or Left, Mix (100%)                                                                                                           |
 | Doubler    | Detune 1–50 ct (9), Delay 2–40 ms (12), Spread (100%), Mix (50%)                                                                                              |
@@ -637,16 +637,51 @@ stereo or ping-pong as the session's delay is, no longer as the preset
 had it. Each, through the default mix, stays under the clip and has
 rung out ten seconds after the key (`src/state/factory.test.ts`).
 
+### Synced
+
+Asked for by ashon, 2026-11-15 ("딜레이도 템포에 맞추거나 하는 기능이
+있으면 좋을 것 같네"), who chose a Sync on the delay, its Time then a
+note value, over a time always in beats, and the LFO's rate synced too
+(the chorus's not). Built the same day.
+
+- **Sync**, Off or On, after the delay's Time and the LFO's Rate. On,
+  the knob in their place is a note value at the song's tempo (`beat`):
+  the delay's from 1/32T to 1/1, shortest first, a dotted eighth (1/8D)
+  to start; the LFO's from four bars to 1/32T, slowest first (its Rate
+  turned up goes faster), a beat (1/4) to start. Each note has its
+  triplet (T, two thirds of it) and its dotted (D, half as long again).
+  Off, the knob is the time or rate of its own, as before: Sync is Off
+  in every preset, session and mix kept before it, which sound as they
+  did (`absent`, read by `valuesFor`). The panel shows one or the other
+  in the same place (`shownKnobs`, `src/state/sound/kinds.ts`), and a
+  synced delay's tile its note value. Built Off for a delay or LFO
+  added too; the same day ashon chose On ("딜레이와 LFO 싱크는
+  기본값을 On 으로 두자"): an added one starts synced, and so does a
+  new session's delay bus (375 ms at 120, where it was 350). The
+  factory presets read as written, unsynced.
+- **The clock** (`src/dsp/clock.ts`): the sequencer keeps the tempo and,
+  as each block starts, the beat it starts on (none while stopped or
+  counting in); every synth and rack in the worklet holds the same one.
+  A synced delay times its note value at the tempo each block, gliding
+  to a new tempo as to a new time; one longer than its line (2 s, a bar
+  below 120) is halved until it fits, so that it still falls on the
+  beat. A synced LFO comes round once a note value; free, while the song
+  plays, its phase is where the song is (as many of its cycles from the
+  first beat), so a note started on a beat picks it up there, and
+  stopped it runs on at the tempo's rate. A note already sounding as the
+  song starts keeps its phase until it is played again. Holding a synced
+  LFO's Rate opens its rate's routes, which still move it, in octaves.
+
 ### Later
 
-A delay's time in beats once the sequencer has a tempo; more effect
-kinds (a phaser; the EQ and the compressor came, 2026-11-13); an EQ's
-curve and a compressor's on its tile; a compressor keyed by another
-sound (side-chain); true peak in the meters (the limiter holds the
-samples, not what lies between them); a picture on an effect's tile;
-dragging an effect to move it, along its row or to another, as an item
-is dragged; a bus fed by another (a delay into the reverb's bus) rather
-than in a row.
+A delay's time in beats once the sequencer had a tempo (since
+2026-11-15: Synced, above); more effect kinds (a phaser; the EQ and the
+compressor came, 2026-11-13); an EQ's curve and a compressor's on its
+tile; a compressor keyed by another sound (side-chain); true peak in the
+meters (the limiter holds the samples, not what lies between them); a
+picture on an effect's tile; dragging an effect to move it, along its
+row or to another, as an item is dragged; a bus fed by another (a delay
+into the reverb's bus) rather than in a row.
 
 ## 2. Parts and the kit
 

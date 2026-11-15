@@ -100,14 +100,17 @@ const PITCH_KNOBS: readonly string[] = ['octave', 'semi', 'fine']
 
 /**
  * The destination key of part that holding its knob key routes to: the
- * knob's own (a cutoff, a send), or an oscillator's pitch for its Octave,
- * Semi and Fine; undefined for a knob nothing can move
+ * knob's own (a cutoff, a send), an oscillator's pitch for its Octave,
+ * Semi and Fine, or the one of the knob it stands for (a synced LFO's
+ * note value, its rate's); undefined for a knob nothing can move
  */
 export function knobDest(
   sound: Sound,
   part: string,
   key: string
 ): string | undefined {
+  const stands = knobSpec(sound, part, key)?.standsFor
+  if (stands !== undefined) return knobDest(sound, part, stands)
   if (destOf(sound, part, key)) return key
   const found = findPart(sound, part)
   return found?.type === 'input' &&

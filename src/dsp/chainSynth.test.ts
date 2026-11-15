@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { ChainSynth, MONO } from './chainSynth'
+import { Clock } from './clock'
 import { LOWPASS } from './filter'
 import { LFO_MAX_RATE, LFO_MIN_RATE, LFO_SINE } from './lfo'
 import { SAW, SINE } from './oscillator'
@@ -24,9 +25,9 @@ import {
 
 const SAMPLE_RATE = 48000
 
-/** Two saws into one chain through an open filter */
-function twoSaws(): ChainSynth {
-  const synth = new ChainSynth(SAMPLE_RATE)
+/** Two saws into one chain through an open filter, on clock if given */
+function twoSaws(clock?: Clock): ChainSynth {
+  const synth = new ChainSynth(SAMPLE_RATE, undefined, clock)
   synth.inputCount = 2
   for (let i = 0; i < 2; i++) {
     synth.setInputKind(i, INPUT_OSC)
@@ -58,6 +59,43 @@ function wobbled(rate: number, octaves?: number): ChainSynth {
     synth.setRoute(1, SOURCE_VELOCITY, rateDest(0), octaves, SOURCE_OFF)
   }
   return synth
+}
+
+/**
+ * wobbled's LFO on clock: at rate (Hz), or with sync a note value (whole
+ * notes) at its tempo; free, or restarted by each note
+ */
+function swept(
+  clock: Clock,
+  rate: number,
+  sync: number,
+  free = false
+): ChainSynth {
+  const synth = twoSaws(clock)
+  synth.setFilter(0, 0, LOWPASS, 2000, 0.3, 0)
+  synth.modulatorCount = 1
+  synth.setModulatorKind(0, MOD_LFO)
+  synth.setLfo(0, LFO_SINE, rate, 0, free, sync)
+  synth.routeCount = 1
+  synth.setRoute(0, modulatorSource(0), itemDest(0, 0, ITEM_CUTOFF), 3, 0)
+  return synth
+}
+
+/**
+ * A quarter second of synth, the song playing on clock from beat from
+ * (NaN, stopped) as each block starts: a block's silence, then a note
+ * held from the next, as a note played starts between blocks
+ */
+function playOn(synth: ChainSynth, clock: Clock, from: number): Float32Array {
+  const out = new Float32Array(128 * 94)
+  const block = new Float32Array(128)
+  for (let at = 0; at < out.length + 128; at += block.length) {
+    clock.beats = from + (at * clock.tempo) / (60 * SAMPLE_RATE)
+    if (at === 128) synth.noteOn(1, 60, 0.8)
+    synth.process(block)
+    if (at >= 128) out.set(block, at - 128)
+  }
+  return out
 }
 
 /**
@@ -195,6 +233,34 @@ describe('ChainSynth', () => {
     expect(play(wobbled(LFO_MIN_RATE, -4))).toEqual(play(wobbled(LFO_MIN_RATE)))
     // Within the range, a route still moves it
     expect(play(wobbled(5, 2))).not.toEqual(play(wobbled(5)))
+  })
+
+  it('comes round once a note value at the tempo, synced', () => {
+    // A quarter at 120 is 2 Hz; at 60, 1 Hz; its own rate unheard
+    const clock = new Clock()
+    const synced = play(swept(clock, 7, 1 / 4))
+    expect(furthest(synced, play(swept(new Clock(), 2, 0)))).toBeLessThan(1e-5)
+    const slow = new Clock()
+    slow.tempo = 60
+    const later = play(swept(slow, 7, 1 / 4))
+    expect(furthest(later, play(swept(new Clock(), 1, 0)))).toBeLessThan(1e-5)
+    expect(furthest(later, synced)).toBeGreaterThan(0.01)
+  })
+
+  it('runs free and synced in step with the song as it plays', () => {
+    const at = (from: number) => {
+      const clock = new Clock()
+      return playOn(swept(clock, 5, 1 / 4, true), clock, from)
+    }
+    // A quarter's cycle a beat: a beat on, the same; half of one, not
+    expect(furthest(at(0), at(1))).toBeLessThan(1e-4)
+    expect(furthest(at(0), at(3))).toBeLessThan(1e-4)
+    expect(furthest(at(0), at(0.5))).toBeGreaterThan(0.01)
+    // Stopped, it runs on as it was, the song's place unheard: its phase
+    // a block on from where it started, as unsynced at a quarter's rate
+    const free = new Clock()
+    const unsynced = playOn(swept(free, 2, 0, true), free, Number.NaN)
+    expect(furthest(at(Number.NaN), unsynced)).toBeLessThan(1e-5)
   })
 
   it('moves nothing by the wheel at 0, and at 1 its routes in full', () => {

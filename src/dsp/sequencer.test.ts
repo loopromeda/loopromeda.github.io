@@ -449,6 +449,70 @@ describe('a beat to start on, and moving by beats', () => {
   })
 })
 
+describe('the clock it keeps', () => {
+  /** The clock's beat as each of blocks starts, run on from play */
+  function beats(
+    sequencer: Sequencer,
+    blocks: number,
+    block = BLOCK
+  ): number[] {
+    const seen: number[] = []
+    for (let b = 0; b < blocks; b++) {
+      sequencer.process(block)
+      seen.push(sequencer.clock.beats)
+    }
+    return seen
+  }
+
+  it('holds the tempo set, within its range', () => {
+    const { sequencer } = clock([[16, []]])
+    expect(sequencer.clock.tempo).toBe(120)
+    sequencer.setTempo(90, 0.5)
+    expect(sequencer.clock.tempo).toBe(90)
+    sequencer.setTempo(1000, 0.5)
+    expect(sequencer.clock.tempo).toBe(240)
+  })
+
+  it('knows no beat stopped, nor counting in', () => {
+    const { sequencer, run } = clock([[16, []]])
+    run(STEP)
+    expect(sequencer.clock.beats).toBeNaN()
+    sequencer.play(true)
+    expect(beats(sequencer, 3).every(Number.isNaN)).toBe(true)
+  })
+
+  it('takes the beat each block starts on, from the first', () => {
+    const { sequencer } = clock([[16, []]])
+    sequencer.play()
+    // A beat is four steps: 24000 frames at 120
+    const seen = beats(sequencer, 400, 120)
+    seen.forEach((beat, b) => expect(beat).toBeCloseTo((b * 120) / 24000, 9))
+    // From a step given: the beat it is in
+    sequencer.play(false, 6)
+    expect(beats(sequencer, 1)[0]).toBeCloseTo(1.5, 9)
+  })
+
+  it('keeps the beat in the clock’s time with a swing', () => {
+    const { sequencer } = clock([[16, []]])
+    sequencer.setTempo(120, 0.75)
+    sequencer.play()
+    // The block starting just after the second step, swung late: 3/4 of
+    // an eighth into the beat, an eighth being 12000 frames
+    const seen = beats(sequencer, 100, 90)
+    seen.forEach((beat, b) => expect(beat).toBeCloseTo((b * 90) / 24000, 9))
+  })
+
+  it('moves with a seek, and stops', () => {
+    const { sequencer } = clock([[16, []]])
+    sequencer.play()
+    beats(sequencer, 1)
+    sequencer.seek(2)
+    expect(beats(sequencer, 1)[0]).toBeCloseTo(2 + 128 / 24000, 9)
+    sequencer.stop()
+    expect(beats(sequencer, 1)[0]).toBeNaN()
+  })
+})
+
 describe('Lane', () => {
   it('leaves out notes past the loop’s end, or not whole', () => {
     const tape = new Tape()

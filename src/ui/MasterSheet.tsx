@@ -14,6 +14,7 @@ import {
   MAX_EFFECTS,
   effectTile,
   reduces,
+  shownKnobs,
 } from '../state/sound/kinds'
 import {
   CARD,
@@ -135,15 +136,17 @@ function MasterKnobs({ engine }: { engine: Engine }) {
       </Group>
       {mix.master.effects.map((effect) => (
         <Group key={effect.id} name={effectInRow(mix.master.effects, effect)}>
-          {EFFECT_KINDS[effect.kind].knobs.map(({ key }) => (
-            <MixKnob
-              key={key}
-              engine={engine}
-              part={effect.id}
-              knob={key}
-              color={arc}
-            />
-          ))}
+          {shownKnobs(EFFECT_KINDS[effect.kind].knobs, effect.values).map(
+            ({ key }) => (
+              <MixKnob
+                key={key}
+                engine={engine}
+                part={effect.id}
+                knob={key}
+                color={arc}
+              />
+            )
+          )}
           {reduces(effect.kind) && (
             <ReductionCell engine={engine} at={{ id: effect.id }} color={arc} />
           )}

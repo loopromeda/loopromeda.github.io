@@ -1,11 +1,17 @@
 import { describe, expect, it } from 'vitest'
-import { addInput, addModulator, addRoute, setRef } from './edit'
+import { addEffect, addInput, addModulator, addRoute, setRef } from './edit'
 import { MAX_INPUTS } from './kinds'
 import { readSound } from './read'
 import { initSound, type Sound } from './sound'
 
 /** sound as storage or a file hands it back */
 const roundTrip = (sound: Sound): unknown => JSON.parse(JSON.stringify(sound))
+
+/** value as it was saved before Sync was: no part with a Sync */
+const beforeSync = (value: unknown): unknown =>
+  JSON.parse(JSON.stringify(value), (key, held: unknown) =>
+    key === 'sync' ? undefined : held
+  )
 
 /** The init sound with an LFO routed to the cutoff and FM from itself */
 function routed(): Sound {
@@ -62,6 +68,20 @@ describe('readSound', () => {
       width: 0.5,
       fm: 0,
     })
+  })
+
+  it('reads an LFO and a delay saved before Sync with their own time', () => {
+    const sound = addEffect(
+      addModulator(initSound(), 'lfo').sound,
+      'delay'
+    ).sound
+    // Added synced, and read back so
+    expect(sound.modulators[0]?.values.sync).toBe(1)
+    expect(sound.effects[0]?.values.sync).toBe(1)
+    expect(readSound(roundTrip(sound))).toEqual(sound)
+    const saved = readSound(beforeSync(sound))
+    expect(saved.modulators[0]?.values.sync).toBe(0)
+    expect(saved.effects[0]?.values.sync).toBe(0)
   })
 
   it('keeps no more parts than the limits', () => {

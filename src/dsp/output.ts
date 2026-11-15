@@ -18,6 +18,7 @@
  */
 import type { ChainSynth } from './chainSynth'
 import { softClip } from './clip'
+import { Clock } from './clock'
 import { EffectRack, Ramp } from './effects'
 import { MAX_BUSES } from './slots'
 
@@ -211,8 +212,8 @@ class Bus {
   left = new Float32Array(BLOCK)
   right = new Float32Array(BLOCK)
 
-  constructor(sampleRate: number, on: boolean) {
-    this.effects = new EffectRack(sampleRate)
+  constructor(sampleRate: number, on: boolean, clock: Clock) {
+    this.effects = new EffectRack(sampleRate, undefined, clock)
     this.on = on
   }
 }
@@ -242,12 +243,13 @@ export class Mixer {
   #groupL = new Float32Array(BLOCK)
   #groupR = new Float32Array(BLOCK)
 
-  constructor(sampleRate: number) {
+  /** clock: the song's time, which a synced delay on a bus follows */
+  constructor(sampleRate: number, clock = new Clock()) {
     this.#buses = Array.from(
       { length: MAX_BUSES },
-      (_, k) => new Bus(sampleRate, k === 0)
+      (_, k) => new Bus(sampleRate, k === 0, clock)
     )
-    this.master = new EffectRack(sampleRate)
+    this.master = new EffectRack(sampleRate, undefined, clock)
   }
 
   /**

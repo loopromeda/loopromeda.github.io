@@ -105,6 +105,10 @@ describe('knobDest and knoblessDests', () => {
     expect(knobDest(sound, 'x1', 'cutoff')).toBe('cutoff')
     expect(knobDest(sound, 'c1', sendKey('i2'))).toBe('send.i2')
     expect(knobDest(sound, 'm1', 'rate')).toBe('rate')
+    // A synced LFO's note value, in its Rate's place, routes to its rate;
+    // its Sync to nothing
+    expect(knobDest(sound, 'm1', 'beat')).toBe('rate')
+    expect(knobDest(sound, 'm1', 'sync')).toBeUndefined()
     expect(knobDest(sound, 'i1', 'semi')).toBe('pitch')
     expect(knobDest(sound, 'i1', 'octave')).toBe('pitch')
   })

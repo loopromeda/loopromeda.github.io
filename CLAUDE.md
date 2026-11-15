@@ -83,8 +83,11 @@ src/dsp/      pure DSP (oscillators, envelopes, LFOs, filters, voices);
               bar counted in first, if asked), and a lane
               for each track playing its loop into the track's
               strips, each note on its own frame (a strip's queue of
-              what starts and stops within a block); click.ts the
-              transport's click, a blip on each beat
+              what starts and stops within a block); clock.ts the
+              song's time the sequencer keeps (the tempo, and the
+              beat each block starts on), which a synced delay and
+              LFO follow; click.ts the transport's click, a blip on
+              each beat
 src/worklet/  the AudioWorkletProcessor around src/dsp; own globals and
               tsconfig (tsconfig.worklet.json), loaded via ?worker&url;
               sound.ts loads a sound document onto the ChainSynth and

@@ -179,6 +179,17 @@ describe('tiles', () => {
     ).toBe('\u22121.0 dB')
   })
 
+  it('writes a delay’s time, or its note value synced', () => {
+    const line = (values = {}) =>
+      effectLine({
+        kind: 'delay',
+        values: { ...effectValues('delay'), ...values },
+      })
+    expect(line()).toBe('1/8D')
+    expect(line({ beat: 10 })).toBe('1/4')
+    expect(line({ sync: 0 })).toBe('350 ms')
+  })
+
   it('writes the stereo tools\u2019 lines from their knobs', () => {
     const line = (kind: 'haas' | 'doubler' | 'width', values = {}) =>
       effectLine({ kind, values: { ...effectValues(kind), ...values } })
@@ -293,6 +304,8 @@ describe('shapeKey', () => {
       setValue(sound, 'i1', 'wave', 3),
       setValue(sound, 'x1', 'type', 1),
       setValue(sound, 'm1', 'shape', 2),
+      // Unsynced, its panel shows its own rate in its Rate's place
+      setValue(sound, 'm1', 'sync', 0),
       setRef(sound, 'i1', 'fmSource', 'i2'),
       removePart(sound, 'r1'),
       addModulator(sound, 'env').sound,

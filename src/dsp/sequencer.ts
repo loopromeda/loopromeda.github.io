@@ -10,6 +10,7 @@
  * message's handler.
  */
 import type { Click } from './click'
+import { Clock } from './clock'
 import type { Strip } from './output'
 
 /** The longest loop, in steps: thirty-two bars of sixteenths */
@@ -268,9 +269,16 @@ export class Sequencer {
   click: Click | undefined
   /** Whether the click sounds while it plays (it does counting in) */
   clicking = false
+  /**
+   * The tempo and, as each block starts, the beat it starts on: what a
+   * synced delay or LFO reads (clock.ts)
+   */
+  readonly clock: Clock
 
-  constructor(sampleRate: number) {
+  constructor(sampleRate: number, clock = new Clock()) {
     this.#sampleRate = sampleRate
+    this.clock = clock
+    clock.tempo = this.#tempo
   }
 
   get playing(): boolean {
@@ -289,6 +297,7 @@ export class Sequencer {
   setTempo(tempo: number, swing: number): void {
     this.#tempo = clamp(tempo, MIN_TEMPO, MAX_TEMPO, 120)
     this.#swing = clamp(swing, MIN_SWING, MAX_SWING, MIN_SWING)
+    this.clock.tempo = this.#tempo
   }
 
   /**
@@ -339,9 +348,11 @@ export class Sequencer {
 
   /**
    * Fires the steps that fall within the next block of length frames,
-   * each on its frame: whether any did (position has moved)
+   * each on its frame: whether any did (position has moved). The clock
+   * first takes the beat the block starts on.
    */
   process(length: number): boolean {
+    this.clock.beats = this.#beats()
     if (!this.#playing) return false
     const lanes = this.#lanes
     let fired = false
@@ -370,6 +381,20 @@ export class Sequencer {
     }
     this.#until -= length
     return fired
+  }
+
+  /**
+   * The beat the next block starts on, from the first, in the time the
+   * clock keeps: the next step's place (a pair of sixteenths an eighth,
+   * the second where the swing puts it) less the frames until it. NaN
+   * stopped or counting in.
+   */
+  #beats(): number {
+    if (!this.#playing || this.#counting > 0) return Number.NaN
+    const next = this.#step
+    const pair = Math.floor(next / 2)
+    const at = (pair + (next % 2 === 0 ? 0 : this.#swing)) / 2
+    return at - (this.#until * this.#tempo) / (60 * this.#sampleRate)
   }
 }
 

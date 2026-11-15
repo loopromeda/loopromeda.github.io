@@ -18,8 +18,10 @@ import {
   compression,
   dbToGain,
   dryLevel,
+  syncedTime,
   wetLevel,
 } from './effects'
+import { Clock } from './clock'
 import {
   FX_CHORUS,
   FX_COMPRESSOR,
@@ -182,6 +184,50 @@ describe('Delay', () => {
     const end = left.length
     expect(rms(left, end - SAMPLE_RATE, end)).toBeLessThan(0.05)
     expect(left.every(Number.isFinite)).toBe(true)
+  })
+})
+
+describe('a synced delay', () => {
+  it('times a note value at the tempo, halved past the longest', () => {
+    const clock = new Clock()
+    expect(syncedTime(clock, 3 / 16)).toBe(0.375)
+    expect(syncedTime(clock, 1)).toBe(2)
+    // At 80 a bar is 3 s, too long: a half, on the beat still
+    clock.tempo = 80
+    expect(syncedTime(clock, 1)).toBe(1.5)
+    // At 30, 8 s: a quarter of it, the longest itself
+    clock.tempo = 30
+    expect(syncedTime(clock, 1)).toBe(2)
+  })
+
+  it('echoes after its note value, its own time unheard', () => {
+    const clock = new Clock()
+    const delay = new Delay(SAMPLE_RATE, clock)
+    // An eighth at 120: a quarter of a second, not 0.6
+    delay.set(0.6, 0.5, 1, false, 1, 1 / 8)
+    delay.reset()
+    const { left } = run(delay, impulse(0.4))
+    expect(firstAbove(left, 0.1)).toBeCloseTo(0.25, 2)
+  })
+
+  it('follows the tempo as it moves, and lets go of it unsynced', () => {
+    const clock = new Clock()
+    const delay = new Delay(SAMPLE_RATE, clock)
+    delay.set(0.6, 0, 1, false, 1, 1 / 4)
+    delay.reset()
+    // At 150 a beat is 0.4 s: the glide there done before the impulse
+    clock.tempo = 150
+    run(delay, silence(1))
+    const echo = (seconds: number) => {
+      const { left } = run(delay, impulse(seconds))
+      return firstAbove(left, 0.1)
+    }
+    expect(echo(0.6)).toBeCloseTo(0.4, 2)
+    // Unsynced, its own time again, and the tempo no longer heard
+    delay.set(0.3, 0, 1, false, 1)
+    run(delay, silence(1))
+    clock.tempo = 60
+    expect(echo(0.5)).toBeCloseTo(0.3, 2)
   })
 })
 
