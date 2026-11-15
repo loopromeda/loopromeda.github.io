@@ -254,6 +254,15 @@ export const FACTORY_PRESETS: readonly Preset[] = [
     'Bass',
     chipBass(-2, { filter: { kind: 'filter', cutoff: 1500 } })
   ),
+  preset('NES Triangle', 'Bass', {
+    // The 2A03's triangle: 32 steps of 16 levels, and no volume of its own
+    inputs: {
+      triangle: { kind: 'osc', wave: 'Triangle', octave: -1, steps: '32' },
+    },
+    chains: { main: { sends: { triangle: 1 } } },
+    amp: { attack: 0.001, decay: 0.01, sustain: 1, release: 0.01, velocity: 0 },
+    voice: { mode: 'Mono' },
+  }),
 
   preset('Saw Lead', 'Lead', {
     inputs: {
@@ -291,6 +300,16 @@ export const FACTORY_PRESETS: readonly Preset[] = [
     // The vibrato sets in after the note starts
     modulators: { vibrato: { kind: 'lfo', rate: 5.5, fade: 0.25 } },
     routes: [{ from: 'vibrato', to: 'voice.pitch', by: 0.3 }],
+    voice: { mode: 'Mono' },
+  }),
+  preset('4-bit Lead', 'Lead', {
+    // A wave-table chip's (the N163's, the Game Boy's): a sine in 32 steps
+    // of 16 levels, its vibrato setting in after the note starts
+    inputs: { wave: { kind: 'osc', wave: 'Sine', steps: '32', bits: 4 } },
+    chains: { main: { sends: { wave: 1 } } },
+    modulators: { vibrato: { kind: 'lfo', rate: 6, fade: 0.3 } },
+    routes: [{ from: 'vibrato', to: 'voice.pitch', by: 0.3 }],
+    amp: { attack: 0.001, decay: 0.15, sustain: 0.8, release: 0.05 },
     voice: { mode: 'Mono' },
   }),
   preset('Fifth Lead', 'Lead', {
