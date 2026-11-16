@@ -343,9 +343,15 @@ as a graph of flat tiles, flowing left to right.
   for the panel on a phone on its side was room wasted, and the tiles
   should not resize as it shows; they kept clear of its bar while it
   had one); under the graph they keep clear of the whole dock. Its card
-  face lets a little through, the canvas under it blurred (since
-  2026-11-12: ashon asked for a blur, a hue and a grain, then found the
-  knobs lost on that busier glass and kept the blur alone).
+  face is opaque. From 2026-11-12 it let a little through, the canvas
+  under it blurred (ashon asked for a blur, a hue and a grain, then
+  found the knobs lost on that busier glass and kept the blur alone).
+  2026-11-17 the blur went: the views under it, drawn each display
+  frame, had a phone's GPU blur them again every frame, and with the mix
+  choppy ashon took it for the cause ("마스터 패널의 반투명 패널이
+  문제같긴 하네"). The frames' report showed none missed for it (the
+  chunks of Bluetooth's audio were the cause, `docs/platform-notes.md`),
+  and the face stayed opaque.
 - **Margins.** In the editor's card everything stands 8 px from the
   card's edges, and its blocks 8 px apart: the rack (a row or a column),
   the graph's tiles, and the panel, which stands in from the

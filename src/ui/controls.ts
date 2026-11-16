@@ -36,7 +36,7 @@
  * A card's face, as a CSS value (index.css's --panel, in either mode):
  * the sound's graph and the sheets that open over it stand on it, and
  * the graph's tiles are cut from it. The editor's panel, over the graph,
- * stands on glass instead (index.css), this face let through.
+ * stands on glass (index.css): this face, opaque.
  */
 export const CARD_FACE = 'var(--panel)'
 
@@ -45,8 +45,9 @@ export const CARD = 'rounded-xl bg-(--panel)'
 
 /**
  * What stands over the cards, raised: the editor's panel over the graph,
- * the presets over the controls. Frosted glass (index.css), what is under
- * it blurred, with a shadow and a faint ring to stand it off them.
+ * the presets over the controls. On glass (index.css): the card's face,
+ * opaque (nothing under it blurred each frame), with a shadow and a faint
+ * ring to stand it off them.
  */
 export const RAISED =
   'glass rounded-xl shadow-[0_0_24px_var(--shadow)] ring-1 ring-(--lift-2)'

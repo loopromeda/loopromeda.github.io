@@ -247,20 +247,16 @@ body {
 }
 
 /*
- * Frosted glass, for what stands over the sound's graph (the editor's
- * panel, SoundEditor.tsx): the card face, letting a little through, and
- * the canvas under it blurred. Nothing more (ashon, 2026-11-12: a hue, a
- * grain and a rim took the eye off the knobs). Without a backdrop filter
- * the face is opaque.
+ * The face of what stands over the sound's graph and the mix (the
+ * editor's panel, SoundEditor.tsx; the master's; a popover): the card
+ * face, opaque. It was frosted glass, the canvas under it blurred (ashon,
+ * 2026-11-12), and the views under it are drawn each display frame, so a
+ * phone's GPU blurred them again every frame. With the mix choppy on the
+ * phone ashon took the blur for it (2026-11-17: "마스터 패널의 반투명
+ * 패널이 문제같긴 하네"); the frames' report then showed none missed for
+ * it, Bluetooth's audio coming in chunks the cause (docs/platform-notes.md),
+ * and the face stayed opaque.
  */
 @utility glass {
-  background-color: color-mix(in srgb, var(--panel) 80%, transparent);
-  -webkit-backdrop-filter: blur(16px);
-  backdrop-filter: blur(16px);
-
-  @supports not (
-    (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))
-  ) {
-    background-color: var(--panel);
-  }
+  background-color: var(--panel);
 }
