@@ -379,11 +379,20 @@ a demo of the editor and its marks was approved with the EQ's ("둘다
   from the step before (looked for two steps ahead); a pitch moved is a
   move on its strip's queue (`src/dsp/output.ts`), the voice's pitch
   jumping at once (ChainSynth.bend). A note going on as its loop is
-  edited goes on where the same note is still there. At Play, a grace
-  before the first step is not heard; the second time round it is.
+  edited goes on where the same note is still there; one changed on its
+  step and key (its ornament, its velocity, its length, a ghost or not)
+  carries on as it now is from the next step, its pitch moved there at
+  once, the note it holds ending where the new one's would. At Play, a
+  grace before the first step is not heard; the second time round it is.
 - **Heard while edited**: stopped, each change plays the note alone, its
   ornament and all, at the song's tempo (Engine.auditionNote,
-  Sequencer.audition); playing, the loop plays it in its turn.
+  Sequencer.audition), the one heard before stopped at once (a choke of
+  a few ms, ChainSynth.cut), not let go through its release; playing,
+  the note sounding takes the change from the next step, and the loop
+  plays it so after. ashon, 2026-11-16: a change should be heard at
+  once, even as the note is held ("꾸밈음이 바뀔 때 음이 지속된다고 해도
+  바로 바뀌면 좋겠는데"), where the release had sounded under the next
+  and a trill changed under it had stopped where it stood.
 - **Edited** (`src/ui/StepGrid.tsx`, `src/ui/OrnamentPanel.tsx`): a note
   held still, or tapped with Ornaments on (a trill's zigzag beside
   Lane), is picked and ringed. The panel stands in the lanes' place

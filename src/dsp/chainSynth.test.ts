@@ -598,6 +598,38 @@ describe('ChainSynth', () => {
     })
   })
 
+  it('cuts a note at once, where a release would ring on', () => {
+    const released = sine()
+    const cut = sine()
+    for (const synth of [released, cut]) {
+      synth.setAmp(0.001, 0.01, 1, 2)
+      synth.noteOn(1, 60, 1)
+      render(synth, 0.05)
+    }
+    released.noteOff(1)
+    cut.cut(1)
+    expect(loudestOf(render(released, 0.01), 0)).toBeGreaterThan(0.1)
+    // Silent past the choke's few milliseconds
+    expect(loudestOf(render(cut, 0.01), 0.004 * SAMPLE_RATE)).toBe(0)
+    expect(cut.activeVoices).toBe(0)
+  })
+
+  it('in mono strikes afresh after a cut, not on from the note cut', () => {
+    const synth = sine()
+    synth.mode = MONO
+    synth.setAmp(0.05, 0.01, 1, 2)
+    synth.noteOn(1, 60, 1)
+    const full = loudestOf(render(synth, 0.2), 0.1 * SAMPLE_RATE)
+    synth.cut(1)
+    synth.noteOn(2, 67, 1)
+    // Silent through the choke, then from nothing up its attack: moved
+    // on legato, it would have held its level
+    const after = render(synth, 0.01)
+    expect(loudestOf(after, 0.004 * SAMPLE_RATE)).toBeLessThan(full * 0.5)
+    const held = render(synth, 0.3)
+    expect(hertz(held) / midiToFrequency(67)).toBeCloseTo(1, 2)
+  })
+
   it('plays nothing while no note is held', () => {
     const synth = twoSaws()
     const block = new Float32Array(128)

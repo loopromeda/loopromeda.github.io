@@ -28,13 +28,17 @@ const BLOCK = 128
 
 /**
  * The notes a strip can be told to start, end or move within one block
- * (queueOn, queueOff, queueBend): a step's worth of a sequence, with
+ * (queueOn, queueOff, queueCut, queueBend): a step's worth of a sequence, with
  * room to spare
  */
 const EVENTS = 128
 
-/** A queued event's velocity: below 0 a note ends, this one it moves */
+/**
+ * A queued event's velocity: below 0 a note ends, let go (-1) or at once
+ * (CUT); at MOVE it moves
+ */
 const MOVE = -2
+const CUT = -3
 
 /**
  * One sound's channel: its voices in stereo (synth.clip off, for the
@@ -117,6 +121,23 @@ export class Strip {
   }
 
   /**
+   * Key stops on frame offset of the next block, after what is queued
+   * already, at once rather than through its release (ChainSynth.cut);
+   * with no room left, now
+   */
+  queueCut(offset: number, key: number): void {
+    const k = this.#count
+    if (k === EVENTS) {
+      this.synth.cut(key)
+      return
+    }
+    this.#at[k] = this.#after(offset)
+    this.#key[k] = key
+    this.#velocity[k] = CUT
+    this.#count = k + 1
+  }
+
+  /**
    * Key's note moves to note (a MIDI number) on frame offset of the next
    * block, after what is queued already: at once, nothing restarting (a
    * tracker's arpeggio, an ornament's pitch moving); with no room left,
@@ -163,6 +184,7 @@ export class Strip {
       const key = this.#key[k] as number
       const velocity = this.#velocity[k] as number
       if (velocity === MOVE) synth.bend(key, this.#note[k] as number, true)
+      else if (velocity === CUT) synth.cut(key)
       else if (velocity < 0) synth.noteOff(key)
       else {
         const note = this.#note[k] as number

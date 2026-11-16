@@ -69,6 +69,12 @@ export interface Target {
   /** Key lets go on frame offset of the next block */
   off(offset: number, key: number): void
   /**
+   * Key stops on frame offset of the next block, at once rather than
+   * through its release (a note auditioned, replaced by the next);
+   * without, it lets go
+   */
+  cut?(offset: number, key: number): void
+  /**
    * Key, sounding, moves to note on frame offset of the next block, at
    * once and nothing restarting: a tracker's arpeggio
    */
@@ -91,6 +97,10 @@ export class SynthTarget implements Target {
 
   off(offset: number, key: number): void {
     this.#strip.queueOff(offset, SEQ_KEY - key)
+  }
+
+  cut(offset: number, key: number): void {
+    this.#strip.queueCut(offset, SEQ_KEY - key)
   }
 
   bend(offset: number, key: number, note: number): void {
@@ -123,6 +133,10 @@ export class KitTarget implements Target {
 
   off(offset: number, key: number): void {
     this.#pads[key]?.queueOff(offset, SEQ_KEY)
+  }
+
+  cut(offset: number, key: number): void {
+    this.#pads[key]?.queueCut(offset, SEQ_KEY)
   }
 }
 
@@ -325,8 +339,12 @@ export class Lane {
   /**
    * Plays notes round every steps steps instead (none: silence), from
    * the next step on; a note sounding ends where it was going to, and one
-   * being played out goes on where the new loop has it as it was. Notes
-   * past the loop's end, or not whole, are left out. Allocates: for a
+   * being played out goes on where the new loop has it as it was. One
+   * the new loop has changed on its step and key (its ornament, its
+   * velocity, its length, a ghost or not) carries on as it now is from
+   * the next step, its pitch moved there at once: a change is heard as
+   * it is made, not the next time round (ashon, 2026-11-16). Notes past
+   * the loop's end, or not whole, are left out. Allocates: for a
    * message's handler, not process.
    */
   setLoop(steps: number, notes: readonly LaneNote[]): void {
@@ -353,7 +371,8 @@ export class Lane {
       const early = -(sounds.t[sounds.first[n] as number] as number)
       if (early > lead) lead = early
     }
-    // The notes being played out, found again in the new loop or let be
+    // The notes being played out, found again in the new loop, carried
+    // on as they changed there, or let be
     const was = this.#sounds
     for (let e = 0; e < this.#active;) {
       if (this.#activeTrial[e] === 1) {
@@ -363,14 +382,17 @@ export class Lane {
       const n = this.#activeNote[e] as number
       const step = was.step[n] as number
       let found = -1
+      let changed = -1
       if (step < length) {
         const end = by[step + 1] as number
         for (let m = by[step] as number; m < end && found < 0; m++) {
           if (sameSounds(was, n, sounds, m)) found = m
+          else if (sounds.key[m] === was.key[n]) changed = m
         }
       }
       if (found < 0) {
-        this.#retire(e)
+        if (changed >= 0 && this.#carry(e, was, n, sounds, changed)) e++
+        else this.#retire(e)
         continue
       }
       this.#activeNote[e] = found
@@ -462,6 +484,20 @@ export class Lane {
     this.forget()
   }
 
+  /**
+   * Every note sounding stops on frame offset of the next block, at once
+   * (Target.cut), or lets go where the target cannot stop one
+   */
+  cut(offset = 0): void {
+    const target = this.#target
+    for (let h = 0; h < this.#held; h++) {
+      const key = this.#heldKey[h] as number
+      if (target.cut) target.cut(offset, key)
+      else target.off(offset, key)
+    }
+    this.forget()
+  }
+
   /** Forgets the notes sounding: their voices were stopped elsewhere */
   forget(): void {
     this.#held = 0
@@ -492,6 +528,45 @@ export class Lane {
         this.#activeHold[e] = 0
       }
     }
+  }
+
+  /**
+   * Active note e, note n of was, carries on as note m of sounds, the
+   * same note changed: its sounds from the next step on (all of them,
+   * none of n's played yet), the note it holds ending where m's would,
+   * and moved at once to m's pitch where it stands. Whether any of m's
+   * sounds are still to come.
+   */
+  #carry(e: number, was: Sounds, n: number, sounds: Sounds, m: number) {
+    const from = sounds.first[m] as number
+    const last = sounds.first[m + 1] as number
+    const next = this.#activeNext[e] as number
+    this.#activeNote[e] = m
+    if (next === was.first[n]) {
+      this.#activeNext[e] = from
+      return from < last
+    }
+    // Its sounds before the next step's are the past
+    const now = this.#expect - (this.#activeStart[e] as number)
+    let k = from
+    while (k < last && (sounds.t[k] as number) < now) k++
+    this.#activeNext[e] = k
+    const hold = this.#activeHold[e] as number
+    if (k === from || hold === 0) return k < last
+    let struck = k - 1
+    while (struck > from && sounds.strike[struck] !== 1) struck--
+    for (let h = 0; h < this.#held; h++) {
+      if (this.#heldHold[h] !== hold) continue
+      this.#heldEnd[h] =
+        (this.#activeStart[e] as number) + (sounds.end[struck] as number)
+      const off = sounds.off[k - 1] as number
+      if (off !== was.off[next - 1]) {
+        const note = clampKey((sounds.key[m] as number) + off)
+        this.#dispatch(this.#base, BEND, this.#activeKey[e] as number, note, 0)
+      }
+      break
+    }
+    return k < last
   }
 
   /** The sounds of the notes being played out that fall within step's */
@@ -855,13 +930,14 @@ export class Sequencer {
   /**
    * Stopped, lane plays note on its own (an ornament's sounds before its
    * step too) from the start of the next block, a note auditioned before
-   * it let go; playing, nothing: the loop plays it. Allocates: for a
-   * message's handler.
+   * it stopped at once, not let go: its release would sound under this
+   * one (ashon, 2026-11-16, an ornament changed as it sounded). Playing,
+   * nothing: the loop plays it. Allocates: for a message's handler.
    */
   audition(lane: Lane, note: LaneNote): void {
     if (this.#playing) return
-    this.#trial?.release(0)
-    lane.release(0)
+    this.#trial?.cut(0)
+    lane.cut(0)
     lane.audition(note)
     this.#trial = lane
     this.#trialStep = 0

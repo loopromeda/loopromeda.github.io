@@ -562,6 +562,28 @@ export class ChainSynth {
   }
 
   /**
+   * key's note stops at once, choked rather than let go through its
+   * release (sequencer.ts: a note auditioned, replaced by the next). In
+   * mono play it lets go as noteOff has it while another key is held;
+   * the last, the voice falls silent, and the next note strikes afresh.
+   */
+  cut(key: number): void {
+    if (this.#mode === POLY) {
+      const index = this.#allocator.noteOff(key)
+      if (index >= 0) (this.#voices[index] as ChainVoice).cut()
+      return
+    }
+    const at = this.#find(key)
+    if (at < 0) return
+    if (this.#held > 1) {
+      this.#monoOff(key)
+      return
+    }
+    this.#removeAt(at)
+    ;(this.#voices[0] as ChainVoice).cut()
+  }
+
+  /**
    * key's finger slid up its key (or down, below 0), -1..1: the Slide
    * source of the note it plays
    */
@@ -995,8 +1017,14 @@ export class ChainSynth {
     this.#given[top] = slide === undefined ? 0 : 1
     this.#ghosts[top] = ghost
     const voice = this.#voices[0] as ChainVoice
-    // A ghost strikes afresh, as does a note after one: none is legato
-    if (voice.active && ghost === GHOST_NONE && voice.ghost === GHOST_NONE) {
+    // A ghost strikes afresh, as does a note after one or after a cut:
+    // none is legato
+    if (
+      voice.active &&
+      !voice.choking &&
+      ghost === GHOST_NONE &&
+      voice.ghost === GHOST_NONE
+    ) {
       // Legato plays on while another key is held
       voice.move(note, velocity, this.#mode === MONO || !held, slide)
       if (slide === undefined) voice.slide = 0

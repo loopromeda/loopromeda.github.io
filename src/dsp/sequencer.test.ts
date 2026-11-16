@@ -37,6 +37,8 @@ class Tape implements Target {
   readonly events: Event[] = []
   /** The pitches moved: when, the key sounding, and the note it moved to */
   readonly bends: { frame: number; key: number; note: number }[] = []
+  /** The keys stopped at once, and when */
+  readonly cuts: { frame: number; key: number }[] = []
   /** The frame the next block starts on */
   base = 0
   /** Whether a note starts when told to */
@@ -58,6 +60,10 @@ class Tape implements Target {
 
   off(offset: number, key: number): void {
     this.events.push({ frame: this.base + offset, on: false, key, velocity: 0 })
+  }
+
+  cut(offset: number, key: number): void {
+    this.cuts.push({ frame: this.base + offset, key })
   }
 
   /** The frames keys started on (one key's, given one) */
@@ -722,6 +728,17 @@ describe('SynthTarget', () => {
     expect(played.synth.activeVoices).toBe(1)
   })
 
+  it('stops a note at once when cut, its release unheard', () => {
+    const played = strip()
+    played.synth.setAmp(0.001, 0.01, 1, 2)
+    const target = new SynthTarget(played)
+    target.on(0, 60, 1)
+    for (let b = 0; b < 8; b++) block(played)
+    target.cut(0, 60)
+    for (let b = 0; b < 3; b++) block(played)
+    expect(played.synth.activeVoices).toBe(0)
+  })
+
   it('tells when its strip has no room', () => {
     const played = strip()
     const target = new SynthTarget(played)
@@ -928,14 +945,91 @@ describe('ornaments', () => {
     ;(lanes[0] as Lane).setLoop(16, [note(0, 60, 2, 1, arp), note(5, 72)])
     run(STEP * 2)
     expect(tape.bends.length).toBe(7)
-    // Changed under it, it stops moving and ends as it was going to
+    // Changed under it, softer, it goes on all the same
     const again = clock([[16, [note(0, 60, 2, 1, arp)]]])
     again.sequencer.play()
     again.run(STEP)
     ;(again.lanes[0] as Lane).setLoop(16, [note(0, 60, 2, 0.5, arp)])
     again.run(STEP * 2)
-    expect(again.tape.bends.length).toBe(3)
+    expect(again.tape.bends.length).toBe(7)
     expect(again.tape.offs(60)).toEqual([STEP * 2])
+  })
+
+  it('carries a note on as its ornament changes, from the next step', () => {
+    const { sequencer, tape, lanes, run } = clock([
+      [16, [note(0, 60, 2, 1, trill)]],
+    ])
+    sequencer.play()
+    run(STEP)
+    const fast = { ...trill, speed: 8 } as const
+    ;(lanes[0] as Lane).setLoop(16, [note(0, 60, 2, 1, fast)])
+    run(STEP * 2)
+    // Struck once; the second step's moves eight, not four
+    expect(tape.ons()).toEqual([0])
+    const later = tape.bends.filter((bend) => bend.frame >= STEP)
+    expect(later.map((bend) => bend.frame / STEP)).toEqual([
+      1, 1.125, 1.25, 1.375, 1.5, 1.625, 1.75, 1.875,
+    ])
+    expect(tape.offs(60)).toEqual([STEP * 2])
+  })
+
+  it('moves the pitch at once where the changed note stands elsewhere', () => {
+    const { sequencer, tape, lanes, run } = clock([
+      [16, [note(0, 60, 2, 1, trill)]],
+    ])
+    sequencer.play()
+    run(STEP)
+    // Up a tone as the first step ends, a semitone now
+    const near = { ...trill, interval: 1 }
+    ;(lanes[0] as Lane).setLoop(16, [note(0, 60, 2, 1, near)])
+    expect(tape.bends.at(-1)).toMatchObject({ key: 60, note: 61 })
+    run(STEP * 2)
+    const later = tape.bends.filter((bend) => bend.frame >= STEP)
+    expect(later.map((bend) => bend.note)).toEqual([60, 61, 60, 61])
+  })
+
+  it('ends a note held where the note changed under it now ends', () => {
+    // A trill made to strike each sound: the note held from the first
+    // lets go once the next step starts, as the struck ones take over
+    const { sequencer, tape, lanes, run } = clock([
+      [16, [note(0, 60, 2, 1, trill)]],
+    ])
+    sequencer.play()
+    run(STEP)
+    const struck = { ...trill, restart: true }
+    ;(lanes[0] as Lane).setLoop(16, [note(0, 60, 2, 1, struck)])
+    run(STEP * 2)
+    expect(tape.offs(60)[0]).toBe(STEP)
+    expect(tape.ons(60)).toEqual([0, STEP, STEP * 1.5])
+    expect(tape.ons(62)).toEqual([STEP * 1.25, STEP * 1.75])
+  })
+
+  it('stops a note auditioned at once as the next is auditioned', () => {
+    const tape = new Tape()
+    const lane = new Lane(tape)
+    const sequencer = new Sequencer(SAMPLE_RATE)
+    sequencer.setLanes([lane])
+    sequencer.audition(lane, note(0, 60, 8, 1, trill))
+    for (let frame = 0; frame < STEP * 2; frame += BLOCK) {
+      tape.base = frame
+      sequencer.process(BLOCK)
+    }
+    tape.base = STEP * 2
+    sequencer.audition(lane, note(0, 60, 8, 1, { ...trill, interval: 1 }))
+    // Stopped, not let go: no release under the next
+    expect(tape.cuts).toEqual([{ frame: STEP * 2, key: 60 }])
+    expect(tape.offs(60)).toEqual([])
+    // Where the target cannot stop one, it lets go
+    const plain = new Tape()
+    const old = new Lane({
+      on: (offset, key, velocity) => plain.on(offset, key, velocity),
+      off: (offset, key) => plain.off(offset, key),
+    })
+    sequencer.setLanes([old])
+    sequencer.audition(old, note(0, 64, 4))
+    sequencer.process(BLOCK)
+    sequencer.audition(old, note(0, 65, 4))
+    expect(plain.offs(64)).toEqual([0])
   })
 
   it('auditions a note while stopped, its graces first, then is done', () => {
@@ -990,7 +1084,7 @@ describe('ghost notes', () => {
     expect(tape.offs(60)).toEqual([STEP, STEP * 3])
   })
 
-  it('are told apart from the notes they were, as the loop changes', () => {
+  it('go on as ghosts from the next step, a note made one as it sounds', () => {
     const roll = { ...ORNAMENT_DEFAULTS.trill, restart: true }
     const { sequencer, tape, lanes, run } = clock([
       [16, [note(0, 60, 2, 1, roll)]],
@@ -999,13 +1093,16 @@ describe('ghost notes', () => {
     run(STEP)
     ;(lanes[0] as Lane).setLoop(16, [ghost(0, 60, roll)])
     run(STEP * 16)
-    // The rest of the note not played, the ghost played the next time
     const ons = tape.events.filter((event) => event.on)
     expect(ons.map((event) => [event.frame / STEP, !!event.ghost])).toEqual([
       [0, false],
       [0.25, false],
       [0.5, false],
       [0.75, false],
+      [1, true],
+      [1.25, true],
+      [1.5, true],
+      [1.75, true],
       [16, true],
       [16.25, true],
       [16.5, true],

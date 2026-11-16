@@ -1,4 +1,4 @@
-import { Adsr, AdsrShape, SUSTAIN } from './adsr'
+import { Adsr, AdsrShape, CHOKE, SUSTAIN } from './adsr'
 import { sinCycles, tanhApprox } from './fastMath'
 import { Filter, LOWPASS } from './filter'
 import { LFO_MAX_RATE, LFO_MIN_RATE, Lfo } from './lfo'
@@ -602,6 +602,21 @@ export class ChainVoice {
         ;(this.#envs[m] as Adsr).gateOff()
       }
     }
+  }
+
+  /**
+   * Stops the note at once: a choke to silence over CHOKE_TIME in place
+   * of its release (a note auditioned, replaced by the next). One waiting
+   * for a choke never starts.
+   */
+  cut(): void {
+    this.#waiting = false
+    this.#env.choke()
+  }
+
+  /** Whether it falls silent from a cut, nothing to start after it */
+  get choking(): boolean {
+    return !this.#waiting && this.#env.stage === CHOKE
   }
 
   /**
