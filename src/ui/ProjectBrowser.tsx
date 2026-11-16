@@ -23,8 +23,7 @@ import {
   SMALL_FIELD,
   TALL_HIT,
 } from './controls'
-import { FadeRow } from './FadeRow'
-import { SmallIconButton } from './IconButton'
+import { MENU_GLYPHS, MoreMenu } from './MoreMenu'
 import { Popover } from './Popover'
 
 /** A folder, 18 px stroked: its tab at the left, over its body */
@@ -118,20 +117,11 @@ export function ProjectButton({
 /** What the row under the header holds */
 type Mode =
   | { kind: 'idle' }
-  | { kind: 'more' }
   | { kind: 'saveAs' }
   | { kind: 'rename' }
   | { kind: 'delete' }
   /** Before what plays is lost: to the project named, or to a new one */
   | { kind: 'replace'; name: string | undefined }
-
-/**
- * A row of 28 px controls that pans sideways (FadeRow), as the presets'
- * do: to the popover's edges, 8 px taller above and below for their hit
- * areas and as much drawn back
- */
-const PAN =
-  '-mx-2.5 -my-2 min-w-0 flex-1 overflow-y-hidden overscroll-x-contain py-2'
 
 /**
  * The popover's size, in rem, where the page has room for it: as wide as
@@ -145,15 +135,16 @@ const WANT_H = 24
  * it: sessions kept under a name on this device, each the tracks (their
  * sounds, a kit's pads and chain), the mix and the song. It looks as the
  * presets do: a chip and a name over 28 px controls, rows of 44 px. The
- * header saves what plays (over the current project, or as a new one);
- * the row under it tells which project the session came from and whether
- * it was edited since, or holds the form at hand (a name, a deletion or
- * a loss to confirm, New and the file actions); a tap on a row opens that
- * project in the session's place, asking first where what plays would be
- * lost. A line at the bottom says what happened. A project moves between
- * devices as a file: Export shares or downloads what plays, Import adds
- * a file's project to the list. Escape and the cross close it; so does a
- * tap in the editor (the page's, App.tsx).
+ * header saves what plays (over the current project, or as a new one),
+ * and its More falls open on a menu (MoreMenu): New, Rename, Export and
+ * Import, and Delete apart. The row under the header tells which project
+ * the session came from and whether it was edited since, or holds the
+ * form at hand (a name, a deletion or a loss to confirm); a tap on a row
+ * opens that project in the session's place, asking first where what
+ * plays would be lost. A line at the bottom says what happened. A project
+ * moves between devices as a file: Export shares or downloads what plays,
+ * Import adds a file's project to the list. Escape and the cross close
+ * it; so does a tap in the editor (the page's, App.tsx).
  */
 export function ProjectBrowser({
   projects,
@@ -173,12 +164,8 @@ export function ProjectBrowser({
   const [message, setMessage] = useState('')
   const listRef = useRef<HTMLUListElement>(null)
   const importRef = useRef<HTMLInputElement>(null)
-  // Rename and Delete are steps of More: it stays pressed through them
-  const more =
-    mode.kind === 'more' || mode.kind === 'rename' || mode.kind === 'delete'
-  /** Opens kind's row, or goes back to the status if it is open */
-  const toggle = (kind: 'more' | 'saveAs', open: boolean) =>
-    setMode({ kind: open ? 'idle' : kind })
+  // Rename and Delete are steps of More: it stays lit through them
+  const more = mode.kind === 'rename' || mode.kind === 'delete'
 
   // Open on the current project, and on one saved as it joins the list
   const [ready, setReady] = useState(false)
@@ -295,16 +282,55 @@ export function ProjectBrowser({
           <button
             type="button"
             aria-pressed={mode.kind === 'saveAs'}
-            onClick={() => toggle('saveAs', mode.kind === 'saveAs')}
+            onClick={() =>
+              setMode({ kind: mode.kind === 'saveAs' ? 'idle' : 'saveAs' })
+            }
             className={SMALL_BUTTON}
           >
             Save as…
           </button>
-          <SmallIconButton
-            label="More"
-            pressed={more}
-            onClick={() => toggle('more', more)}
-            path="M4 9h.01M9 9h.01M14 9h.01"
+          <MoreMenu
+            lit={more}
+            groups={[
+              [
+                {
+                  label: 'New',
+                  glyph: MENU_GLYPHS.new,
+                  onSelect: () => ask(undefined),
+                },
+                ...(current === undefined
+                  ? []
+                  : [
+                      {
+                        label: 'Rename…',
+                        glyph: MENU_GLYPHS.rename,
+                        onSelect: () => setMode({ kind: 'rename' }),
+                      },
+                    ]),
+              ],
+              [
+                {
+                  label: 'Export',
+                  glyph: MENU_GLYPHS.export,
+                  onSelect: () => void exportPlaying(),
+                },
+                {
+                  label: 'Import…',
+                  glyph: MENU_GLYPHS.import,
+                  onSelect: () => importRef.current?.click(),
+                },
+              ],
+              current === undefined
+                ? []
+                : [
+                    {
+                      label: 'Delete…',
+                      glyph: MENU_GLYPHS.delete,
+                      danger: true,
+                      onSelect: () => setMode({ kind: 'delete' }),
+                    },
+                  ],
+            ]}
           />
         </>
       }
@@ -329,49 +355,6 @@ export function ProjectBrowser({
               </>
             )}
           </p>
-        )}
-        {mode.kind === 'more' && (
-          <FadeRow className={PAN} row="items-center gap-1.5 px-2.5">
-            <button
-              type="button"
-              onClick={() => ask(undefined)}
-              className={SMALL_BUTTON}
-            >
-              New
-            </button>
-            {current !== undefined && (
-              <>
-                <button
-                  type="button"
-                  onClick={() => setMode({ kind: 'rename' })}
-                  className={SMALL_BUTTON}
-                >
-                  Rename
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMode({ kind: 'delete' })}
-                  className={SMALL_BUTTON}
-                >
-                  Delete
-                </button>
-              </>
-            )}
-            <button
-              type="button"
-              onClick={() => void exportPlaying()}
-              className={SMALL_BUTTON}
-            >
-              Export
-            </button>
-            <button
-              type="button"
-              onClick={() => importRef.current?.click()}
-              className={SMALL_BUTTON}
-            >
-              Import
-            </button>
-          </FadeRow>
         )}
         {(mode.kind === 'saveAs' || mode.kind === 'rename') && (
           <NameForm

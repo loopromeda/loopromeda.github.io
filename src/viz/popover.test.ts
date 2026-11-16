@@ -106,4 +106,29 @@ describe('placePopover', () => {
     expect(placed.side).toBe('above')
     expect(placed.top + placed.height).toBe(525)
   })
+
+  it('aligned to the end, stands its right under the button’s right', () => {
+    // The projects' More, at the right of a popover's header
+    const more = { left: 380, top: 40, right: 408, bottom: 68 }
+    const placed = placePopover(
+      more,
+      bounds,
+      { w: 160, h: 200 },
+      8,
+      'below',
+      'end'
+    )
+    expect(placed.left + placed.width).toBe(408)
+    expect(placed.width).toBe(160)
+    // Near the page's left edge it is moved in to keep within it
+    const left = placePopover(
+      { left: 20, top: 40, right: 48, bottom: 68 },
+      bounds,
+      { w: 160, h: 200 },
+      8,
+      'below',
+      'end'
+    )
+    expect(left.left).toBe(16)
+  })
 })

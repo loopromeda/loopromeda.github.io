@@ -312,7 +312,9 @@ src/ui/       React components; SoundEditor.tsx the sound as tiles
               pads), ProjectBrowser.tsx one on the status
               line's project button, left of Settings (the projects
               kept, the session saved under a name, one opened in its
-              place, a project's file out and in; #/project),
+              place, a project's file out and in; #/project), the
+              More of their headers MoreMenu.tsx, a menu falling from
+              it (New, Rename, Export, Import, Delete apart),
               SettingsDialog.tsx, a modal dialog, holds the settings
               (the theme in Dropdown.tsx, the app's own select, its
               list on the page, out of a panel's glass),

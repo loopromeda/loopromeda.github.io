@@ -16,28 +16,29 @@ export interface Placement {
 /**
  * A popover of the size it wants (w by h), placed by the button it opens
  * from (anchor) within bounds (the page inside its margins): as wide as
- * it wants or as the bounds, its left at the button's left and moved in
- * to keep within them. Above the button, gap clear of it, as tall as it
- * wants or as the room above; below it where the room above is short of
- * that and the room below is more (a button at the top of the page). Its
- * height does not follow what it holds, so a list filtered shorter moves
- * nothing. The side it prefers (above, as the app's popovers stand on
- * their buttons; below, as a dropdown's list falls from its box) is the
- * side it gets, unless it is short of what is wanted and the other has
- * more (a dropdown at the page's foot opens above).
+ * it wants or as the bounds, its left at the button's left (its right at
+ * the button's right, aligned to the end, as a menu from a header's last
+ * button falls) and moved in to keep within them. Above the button, gap
+ * clear of it, as tall as it wants or as the room above; below it where
+ * the room above is short of that and the room below is more (a button
+ * at the top of the page). Its height does not follow what it holds, so
+ * a list filtered shorter moves nothing. The side it prefers (above, as
+ * the app's popovers stand on their buttons; below, as a dropdown's list
+ * falls from its box) is the side it gets, unless it is short of what is
+ * wanted and the other has more (a dropdown at the page's foot opens
+ * above).
  */
 export function placePopover(
   anchor: Edges,
   bounds: Edges,
   want: { readonly w: number; readonly h: number },
   gap: number,
-  prefer: 'above' | 'below' = 'above'
+  prefer: 'above' | 'below' = 'above',
+  align: 'start' | 'end' = 'start'
 ): Placement {
   const width = Math.max(0, Math.min(want.w, bounds.right - bounds.left))
-  const left = Math.max(
-    bounds.left,
-    Math.min(anchor.left, bounds.right - width)
-  )
+  const from = align === 'end' ? anchor.right - width : anchor.left
+  const left = Math.max(bounds.left, Math.min(from, bounds.right - width))
   const above = Math.max(0, anchor.top - gap - bounds.top)
   const below = Math.max(0, bounds.bottom - anchor.bottom - gap)
   const first = prefer === 'below' ? below : above

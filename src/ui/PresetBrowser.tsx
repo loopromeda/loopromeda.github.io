@@ -33,7 +33,7 @@ import {
 } from './controls'
 import { neutralLook } from './editor'
 import { FadeRow } from './FadeRow'
-import { SmallIconButton } from './IconButton'
+import { MENU_GLYPHS, MoreMenu } from './MoreMenu'
 import { Popover } from './Popover'
 
 /** Which presets the list shows */
@@ -42,7 +42,6 @@ type Filter = 'all' | 'mine' | PresetCategory
 /** What the row under the header holds */
 type Mode =
   | { kind: 'filters' }
-  | { kind: 'more' }
   | { kind: 'saveAs' }
   | { kind: 'rename' }
   | { kind: 'delete' }
@@ -80,12 +79,13 @@ const WANT_H = 30
  * in from its edges; its rows 44 px, for the finger that tries them. A
  * tap on a row loads that preset, so presets can be tried one after
  * another. The header saves (over the user's preset, or as a new one),
- * the next row filters by category or holds the form at hand (a name, a
- * deletion to confirm, the file actions), and a line at the bottom says
- * what happened. Presets move between devices as a file: Export shares
- * or downloads the user's, Import adds a file's. With a kit played, a
- * tap maps the preset onto the pad picked, and there is nothing to save:
- * a pad plays its preset as it is, its sound made in the synth.
+ * and its More falls open on a menu (MoreMenu): Rename, Export and
+ * Import, and Delete apart. The next row filters by category or holds
+ * the form at hand (a name, a deletion to confirm), and a line at the
+ * bottom says what happened. Presets move between devices as a file:
+ * Export shares or downloads the user's, Import adds a file's. With a kit
+ * played, a tap maps the preset onto the pad picked, and there is nothing
+ * to save: a pad plays its preset as it is, its sound made in the synth.
  */
 export function PresetBrowser({
   library,
@@ -110,12 +110,8 @@ export function PresetBrowser({
   const preset = current && find(snapshot, current)
   const shown = rows(snapshot, filter)
   const mine = current?.source === 'user' ? current.name : undefined
-  // Rename and Delete are steps of More: it stays pressed through them
-  const more =
-    mode.kind === 'more' || mode.kind === 'rename' || mode.kind === 'delete'
-  /** Opens mode's row, or goes back to the filters if it is open */
-  const toggle = (kind: Mode['kind'], open: boolean) =>
-    setMode({ kind: open ? 'filters' : kind })
+  // Rename and Delete are steps of More: it stays lit through them
+  const more = mode.kind === 'rename' || mode.kind === 'delete'
 
   // Open on the current preset, once there is a list to scroll
   const [ready, setReady] = useState(false)
@@ -218,17 +214,52 @@ export function PresetBrowser({
             <button
               type="button"
               aria-pressed={mode.kind === 'saveAs'}
-              onClick={() => toggle('saveAs', mode.kind === 'saveAs')}
+              onClick={() =>
+                setMode({
+                  kind: mode.kind === 'saveAs' ? 'filters' : 'saveAs',
+                })
+              }
               className={SMALL_BUTTON}
             >
               Save as…
             </button>
           )}
-          <SmallIconButton
-            label="More"
-            pressed={more}
-            onClick={() => toggle('more', more)}
-            path="M4 9h.01M9 9h.01M14 9h.01"
+          <MoreMenu
+            lit={more}
+            groups={[
+              mine
+                ? [
+                    {
+                      label: 'Rename…',
+                      glyph: MENU_GLYPHS.rename,
+                      onSelect: () => setMode({ kind: 'rename' }),
+                    },
+                  ]
+                : [],
+              [
+                {
+                  label: 'Export',
+                  glyph: MENU_GLYPHS.export,
+                  disabled: user.length === 0,
+                  onSelect: () => void exportAll(),
+                },
+                {
+                  label: 'Import…',
+                  glyph: MENU_GLYPHS.import,
+                  onSelect: () => importRef.current?.click(),
+                },
+              ],
+              mine
+                ? [
+                    {
+                      label: 'Delete…',
+                      glyph: MENU_GLYPHS.delete,
+                      danger: true,
+                      onSelect: () => setMode({ kind: 'delete' }),
+                    },
+                  ]
+                : [],
+            ]}
           />
         </>
       }
@@ -240,43 +271,6 @@ export function PresetBrowser({
       <div className="flex h-7 shrink-0 items-center gap-1.5">
         {mode.kind === 'filters' && (
           <Filters filter={filter} onChange={setFilter} />
-        )}
-        {mode.kind === 'more' && (
-          <FadeRow className={PAN} row="items-center gap-1.5 px-2.5">
-            {mine && (
-              <>
-                <button
-                  type="button"
-                  onClick={() => setMode({ kind: 'rename' })}
-                  className={SMALL_BUTTON}
-                >
-                  Rename
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMode({ kind: 'delete' })}
-                  className={SMALL_BUTTON}
-                >
-                  Delete
-                </button>
-              </>
-            )}
-            <button
-              type="button"
-              disabled={user.length === 0}
-              onClick={() => void exportAll()}
-              className={SMALL_BUTTON}
-            >
-              Export
-            </button>
-            <button
-              type="button"
-              onClick={() => importRef.current?.click()}
-              className={SMALL_BUTTON}
-            >
-              Import
-            </button>
-          </FadeRow>
         )}
         {((mode.kind === 'saveAs' && pad === undefined) ||
           mode.kind === 'rename') && (
