@@ -407,9 +407,7 @@ export class Mixer {
       for (let s = 0; s < part.strips.length; s++) {
         const strip = part.strips[s] as Strip
         const sounding =
-          strip.synth.activeVoices > 0 ||
-          strip.pending > 0 ||
-          !strip.inserts.resting
+          strip.synth.sounding || strip.pending > 0 || !strip.inserts.resting
         // Its LFOs run on in silence, and a new structure lands
         strip.render(stripL, stripR)
         if (!sounding) continue

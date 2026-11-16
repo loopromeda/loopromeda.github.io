@@ -201,6 +201,15 @@ export class ChainSynth {
     return count
   }
 
+  /**
+   * Whether it sounds at all: a voice held or releasing, or, after the
+   * last, the DC highpass ringing on (a chip's DC falling away), which a
+   * mixer passing over a silent strip must not cut
+   */
+  get sounding(): boolean {
+    return this.activeVoices > 0 || this.#ringing()
+  }
+
   // The structure
 
   /** How many inputs the sound has, 0..MAX_INPUTS */

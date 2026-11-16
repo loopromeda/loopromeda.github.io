@@ -3,8 +3,8 @@ import { ChainSynth } from './chainSynth'
 import { softClip } from './clip'
 import { EffectRack } from './effects'
 import { Mixer, Part, Strip, sideGain } from './output'
-import { FX_CHORUS, FX_DELAY, FX_REVERB, INPUT_OSC } from './slots'
-import { SAW } from './oscillator'
+import { FX_CHORUS, FX_DELAY, FX_REVERB, INPUT_CHIP, INPUT_OSC } from './slots'
+import { SAW, TRIANGLE } from './oscillator'
 
 const SAMPLE_RATE = 48000
 const BLOCK = 128
@@ -364,6 +364,53 @@ describe('Mixer', () => {
       expect(left).toEqual(l)
     }
     expect(kit.activeVoices).toBe(1)
+  })
+
+  it('hears a chip’s DC fall away after its last voice, uncut', () => {
+    // A triangle on its DAC's DC through a strip of no inserts: after the
+    // note the synth's highpass rings on, and the mixer hears it out
+    const chip = () => {
+      const synth = new ChainSynth(SAMPLE_RATE)
+      synth.clip = false
+      synth.inputCount = 1
+      synth.setInputKind(0, INPUT_CHIP)
+      synth.setChip(0, TRIANGLE, -12, 0.5, 32, 0, 1)
+      synth.chainCount = 1
+      synth.setSend(0, 0, 1)
+      synth.setAmp(0.001, 0.01, 1, 0.01)
+      synth.noteOn(1, 60, 1)
+      return synth
+    }
+    const mixed = chip()
+    const alone = chip()
+    const part = new Part([new Strip(mixed, new EffectRack(SAMPLE_RATE))])
+    const mixer = new Mixer(SAMPLE_RATE)
+    mixer.clip = false
+    const left = new Float32Array(BLOCK)
+    const right = new Float32Array(BLOCK)
+    const l = new Float32Array(BLOCK)
+    const r = new Float32Array(BLOCK)
+    let apart = 0
+    let tail = 0
+    for (let b = 0; b < 200; b++) {
+      if (b === 40) {
+        mixed.noteOff(1)
+        alone.noteOff(1)
+      }
+      mixer.render([part], left, right)
+      alone.process(l, r)
+      for (let i = 0; i < BLOCK; i++) {
+        apart = Math.max(
+          apart,
+          Math.abs((left[i] as number) - (l[i] as number))
+        )
+      }
+      if (mixed.activeVoices === 0 && l.some((x) => x !== 0)) tail++
+    }
+    expect(tail).toBeGreaterThan(10)
+    expect(apart).toBeLessThan(1e-6)
+    // Silent at last, and passed over from there
+    expect(mixed.sounding).toBe(false)
   })
 
   it('sends a group by its own sends, its strips’ unheard', () => {

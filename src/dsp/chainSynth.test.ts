@@ -923,9 +923,12 @@ describe('ChainSynth’s chips', () => {
     )
     const last = after.subarray(after.length - 128)
     expect(last.some((x) => x !== 0)).toBe(true)
+    // Sounding on with no voice, for a mixer to hear the tail out
+    expect(synth.sounding).toBe(true)
     render(synth, 3)
     const quiet = render(synth, 0.01)
     expect(quiet.every((x) => x === 0)).toBe(true)
+    expect(synth.sounding).toBe(false)
   })
 
   it('lets a chip’s DC, its wave and its kind go with no highpass left', () => {
