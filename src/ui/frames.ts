@@ -151,6 +151,17 @@ export interface FrameStats {
     readonly stepMs: number
     readonly stepMax: number
   }
+  /**
+   * The time the views showed (Engine.presentAt), where it was told: how
+   * far each frame's step in it strayed from the frame's own, ms (the
+   * mean and the largest), and the frames it stood still. Smooth, both
+   * are near nothing however the audio came.
+   */
+  readonly shown?: {
+    readonly strayMs: number
+    readonly strayMax: number
+    readonly still: number
+  }
 }
 
 /** The frames a report spans: five seconds' */
@@ -164,6 +175,14 @@ const meter = {
   /** The audio clock, s, and what it did over the span */
   clock: undefined as (() => number | undefined) | undefined,
   clockAt: Number.NaN,
+  /** The time shown, s, and how its steps went over the span */
+  shown: undefined as (() => number | undefined) | undefined,
+  shownAt: Number.NaN,
+  shownNow: Number.NaN,
+  strays: 0,
+  strayTotal: 0,
+  strayMax: 0,
+  still: 0,
   updates: 0,
   stale: 0,
   stepTotal: 0,
@@ -203,6 +222,20 @@ const meter = {
   end(now: number): void {
     this.draws[this.count] = this.drawing
     this.count++
+    const shown = this.shown?.()
+    if (shown !== undefined) {
+      const step = shown - this.shownAt
+      const frame = (now - this.shownNow) / 1000
+      if (frame > 0 && frame < 0.25 && step >= 0) {
+        const stray = Math.abs(step - frame)
+        this.strays++
+        this.strayTotal += stray
+        this.strayMax = Math.max(this.strayMax, stray)
+        if (step === 0) this.still++
+      }
+      this.shownAt = shown
+      this.shownNow = now
+    }
     if (now - (this.times[0] as number) >= REPORT_MS) this.report()
   },
 
@@ -258,6 +291,14 @@ const meter = {
               stepMax: round(this.stepMax * 1000),
             },
           }),
+        ...(this.shown &&
+          this.strays > 0 && {
+            shown: {
+              strayMs: round((this.strayTotal * 1000) / this.strays),
+              strayMax: round(this.strayMax * 1000),
+              still: this.still,
+            },
+          }),
       })
     }
     this.restart()
@@ -271,6 +312,10 @@ const meter = {
     this.stale = 0
     this.stepTotal = 0
     this.stepMax = 0
+    this.strays = 0
+    this.strayTotal = 0
+    this.strayMax = 0
+    this.still = 0
   },
 }
 
@@ -280,20 +325,25 @@ const round = (ms: number) => Math.round(ms * 1000) / 1000
  * Tells listener what the views' display frames cost, every five seconds
  * of them while any draws (FrameStats): what a device report keeps, in
  * development. With clock (the audio clock, s), how often the audio they
- * show moved on too. Returns the way to stop.
+ * show moved on too, and with shown (the time they show, s), how
+ * smoothly that moved. Returns the way to stop.
  */
 export function watchFrames(
   listener: (stats: FrameStats) => void,
-  clock?: () => number | undefined
+  clock?: () => number | undefined,
+  shown?: () => number | undefined
 ): () => void {
   meter.listener = listener
   meter.clock = clock
   meter.clockAt = Number.NaN
+  meter.shown = shown
+  meter.shownAt = meter.shownNow = Number.NaN
   meter.restart()
   return () => {
     if (meter.listener !== listener) return
     meter.listener = undefined
     meter.clock = undefined
+    meter.shown = undefined
   }
 }
 
@@ -405,10 +455,10 @@ export function useFrames(
 }
 
 /**
- * An output as its views read it (Engine.readOutput), once a display
- * frame however many of them draw it: every view's frame has the same
- * requestAnimationFrame time, and a second read of the spectrum would
- * smooth it twice.
+ * An output as its views read it (Engine.readOutput, Engine.spectrum),
+ * once a display frame however many of them draw it, up to the frame's
+ * time (Engine.presentAt): every view's frame has the same
+ * requestAnimationFrame time.
  */
 export class OutputTap {
   readonly #engine: Engine
@@ -434,9 +484,17 @@ export class OutputTap {
   read(now: number): MasterFrame | undefined {
     if (now !== this.#at) {
       this.#at = now
-      this.#read = this.#engine.readOutput(this.#frame, this.#source)
+      this.#read = this.#engine.readOutput(this.#frame, this.#source, now)
     }
     return this.#read ? this.#frame : undefined
+  }
+
+  /**
+   * The output's spectrum at now (Engine.spectrum, the engine's array,
+   * good until the next frame), or undefined before the audio
+   */
+  spectrum(now: number): Float32Array<ArrayBuffer> | undefined {
+    return this.#engine.spectrum(this.#source, now)
   }
 }
 

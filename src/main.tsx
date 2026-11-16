@@ -231,6 +231,8 @@ if (import.meta.env.DEV) {
           base: engine.snapshot.baseLatency,
           output: engine.snapshot.outputLatency,
         },
+        // ms the views showed behind the newest audio rendered
+        behind: engine.presentBehind,
       }
       if (!battery) return void sendReport('frames', report)
       void battery.then((charge) =>
@@ -240,7 +242,8 @@ if (import.meta.env.DEV) {
         })
       )
     },
-    () => engine.audioTime
+    () => engine.audioTime,
+    () => engine.presentTime
   )
   // The audio thread's render time, measured by hand in the settings
   reportBench = (report) =>

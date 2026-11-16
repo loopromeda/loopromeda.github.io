@@ -536,12 +536,12 @@ export function Spectrum({
         },
         draw(now) {
           const { width, height } = canvas
-          const frame = tap.read(now)
+          const spectrum = tap.spectrum(now)
           const dt = last > 0 ? Math.min(0.1, (now - last) / 1000) : 0
           last = now
-          if (frame) {
+          if (spectrum) {
             const rate = engine.snapshot.sampleRate ?? 48000
-            spectrumColumns(frame.spectrum, rate, columns)
+            spectrumColumns(spectrum, rate, columns)
           } else {
             columns.fill(-Infinity)
           }
@@ -744,14 +744,14 @@ export function Spectrogram({
           const { width, height } = canvas
           const dt = last > 0 ? Math.min(0.1, (now - last) / 1000) : 0
           last = now
-          const frame = tap.read(now)
           ahead += dt * SCROLL * scale
           const shift = Math.min(Math.floor(ahead), width)
           if (shift < 1) return
           ahead -= shift
-          if (frame) {
+          const spectrum = tap.spectrum(now)
+          if (spectrum) {
             const rate = engine.snapshot.sampleRate ?? 48000
-            spectrumColumns(frame.spectrum, rate, rows)
+            spectrumColumns(spectrum, rate, rows)
           } else {
             rows.fill(-Infinity)
           }

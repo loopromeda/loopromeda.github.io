@@ -32,6 +32,8 @@ import { Recorder, type RecordMode } from '../state/record'
 import { lanesPlayed, sameLanes, type PlayedLane } from '../state/lanes'
 import { knobChanges } from '../state/sound/diff'
 import { initSound, type Sound } from '../state/sound/sound'
+import { PresentClock } from '../viz/presentClock'
+import { SpectrumAnalysis } from '../viz/spectrum'
 import {
   addTrack,
   editPad,
@@ -92,23 +94,39 @@ const seconds = (value: unknown): number | undefined =>
   typeof value === 'number' && Number.isFinite(value) ? value : undefined
 
 /**
- * Samples one waveform read returns (AnalyserNode.fftSize): 43 ms at 48 kHz,
- * room for a display window plus a period to find a trigger in
+ * Samples one waveform read returns: 43 ms at 48 kHz, room for a display
+ * window plus a period to find a trigger in
  */
 export const WAVEFORM_SIZE = 2048
 
 /**
- * The spectrum's FFT (AnalyserNode.fftSize): 85 ms at 48 kHz, its bins
- * 11.7 Hz apart, half as many bins as this
+ * The spectrum's FFT: 85 ms at 48 kHz, its bins 11.7 Hz apart, half as
+ * many bins as this
  */
 export const SPECTRUM_SIZE = 4096
 
 /**
- * How much of the last frame's spectrum each new one keeps
- * (smoothingTimeConstant): a little steadier than the analyser's 0.8
- * would be slow
+ * How much of the last frame's spectrum each new one keeps, a 60th of a
+ * second on (SpectrumAnalysis): a little steadier than the analyser's
+ * 0.8 would be slow
  */
 const SPECTRUM_SMOOTHING = 0.7
+
+/**
+ * What a side's analyser holds at first (AnalyserNode.fftSize): 171 ms
+ * at 48 kHz, room for the spectrum's window and a speaker's latency
+ * behind the newest sample rendered (Engine.presentAt)
+ */
+const HISTORY = 8192
+
+/**
+ * The most it holds (fftSize's largest): 683 ms at 48 kHz, for an
+ * output as late as Bluetooth's
+ */
+const HISTORY_MOST = 32768
+
+/** Held half as long, after this long (ms) with room for that to do */
+const HISTORY_SHRINK_MS = 5000
 
 /**
  * Which output a view shows: the master (everything, after the soft
@@ -119,13 +137,12 @@ export type OutputSource = 'master' | number
 
 /**
  * What an output's views read in a display frame (readOutput): the two
- * sides' latest WAVEFORM_SIZE samples, oldest first, and the spectrum of
- * both, SPECTRUM_SIZE / 2 bins in decibels (getFloatFrequencyData)
+ * sides' WAVEFORM_SIZE samples up to the frame's time (presentAt),
+ * oldest first
  */
 export interface MasterFrame {
   readonly left: Float32Array<ArrayBuffer>
   readonly right: Float32Array<ArrayBuffer>
-  readonly spectrum: Float32Array<ArrayBuffer>
 }
 
 /** Buffers for readOutput, the sizes it fills */
@@ -133,16 +150,34 @@ export function masterFrame(): MasterFrame {
   return {
     left: new Float32Array(WAVEFORM_SIZE),
     right: new Float32Array(WAVEFORM_SIZE),
-    spectrum: new Float32Array(SPECTRUM_SIZE / 2),
   }
 }
 
-/** An output's taps: each side's samples, the sum's waveform, spectrum */
+/**
+ * An output's taps: each side's analyser, what they held at a display
+ * frame's read, and the spectrum of the samples shown
+ */
 interface Taps {
   readonly left: AnalyserNode
   readonly right: AnalyserNode
-  readonly waveform: AnalyserNode
-  readonly spectrum: AnalyserNode
+  /** Each side as last read: its analyser's fftSize samples, oldest first */
+  history: { left: Float32Array<ArrayBuffer>; right: Float32Array<ArrayBuffer> }
+  /** The history's length from the next read on, grown or halved */
+  size: number
+  /** The frame time (ms) last read at, and where the time shown fell in it */
+  readAt: number
+  /** The index after the last sample a view shows */
+  end: number
+  /** Since when (ms) half the history would have held what was shown */
+  roomySince: number
+  readonly analysis: SpectrumAnalysis
+  /** SPECTRUM_SIZE samples up to end, both sides mixed down */
+  readonly mono: Float32Array<ArrayBuffer>
+  /** The spectrum, SPECTRUM_SIZE / 2 bins in decibels */
+  readonly spectrum: Float32Array<ArrayBuffer>
+  /** The frame time (ms) it was analysed at, and the audio time shown */
+  analysedAt: number
+  analysedShown: number
 }
 
 /** What the worklet was last sent for a track, to tell what changed */
@@ -204,6 +239,12 @@ export class Engine {
   /** The tracks' taps' way to the destination, silenced */
   #hush: GainNode | undefined
   #snapshot: EngineSnapshot = { state: 'idle' }
+  /** The audio time display frames show (presentAt), and the last asked */
+  readonly #present = new PresentClock()
+  #presentNow = Number.NaN
+  #presentAt = Number.NaN
+  /** How far that stood behind the newest sample rendered, s */
+  #presentBehind = Number.NaN
   /** The tracks, as the main thread has them: one synth until set */
   #tracks: readonly Track[] = [{ id: 't1', kind: 'synth', sound: initSound() }]
   /** What is played and edited: a track, and the pad picked in a kit */
@@ -779,6 +820,7 @@ export class Engine {
     this.#taps = undefined
     this.#trackTaps = []
     this.#hush = undefined
+    this.#present.reset()
     this.#unsent()
     this.#held.clear()
     this.#stopped()
@@ -1159,36 +1201,204 @@ export class Engine {
   }
 
   /**
-   * Copies the latest WAVEFORM_SIZE samples of an output (the master's
-   * unless another is named) into `into`, oldest first, the two sides
-   * mixed down. False (and `into` untouched) until the engine has
-   * started.
+   * The audio time (s, the audio clock's) a display frame at now (its
+   * requestAnimationFrame time, ms) shows, the same for every view in
+   * it: the samples heard then, as near as those rendered so far allow
+   * (PresentClock), so the views move at the frames' pace however the
+   * audio comes (in chunks, on Bluetooth) and with what is heard.
+   * Undefined before the audio starts.
+   */
+  presentAt(now: number): number | undefined {
+    const context = this.#context
+    if (!context) return undefined
+    if (now !== this.#presentNow) {
+      this.#presentNow = now
+      this.#presentAt = this.#present.at(
+        now / 1000,
+        context.currentTime,
+        this.#heardAt(context, now)
+      )
+    }
+    return this.#presentAt
+  }
+
+  /** The audio time the last display frame showed (presentAt), s */
+  get presentTime(): number | undefined {
+    const at = this.#presentAt
+    return Number.isFinite(at) ? at : undefined
+  }
+
+  /**
+   * How far the samples a display frame showed stood behind the newest
+   * rendered, ms, at the last read of them: what the frames' report tells
+   */
+  get presentBehind(): number | undefined {
+    const behind = this.#presentBehind
+    return Number.isFinite(behind) ? behind * 1000 : undefined
+  }
+
+  /**
+   * The audio time heard at now (ms, the page's clock): the output's
+   * timestamp, on from when it was taken, or the audio clock less the
+   * latencies where there is none
+   */
+  #heardAt(context: AudioContext, now: number): number {
+    // Not in every browser the app runs in
+    const { contextTime, performanceTime } =
+      'getOutputTimestamp' in context ? context.getOutputTimestamp() : {}
+    if (
+      contextTime !== undefined &&
+      performanceTime !== undefined &&
+      contextTime > 0 &&
+      performanceTime > 0
+    ) {
+      return contextTime + (now - performanceTime) / 1000
+    }
+    const { baseLatency = 0, outputLatency = 0 } = this.#snapshot
+    return context.currentTime - baseLatency - outputLatency
+  }
+
+  /**
+   * An output's sides as they stood at a display frame (now, ms), read
+   * once for every view of it, and where the frame's time falls in them
+   */
+  #read(taps: Taps, now: number, context: AudioContext): void {
+    if (taps.readAt === now) return
+    if (taps.size !== taps.history.left.length) {
+      taps.left.fftSize = taps.size
+      taps.right.fftSize = taps.size
+      taps.history = {
+        left: new Float32Array(taps.size),
+        right: new Float32Array(taps.size),
+      }
+    }
+    const shown = this.presentAt(now) ?? context.currentTime
+    // The audio clock unmoved over the read: the sides hold what it
+    // says, not a chunk rendered between the two
+    let rendered = context.currentTime
+    for (let tries = 0; tries < 3; tries++) {
+      taps.left.getFloatTimeDomainData(taps.history.left)
+      taps.right.getFloatTimeDomainData(taps.history.right)
+      const after = context.currentTime
+      if (after === rendered) break
+      rendered = after
+    }
+    const size = taps.history.left.length
+    this.#presentBehind = rendered - shown
+    const behind = Math.max(
+      0,
+      Math.round((rendered - shown) * context.sampleRate)
+    )
+    taps.end = size - Math.min(behind, size - SPECTRUM_SIZE)
+    taps.readAt = now
+    this.#fit(taps, behind + SPECTRUM_SIZE, now)
+  }
+
+  /**
+   * An output's history grown to hold need samples, from its next read,
+   * or halved after HISTORY_SHRINK_MS with room to
+   */
+  #fit(taps: Taps, need: number, now: number): void {
+    const size = taps.history.left.length
+    if (need > size) {
+      taps.size = Math.min(HISTORY_MOST, 2 ** Math.ceil(Math.log2(need)))
+      taps.roomySince = Number.NaN
+    } else if (size > HISTORY && need < size * 0.4) {
+      if (Number.isNaN(taps.roomySince)) taps.roomySince = now
+      else if (now - taps.roomySince > HISTORY_SHRINK_MS) {
+        taps.size = size / 2
+        taps.roomySince = Number.NaN
+      }
+    } else {
+      taps.roomySince = Number.NaN
+    }
+  }
+
+  /**
+   * Copies an output's samples (the master's unless another is named) up
+   * to a display frame's time (now, its requestAnimationFrame time, ms;
+   * presentAt) into `into`, as many as it holds (SPECTRUM_SIZE at most),
+   * oldest first, the two sides mixed down. False (and `into` untouched)
+   * until the engine has started.
    */
   readWaveform(
     into: Float32Array<ArrayBuffer>,
-    source: OutputSource = 'master'
+    source: OutputSource = 'master',
+    now = performance.now()
   ): boolean {
+    const context = this.#context
     const taps = this.#tapsOf(source)
-    if (!taps) return false
-    taps.waveform.getFloatTimeDomainData(into)
+    if (!context || !taps) return false
+    this.#read(taps, now, context)
+    const { left, right } = taps.history
+    const count = Math.min(into.length, SPECTRUM_SIZE)
+    const from = taps.end - count
+    for (let i = 0; i < count; i++) {
+      into[i] = ((left[from + i] as number) + (right[from + i] as number)) / 2
+    }
     return true
   }
 
   /**
-   * Fills frame (masterFrame's) with an output (the master's unless
-   * another is named) as it is now: each side's samples and the
-   * spectrum. Once a display frame at most: each spectrum read smooths
-   * it again (smoothingTimeConstant), so views share one read
-   * (OutputTap, src/ui/frames.ts). False (and frame untouched) until the
-   * engine has started.
+   * Fills frame (masterFrame's) with an output's sides (the master's
+   * unless another is named) up to a display frame's time (now, its
+   * requestAnimationFrame time, ms; presentAt). Views share one read a
+   * frame (OutputTap, src/ui/frames.ts). False (and frame untouched)
+   * until the engine has started.
    */
-  readOutput(frame: MasterFrame, source: OutputSource = 'master'): boolean {
+  readOutput(
+    frame: MasterFrame,
+    source: OutputSource = 'master',
+    now = performance.now()
+  ): boolean {
+    const context = this.#context
     const taps = this.#tapsOf(source)
-    if (!taps) return false
-    taps.left.getFloatTimeDomainData(frame.left)
-    taps.right.getFloatTimeDomainData(frame.right)
-    taps.spectrum.getFloatFrequencyData(frame.spectrum)
+    if (!context || !taps) return false
+    this.#read(taps, now, context)
+    const { left, right } = taps.history
+    const from = taps.end - WAVEFORM_SIZE
+    for (let i = 0; i < WAVEFORM_SIZE; i++) {
+      frame.left[i] = left[from + i] as number
+      frame.right[i] = right[from + i] as number
+    }
     return true
+  }
+
+  /**
+   * An output's spectrum (the master's unless another is named) up to a
+   * display frame's time (now, its requestAnimationFrame time, ms;
+   * presentAt): SPECTRUM_SIZE / 2 bins in decibels, the two sides mixed
+   * down, smoothed from frame to frame as an analyser's are
+   * (SpectrumAnalysis). Analysed once a frame however many views read
+   * it, into the engine's own array, good until the next frame.
+   * Undefined until the engine has started.
+   */
+  spectrum(
+    source: OutputSource = 'master',
+    now = performance.now()
+  ): Float32Array<ArrayBuffer> | undefined {
+    const context = this.#context
+    const taps = this.#tapsOf(source)
+    if (!context || !taps) return undefined
+    if (taps.analysedAt === now) return taps.spectrum
+    this.#read(taps, now, context)
+    const shown = this.presentAt(now) ?? context.currentTime
+    const { left, right } = taps.history
+    const from = taps.end - SPECTRUM_SIZE
+    for (let i = 0; i < SPECTRUM_SIZE; i++) {
+      taps.mono[i] =
+        ((left[from + i] as number) + (right[from + i] as number)) / 2
+    }
+    let seconds = shown - taps.analysedShown
+    // The first, or the audio started again: nothing to smooth from
+    if (!(seconds >= 0)) {
+      taps.analysis.reset()
+      seconds = 1
+    }
+    taps.analysis.analyse(taps.mono, seconds, taps.spectrum)
+    taps.analysedAt = now
+    taps.analysedShown = shown
+    return taps.spectrum
   }
 
   /**
@@ -1415,9 +1625,10 @@ function ids(tracks: readonly Track[]): string[] {
  * Output k of node's taps, in its path to end (the destination, or a
  * silenced way to it) rather than beside it (an analyser that does not
  * reach the destination is not rendered in every browser): the sides
- * split, each through an analyser, merged again, then through the
- * waveform's analyser (which mixes them down for itself) and the
- * spectrum's. An analyser passes its input on unchanged.
+ * split, each through an analyser holding its last HISTORY samples,
+ * merged again. An analyser passes its input on unchanged. The spectrum
+ * is analysed here, not by an analyser, which reads only the latest
+ * samples rendered (Engine.spectrum).
  */
 function tap(
   context: AudioContext,
@@ -1425,20 +1636,10 @@ function tap(
   output: number,
   end: AudioNode
 ): Taps {
-  const samples = () =>
-    new AnalyserNode(context, {
-      fftSize: WAVEFORM_SIZE,
-      smoothingTimeConstant: 0,
-    })
-  const left = samples()
-  const right = samples()
-  const waveform = samples()
-  const spectrum = new AnalyserNode(context, {
-    fftSize: SPECTRUM_SIZE,
-    smoothingTimeConstant: SPECTRUM_SMOOTHING,
-    minDecibels: -100,
-    maxDecibels: 0,
-  })
+  const side = () =>
+    new AnalyserNode(context, { fftSize: HISTORY, smoothingTimeConstant: 0 })
+  const left = side()
+  const right = side()
   const split = new ChannelSplitterNode(context, { numberOfOutputs: 2 })
   const merge = new ChannelMergerNode(context, { numberOfInputs: 2 })
   node.connect(split, output)
@@ -1446,6 +1647,22 @@ function tap(
   split.connect(right, 1)
   left.connect(merge, 0, 0)
   right.connect(merge, 0, 1)
-  merge.connect(waveform).connect(spectrum).connect(end)
-  return { left, right, waveform, spectrum }
+  merge.connect(end)
+  return {
+    left,
+    right,
+    history: {
+      left: new Float32Array(HISTORY),
+      right: new Float32Array(HISTORY),
+    },
+    size: HISTORY,
+    readAt: Number.NaN,
+    end: HISTORY,
+    roomySince: Number.NaN,
+    analysis: new SpectrumAnalysis(SPECTRUM_SIZE, SPECTRUM_SMOOTHING),
+    mono: new Float32Array(SPECTRUM_SIZE),
+    spectrum: new Float32Array(SPECTRUM_SIZE / 2).fill(-Infinity),
+    analysedAt: Number.NaN,
+    analysedShown: Number.NaN,
+  }
 }

@@ -12,7 +12,7 @@ import {
   outlineFill,
   outlinePath,
 } from './outline'
-import { FADE_IN, drawEachFrame, shown } from './frames'
+import { FADE_IN, between, drawEachFrame, shown } from './frames'
 import { ground, mode, palette, themeId } from './theme'
 
 /** Samples on screen: 21 ms at 48 kHz, about nine cycles of A4 */
@@ -196,11 +196,14 @@ export function Scope({
       bg.stroke()
     }
 
-    /** Draws one frame; false when there was nothing new to draw */
-    const render = (): boolean => {
+    /**
+     * Draws one frame, the output up to now's (a display frame's time,
+     * Engine.presentAt); false when there was nothing new to draw
+     */
+    const render = (now: number): boolean => {
       const { width, height } = canvas
       if (!sized || !width || !height) return false
-      if (!engine.readWaveform(samples, source)) samples.fill(0)
+      if (!engine.readWaveform(samples, source, now)) samples.fill(0)
       const edge = findRisingEdge(samples, 0, SEARCH_END, HYSTERESIS)
       const start = edge < 0 ? 0 : edge
       const silent = isSilent(samples, SILENCE, start, start + WINDOW)
@@ -268,12 +271,12 @@ export function Scope({
       // The resized canvas is blank: drawn now, not on the next frame,
       // and shown once it is (FADE_IN)
       wasSilent = false
-      render()
+      render(between(stop !== undefined))
       shown(canvas)
     }
 
     const frame = (now: number) => {
-      render()
+      render(now)
       const elapsed = now - statsSince
       if (elapsed < 1000) return
       const stats: ScopeStats = {
@@ -346,7 +349,7 @@ export function Scope({
       if (!sized) return
       paintBackground()
       wasSilent = false
-      if (!stop) render()
+      if (!stop) render(performance.now())
     })
 
     return () => {

@@ -126,7 +126,9 @@ src/sw/       the service worker (own globals, tsconfig.sw.json): keeps
 src/engine/   AudioContext lifecycle, unlock, node wiring; the sound,
               held here and edited, sent whole or as the knobs that
               moved; the session's mix, sent whole; the analysers on the
-              output (each side, the waveform, the spectrum), the
+              output (each side, read where a display frame stands, the
+              samples heard then however the audio comes, presentAt;
+              the spectrum analysed from them), the
               master's and each track's own (the node's later outputs),
               never the click's (the last, straight to the speakers);
               the tracks, the one picked edited and played, and the
@@ -209,6 +211,9 @@ src/viz/      pure display math (scope trigger and decimation, envelope
               side, and whether a box holds them as the master's sheet
               stands them) and the mastering tools'
               readouts (a reduction, a loudness) in master.ts, the
+              time a display frame shows in the audio (the heard, behind
+              the chunks rendered) in presentClock.ts, an output's
+              spectrum as an analyser reads it in spectrum.ts, the
               colour scales the spectrogram's levels take, the dark's
               and the light's, in colourScale.ts, and where a
               tile dragged goes in

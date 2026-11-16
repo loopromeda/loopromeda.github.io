@@ -36,7 +36,6 @@ import {
   type PointerEvent,
 } from 'react'
 import { EQ_TYPE_NAMES, isCut, isOff } from '../dsp/eq'
-import type { MasterFrame } from '../engine/engine'
 import {
   DRAW_RATE,
   EQ_SHORT_NAMES,
@@ -203,7 +202,7 @@ export function EqGraph({
     const { access } = latest.current
     const { engine } = access.heard
     const heard = heardAt(access, between(running(access)))
-    painter.current.paint(heard?.spectrum, engine.snapshot.sampleRate)
+    painter.current.paint(heard, engine.snapshot.sampleRate)
   }, [frame, points, picked, compact, tone, theme])
 
   // Each display frame while the audio runs: the spectrum behind
@@ -213,7 +212,7 @@ export function EqGraph({
     let drawing: (() => void) | undefined
     const draw = (now: number) => {
       const heard = heardAt(latest.current.access, now)
-      painter.current?.paint(heard?.spectrum, engine.snapshot.sampleRate)
+      painter.current?.paint(heard, engine.snapshot.sampleRate)
     }
     const sync = () => {
       if (engine.snapshot.state === 'running') {
@@ -527,14 +526,17 @@ function running(access: EqAccess): boolean {
 }
 
 /**
- * The output access's EQ is heard in, at now (a display frame's time),
- * read once a frame however many views read it (OutputTap); none before
- * the audio runs, nor for a bus's EQ
+ * The spectrum of the output access's EQ is heard in, at now (a display
+ * frame's time), analysed once a frame however many views read it
+ * (OutputTap); none before the audio runs, nor for a bus's EQ
  */
-function heardAt(access: EqAccess, now: number): MasterFrame | undefined {
+function heardAt(
+  access: EqAccess,
+  now: number
+): Float32Array<ArrayBuffer> | undefined {
   const source = access.heard.source()
   if (source === undefined || !running(access)) return undefined
-  return outputTap(access.heard.engine, source).read(now)
+  return outputTap(access.heard.engine, source).spectrum(now)
 }
 
 /**
