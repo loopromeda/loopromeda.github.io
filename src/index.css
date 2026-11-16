@@ -247,6 +247,67 @@ body {
 }
 
 /*
+ * A slider drawn here, not by the browser: a dark page's native track
+ * carries a light outline. A rounded track, filled with the accent up to
+ * the thumb's middle, and the thumb a disc of it with no rim. The element
+ * sets --fill, the value's share of its range (0 to 1), as it is drawn
+ * (Transport.tsx); keyboard focus rings the thumb.
+ */
+@utility range-slider {
+  --thumb: 1rem;
+  --track: 0.5rem;
+  appearance: none;
+  background: transparent;
+  outline: none;
+  cursor: pointer;
+
+  &::-webkit-slider-runnable-track {
+    height: var(--track);
+    border: none;
+    border-radius: 9999px;
+    background: linear-gradient(
+      to right,
+      var(--accent)
+        calc(var(--thumb) / 2 + (100% - var(--thumb)) * var(--fill, 0)),
+      var(--lift-3) 0
+    );
+  }
+  &::-moz-range-track {
+    height: var(--track);
+    border: none;
+    border-radius: 9999px;
+    background: linear-gradient(
+      to right,
+      var(--accent)
+        calc(var(--thumb) / 2 + (100% - var(--thumb)) * var(--fill, 0)),
+      var(--lift-3) 0
+    );
+  }
+  &::-webkit-slider-thumb {
+    appearance: none;
+    width: var(--thumb);
+    height: var(--thumb);
+    margin-top: calc((var(--track) - var(--thumb)) / 2);
+    border: none;
+    border-radius: 9999px;
+    background: var(--accent);
+  }
+  &::-moz-range-thumb {
+    width: var(--thumb);
+    height: var(--thumb);
+    border: none;
+    border-radius: 9999px;
+    background: var(--accent);
+  }
+  &:focus-visible::-webkit-slider-thumb {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 40%, transparent);
+  }
+  &:focus-visible::-moz-range-thumb {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 40%, transparent);
+  }
+}
+
+/*
  * The face of what stands over the sound's graph and the mix (the
  * editor's panel, SoundEditor.tsx; the master's; a popover): the card
  * face, opaque. It was frosted glass, the canvas under it blurred (ashon,
