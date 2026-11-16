@@ -32,6 +32,8 @@ const CROSS = 'M5 5l8 8M13 5l-8 8'
  * tall as its content, measured as that changes, up to the room the
  * page has, past which it scrolls; the content is a column of
  * bodyClassName's gaps.
+ *
+ * @category Overlays
  */
 export function Popover({
   id,

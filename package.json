@@ -14,6 +14,7 @@
     "dev:tailnet": "scripts/tailnet.sh on && vite",
     "tailnet:off": "scripts/tailnet.sh off",
     "build": "pnpm typecheck && vite build",
+    "build:ds": "vite build --config vite.ds.config.ts && tsc -p tsconfig.ds.json",
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.worklet.json && tsc -p tsconfig.sw.json && tsc -p tsconfig.node.json",
     "lint": "eslint .",

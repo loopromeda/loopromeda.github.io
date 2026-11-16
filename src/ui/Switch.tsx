@@ -3,6 +3,8 @@ import { TALL_HIT } from './controls'
 /**
  * Something on or off: a switch, 28 px tall (its touch 44, TALL_HIT), its
  * knob to the accent when on. Named by what labelledBy names, or label.
+ *
+ * @category Controls
  */
 export function Switch({
   checked,

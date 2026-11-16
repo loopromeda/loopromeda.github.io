@@ -1,0 +1,95 @@
+/*
+ * The cards' frame, imported by every preview (it compiles to
+ * _preview/<Name>.css, linked from the card): the card's page on the design
+ * system's own tokens in place of the card template's white, as styles.css
+ * paints a screen; a cell a hairline on it, its story's name in the app's
+ * dim ink; and nothing a story holds cut off at its cell's edge, at any
+ * size the card is drawn. `html body` outranks the template's own `body`,
+ * `.ds-grid` and `.ds-cell` rules (`.ds-grid.ds-col` keeps its one column).
+ */
+html body {
+  background: var(--bg);
+  color: var(--ink);
+}
+
+/*
+ * Claude Design draws a card at the size of its pane, or of a thumbnail's
+ * page, not at the viewport the card declares: a grid's columns are never
+ * narrower than the stories in them. A story of a fixed width (a 20 rem
+ * card, a 360 px keyboard) says what its cell needs (Stage's `min`, the
+ * story's width and the cell's 26 px), and its card's columns are at
+ * least that wide; the template's 320 px elsewhere.
+ */
+html body :global(.ds-grid) {
+  grid-template-columns: repeat(
+    auto-fit,
+    minmax(min(100%, var(--ds-min, 320px)), 1fr)
+  );
+  gap: 16px;
+}
+
+/* Ascending: a card of two needs takes the larger, the later rule */
+html body :global(.ds-grid:has([data-ds-min='326'])) {
+  --ds-min: 326px;
+}
+
+html body :global(.ds-grid:has([data-ds-min='346'])) {
+  --ds-min: 346px;
+}
+
+html body :global(.ds-grid:has([data-ds-min='386'])) {
+  --ds-min: 386px;
+}
+
+/*
+ * The stories are the phone's layout, whatever size a card is drawn at:
+ * where the app's `tall:` (48 rem both ways) would stand a knob row's
+ * columns 9 rem apart, wider than the 20 rem cards the stories stand them
+ * in, they keep the phone's columns, shares of the row
+ */
+@media (width >= 48rem) and (height >= 48rem) {
+  html body [class*='tall:grid-cols-[repeat(1,9rem)]'] {
+    grid-template-columns: repeat(1, minmax(0, 1fr));
+  }
+  html body [class*='tall:grid-cols-[repeat(2,9rem)]'] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  html body [class*='tall:grid-cols-[repeat(3,9rem)]'] {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  html body [class*='tall:grid-cols-[repeat(4,9rem)]'] {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  html body [class*='tall:grid-cols-[repeat(5,9rem)]'] {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+  html body [class*='tall:grid-cols-[repeat(6,9rem)]'] {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+  html body [class*='tall:grid-cols-[repeat(7,9rem)]'] {
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+  }
+  html body [class*='tall:grid-cols-[repeat(8,9rem)]'] {
+    grid-template-columns: repeat(8, minmax(0, 1fr));
+  }
+}
+
+html body :global(.ds-cell) {
+  border: 1px solid var(--lift-2);
+  border-radius: 12px;
+  padding: 12px;
+  overflow: visible;
+}
+
+html body :global(.ds-cell > h4) {
+  margin: 0 0 10px;
+  font: 500 12px / 1.2 var(--font-sans);
+  letter-spacing: 0.02em;
+  text-transform: none;
+  color: var(--ink-500);
+}
+
+/* A story marked wide (Stage's `wide`) takes its card's whole row */
+html body :global(.ds-cell:has([data-ds-wide])) {
+  grid-column: 1 / -1;
+}

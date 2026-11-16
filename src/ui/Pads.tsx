@@ -21,6 +21,8 @@ const OTHER_PAD = `${PAD} bg-(--key) text-(--ink-500)`
  * nearer its bottom edge (every pad at full velocity, given fullVelocity).
  * A finger keeps the pad it pressed, so a pad is never played by a finger
  * that drifts: moving it up or down sends Slide.
+ *
+ * @category Play
  */
 export function Pads({
   hands,

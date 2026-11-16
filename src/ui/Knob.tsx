@@ -2,6 +2,7 @@ import {
   useEffect,
   useLayoutEffect,
   useRef,
+  useState,
   useSyncExternalStore,
   type CSSProperties,
   type KeyboardEvent,
@@ -11,6 +12,7 @@ import {
 import { createPortal } from 'react-dom'
 import type { Engine } from '../engine/engine'
 import {
+  clampValue,
   formatAmount,
   formatValue,
   isSwitch,
@@ -176,12 +178,101 @@ export function Knob({
   }
   return (
     <Dial
-      engine={engine}
       address={`${part} ${knob}`}
       turns={turns}
       color={color}
       hot={hot}
-      routed={{ part, knob, onHold }}
+      routed={{ engine, part, knob, onHold }}
+      follow={engine.subscribeSound}
+    />
+  )
+}
+
+/**
+ * A value held for a knob of no engine (ValueKnob), and told to its dial
+ * or switch as it changes
+ */
+function heldValue(initial: number) {
+  let value = initial
+  const listeners = new Set<() => void>()
+  return {
+    read: () => value,
+    set(next: number) {
+      if (next === value) return
+      value = next
+      for (const listener of listeners) listener()
+    },
+    follow(listener: () => void) {
+      listeners.add(listener)
+      return () => {
+        listeners.delete(listener)
+      }
+    },
+  }
+}
+
+/**
+ * A knob of its own value, no engine behind it: a value in spec's range,
+ * turned as the sound's knobs are (a drag up or down anywhere on it,
+ * finer with the finger off to the side, a double tap for the default,
+ * the arrow keys, Page Up/Down and Home/End), or, when spec has two
+ * choices (isSwitch: Off and On), the upright switch that stands in a
+ * dial's place. It holds what it was turned to and onChange hears each
+ * turn; a new value given redraws it. Its size is its row's: stand it in
+ * a knobRow's grid (controls.ts), whose cells KNOB_SIZE fits. The arc is
+ * neutral unless given a colour: a chain's ink, the modulation colour.
+ *
+ * @category Controls
+ */
+export function ValueKnob({
+  label,
+  spec,
+  value = spec.default,
+  onChange,
+  format,
+  color = neutralArc(),
+  hot,
+}: {
+  /** Its name, under its face */
+  label: string
+  /** Its range, default, curve, step and unit (state/params.ts) */
+  spec: ValueSpec
+  /** Where it stands: spec.default where not given */
+  value?: number
+  /** Hears each turn, the value clamped to spec's range */
+  onChange?: (value: number) => void
+  /** Its readout, if not its unit's (formatValue) */
+  format?: (value: number) => string
+  /** Its arc's colour, and its glow while turned */
+  color?: string
+  /** Its name drawn in this colour: a part's own knob called out */
+  hot?: string
+}) {
+  const given = clampValue(spec, value)
+  const [held] = useState(() => heldValue(given))
+  // A value given anew: it stands there (a render giving the same one
+  // leaves it where it was turned to)
+  useLayoutEffect(() => held.set(given), [held, given])
+  const turns: Turns = {
+    spec: { ...spec, label },
+    read: held.read,
+    write: (next) => {
+      const clamped = clampValue(spec, next)
+      held.set(clamped)
+      onChange?.(clamped)
+    },
+    format: format ?? ((next) => formatValue(spec, next)),
+  }
+  if (isSwitch(spec)) {
+    return <Toggle turns={turns} color={color} follow={held.follow} />
+  }
+  return (
+    <Dial
+      address={label}
+      turns={turns}
+      color={color}
+      hot={hot}
+      follow={held.follow}
     />
   )
 }
@@ -205,7 +296,6 @@ export function DepthKnob({
 }) {
   return (
     <Dial
-      engine={engine}
       address={`${source} ${target} ${key}`}
       turns={{
         spec: { ...AMOUNT_SPEC, label },
@@ -216,6 +306,7 @@ export function DepthKnob({
       }}
       color={palette().modulator}
       hot={undefined}
+      follow={engine.subscribeSound}
     />
   )
 }
@@ -250,7 +341,6 @@ export function MixKnob({
   }
   return (
     <Dial
-      engine={engine}
       address={`mix ${part} ${knob}`}
       turns={turns}
       color={color}
@@ -367,31 +457,40 @@ interface Turns {
   readonly format: (value: number) => string
 }
 
-/** The knob of the sound a dial turns: its routes drawn, held to route */
+/**
+ * The knob of the sound a dial turns, in the engine that holds it: its
+ * routes drawn, held to route
+ */
 interface Routed {
+  readonly engine: Engine
   readonly part: string
   readonly knob: string
   readonly onHold: ((dest: string) => void) | undefined
 }
 
+/**
+ * A dial: what it turns, read and written (Turns), with no engine of its
+ * own; a knob of the sound gives it the engine through routed
+ */
 function Dial({
-  engine,
   address,
   turns,
   color,
   hot,
   routed,
-  follow = engine.subscribeSound,
+  follow,
 }: {
-  engine: Engine
   /** What it turns, as a key: a new one, a new listener */
   address: string
   turns: Turns
   color: string
   hot: string | undefined
   routed?: Routed
-  /** What it follows for a value set elsewhere: the sound, or the mix */
-  follow?: (listener: () => void) => () => void
+  /**
+   * What it follows for a value set elsewhere: the sound, the mix, or a
+   * value of its own (ValueKnob)
+   */
+  follow: (listener: () => void) => () => void
 }) {
   const { spec } = turns
   /** The latest of what it turns, for the listener set up once per dial */
@@ -469,7 +568,7 @@ function Dial({
   const showRoutes = () => {
     const at = routedRef.current
     if (!at) return
-    const { part, knob } = at
+    const { engine, part, knob } = at
     const sound = engine.getSound()
     const dest = knobDest(sound, part, knob)
     const count = dest === undefined ? 0 : routesTo(sound, part, dest).length
@@ -509,7 +608,7 @@ function Dial({
   const hold = () => {
     const at = routedRef.current
     if (!at?.onHold) return
-    const dest = knobDest(engine.getSound(), at.part, at.knob)
+    const dest = knobDest(at.engine.getSound(), at.part, at.knob)
     if (dest !== undefined) at.onHold(dest)
   }
 
@@ -583,9 +682,9 @@ function Dial({
         showRoutes()
       }),
     // show, showRoutes and read use only refs; address names what they
-    // read, and follow is the engine's, as it is
+    // read, and follow is the engine's or the value's, kept as it is
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [engine, address]
+    [follow, address]
   )
 
   // A hold still pending when the knob goes away fires nothing, and a fine

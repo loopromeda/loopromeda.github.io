@@ -16,6 +16,8 @@ const FADE = 24
  * (--fade-l, --fade-r) and not through React. className places and sizes
  * the scroller; row lays out what it holds (a gap, a padding at its ends
  * to stand them in from the card's edges, which the row runs to).
+ *
+ * @category Layout
  */
 export function FadeRow({
   className = '',

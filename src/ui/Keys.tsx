@@ -15,6 +15,8 @@ import type { Hands } from './hands'
  * key plays louder pressed nearer its front edge (every key at full
  * velocity, given fullVelocity); a finger that slides moves its note from
  * key to key, and up or down the keys sends Slide.
+ *
+ * @category Play
  */
 export function Keys({
   hands,

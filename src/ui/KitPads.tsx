@@ -24,6 +24,8 @@ const PICKED_PAD = `${PAD} bg-(--key) text-(--ink-100) outline-2 -outline-offset
  * fullVelocity). A finger keeps the pad it struck: moving it up or down
  * sends Slide. Hands holds each touch on a pad as on a key, the pad's
  * place standing for its note there (the engine plays the pad's own).
+ *
+ * @category Play
  */
 export function KitPads({
   hands,

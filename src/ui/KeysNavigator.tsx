@@ -58,6 +58,8 @@ const ReachKeys = memo(function ReachKeys() {
  * and drags from there. The reach outside the frame is dimmed. To a
  * keyboard it is a slider: the arrows move a white key, Page Up and Page
  * Down an octave, Home and End to either end.
+ *
+ * @category Navigation
  */
 export function KeysNavigator({
   position,

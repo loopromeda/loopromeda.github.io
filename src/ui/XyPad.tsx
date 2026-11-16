@@ -61,6 +61,8 @@ interface Mark extends XyFinger {
  * rings under the fingers, their lines, pitches and glides are drawn
  * straight onto the page, as the keys are lit, so a touch never
  * re-renders React.
+ *
+ * @category Play
  */
 export function XyPad({
   hands,

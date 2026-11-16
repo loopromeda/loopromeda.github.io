@@ -8,7 +8,16 @@ import tseslint from 'typescript-eslint'
 
 export default defineConfig(
   {
-    ignores: ['dist/', 'coverage/', '**/node_modules/'],
+    ignores: [
+      'dist/',
+      'dist-ds/',
+      'coverage/',
+      '**/node_modules/',
+      '.ds-sync/',
+      'ds-bundle/',
+      '.design-sync/.cache/',
+      '.design-sync/learnings/',
+    ],
   },
   eslint.configs.recommended,
   tseslint.configs.recommended,

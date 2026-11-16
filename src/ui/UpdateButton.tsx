@@ -5,6 +5,8 @@
  * come back with the reload, the audio after a tap. As small as the line,
  * it answers a larger touch, as far into the gap above it and the margin
  * below it as the settings button does.
+ *
+ * @category Toolbar
  */
 export function UpdateButton({ onUpdate }: { onUpdate: () => void }) {
   return (

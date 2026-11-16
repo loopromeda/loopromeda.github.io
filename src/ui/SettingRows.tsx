@@ -5,6 +5,8 @@ import { Switch } from './Switch'
 /**
  * A titled run of settings, as the settings dialog and the transport's
  * popover hold them: a section's small capitals over its rows
+ *
+ * @category Settings
  */
 export function SettingGroup({
   title,
@@ -27,6 +29,8 @@ export function SettingGroup({
 /**
  * One setting: its name at the left, the control at the right (under it
  * when they do not fit side by side), and what it does below
+ *
+ * @category Settings
  */
 export function SettingRow({
   label,
@@ -65,7 +69,11 @@ export function SettingRow({
   )
 }
 
-/** A setting that is on or off: a switch (Switch) at its right */
+/**
+ * A setting that is on or off: a switch (Switch) at its right
+ *
+ * @category Settings
+ */
 export function SwitchRow({
   label,
   hint,
@@ -95,7 +103,11 @@ export function SwitchRow({
   )
 }
 
-/** A setting chosen from a row of options, the chosen one pressed */
+/**
+ * A setting chosen from a row of options, the chosen one pressed
+ *
+ * @category Settings
+ */
 export function ChoiceRow<T extends string | number>({
   label,
   hint,

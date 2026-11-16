@@ -14,6 +14,8 @@ const KNOB = `${SMALL_OPTION} disabled:opacity-40`
  * the loop's track (src/state/lanes.ts: its sound's, part by part, and
  * its fader's), each knob one lane at most, eight in all, one with a lane
  * already greyed. Escape or the cross closes it.
+ *
+ * @category Panels
  */
 export function LanePicker({
   groups,

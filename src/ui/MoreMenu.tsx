@@ -74,6 +74,8 @@ export interface MenuItem {
  * deletion to confirm). The menu is put on the page itself (on a modal
  * dialog's, in one), not where the button stands: a popover's glass would
  * hold it inside.
+ *
+ * @category Overlays
  */
 export function MoreMenu({
   groups,

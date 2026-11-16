@@ -3,6 +3,18 @@ import { KNOB_COLUMN, KNOB_LABEL, KNOB_READOUT, KNOB_SIZE } from './controls'
 import { GLYPHS } from './editor'
 import { MASTER_VIEWS, type MasterViewKind } from './MasterViews'
 
+/** The view shown, as its cell reads it */
+const READOUTS: Record<MasterViewKind, string> = {
+  scope: 'Scope',
+  spectrum: 'Spectrum',
+  spectrogram: 'Spectro.',
+  stereo: 'Stereo',
+}
+
+/** A view's button: an option's face (SMALL_OPTION's), square */
+const VIEW =
+  'flex min-h-0 min-w-0 items-center justify-center rounded-md bg-(--lift) text-(--ink-400) aria-pressed:bg-(--lift-2) aria-pressed:text-(--ink-0)'
+
 /**
  * An output's own controls in its panel's knob row, after the knobs, so
  * that the panel ends with them (asked for by ashon, 2026-11-15: "여기
@@ -17,20 +29,9 @@ import { MASTER_VIEWS, type MasterViewKind } from './MasterViews'
  * "Spectrogram -> Spectro. 이렇게 줄이는건 어떨까?"), no wider than
  * Spectrum: in full it is as wide as two narrow columns, and would run
  * off the panel in a row of eight. Its button keeps the whole name.
+ *
+ * @category Panels
  */
-
-/** The view shown, as its cell reads it */
-const READOUTS: Record<MasterViewKind, string> = {
-  scope: 'Scope',
-  spectrum: 'Spectrum',
-  spectrogram: 'Spectro.',
-  stereo: 'Stereo',
-}
-
-/** A view's button: an option's face (SMALL_OPTION's), square */
-const VIEW =
-  'flex min-h-0 min-w-0 items-center justify-center rounded-md bg-(--lift) text-(--ink-400) aria-pressed:bg-(--lift-2) aria-pressed:text-(--ink-0)'
-
 export function OutputCells({
   mutes,
   shown,

@@ -7,16 +7,19 @@ import {
 import { pitchName } from '../viz/keyboard'
 import { BAR_ICON_BUTTON } from './controls'
 
-/**
- * A stroked picture of a surface, 18 px unless given a size: a piano's
- * keys, four pads, or a pad crossed where a finger stands
- */
+/** Each surface's picture, a stroked path on an 18 px square */
 const ICONS: Readonly<Record<SurfaceKind, string>> = {
   keys: 'M2.5 3.5h13v11h-13zM6.5 3.5v6M11.5 3.5v6M9 9.5v5',
   pads: 'M3 3h5v5H3zM10 3h5v5h-5zM3 10h5v5H3zM10 10h5v5h-5z',
   xy: 'M2.5 2.5h13v13h-13zM11 2.5v13M2.5 7h13',
 }
 
+/**
+ * A stroked picture of a surface, 18 px unless given a size: a piano's
+ * keys, four pads, or a pad crossed where a finger stands
+ *
+ * @category Toolbar
+ */
 export function SurfaceIcon({
   kind,
   size = 18,
@@ -48,6 +51,8 @@ export function SurfaceIcon({
  * pads), as its picture. A tap
  * opens the choice (and the pads' key), a popover standing on it
  * (SurfacePicker, which ref places), and closes it again.
+ *
+ * @category Toolbar
  */
 export function SurfaceButton({
   ref,

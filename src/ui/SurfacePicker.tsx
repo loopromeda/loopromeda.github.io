@@ -45,6 +45,8 @@ const WANT_W = 24
  * roots six, two to one of their columns). It stands as tall as they are
  * (the pads' key takes more than the keys' line of help), up to the room
  * the page has, past which they scroll.
+ *
+ * @category Panels
  */
 export function SurfacePicker({
   settings,

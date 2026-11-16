@@ -1,0 +1,145 @@
+{
+  "projectId": "58233155-e063-4076-8745-5847e10ce2c7",
+  "pkg": "@loopromeda/ds",
+  "globalName": "Loopromeda",
+  "shape": "package",
+  "buildCmd": "pnpm build:ds",
+  "entry": "dist-ds/index.js",
+  "srcDir": "../src/ui",
+  "cssEntry": "styles.css",
+  "componentSrcMap": {
+    "Hands": null,
+    "BarIconButton": "../src/ui/IconButton.tsx",
+    "SmallIconButton": "../src/ui/IconButton.tsx",
+    "SettingGroup": "../src/ui/SettingRows.tsx",
+    "SettingRow": "../src/ui/SettingRows.tsx",
+    "SwitchRow": "../src/ui/SettingRows.tsx",
+    "ChoiceRow": "../src/ui/SettingRows.tsx",
+    "SurfaceIcon": "../src/ui/SurfaceButton.tsx",
+    "ValueKnob": "../src/ui/Knob.tsx"
+  },
+  "dtsPropsFor": {
+    "ValueKnob": "/** Its name, under its face */\n  label: string;\n  /** Its range, default, curve, step and unit; two choices (Off, On) make it a switch */\n  spec: { min: number; max: number; default: number; curve: 'linear' | 'quadratic' | 'exponential' | 'bipolar'; step: number; unit: '' | '%' | 'oct' | 'st' | 'ct' | 's' | 'Hz' | 'pan' | 'dB' | 'ratio' | 'q'; choices?: readonly string[]; atMin?: string };\n  /** Where it stands: spec.default where not given */\n  value?: number;\n  /** Hears each turn, the value clamped to spec's range */\n  onChange?: (value: number) => void;\n  /** Its readout, if not its unit's (formatValue) */\n  format?: (value: number) => string;\n  /** Its arc's colour, and its glow while turned */\n  color?: string;\n  /** Its name drawn in this colour: a part's own knob called out */\n  hot?: string;",
+    "MoreMenu": "/** The items, in groups; one empty is left out, and its line. glyph: a path on a 14 px square (MENU_GLYPHS) */\n  groups: readonly (readonly { label: string; glyph: string; onSelect: () => void; disabled?: boolean; danger?: boolean }[])[];\n  label?: string;\n  lit?: boolean;",
+    "Popover": "/** Its element's id (the buttons' aria-controls), its heading's after it */\n  id: string;\n  /** The button it opens from, which places it */\n  anchor: React.RefObject<HTMLElement | null>;\n  /** As wide as it wants to be, in rem */\n  width: number;\n  /** As tall, in rem: measured from its content where not given */\n  height?: number;\n  chip: React.ReactNode;\n  title: string;\n  note?: React.ReactNode;\n  /** In the header, before the cross */\n  actions?: React.ReactNode;\n  /** The cross's name, for a screen reader */\n  closeLabel: string;\n  onClose: () => void;\n  /** What Escape does, if not closing it */\n  onEscape?: () => void;\n  /** Told once it is placed, before it is seen: its list has a size */\n  onPlaced?: () => void;\n  bodyClassName?: string;\n  children: React.ReactNode;",
+    "LanePicker": "/** A part's knobs a lane can move, under the part's name; name: A Filter · Cutoff */\n  groups: readonly { part: string; name: string; knobs: readonly { part: string; key: string; spec: { min: number; max: number; default: number; curve: 'linear' | 'quadratic' | 'exponential' | 'bipolar'; step: number; unit: '' | '%' | 'oct' | 'st' | 'ct' | 's' | 'Hz' | 'pan' | 'dB' | 'ratio' | 'q'; choices?: readonly string[]; atMin?: string; key: string; label: string }; name: string }[] }[];\n  /** The loop's lanes: one per knob already laned */\n  lanes: readonly { part: string; key: string; glide: boolean; on: boolean; values: readonly number[] }[];\n  onAdd: (knob: { part: string; key: string; spec: { min: number; max: number; default: number; curve: 'linear' | 'quadratic' | 'exponential' | 'bipolar'; step: number; unit: '' | '%' | 'oct' | 'st' | 'ct' | 's' | 'Hz' | 'pan' | 'dB' | 'ratio' | 'q'; choices?: readonly string[]; atMin?: string; key: string; label: string }; name: string }) => void;\n  onClose: () => void;",
+    "OrnamentPanel": "/** The note picked: its key, its ornament and whether a ghost; none before a note is tapped (the kinds disabled) */\n  note?: { key: number; ornament?: ({ kind: 'grace'; interval: number; count: number; speed: 2 | 3 | 4 | 6 | 8; place: 'before' | 'on' } | { kind: 'mordent' | 'trill'; interval: number; speed: 2 | 3 | 4 | 6 | 8; restart: boolean } | { kind: 'roll'; speed: 2 | 3 | 4 | 6 | 8; shape: 'flat' | 'rise' | 'fall' } | { kind: 'arp'; chord: 'maj' | 'min' | 'sus4' | 'fifth' | 'oct' | 'maj7' | 'min7' | 'dim'; order: 'up' | 'down' | 'updown'; speed: 2 | 3 | 4 | 6 | 8; restart: boolean }); ghost?: boolean };\n  /** A synth's note (its pitch moves), or a kit's pad */\n  pitched: boolean;\n  /** The song's, for how long a sound lasts */\n  tempo: number;\n  /** A key's name: a synth's note, a kit's pad */\n  keyName: (key: number) => string;\n  onChange: (ornament: ({ kind: 'grace'; interval: number; count: number; speed: 2 | 3 | 4 | 6 | 8; place: 'before' | 'on' } | { kind: 'mordent' | 'trill'; interval: number; speed: 2 | 3 | 4 | 6 | 8; restart: boolean } | { kind: 'roll'; speed: 2 | 3 | 4 | 6 | 8; shape: 'flat' | 'rise' | 'fall' } | { kind: 'arp'; chord: 'maj' | 'min' | 'sus4' | 'fifth' | 'oct' | 'maj7' | 'min7' | 'dim'; order: 'up' | 'down' | 'updown'; speed: 2 | 3 | 4 | 6 | 8; restart: boolean }) | undefined) => void;\n  /** The note made a ghost, or a note again */\n  onGhost: (ghost: boolean) => void;\n  onClose: () => void;",
+    "OutputCells": "/** A track's Mute and Solo, if it has one: a cell before the views */\n  mutes?: React.ReactNode;\n  /** The view its tiles show */\n  shown: 'scope' | 'spectrum' | 'spectrogram' | 'stereo';\n  choose: (view: 'scope' | 'spectrum' | 'spectrogram' | 'stereo') => void;",
+    "SurfacePicker": "settings: { kind: 'keys' | 'pads' | 'xy'; root: number; scale: 'chromatic' | 'major' | 'minor' | 'dorian' | 'phrygian' | 'lydian' | 'mixolydian' | 'harmonic-minor' | 'major-pentatonic' | 'minor-pentatonic' | 'blues'; hideControls: boolean; hideSurface: boolean; wheel: boolean };\n  /** The track picked is a kit: its pads */\n  kit: boolean;\n  /** The button it opens from, which places it */\n  anchor: React.RefObject<HTMLElement | null>;\n  onChange: (settings: { kind: 'keys' | 'pads' | 'xy'; root: number; scale: 'chromatic' | 'major' | 'minor' | 'dorian' | 'phrygian' | 'lydian' | 'mixolydian' | 'harmonic-minor' | 'major-pentatonic' | 'minor-pentatonic' | 'blues'; hideControls: boolean; hideSurface: boolean; wheel: boolean }) => void;\n  onClose: () => void;",
+    "SurfaceButton": "ref?: React.Ref<HTMLButtonElement>;\n  settings: { kind: 'keys' | 'pads' | 'xy'; root: number; scale: 'chromatic' | 'major' | 'minor' | 'dorian' | 'phrygian' | 'lydian' | 'mixolydian' | 'harmonic-minor' | 'major-pentatonic' | 'minor-pentatonic' | 'blues'; hideControls: boolean; hideSurface: boolean; wheel: boolean };\n  /** The track picked is a kit */\n  kit?: boolean;\n  open: boolean;\n  onToggle: () => void;",
+    "Keys": "/** Who holds which note: new Hands(player) (an export), the player { noteOn(id: number, note: number, velocity: number, slide?: number): void; noteOff(id: number): void; slide(id: number, value: number): void; bend(id: number, note: number): void }, a no-op player for a picture */\n  hands: Hands;\n  /** The lowest note, a white key's (MIDI: 60 is C4, MIDDLE_C) */\n  lowest: number;\n  octaves: number;\n  label: string;\n  /** Every note at full velocity; otherwise lower on a key plays louder */\n  fullVelocity?: boolean;",
+    "Pads": "/** Who holds which note: new Hands(player) (an export), the player { noteOn(id: number, note: number, velocity: number, slide?: number): void; noteOff(id: number): void; slide(id: number, value: number): void; bend(id: number, note: number): void }, a no-op player for a picture */\n  hands: Hands;\n  /** Pads across and rows up (padGrid(width, height), kitGrid) */\n  grid: { columns: number; rows: number };\n  /** A MIDI note per pad, from the bottom left (padNote) */\n  notes: readonly number[];\n  /** The key's root, semitones above C: its pads are marked */\n  root: number;\n  label: string;\n  fullVelocity?: boolean;",
+    "KitPads": "/** Who holds which note: new Hands(player) (an export), the player { noteOn(id: number, note: number, velocity: number, slide?: number): void; noteOff(id: number): void; slide(id: number, value: number): void; bend(id: number, note: number): void }, a no-op player for a picture */\n  hands: Hands;\n  /** Pads across and rows up (padGrid(width, height), kitGrid) */\n  grid: { columns: number; rows: number };\n  /** Each pad's name, from the bottom left */\n  names: readonly string[];\n  /** What stands small on a pad beside its name: its note, or nothing */\n  marks?: readonly (string | undefined)[];\n  /** The pad whose sound the editor shows */\n  picked: number;\n  onPick: (pad: number) => void;\n  label: string;\n  fullVelocity?: boolean;",
+    "XyPad": "/** Who holds which note: new Hands(player) (an export), the player { noteOn(id: number, note: number, velocity: number, slide?: number): void; noteOff(id: number): void; slide(id: number, value: number): void; bend(id: number, note: number): void }, a no-op player for a picture */\n  hands: Hands;\n  /** Follows the notes still gliding: (listener) => unsubscribe; () => () => {} where nothing glides */\n  watchGlides: (listener: (report: { count: number; keys: Float64Array; amounts: Float64Array; slides: Float64Array }) => void) => () => void;\n  /** The lowest note across its width, MIDI */\n  lowest: number;\n  octaves: number;\n  label: string;",
+    "ChoiceRow": "/** The setting's name */\n  label: string;\n  /** A line under it saying what it does */\n  hint?: string;\n  /** The choices, one button each; the one whose value is value is lit */\n  options: readonly { value: string | number; label: string }[];\n  value: string | number;\n  onChange: (value: string | number) => void;",
+    "Dropdown": "/** The row's name, which both button and list are read by */\n  labelId: string;\n  /** The row's hint, when it has one */\n  hintId?: string;\n  /** swatch: a theme's colours, as dots before the name; glyph: a path on a 14 px square before it */\n  options: readonly { value: string | number; label: string; swatch?: readonly string[]; glyph?: string }[];\n  value: string | number;\n  onChange: (value: string | number) => void;\n  /** The editor's Sound, Seq or Mix, folded on a narrow tab rail */\n  rail?: boolean;",
+    "FadeRow": "/** The scroller's classes (its width, its padding) */\n  className?: string;\n  /** The row's own classes: its gap, its items' alignment */\n  row?: string;\n  children: React.ReactNode;\n  /** Any of a div's attributes, spread on the scroller */\n  id?: string;\n  style?: React.CSSProperties;\n  role?: string;\n  'aria-label'?: string;\n  'aria-labelledby'?: string;\n  title?: string;"
+  },
+  "overrides": {
+    "ValueKnob": {
+      "viewport": "1120x694"
+    },
+    "Keys": {
+      "viewport": "900x593"
+    },
+    "Pads": {
+      "viewport": "900x613"
+    },
+    "KitPads": {
+      "cardMode": "column",
+      "viewport": "728x583"
+    },
+    "XyPad": {
+      "cardMode": "column",
+      "viewport": "728x633"
+    },
+    "ThemeRoot": {
+      "cardMode": "single",
+      "primaryStory": "Themes"
+    },
+    "Dropdown": {
+      "cardMode": "single",
+      "viewport": "480x360",
+      "primaryStory": "ThemeOpen"
+    },
+    "MoreMenu": {
+      "cardMode": "single",
+      "viewport": "480x320",
+      "primaryStory": "ProjectOpen"
+    },
+    "Popover": {
+      "cardMode": "single",
+      "viewport": "480x620",
+      "primaryStory": "Transport"
+    },
+    "ConfirmDialog": {
+      "cardMode": "single",
+      "viewport": "440x340",
+      "primaryStory": "ClearLoop"
+    },
+    "SurfacePicker": {
+      "cardMode": "single"
+    },
+    "OrnamentPanel": {
+      "cardMode": "column",
+      "viewport": "728x943"
+    },
+    "IconButton": {
+      "cardMode": "column",
+      "viewport": "728x465"
+    },
+    "SmallIconButton": {
+      "cardMode": "column",
+      "viewport": "728x501"
+    },
+    "FadeRow": {
+      "cardMode": "column",
+      "viewport": "728x521"
+    },
+    "KeysNavigator": {
+      "cardMode": "column",
+      "viewport": "728x528"
+    },
+    "LanePicker": {
+      "viewport": "1120x515"
+    },
+    "OutputCells": {
+      "viewport": "900x642"
+    },
+    "ChoiceRow": {
+      "viewport": "900x523"
+    },
+    "SettingRow": {
+      "viewport": "900x532"
+    },
+    "SwitchRow": {
+      "viewport": "900x592"
+    },
+    "BarIconButton": {
+      "viewport": "728x245"
+    },
+    "Switch": {
+      "viewport": "728x293"
+    },
+    "SettingGroup": {
+      "viewport": "728x384"
+    },
+    "SettingsButton": {
+      "viewport": "728x147"
+    },
+    "SurfaceButton": {
+      "viewport": "728x245"
+    },
+    "SurfaceIcon": {
+      "viewport": "728x151"
+    },
+    "UpdateButton": {
+      "viewport": "728x123"
+    },
+    "RowNavigator": {
+      "viewport": "728x725"
+    }
+  },
+  "readmeHeader": ".design-sync/conventions.md",
+  "guidelinesGlob": "../docs/design-system.md"
+}

@@ -21,6 +21,8 @@ const LINE =
  * takes a touch from the keys nor runs the page over. Past the page's
  * edge it ran the page 4 px wider than the screen, which Chrome showed as
  * a margin at the right.
+ *
+ * @category Toolbar
  */
 export function SettingsButton({
   onOpen,

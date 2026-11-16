@@ -21,6 +21,8 @@ const KEY_STEPS: Readonly<Record<string, number>> = {
  * stand dark, the octave seams are lit and middle C is dotted, as the
  * keys' navigator does it (KeysNavigator.tsx); without it the rows stand
  * plain, as a kit's pads are.
+ *
+ * @category Navigation
  */
 export function RowNavigator({
   position,

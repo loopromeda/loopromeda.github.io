@@ -6,6 +6,8 @@ import { BUTTON, BUTTON_DANGER, CARD } from './controls'
  * part): what goes, what goes with it, and the two answers. Cancel has the
  * focus, so Enter keeps the part; Escape, Back and a tap outside cancel
  * too. Shown while mounted.
+ *
+ * @category Overlays
  */
 export function ConfirmDialog({
   title,

@@ -75,6 +75,8 @@ function Dots({ colours }: { colours: readonly string[] }) {
  * the page itself (on a modal dialog's, in one), not where the button
  * stands: in the editor's panel, whose glass would hold it inside and
  * scroll to show it, which closes it (the EQ's kind, in EqGraph).
+ *
+ * @category Controls
  */
 export function Dropdown<T extends string | number>({
   labelId,

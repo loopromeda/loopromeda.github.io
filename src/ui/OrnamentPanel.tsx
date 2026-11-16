@@ -79,6 +79,8 @@ const EACH: readonly [boolean, string][] = [
  * picked it asks for one. As tall whatever it shows, so the grid's rows
  * stay under a finger. Beside the kinds, Ghost makes the note a ghost
  * note or a note again. Escape or the cross closes it.
+ *
+ * @category Panels
  */
 export function OrnamentPanel({
   note,

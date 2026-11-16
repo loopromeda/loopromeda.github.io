@@ -1,0 +1,14 @@
+{
+  // The design system's types, beside its module in dist-ds/ (pnpm
+  // build:ds, vite.ds.config.ts): declarations only, from src/ds/index.ts
+  // and what it reaches
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "rootDir": "src",
+    "outDir": "dist-ds/types"
+  },
+  "include": ["src/ds"]
+}

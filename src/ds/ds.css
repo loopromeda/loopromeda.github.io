@@ -1,0 +1,68 @@
+/*
+ * The design system's stylesheet (src/ds/index.ts): the app's own
+ * (index.css: the tokens, the face, the variants, glass and the select's
+ * chevron, and every class the app's source uses), and over it a
+ * vocabulary for screens the app has not drawn yet. Tailwind builds only
+ * the classes it reads in the source; a screen built of the design system
+ * elsewhere (Claude Design) writes its own, so these are built whether
+ * the app uses them or not: Tailwind's spacing, sizing, layout and type
+ * on its scale, and every colour token as a fill, an ink, a line and a
+ * ring (bg-(--panel), text-(--ink-400), border-(--lift-2)).
+ */
+@import '../index.css';
+
+/* Spacing, on Tailwind's scale (0.25rem a step) */
+@source inline("{p,px,py,pt,pr,pb,pl,m,mx,my,mt,mr,mb,ml,gap,gap-x,gap-y,space-x,space-y}-{0,px,0.5,1,1.5,2,2.5,3,3.5,4,5,6,7,8,9,10,11,12,14,16,20,24}");
+@source inline("{-mt,-mb,-ml,-mr,-mx,-my}-{px,0.5,1,2,3,4}");
+@source inline("{inset,inset-x,inset-y,top,right,bottom,left}-{0,px,0.5,1,2,3,4,6,8,1/2,full,auto}");
+@source inline("m{,x,y,t,b,l,r}-auto");
+
+/* Sizing */
+@source inline("{w,h,size,min-w,min-h,max-w,max-h}-{0,px,1,2,3,4,5,6,7,8,9,10,11,12,14,16,20,24,28,32,36,40,44,48,52,56,60,64,72,80,96}");
+@source inline("{w,h,size,min-w,min-h,max-w,max-h}-{full,auto,fit,min,max,screen,dvh,svh}");
+@source inline("w-{1/2,1/3,2/3,1/4,3/4,1/5,2/5,3/5,4/5}");
+@source inline("max-w-{3xs,2xs,xs,sm,md,lg,xl,2xl,3xl,4xl,5xl,6xl,7xl,prose}");
+@source inline("aspect-{square,video,auto}");
+
+/* Layout */
+@source inline("{block,inline-block,inline,flex,inline-flex,grid,inline-grid,contents,hidden}");
+@source inline("flex-{row,row-reverse,col,col-reverse,wrap,nowrap,1,auto,initial,none}");
+@source inline("{grow,grow-0,shrink,shrink-0,basis-0,basis-full,basis-auto}");
+@source inline("items-{start,end,center,baseline,stretch}");
+@source inline("justify-{start,end,center,between,around,evenly,stretch}");
+@source inline("justify-items-{start,end,center,stretch}");
+@source inline("{self,content,place-items,place-content,place-self}-{start,end,center,stretch,between,auto}");
+@source inline("{grid-cols,grid-rows}-{1,2,3,4,5,6,7,8,9,10,11,12,none,subgrid}");
+@source inline("{col-span,row-span}-{1,2,3,4,5,6,7,8,9,10,11,12,full}");
+@source inline("{col,row}-start-{1,2,3,4,5,6,7}");
+@source inline("grid-flow-{row,col,dense}");
+@source inline("{static,relative,absolute,fixed,sticky,isolate}");
+@source inline("z-{0,10,20,30,40,50,auto}");
+@source inline("{overflow,overflow-x,overflow-y}-{hidden,auto,scroll,visible,clip}");
+@source inline("{order}-{first,last,none,1,2,3}");
+
+/* Type: the face's two cuts, sizes, weights, spacing */
+@source inline("text-{2xs,xs,sm,base,lg,xl,2xl,3xl,4xl,5xl,[9px],[10px],[11px],[12px],[13px]}");
+@source inline("font-{sans,mono,light,normal,medium,semibold,bold,extrabold,black}");
+@source inline("tracking-{tighter,tight,normal,wide,wider,widest}");
+@source inline("leading-{none,tight,snug,normal,relaxed,loose,3,4,5,6,7}");
+@source inline("text-{left,center,right,balance,pretty,wrap,nowrap,ellipsis,clip}");
+@source inline("{uppercase,lowercase,capitalize,normal-case,truncate,italic,not-italic,underline,no-underline,tabular-nums,whitespace-nowrap,whitespace-normal,whitespace-pre-line,break-words,break-all,line-clamp-1,line-clamp-2,line-clamp-3}");
+
+/* Shape and depth */
+@source inline("rounded{,-none,-sm,-md,-lg,-xl,-2xl,-3xl,-full,-[6px],-[10px]}");
+@source inline("rounded-{t,b,l,r}{,-md,-lg,-xl}");
+@source inline("{border,border-0,border-2,border-t,border-b,border-l,border-r,border-x,border-y,border-dashed,border-solid}");
+@source inline("{ring,ring-0,ring-1,ring-2,ring-inset,outline-none,outline-1,outline-2}");
+@source inline("{shadow,shadow-none,shadow-sm,shadow-md,shadow-lg,shadow-xl,shadow-[0_0_24px_var(--shadow)]}");
+@source inline("opacity-{0,10,20,30,40,50,60,70,80,90,100}");
+@source inline("{divide-x,divide-y,backdrop-blur,backdrop-blur-sm,backdrop-blur-md}");
+@source inline("{transition,transition-colors,transition-opacity,transition-transform,duration-100,duration-150,duration-200,duration-300,ease-out,ease-in-out}");
+@source inline("{cursor-pointer,cursor-default,cursor-grab,pointer-events-none,pointer-events-auto,select-none,touch-none,sr-only}");
+
+/* Every colour token, as a fill, an ink, a line, a ring, an outline */
+@source inline("{bg,text,border,ring}-(--{bg,panel,tile,key,key-black,key-held,key-root,ink,ink-0,ink-100,ink-200,ink-300,ink-400,ink-500,ink-600,over,lift,lift-2,lift-3,lift-4,well,under,veil,scrim,backdrop,shadow,on-colour,accent,secondary,modulator,mod-ink,ok,warn,danger,ok-ink,warn-ink,danger-ink})");
+@source inline("{hover:,aria-pressed:}{bg,text}-(--{panel,tile,key,ink-0,ink-100,ink-200,lift,lift-2,lift-3,accent,secondary})");
+@source inline("{outline,fill,stroke,divide}-(--{bg,panel,tile,key,ink,ink-100,ink-200,ink-400,ink-500,lift-2,lift-3,accent,secondary,modulator,ok,warn,danger})");
+@source inline("{bg,text,border,ring}-(--{accent,secondary,modulator,ok,warn,danger,over})/{5,8,10,15,20,25,30,40,50,60,70,80}");
+@source inline("{bg,text,border,ring,fill,stroke}-{transparent,current,white,black}");

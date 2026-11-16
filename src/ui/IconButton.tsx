@@ -14,6 +14,8 @@ interface IconButtonProps {
 /**
  * A 44 px square button showing one 18 px stroked path (an arrow, a
  * cross), named by label for screen readers. Given pressed, it is a toggle.
+ *
+ * @category Controls
  */
 export function IconButton(props: IconButtonProps) {
   return <Face {...props} className={ICON_BUTTON} icon={18} />
@@ -22,6 +24,8 @@ export function IconButton(props: IconButtonProps) {
 /**
  * The same at 36 px, an icon of 16, as the play surface's header holds
  * them: its touch still 44 px tall (BAR_HIT)
+ *
+ * @category Controls
  */
 export function BarIconButton(props: IconButtonProps) {
   return <Face {...props} className={BAR_ICON_BUTTON} icon={16} />
@@ -30,6 +34,8 @@ export function BarIconButton(props: IconButtonProps) {
 /**
  * The same at 28 px, an icon of 14 (the path in the same 18×18 box), as a
  * panel header's actions are: its touch still 44 px tall (TALL_HIT)
+ *
+ * @category Controls
  */
 export function SmallIconButton({
   className = '',
