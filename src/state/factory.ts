@@ -24,11 +24,14 @@ function preset(
  * Pulse 12 and 25), and the Kick and the Snare, are the sounds a 2A03 and
  * N163 chiptune was ported to Loopromeda with, matched to its recording
  * (2026-11-15): dry, as the chips are, each a tracker's note, struck at
- * once and cut when it ends. Since 2026-11-16 their waves are chips',
- * on their DACs' DC (docs/plan/sound-chains.md, The chip): each note
- * thumps as it starts and ends, as the recording's do, which brought the
- * port's lows (60 to 120 Hz) from 4.3 dB under the recording's to 1 dB,
- * and its worst bar's chroma from 0.921 to 0.942.
+ * once and cut when it ends. Since 2026-11-16 their waves are chips'
+ * (docs/plan/sound-chains.md, The chip). The tones are on their DACs' DC:
+ * each note thumps as it starts and ends, as the recording's do, which
+ * brought the port's lows (60 to 120 Hz) from 4.3 dB under the
+ * recording's to 1.7 dB, and its worst bar's chroma from 0.921 to 0.939.
+ * The middle line's pulses are 12.5%, as the recording's harmonics are
+ * (their 4th sounds, their 8th does not), and the drums' bodies are the
+ * 2A03's triangle, off its DC.
  */
 
 /** The chip presets' amp: struck at once, held a little under full */
@@ -40,16 +43,26 @@ const CHIP_AMP = {
   velocity: 1,
 } as const
 
-/** The chip pulses' EQ: the top past 2.5 kHz 4 dB down */
+/** The chip lead's EQ: the top past 2.5 kHz 4 dB down */
 const CHIP_PULSE_EQ = { kind: 'eq', high: -4, highFreq: 2500 } as const
 
+/**
+ * The chip pulses' (Chip Pulse 12 and 25) EQ: the lead's, and their 2nd
+ * to 7th harmonics, around 1 kHz, 5 dB down, as the recording's middle
+ * line holds them under a pulse's own
+ */
+const CHIP_MID_EQ = { ...CHIP_PULSE_EQ, mid: -5, midFreq: 1000 } as const
+
 /** A chip pulse at a duty, the share of its cycle spent high */
-function chipPulse(duty: '12.5%' | '25%'): WrittenSound {
+function chipPulse(
+  duty: '12.5%' | '25%',
+  eq: NonNullable<WrittenSound['effects']>[number] = CHIP_PULSE_EQ
+): WrittenSound {
   return {
     inputs: { pulse: { kind: 'chip', duty } },
     chains: { main: { sends: { pulse: 1 } } },
     amp: CHIP_AMP,
-    effects: [CHIP_PULSE_EQ],
+    effects: [eq],
   }
 }
 
@@ -728,15 +741,15 @@ export const FACTORY_PRESETS: readonly Preset[] = [
       },
     ],
   }),
-  preset('Chip Pulse 12', 'Keys', chipPulse('12.5%')),
-  preset('Chip Pulse 25', 'Keys', chipPulse('25%')),
+  preset('Chip Pulse 12', 'Keys', chipPulse('12.5%', CHIP_MID_EQ)),
+  preset('Chip Pulse 25', 'Keys', chipPulse('25%', CHIP_MID_EQ)),
 
   preset('Kick', 'Drums', {
-    // A triangle 27 semitones under the key (A1 at C4), struck 30 higher
-    // and falling to it in about a tenth of a second, then held; dark
-    // noise at the strike
+    // A 2A03's triangle (32 steps, off its DC) 27 semitones under the key
+    // (A1 at C4), struck 30 higher and falling to it in about a tenth of a
+    // second, then held; dark noise at the strike
     inputs: {
-      body: { kind: 'osc', wave: 'Triangle', octave: -2, semi: -3 },
+      body: { kind: 'chip', wave: 'Triangle', octave: -2, semi: -3, dc: 0 },
       noise: { kind: 'noise' },
     },
     chains: {
@@ -758,9 +771,10 @@ export const FACTORY_PRESETS: readonly Preset[] = [
     amp: { attack: 0.001, decay: 2, sustain: 0, release: 0.03, velocity: 0.8 },
   }),
   preset('Snare', 'Drums', {
-    // Mostly a triangle near G3, falling a little, with dark noise under it
+    // Mostly a 2A03's triangle (32 steps, off its DC) near G3, falling a
+    // little, with dark noise under it
     inputs: {
-      body: { kind: 'osc', wave: 'Triangle', semi: -5 },
+      body: { kind: 'chip', wave: 'Triangle', semi: -5, dc: 0 },
       noise: { kind: 'noise' },
     },
     chains: {
