@@ -4,6 +4,7 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  type KeyboardEvent,
   type MouseEvent,
 } from 'react'
 import type { Engine } from '../engine/engine'
@@ -17,12 +18,32 @@ import {
   type Latency,
   type VelocityMode,
 } from '../state/settings'
-import { CARD, SMALL_BUTTON } from './controls'
-import { Dropdown } from './Dropdown'
+import { CARD, SMALL_BUTTON, TALL_HIT } from './controls'
+import { FadeRow } from './FadeRow'
 import { SmallIconButton } from './IconButton'
 import { PlatformChecks } from './PlatformChecks'
-import { ChoiceRow, SettingGroup, SettingRow, SwitchRow } from './SettingRows'
-import { THEMES, mode as pageMode } from './theme'
+import { ChoiceRow, SettingRow, SwitchRow } from './SettingRows'
+import { mode as pageMode } from './theme'
+import { ThemePicker } from './ThemePicker'
+
+/** The dialog's tabs, a section of the settings each */
+type Tab =
+  'appearance' | 'performance' | 'playing' | 'debug' | 'browser' | 'about'
+
+const TABS: readonly { readonly tab: Tab; readonly label: string }[] = [
+  { tab: 'appearance', label: 'Appearance' },
+  { tab: 'performance', label: 'Performance' },
+  { tab: 'playing', label: 'Playing' },
+  { tab: 'debug', label: 'Debug' },
+  { tab: 'browser', label: 'Browser' },
+  { tab: 'about', label: 'About' },
+]
+
+/** The arrow keys' steps along the tabs */
+const TAB_STEPS: Readonly<Record<string, number>> = {
+  ArrowRight: 1,
+  ArrowLeft: -1,
+}
 
 /** Each latencyHint as the player picks it, lowest first */
 const LATENCY_LABELS: readonly { value: Latency; label: string }[] = [
@@ -59,6 +80,13 @@ const SOURCE = 'https://github.com/loopromeda/loopromeda.github.io'
  * (Chrome on Android closes a modal dialog first), the cross or a tap
  * outside it closes it, and the settings button has the focus again.
  *
+ * Its sections are tabs (ashon, 2026-11-17: "설정 모달에서 각 섹션을
+ * 탭으로 나누고"), a row of them under its header that pans where they
+ * do not fit (FadeRow), the arrow keys moving along them; the dialog is
+ * as tall whichever is shown, so it stands still as they change.
+ * Appearance shows the themes as samples in their own colours
+ * (ThemePicker), in the mode the page is in, and the mode.
+ *
  * Debug holds Measure CPU: the audio thread times the heaviest sound at 8
  * to 32 voices, to choose Voices by. onBench gets its results too (the dev
  * server keeps them in device-reports.jsonl). Browser lists what this
@@ -93,10 +121,32 @@ export function SettingsDialog({
   onClose: () => void
   onBench?: (report: BenchReport) => void
 }) {
-  // The themes' swatches in the mode the page is in
+  // The themes' samples in the mode the page is in
   const mode = pageMode()
   const set = (change: Partial<AppSettings>) =>
     onChange({ ...settings, ...change })
+
+  const id = useId()
+  const [tab, setTab] = useState<Tab>('appearance')
+  const show = (next: Tab, button: HTMLElement | null | undefined) => {
+    setTab(next)
+    // Into view in the row, where it pans: a tap does not focus a button
+    // in Safari, so focusing does not bring it
+    button?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+  }
+  const step = (event: KeyboardEvent<HTMLDivElement>) => {
+    const by = TAB_STEPS[event.key]
+    if (!by) return
+    event.preventDefault()
+    const at = TABS.findIndex((each) => each.tab === tab)
+    const next = TABS[(at + by + TABS.length) % TABS.length]?.tab
+    if (!next) return
+    const button = event.currentTarget.querySelector<HTMLElement>(
+      `[data-tab="${next}"]`
+    )
+    show(next, button)
+    button?.focus()
+  }
 
   const dialogRef = useRef<HTMLDialogElement>(null)
   const closeRef = useRef(onClose)
@@ -138,7 +188,7 @@ export function SettingsDialog({
       id="settings"
       aria-labelledby="settings-heading"
       onClick={outside}
-      className={`m-auto max-h-[calc(100dvh_-_2rem_-_env(safe-area-inset-top)_-_env(safe-area-inset-bottom))] w-[calc(100%_-_1.5rem)] max-w-md flex-col gap-1.5 p-2.5 text-inherit open:flex backdrop:bg-(--backdrop) ${CARD}`}
+      className={`m-auto h-[min(36rem,calc(100dvh_-_2rem_-_env(safe-area-inset-top)_-_env(safe-area-inset-bottom)))] max-h-none w-[calc(100%_-_1.5rem)] max-w-lg flex-col gap-1.5 p-2.5 text-inherit open:flex backdrop:bg-(--backdrop) ${CARD}`}
     >
       <div className="flex h-7 shrink-0 items-center justify-end gap-1.5">
         <h2
@@ -154,138 +204,136 @@ export function SettingsDialog({
         />
       </div>
 
-      <div className="-mx-2.5 flex min-h-0 flex-col gap-3 overflow-y-auto overscroll-contain px-2.5">
-        <SettingGroup title="Look">
-          <Picker
-            label="Theme"
-            hint="The chains' colours, the modulation colour and the accent, together. The letters stay, so colour is never the only cue."
-            options={THEMES.map((theme) => ({
-              value: theme.id,
-              label: theme.name,
-              swatch: [theme[mode].accent, ...theme[mode].chains.slice(0, 3)],
-            }))}
-            value={settings.theme}
-            onChange={(theme) => set({ theme })}
-          />
-          <ChoiceRow
-            label="Appearance"
-            hint="Dark or light, or as the device is set."
-            options={APPEARANCE_LABELS}
-            value={settings.appearance}
-            onChange={(appearance) => set({ appearance })}
-          />
-        </SettingGroup>
+      {/* The tabs' touch reaches 8 px above and below them (TALL_HIT): the
+          row stands them in that much, so it does not clip it */}
+      <FadeRow className="-mx-2.5 -my-2 shrink-0" row="px-2.5 py-2">
+        <div
+          role="tablist"
+          aria-label="Settings"
+          onKeyDown={step}
+          className="flex gap-0.5 rounded-lg bg-(--under)/25 p-0.5"
+        >
+          {TABS.map(({ tab: each, label }) => (
+            <button
+              key={each}
+              type="button"
+              role="tab"
+              id={`${id}-${each}`}
+              aria-selected={tab === each}
+              aria-controls={`${id}-panel`}
+              tabIndex={tab === each ? 0 : -1}
+              data-tab={each}
+              onClick={(event) => show(each, event.currentTarget)}
+              className={`${TALL_HIT} h-7 shrink-0 rounded-md px-3 text-[11px] font-semibold tracking-wider whitespace-nowrap text-(--ink-400) aria-selected:bg-(--lift-2) aria-selected:text-(--ink-0)`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </FadeRow>
 
-        <SettingGroup title="Performance">
-          <ChoiceRow
-            label="Voices"
-            options={VOICE_LIMITS.map((voices) => ({
-              value: voices,
-              label: `${voices}`,
-            }))}
-            value={settings.voices}
-            onChange={(voices) => set({ voices })}
-          />
-          <ChoiceRow
-            label="Latency"
-            hint="Higher gives a slow phone more time for each block, and delays every note. Changing it restarts the audio."
-            options={LATENCY_LABELS}
-            value={settings.latency}
-            onChange={(latency) => set({ latency })}
-          />
-          <SwitchRow
-            label="Waveform"
-            value={settings.waveform}
-            onChange={(waveform) => set({ waveform })}
-          />
-        </SettingGroup>
+      {/* Keyed by its tab, so each opens scrolled to its top */}
+      <div
+        key={tab}
+        role="tabpanel"
+        id={`${id}-panel`}
+        aria-labelledby={`${id}-${tab}`}
+        tabIndex={0}
+        className="-mx-2.5 flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto overscroll-contain px-2.5 pt-1.5 pb-1"
+      >
+        {tab === 'appearance' && (
+          <>
+            <ThemePicker
+              label="Theme"
+              hint="The chains' colours, the modulation colour and the accent, together. The letters stay, so colour is never the only cue."
+              value={settings.theme}
+              mode={mode}
+              onChange={(theme) => set({ theme })}
+            />
+            <ChoiceRow
+              label="Mode"
+              hint="Dark or light, or as the device is set."
+              options={APPEARANCE_LABELS}
+              value={settings.appearance}
+              onChange={(appearance) => set({ appearance })}
+            />
+          </>
+        )}
 
-        <SettingGroup title="Playing">
-          <ChoiceRow
-            label="Velocity"
-            hint="Touch: lower on a key or a pad plays louder. Full: every note at full velocity."
-            options={VELOCITY_LABELS}
-            value={settings.velocity}
-            onChange={(velocity) => set({ velocity })}
-          />
-          <SwitchRow
-            label="Keep screen on"
-            hint={
-              platform.checks['Screen Wake Lock']
-                ? 'While the audio runs and this page is in front.'
-                : 'This browser cannot keep the screen on: it dims as usual.'
-            }
-            value={settings.keepAwake}
-            onChange={(keepAwake) => set({ keepAwake })}
-          />
-        </SettingGroup>
+        {tab === 'performance' && (
+          <>
+            <ChoiceRow
+              label="Voices"
+              options={VOICE_LIMITS.map((voices) => ({
+                value: voices,
+                label: `${voices}`,
+              }))}
+              value={settings.voices}
+              onChange={(voices) => set({ voices })}
+            />
+            <ChoiceRow
+              label="Latency"
+              hint="Higher gives a slow phone more time for each block, and delays every note. Changing it restarts the audio."
+              options={LATENCY_LABELS}
+              value={settings.latency}
+              onChange={(latency) => set({ latency })}
+            />
+            <SwitchRow
+              label="Waveform"
+              value={settings.waveform}
+              onChange={(waveform) => set({ waveform })}
+            />
+          </>
+        )}
 
-        <SettingGroup title="Debug">
-          <SwitchRow
-            label="Audio details"
-            value={settings.audioDetails}
-            onChange={(audioDetails) => set({ audioDetails })}
-          />
-          <SwitchRow
-            label="Waveform timing"
-            value={settings.waveformTiming}
-            onChange={(waveformTiming) => set({ waveformTiming })}
-          />
-          <MeasureCpu engine={engine} onBench={onBench} />
-        </SettingGroup>
+        {tab === 'playing' && (
+          <>
+            <ChoiceRow
+              label="Velocity"
+              hint="Touch: lower on a key or a pad plays louder. Full: every note at full velocity."
+              options={VELOCITY_LABELS}
+              value={settings.velocity}
+              onChange={(velocity) => set({ velocity })}
+            />
+            <SwitchRow
+              label="Keep screen on"
+              hint={
+                platform.checks['Screen Wake Lock']
+                  ? 'While the audio runs and this page is in front.'
+                  : 'This browser cannot keep the screen on: it dims as usual.'
+              }
+              value={settings.keepAwake}
+              onChange={(keepAwake) => set({ keepAwake })}
+            />
+          </>
+        )}
 
-        <SettingGroup title="Browser">
-          <PlatformChecks platform={platform} />
-          <OfflineRow state={offline} onUpdate={onUpdate} onCheck={onCheck} />
-        </SettingGroup>
+        {tab === 'debug' && (
+          <>
+            <SwitchRow
+              label="Audio details"
+              value={settings.audioDetails}
+              onChange={(audioDetails) => set({ audioDetails })}
+            />
+            <SwitchRow
+              label="Waveform timing"
+              value={settings.waveformTiming}
+              onChange={(waveformTiming) => set({ waveformTiming })}
+            />
+            <MeasureCpu engine={engine} onBench={onBench} />
+          </>
+        )}
 
-        <SettingGroup title="About">
-          <About />
-        </SettingGroup>
+        {tab === 'browser' && (
+          <>
+            <PlatformChecks platform={platform} />
+            <OfflineRow state={offline} onUpdate={onUpdate} onCheck={onCheck} />
+          </>
+        )}
+
+        {tab === 'about' && <About />}
       </div>
     </dialog>
-  )
-}
-
-/**
- * A setting picked from a list: the row's name and hint, and the app's own
- * dropdown (Dropdown) reading them — its look is this app's, not the
- * operating system's, so it sits with the switches and the option rows
- */
-function Picker<T extends string | number>({
-  label,
-  hint,
-  options,
-  value,
-  onChange,
-}: {
-  label: string
-  hint?: string
-  options: readonly {
-    value: T
-    label: string
-    /** The theme's colours, as dots before the name */
-    readonly swatch?: readonly string[]
-  }[]
-  value: T
-  onChange: (value: T) => void
-}) {
-  const id = useId()
-  return (
-    <SettingRow
-      label={label}
-      labelId={`${id}-label`}
-      hint={hint}
-      hintId={`${id}-hint`}
-    >
-      <Dropdown
-        labelId={`${id}-label`}
-        hintId={`${id}-hint`}
-        options={options}
-        value={value}
-        onChange={onChange}
-      />
-    </SettingRow>
   )
 }
 
