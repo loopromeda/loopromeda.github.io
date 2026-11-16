@@ -20,6 +20,7 @@ export const PRESET_CATEGORIES = [
   'Keys',
   'Drums',
   'FX',
+  'Analog',
   'Chip',
 ] as const
 

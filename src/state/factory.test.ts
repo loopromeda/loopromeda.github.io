@@ -5,6 +5,7 @@ import { Mixer, Part, Strip } from '../dsp/output'
 import { SoundPlayer, applyMix, applySound } from '../worklet/sound'
 import { FACTORY_PRESETS } from './factory'
 import { initMix } from './mix'
+import { LFO_SHAPE_NAMES } from './params'
 import { PRESET_CATEGORIES, cleanName, type Preset } from './presets'
 import { readSound } from './sound/read'
 import { VOICE, initSound } from './sound/sound'
@@ -176,6 +177,59 @@ describe('FACTORY_PRESETS', () => {
       render(synth, 0.05)
       expect(synth.activeVoices, preset.name).toBe(1)
     }
+  })
+
+  describe('the Analog presets', () => {
+    const analog = FACTORY_PRESETS.filter(
+      (preset) => preset.category === 'Analog'
+    ).map((preset) => [preset.name, preset.sound] as const)
+
+    it('are there', () => {
+      expect(analog.length).toBeGreaterThan(0)
+    })
+
+    it.each(analog)(
+      '%s filters through a lowpass of four poles, its halves moved alike',
+      (_, sound) => {
+        const [first, second] = sound.chains[0]?.items ?? []
+        if (!first || !second) throw new Error('no two items')
+        for (const item of [first, second]) {
+          expect(item.kind).toBe('filter')
+          expect(item.values.type).toBe(0) // LP
+          expect(item.values.cutoff).toBe(first.values.cutoff)
+          expect(item.values.keytrack).toBe(first.values.keytrack)
+        }
+        // The resonance on the second only
+        expect(first.values.resonance).toBe(0)
+        const into = (id: string) =>
+          sound.routes
+            .filter((route) => route.target === id && route.key === 'cutoff')
+            .map(({ source, via, amount }) => ({ source, via, amount }))
+        expect(into(first.id).length).toBeGreaterThan(0)
+        expect(into(second.id)).toEqual(into(first.id))
+      }
+    )
+
+    it.each(analog)(
+      '%s drifts, a smooth wander of each voice its own on its pitches',
+      (_, sound) => {
+        const slop = sound.modulators.find(
+          (modulator) =>
+            modulator.kind === 'lfo' &&
+            modulator.values.shape === LFO_SHAPE_NAMES.indexOf('Smooth') &&
+            modulator.values.trigger === 0 // Key: each voice's own
+        )
+        if (!slop) throw new Error('no slop')
+        const pitches = sound.routes.filter(
+          (route) => route.source === slop.id && route.key === 'pitch'
+        )
+        expect(pitches.length).toBeGreaterThanOrEqual(2)
+        // A few cents either way, no more
+        for (const route of pitches) {
+          expect(Math.abs(route.amount * 48)).toBeLessThanOrEqual(0.05)
+        }
+      }
+    )
   })
 
   it('drops the Kick to 27 semitones under the key', () => {
