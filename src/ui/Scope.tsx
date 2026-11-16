@@ -12,7 +12,7 @@ import {
   outlineFill,
   outlinePath,
 } from './outline'
-import { FADE_IN, shown } from './frames'
+import { FADE_IN, drawEachFrame, shown } from './frames'
 import { ground, mode, palette, themeId } from './theme'
 
 /** Samples on screen: 21 ms at 48 kHz, about nine cycles of A4 */
@@ -131,7 +131,8 @@ export function Scope({
      */
     let sized = false
     let wasSilent = false
-    let raf = 0
+    /** The way to stop drawing each display frame, while it does */
+    let stop: (() => void) | undefined
     let statsSince = 0
     let drawn = 0
     let drawTime = 0
@@ -272,7 +273,6 @@ export function Scope({
     }
 
     const frame = (now: number) => {
-      raf = requestAnimationFrame(frame)
       render()
       const elapsed = now - statsSince
       if (elapsed < 1000) return
@@ -295,15 +295,15 @@ export function Scope({
     }
 
     const startLoop = () => {
-      if (raf || engine.snapshot.state !== 'running') return
+      if (stop || engine.snapshot.state !== 'running') return
       statsSince = performance.now()
       drawn = 0
       drawTime = 0
-      raf = requestAnimationFrame(frame)
+      stop = drawEachFrame('waveform', frame)
     }
     const stopLoop = () => {
-      cancelAnimationFrame(raf)
-      raf = 0
+      stop?.()
+      stop = undefined
     }
     const sync = () =>
       engine.snapshot.state === 'running' ? startLoop() : stopLoop()
@@ -346,7 +346,7 @@ export function Scope({
       if (!sized) return
       paintBackground()
       wasSilent = false
-      if (!raf) render()
+      if (!stop) render()
     })
 
     return () => {

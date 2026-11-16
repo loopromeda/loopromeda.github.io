@@ -20,6 +20,7 @@ import {
   writeSeqTrack,
 } from './state/tracks'
 import { touchHeld } from './ui/held'
+import { watchFrames } from './ui/frames'
 import type { ScopeStats } from './ui/Scope'
 import { ScreenAwake } from './wakeLock'
 
@@ -212,6 +213,35 @@ if (import.meta.env.DEV) {
     lastScope = stats.at
     void sendReport('scope', stats)
   }
+  // Every view's display frames, every 5 s while any draws: the rate
+  // the screen gives, the frames missed, and what drawing took
+  // The battery beside them, where the browser tells it (a saver caps the
+  // screen's rate)
+  type BatteryLike = { level: number; charging: boolean }
+  const battery = (
+    navigator as Navigator & { getBattery?: () => Promise<BatteryLike> }
+  )
+    .getBattery?.()
+    .catch(() => undefined)
+  watchFrames(
+    (stats) => {
+      const report = {
+        ...stats,
+        latency: {
+          base: engine.snapshot.baseLatency,
+          output: engine.snapshot.outputLatency,
+        },
+      }
+      if (!battery) return void sendReport('frames', report)
+      void battery.then((charge) =>
+        sendReport('frames', {
+          ...report,
+          ...(charge && { battery: charge.level, charging: charge.charging }),
+        })
+      )
+    },
+    () => engine.audioTime
+  )
   // The audio thread's render time, measured by hand in the settings
   reportBench = (report) =>
     void sendReport('bench', { ...engine.snapshot, ...report })

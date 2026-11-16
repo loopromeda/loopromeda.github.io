@@ -71,7 +71,7 @@ import {
 import { TALL_HIT } from './controls'
 import { Dropdown } from './Dropdown'
 import type { EqAccess } from './eqAccess'
-import { MAX_SCALE, between, drewAt, outputTap } from './frames'
+import { MAX_SCALE, between, drawEachFrame, outputTap } from './frames'
 import { alpha, ground, mode, palette, themeId } from './theme'
 
 /** The curve's inset from the graph's edges, so a point at an end is reached */
@@ -209,26 +209,25 @@ export function EqGraph({
   // Each display frame while the audio runs: the spectrum behind
   useEffect(() => {
     const { engine } = latest.current.access.heard
-    let raf = 0
+    /** The way to stop drawing each display frame, while it does */
+    let drawing: (() => void) | undefined
     const draw = (now: number) => {
-      raf = requestAnimationFrame(draw)
-      drewAt(now)
       const heard = heardAt(latest.current.access, now)
       painter.current?.paint(heard?.spectrum, engine.snapshot.sampleRate)
     }
     const sync = () => {
       if (engine.snapshot.state === 'running') {
-        if (!raf) raf = requestAnimationFrame(draw)
+        drawing ??= drawEachFrame('eq', draw)
         return
       }
-      cancelAnimationFrame(raf)
-      raf = 0
+      drawing?.()
+      drawing = undefined
       painter.current?.paint()
     }
     const stop = engine.subscribe(sync)
     sync()
     return () => {
-      cancelAnimationFrame(raf)
+      drawing?.()
       stop()
     }
   }, [])

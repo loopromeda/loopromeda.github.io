@@ -291,6 +291,15 @@ export class Engine {
   #step = -1
   readonly #stepListeners = new Set<(step: number) => void>()
 
+  /**
+   * The audio clock, s (AudioContext.currentTime): how far the audio
+   * thread has rendered, moving on in the steps its callbacks take (what
+   * the analysers have heard so far). Undefined before it starts.
+   */
+  get audioTime(): number | undefined {
+    return this.#context?.currentTime
+  }
+
   get snapshot(): EngineSnapshot {
     return this.#snapshot
   }

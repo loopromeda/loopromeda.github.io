@@ -57,6 +57,246 @@ export function between(running: boolean): number {
   return running && frameAt > 0 ? frameAt : performance.now()
 }
 
+/** A view drawn each display frame, by its name for the frames' report */
+interface Drawer {
+  readonly name: string
+  readonly draw: (now: number) => void
+}
+
+/** Every view drawn each display frame, in the order they came */
+const drawers: Drawer[] = []
+let loopRaf = 0
+
+/**
+ * One display frame of every view drawn each frame (useFrames, the
+ * scope, an EQ's spectrum): one requestAnimationFrame callback for all of
+ * them, each drawn in turn at the same time, so the output is read once
+ * (OutputTap) and the frame's whole cost is told in one place
+ * (watchFrames)
+ */
+function displayFrame(now: number): void {
+  loopRaf = requestAnimationFrame(displayFrame)
+  drewAt(now)
+  const metering = meter.listener !== undefined
+  if (metering) meter.begin(now)
+  for (let d = 0; d < drawers.length; d++) {
+    const drawer = drawers[d] as Drawer
+    if (!metering) {
+      drawer.draw(now)
+      continue
+    }
+    const began = performance.now()
+    drawer.draw(now)
+    meter.add(drawer.name, performance.now() - began)
+  }
+  if (metering) meter.end(now)
+}
+
+/**
+ * Draws draw each display frame from the next on, as name (what the
+ * frames' report counts it as): until the way back it returns is called
+ */
+export function drawEachFrame(
+  name: string,
+  draw: (now: number) => void
+): () => void {
+  const drawer: Drawer = { name, draw }
+  drawers.push(drawer)
+  if (!loopRaf) loopRaf = requestAnimationFrame(displayFrame)
+  return () => {
+    const at = drawers.indexOf(drawer)
+    if (at >= 0) drawers.splice(at, 1)
+    if (drawers.length > 0 || !loopRaf) return
+    cancelAnimationFrame(loopRaf)
+    loopRaf = 0
+  }
+}
+
+/** What the views' display frames cost, over a report's span */
+export interface FrameStats {
+  /** ms the span lasted, from its first frame to its last */
+  readonly span: number
+  /** Display frames a second the views were drawn on */
+  readonly fps: number
+  /**
+   * The display's own interval, ms: the gap between two frames that came
+   * on time (the shortest tenth's)
+   */
+  readonly interval: number
+  /** Frames that came more than half an interval late: one missed, or more */
+  readonly late: number
+  /** Display frames missed, counted by the intervals the late ones took */
+  readonly missed: number
+  /**
+   * Main-thread ms drawing every view in a frame: the mean, the 95th
+   * percentile, the worst
+   */
+  readonly drawMs: number
+  readonly drawP95: number
+  readonly drawMax: number
+  /** Each kind of view: how many drew, and their mean ms a frame together */
+  readonly views: Readonly<Record<string, { count: number; ms: number }>>
+  /** Panels on glass on the page (index.css): what stands over the views */
+  readonly glass: number
+  /**
+   * The audio the views were drawn from, where the audio clock was told
+   * (watchFrames): how many times a second it had moved on since the
+   * frame before (new audio to show), the frames it had not (the views
+   * drew what they had), and its steps, ms (the mean and the largest):
+   * the audio thread renders a callback's frames at once
+   */
+  readonly audio?: {
+    readonly updates: number
+    readonly stale: number
+    readonly stepMs: number
+    readonly stepMax: number
+  }
+}
+
+/** The frames a report spans: five seconds' */
+const REPORT_MS = 5000
+/** Room for a span's frames, at 120 a second and more */
+const MAX_FRAMES = 1024
+
+/** The display frames' costs, gathered while someone listens */
+const meter = {
+  listener: undefined as ((stats: FrameStats) => void) | undefined,
+  /** The audio clock, s, and what it did over the span */
+  clock: undefined as (() => number | undefined) | undefined,
+  clockAt: Number.NaN,
+  updates: 0,
+  stale: 0,
+  stepTotal: 0,
+  stepMax: 0,
+  /** Each frame's time and its views' drawing, in the span so far */
+  times: new Float64Array(MAX_FRAMES),
+  draws: new Float64Array(MAX_FRAMES),
+  count: 0,
+  /** The frame being drawn: its views' ms, and each kind's */
+  drawing: 0,
+  byName: new Map<string, { ms: number; calls: number }>(),
+
+  begin(now: number): void {
+    if (this.count === MAX_FRAMES) this.report()
+    this.times[this.count] = now
+    this.drawing = 0
+    const at = this.clock?.()
+    if (at === undefined) return
+    const step = at - this.clockAt
+    if (step > 0) {
+      this.updates++
+      this.stepTotal += step
+      this.stepMax = Math.max(this.stepMax, step)
+    } else if (step === 0) this.stale++
+    this.clockAt = at
+  },
+
+  add(name: string, ms: number): void {
+    this.drawing += ms
+    const each = this.byName.get(name)
+    if (each) {
+      each.ms += ms
+      each.calls++
+    } else this.byName.set(name, { ms, calls: 1 })
+  },
+
+  end(now: number): void {
+    this.draws[this.count] = this.drawing
+    this.count++
+    if (now - (this.times[0] as number) >= REPORT_MS) this.report()
+  },
+
+  /** The span so far told, and a new one begun */
+  report(): void {
+    const count = this.count
+    const listener = this.listener
+    if (count > 2 && listener) {
+      const times = this.times
+      const gaps: number[] = []
+      for (let f = 1; f < count; f++) {
+        gaps.push((times[f] as number) - (times[f - 1] as number))
+      }
+      gaps.sort((a, b) => a - b)
+      const interval = gaps[Math.floor(gaps.length / 10)] as number
+      let late = 0
+      let missed = 0
+      for (const gap of gaps) {
+        if (gap <= interval * 1.5) continue
+        late++
+        missed += Math.round(gap / interval) - 1
+      }
+      const draws = Array.from(this.draws.subarray(0, count)).sort(
+        (a, b) => a - b
+      )
+      let total = 0
+      for (const ms of draws) total += ms
+      const span = (times[count - 1] as number) - (times[0] as number)
+      const views: Record<string, { count: number; ms: number }> = {}
+      for (const [name, { ms, calls }] of this.byName) {
+        views[name] = {
+          count: Math.round(calls / count),
+          ms: round(ms / count),
+        }
+      }
+      listener({
+        span: Math.round(span),
+        fps: Math.round(((count - 1) * 1000) / span),
+        interval: round(interval),
+        late,
+        missed,
+        drawMs: round(total / count),
+        drawP95: round(draws[Math.floor(count * 0.95)] as number),
+        drawMax: round(draws[count - 1] as number),
+        views,
+        glass: document.querySelectorAll('.glass').length,
+        ...(this.clock &&
+          this.updates > 0 && {
+            audio: {
+              updates: Math.round((this.updates * 1000) / span),
+              stale: this.stale,
+              stepMs: round((this.stepTotal * 1000) / this.updates),
+              stepMax: round(this.stepMax * 1000),
+            },
+          }),
+      })
+    }
+    this.restart()
+  },
+
+  /** A new span, from nothing */
+  restart(): void {
+    this.count = 0
+    this.byName.clear()
+    this.updates = 0
+    this.stale = 0
+    this.stepTotal = 0
+    this.stepMax = 0
+  },
+}
+
+const round = (ms: number) => Math.round(ms * 1000) / 1000
+
+/**
+ * Tells listener what the views' display frames cost, every five seconds
+ * of them while any draws (FrameStats): what a device report keeps, in
+ * development. With clock (the audio clock, s), how often the audio they
+ * show moved on too. Returns the way to stop.
+ */
+export function watchFrames(
+  listener: (stats: FrameStats) => void,
+  clock?: () => number | undefined
+): () => void {
+  meter.listener = listener
+  meter.clock = clock
+  meter.clockAt = Number.NaN
+  meter.restart()
+  return () => {
+    if (meter.listener !== listener) return
+    meter.listener = undefined
+    meter.clock = undefined
+  }
+}
+
 /**
  * Draws canvasRef's canvas every display frame while the audio runs, as
  * the scope does (Scope.tsx): opaque, its backing store the device's
@@ -72,7 +312,8 @@ export function useFrames(
   engine: Engine,
   canvasRef: RefObject<HTMLCanvasElement | null>,
   start: (canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D) => Frames,
-  key = ''
+  key = '',
+  name = 'view'
 ): void {
   // The latest start, without restarting the loop when it changes
   const startRef = useRef(start)
@@ -87,7 +328,8 @@ export function useFrames(
     const frames = startRef.current(canvas, ctx)
     let sized = false
     let scale = 1
-    let raf = 0
+    /** The way to stop drawing each frame, while it does */
+    let stop: (() => void) | undefined
 
     const resize = (width: number, height: number, next: number) => {
       if (
@@ -107,20 +349,18 @@ export function useFrames(
       if (!sized) return
       frames.resize(width, height, next)
       // The resized canvas is blank: drawn now, not on the next frame
-      frames.draw(between(raf !== 0))
+      frames.draw(between(stop !== undefined))
       shown(canvas)
     }
     const frame = (now: number) => {
-      raf = requestAnimationFrame(frame)
-      drewAt(now)
       if (sized && canvas.width && canvas.height) frames.draw(now)
     }
     const sync = () => {
       if (engine.snapshot.state === 'running') {
-        if (!raf) raf = requestAnimationFrame(frame)
+        stop ??= drawEachFrame(name, frame)
       } else {
-        cancelAnimationFrame(raf)
-        raf = 0
+        stop?.()
+        stop = undefined
       }
     }
     const observer = new ResizeObserver((entries) => {
@@ -153,15 +393,15 @@ export function useFrames(
     const unsubscribe = engine.subscribe(sync)
     sync()
     return () => {
-      cancelAnimationFrame(raf)
-      raf = 0
+      stop?.()
+      stop = undefined
       unsubscribe()
       observer.disconnect()
       if (sized) frames.keep?.()
     }
     // canvasRef is a ref; key names what start draws
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [engine, key])
+  }, [engine, key, name])
 }
 
 /**

@@ -586,7 +586,8 @@ export function Spectrum({
         },
       }
     },
-    `${source}:${tone}:${themeId()}`
+    `${source}:${tone}:${themeId()}`,
+    'spectrum'
   )
   return (
     <div className={`relative overflow-hidden contain-strict ${className}`}>
@@ -799,7 +800,8 @@ export function Spectrogram({
         },
       }
     },
-    key
+    key,
+    'spectrogram'
   )
   return (
     <div
@@ -994,7 +996,8 @@ export function Vectorscope({
         },
       }
     },
-    `${source}:${tone}:${themeId()}`
+    `${source}:${tone}:${themeId()}`,
+    'stereo'
   )
   return (
     <div
@@ -1212,7 +1215,8 @@ export function Meters({
         },
       }
     },
-    `${source}:${tone}:${themeId()}`
+    `${source}:${tone}:${themeId()}`,
+    'meters'
   )
   return (
     <div className={`flex min-h-0 flex-col items-stretch gap-1 ${className}`}>
