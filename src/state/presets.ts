@@ -20,6 +20,7 @@ export const PRESET_CATEGORIES = [
   'Keys',
   'Drums',
   'FX',
+  'Chip',
 ] as const
 
 /** One of the categories a preset can belong to */

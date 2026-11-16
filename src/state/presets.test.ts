@@ -29,9 +29,9 @@ function file(presets: readonly unknown[], version = PRESET_FILE_VERSION) {
 const fromV1 = (values: PresetValues) => soundFromV1(fullValues(values))
 
 describe('PRESET_CATEGORIES', () => {
-  it('lists eight unique categories', () => {
-    expect(PRESET_CATEGORIES).toHaveLength(8)
-    expect(new Set(PRESET_CATEGORIES).size).toBe(8)
+  it('lists nine unique categories', () => {
+    expect(PRESET_CATEGORIES).toHaveLength(9)
+    expect(new Set(PRESET_CATEGORIES).size).toBe(9)
   })
 })
 

@@ -265,21 +265,6 @@ export const FACTORY_PRESETS: readonly Preset[] = [
     amp: { attack: 0.002, decay: 0.4, sustain: 0.8, release: 0.1 },
     voice: { mode: 'Mono' },
   }),
-  preset('Chip Bass', 'Bass', chipBass(-1)),
-  // The same two octaves down, through a lowpass: the bass's lowest notes
-  preset(
-    'Chip Sub',
-    'Bass',
-    chipBass(-2, { filter: { kind: 'filter', cutoff: 1500 } })
-  ),
-  preset('NES Triangle', 'Bass', {
-    // The 2A03's triangle: 32 steps of 16 levels on its DAC's DC, and no
-    // volume of its own
-    inputs: { triangle: { kind: 'chip', wave: 'Triangle', octave: -1 } },
-    chains: { main: { sends: { triangle: 1 } } },
-    amp: { attack: 0.001, decay: 0.01, sustain: 1, release: 0.01, velocity: 0 },
-    voice: { mode: 'Mono' },
-  }),
 
   preset('Saw Lead', 'Lead', {
     inputs: {
@@ -311,23 +296,6 @@ export const FACTORY_PRESETS: readonly Preset[] = [
     amp: { sustain: 0.85, release: 0.25 },
     voice: { mode: 'Legato', glide: 0.08 },
     sends: { b: 0.4 },
-  }),
-  preset('Chip Lead', 'Lead', {
-    ...chipPulse('25%'),
-    // The vibrato sets in after the note starts
-    modulators: { vibrato: { kind: 'lfo', rate: 5.5, fade: 0.25 } },
-    routes: [{ from: 'vibrato', to: 'voice.pitch', by: 0.3 }],
-    voice: { mode: 'Mono' },
-  }),
-  preset('4-bit Lead', 'Lead', {
-    // A wave-table chip's (the N163's, the Game Boy's): a sine in 32 steps
-    // of 16 levels, its vibrato setting in after the note starts
-    inputs: { wave: { kind: 'chip', wave: 'Sine', bits: 4 } },
-    chains: { main: { sends: { wave: 1 } } },
-    modulators: { vibrato: { kind: 'lfo', rate: 6, fade: 0.3 } },
-    routes: [{ from: 'vibrato', to: 'voice.pitch', by: 0.3 }],
-    amp: { attack: 0.001, decay: 0.15, sustain: 0.8, release: 0.05 },
-    voice: { mode: 'Mono' },
   }),
   preset('Fifth Lead', 'Lead', {
     inputs: {
@@ -723,26 +691,6 @@ export const FACTORY_PRESETS: readonly Preset[] = [
     amp: { attack: 0.001, decay: 2.5, sustain: 0, release: 0.8, velocity: 0.6 },
     sends: { c: 0.5 },
   }),
-  preset('Chip Chords', 'Keys', {
-    // A chip's saw falling to under half over a second, its lows lifted
-    // hard (15 dB before its DC thumped too, which they lift as well)
-    inputs: { saw: { kind: 'chip', wave: 'Saw' } },
-    chains: { main: { sends: { saw: 1 } } },
-    amp: { ...CHIP_AMP, decay: 1.2, sustain: 0.45 },
-    effects: [
-      {
-        kind: 'eq',
-        low: 12,
-        lowFreq: 82,
-        mid: -0.3,
-        midFreq: 2404,
-        high: 2.7,
-        highFreq: 4469,
-      },
-    ],
-  }),
-  preset('Chip Pulse 12', 'Keys', chipPulse('12.5%', CHIP_MID_EQ)),
-  preset('Chip Pulse 25', 'Keys', chipPulse('25%', CHIP_MID_EQ)),
 
   preset('Kick', 'Drums', {
     // A 2A03's triangle (32 steps, off its DC) 27 semitones under the key
@@ -1185,6 +1133,61 @@ export const FACTORY_PRESETS: readonly Preset[] = [
     amp: { attack: 0.02, sustain: 1, release: 0.3 },
     voice: { mode: 'Mono' },
   }),
+
+  // A chiptune's channels, its chips' (the 2A03's and the N163's): the
+  // basses, the leads, the chords and the middle line's pulses
+  preset('Chip Bass', 'Chip', chipBass(-1)),
+  // The same two octaves down, through a lowpass: the bass's lowest notes
+  preset(
+    'Chip Sub',
+    'Chip',
+    chipBass(-2, { filter: { kind: 'filter', cutoff: 1500 } })
+  ),
+  preset('NES Triangle', 'Chip', {
+    // The 2A03's triangle: 32 steps of 16 levels on its DAC's DC, and no
+    // volume of its own
+    inputs: { triangle: { kind: 'chip', wave: 'Triangle', octave: -1 } },
+    chains: { main: { sends: { triangle: 1 } } },
+    amp: { attack: 0.001, decay: 0.01, sustain: 1, release: 0.01, velocity: 0 },
+    voice: { mode: 'Mono' },
+  }),
+  preset('Chip Lead', 'Chip', {
+    ...chipPulse('25%'),
+    // The vibrato sets in after the note starts
+    modulators: { vibrato: { kind: 'lfo', rate: 5.5, fade: 0.25 } },
+    routes: [{ from: 'vibrato', to: 'voice.pitch', by: 0.3 }],
+    voice: { mode: 'Mono' },
+  }),
+  preset('4-bit Lead', 'Chip', {
+    // A wave-table chip's (the N163's, the Game Boy's): a sine in 32 steps
+    // of 16 levels, its vibrato setting in after the note starts
+    inputs: { wave: { kind: 'chip', wave: 'Sine', bits: 4 } },
+    chains: { main: { sends: { wave: 1 } } },
+    modulators: { vibrato: { kind: 'lfo', rate: 6, fade: 0.3 } },
+    routes: [{ from: 'vibrato', to: 'voice.pitch', by: 0.3 }],
+    amp: { attack: 0.001, decay: 0.15, sustain: 0.8, release: 0.05 },
+    voice: { mode: 'Mono' },
+  }),
+  preset('Chip Chords', 'Chip', {
+    // A chip's saw falling to under half over a second, its lows lifted
+    // hard (15 dB before its DC thumped too, which they lift as well)
+    inputs: { saw: { kind: 'chip', wave: 'Saw' } },
+    chains: { main: { sends: { saw: 1 } } },
+    amp: { ...CHIP_AMP, decay: 1.2, sustain: 0.45 },
+    effects: [
+      {
+        kind: 'eq',
+        low: 12,
+        lowFreq: 82,
+        mid: -0.3,
+        midFreq: 2404,
+        high: 2.7,
+        highFreq: 4469,
+      },
+    ],
+  }),
+  preset('Chip Pulse 12', 'Chip', chipPulse('12.5%', CHIP_MID_EQ)),
+  preset('Chip Pulse 25', 'Chip', chipPulse('25%', CHIP_MID_EQ)),
 ]
 
 /**
