@@ -2,8 +2,10 @@ import { VoiceAllocator } from './allocator'
 import { ChainSettings, ChainVoice, GHOST_NONE } from './chainVoice'
 import { softClip } from './clip'
 import { Clock } from './clock'
+import { MAX_WIDTH, MIN_WIDTH, SQUARE } from './oscillator'
 import { Smoother } from './smoother'
 import {
+  INPUT_CHIP,
   INPUT_FM,
   INPUT_NOISE,
   INPUT_OSC,
@@ -67,6 +69,15 @@ const BEND_TIME = 0.03
 /** Work buffer length; longer blocks render in chunks of it */
 const CHUNK = 128
 /**
+ * The corner, in hertz, of the highpass after a sound whose chips stand
+ * on their DC (DC above 0): the console's output, which turns each step
+ * of the DC, a note starting or ending, into a thump
+ * (docs/plan/sound-chains.md, The chip)
+ */
+const DC_CORNER = 10
+/** Under this, what the highpass holds is taken for silence */
+const DC_QUIET = 1e-9
+/**
  * Held keys mono play remembers, newest last: letting go of the newest
  * goes back to the one before. Past this, the oldest is forgotten.
  */
@@ -99,6 +110,13 @@ export class ChainSynth {
   readonly #amounts: Smoother[] = []
   /** The mod wheel, 0..1: the Wheel source, the same for every voice */
   readonly #wheel: Smoother
+  /**
+   * The DC highpass's coefficient, and per side (left, right) its last
+   * input and output
+   */
+  readonly #dcPole: number
+  readonly #dcIn = new Float64Array(2)
+  readonly #dcOut = new Float64Array(2)
   /** Where the voices stand between the sides, -1..1 (pan) */
   readonly #pan: Smoother
   readonly #smoothers: Smoother[] = []
@@ -159,6 +177,7 @@ export class ChainSynth {
     this.#pan = new Smoother(sampleRate, SMOOTHING, 0)
     this.#smoothers.push(this.#pan)
     this.#settings.bendCoef = 1 - Math.exp(-3 / (BEND_TIME * sampleRate))
+    this.#dcPole = Math.exp((-2 * Math.PI * DC_CORNER) / sampleRate)
   }
 
   /**
@@ -189,9 +208,9 @@ export class ChainSynth {
     this.#restructure('inputCount', clampCount(count, MAX_INPUTS))
   }
 
-  /** Input i's kind: INPUT_OSC, INPUT_NOISE or INPUT_RING */
+  /** Input i's kind: INPUT_OSC, INPUT_NOISE, INPUT_RING or INPUT_CHIP */
   setInputKind(i: number, kind: number): void {
-    if (!isIndex(i, MAX_INPUTS) || !isKind(kind, INPUT_RING)) return
+    if (!isIndex(i, MAX_INPUTS) || !isKind(kind, INPUT_CHIP)) return
     this.#change(this.#settings.inputKind, i, kind)
   }
 
@@ -249,27 +268,58 @@ export class ChainSynth {
 
   /**
    * Oscillator input i: wave (an index into WAVES), pitch above the note
-   * in semitones, pulse width (its square), FM depth 0..1, the steps a
-   * cycle is held in (0: smooth) and the bits each step's level is
-   * rounded to (0: not rounded)
+   * in semitones, pulse width (its square), FM depth 0..1
    */
   setOsc(
     i: number,
     wave: number,
     transpose: number,
     width: number,
-    fm: number,
-    steps = 0,
-    bits = 0
+    fm: number
   ): void {
     if (!isIndex(i, MAX_INPUTS)) return
     const settings = this.#settings
     settings.wave[i] = wave
-    settings.steps[i] = Number.isFinite(steps) ? steps : 0
-    settings.bits[i] = Number.isFinite(bits) ? bits : 0
+    settings.steps[i] = 0
+    settings.bits[i] = 0
     settings.transpose[i] = Number.isFinite(transpose) ? transpose : 0
     target(this.#width[i], width)
     target(this.#fm[i], fm)
+  }
+
+  /**
+   * Chip input i: wave (an index into WAVES), pitch above the note in
+   * semitones, pulse width (its square), the steps a cycle is held in (0:
+   * smooth) and the bits each step's level is rounded to (0: not
+   * rounded), and DC, 0..1: how far the wave stands on its DAC's zero,
+   * its lowest at 0 at 1, as a chip's channel does. Its DC steps at each
+   * note's start and end, which the highpass after the voices turns into
+   * a thump. A pulse is never held in steps: its widths are whole steps
+   * of eight already.
+   */
+  setChip(
+    i: number,
+    wave: number,
+    transpose: number,
+    width: number,
+    steps: number,
+    bits: number,
+    dc: number
+  ): void {
+    if (!isIndex(i, MAX_INPUTS)) return
+    const settings = this.#settings
+    const stepped = wave !== SQUARE
+    settings.wave[i] = wave
+    settings.steps[i] = stepped && Number.isFinite(steps) ? steps : 0
+    settings.bits[i] = stepped && Number.isFinite(bits) ? bits : 0
+    settings.transpose[i] = Number.isFinite(transpose) ? transpose : 0
+    target(this.#width[i], width)
+    target(this.#fm[i], 0)
+    // A wave spans -1..1 about its mean, a pulse of width w -2w..2-2w
+    const pulse =
+      width > MIN_WIDTH ? (width < MAX_WIDTH ? width : MAX_WIDTH) : MIN_WIDTH
+    const lift = wave === SQUARE ? 2 * pulse : 1
+    settings.dc[i] = (dc > 0 ? (dc < 1 ? dc : 1) : 0) * lift
   }
 
   /** Chain c's level into the voice, 0..1 */
@@ -638,13 +688,22 @@ export class ChainSynth {
     if (from === 0) this.#follow()
     out.fill(0, from, to)
     right?.fill(0, from, to)
-    if (this.activeVoices > 0) {
-      for (let start = from; start < to; start += CHUNK) {
-        const end = Math.min(start + CHUNK, to)
-        this.#prepare(end - start)
-        for (let i = 0; i < this.#voices.length; i++) {
-          ;(this.#voices[i] as ChainVoice).render(out, start, end, right)
+    const voices = this.activeVoices > 0
+    // The highpass runs while a chip's DC sounds, and on after, its tail
+    const highpass = this.#ringing() || (voices && this.#standsOnDc())
+    if (voices || highpass) {
+      if (voices) {
+        for (let start = from; start < to; start += CHUNK) {
+          const end = Math.min(start + CHUNK, to)
+          this.#prepare(end - start)
+          for (let i = 0; i < this.#voices.length; i++) {
+            ;(this.#voices[i] as ChainVoice).render(out, start, end, right)
+          }
         }
+      }
+      if (highpass) {
+        this.#highpass(out, 0, from, to)
+        if (right) this.#highpass(right, 1, from, to)
       }
       this.#level(out, from, to)
       if (right) this.#level(right, from, to)
@@ -658,6 +717,48 @@ export class ChainSynth {
         ((settings.lfoRate[m] as number) * (to - from)) / this.#sampleRate
       settings.lfoPhase[m] = phase - Math.floor(phase)
     }
+  }
+
+  /** True while a chip input stands on its DC (DC above 0) */
+  #standsOnDc(): boolean {
+    const settings = this.#settings
+    for (let i = 0; i < settings.inputCount; i++) {
+      if (settings.inputKind[i] === INPUT_CHIP && settings.dc[i] !== 0) {
+        return true
+      }
+    }
+    return false
+  }
+
+  /** True while the DC highpass holds something on either side */
+  #ringing(): boolean {
+    const held = this.#dcIn
+    const out = this.#dcOut
+    return held[0] !== 0 || out[0] !== 0 || held[1] !== 0 || out[1] !== 0
+  }
+
+  /**
+   * The voices' sum over [from, to) through the DC highpass, side's (0
+   * left, 1 right) state: a one-pole highpass at DC_CORNER, whole at the
+   * Nyquist frequency. Once its state is silent it is set to 0, and stops.
+   */
+  #highpass(out: Float32Array, side: number, from: number, to: number): void {
+    const pole = this.#dcPole
+    const gain = (1 + pole) * 0.5
+    let last = this.#dcIn[side] as number
+    let before = this.#dcOut[side] as number
+    for (let i = from; i < to; i++) {
+      const x = out[i] as number
+      before = gain * (x - last) + pole * before
+      last = x
+      out[i] = before
+    }
+    if (Math.abs(before) < DC_QUIET && Math.abs(last) < DC_QUIET) {
+      last = 0
+      before = 0
+    }
+    this.#dcIn[side] = last
+    this.#dcOut[side] = before
   }
 
   /**
@@ -837,7 +938,8 @@ export class ChainSynth {
       const i = settings.order[k] as number
       if (settings.inputOn[i] !== 1) continue
       const kind = settings.inputKind[i]
-      if (kind === INPUT_OSC) {
+      if (kind === INPUT_OSC || kind === INPUT_CHIP) {
+        // A chip has no FM: its fmFrom is NO_INPUT
         const from = settings.fmFrom[i] as number
         const fm = this.#fm[i] as Smoother
         const on =

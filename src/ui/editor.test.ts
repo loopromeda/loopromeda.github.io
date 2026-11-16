@@ -128,9 +128,19 @@ describe('tiles', () => {
     sound = setValue(sound, 'x2', 'cutoff', 400)
     sound = setValue(sound, 'c1', 'level', 0.7)
     expect(tileLine(sound, 'i1')).toBe('Saw')
-    const stepped = setValue(sound, 'i1', 'steps', 4)
-    expect(tileLine(stepped, 'i1')).toBe('Saw 32')
-    expect(tileLine(setValue(stepped, 'i1', 'bits', 4), 'i1')).toBe('Saw 32·4b')
+    // A chip's pulse by its duty, its other waves by their steps and bits
+    const chip = addInput(sound, 'chip')
+    const id = chip.id as string
+    expect(tileLine(chip.sound, id)).toBe('Pulse 50%')
+    expect(tileLine(setValue(chip.sound, id, 'duty', 0), id)).toBe(
+      'Pulse 12.5%'
+    )
+    const triangle = setValue(chip.sound, id, 'wave', 1)
+    expect(tileLine(triangle, id)).toBe('Triangle 32')
+    expect(tileLine(setValue(triangle, id, 'steps', 0), id)).toBe('Triangle 4')
+    expect(tileLine(setValue(triangle, id, 'bits', 4), id)).toBe(
+      'Triangle 32·4b'
+    )
     expect(tileLine(sound, 'i2')).toBe('Noise')
     expect(tileLine(sound, 'x1')).toBe('LP 1.20k')
     expect(tileLine(sound, 'x2')).toBe('HP 400')
@@ -281,7 +291,14 @@ describe('tiles', () => {
     sound = setValue(sound, 'x1', 'type', 2)
     sound = setValue(sound, 'm1', 'shape', 4)
     expect(glyphOf(sound, 'i1')).toBe(GLYPHS.sine)
-    expect(glyphOf(setValue(sound, 'i1', 'steps', 1), 'i1')).toBe(
+    // A chip's waves in steps, its pulse at its duty
+    const chip = addInput(sound, 'chip')
+    const id = chip.id as string
+    expect(glyphOf(chip.sound, id)).toBe(GLYPHS.pulse50)
+    expect(glyphOf(setValue(chip.sound, id, 'duty', 1), id)).toBe(
+      GLYPHS.pulse25
+    )
+    expect(glyphOf(setValue(chip.sound, id, 'wave', 3), id)).toBe(
       GLYPHS.steppedSine
     )
     expect(glyphOf(sound, 'x1')).toBe(GLYPHS.bandpass)
@@ -317,10 +334,6 @@ describe('shapeKey', () => {
     const changed = [
       setSend(sound, 'c1', 'i2', 0),
       setValue(sound, 'i1', 'wave', 3),
-      // In steps its pictogram is stepped, and its panel shows Bits; its
-      // steps and bits name its tile for a screen reader
-      setValue(sound, 'i1', 'steps', 2),
-      setValue(sound, 'i1', 'bits', 4),
       setValue(sound, 'x1', 'type', 1),
       setValue(sound, 'm1', 'shape', 2),
       // Unsynced, its panel shows its own rate in its Rate's place
@@ -331,10 +344,18 @@ describe('shapeKey', () => {
       addEffect(sound, 'chorus').sound,
     ]
     for (const after of changed) expect(shapeKey(after)).not.toBe(key)
-    const stepped = setValue(sound, 'i1', 'steps', 2)
-    expect(shapeKey(setValue(stepped, 'i1', 'steps', 3))).not.toBe(
-      shapeKey(stepped)
-    )
+    // A chip's duty draws its pulse; its steps and bits name its tile for
+    // a screen reader
+    const chip = addInput(sound, 'chip')
+    const id = chip.id as string
+    const chipKey = shapeKey(chip.sound)
+    for (const [knob, value] of [
+      ['duty', 0],
+      ['steps', 2],
+      ['bits', 4],
+    ] as const) {
+      expect(shapeKey(setValue(chip.sound, id, knob, value))).not.toBe(chipKey)
+    }
   })
 
   it('stays as it was while a knob turns', () => {

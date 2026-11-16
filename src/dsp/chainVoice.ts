@@ -12,6 +12,7 @@ import {
   DEST_PAN,
   DEST_PITCH,
   INPUT_FM,
+  INPUT_CHIP,
   INPUT_NOISE,
   INPUT_OSC,
   INPUT_PITCH,
@@ -108,17 +109,25 @@ const SCRAPE_LAND = 1e-5
 export class ChainSettings {
   // Inputs, in the sound's order
   inputCount = 0
-  /** INPUT_OSC, INPUT_NOISE or INPUT_RING */
+  /** INPUT_OSC, INPUT_NOISE, INPUT_RING or INPUT_CHIP */
   readonly inputKind = new Int8Array(MAX_INPUTS)
-  /** An oscillator's wave (an index into WAVES), and pitch in semitones */
+  /**
+   * An oscillator's or a chip's wave (an index into WAVES), and pitch in
+   * semitones
+   */
   readonly wave = new Int32Array(MAX_INPUTS)
   readonly transpose = new Float64Array(MAX_INPUTS)
   /**
-   * An oscillator's steps a cycle (0: smooth) and the bits each step's
-   * level is rounded to (0: not rounded)
+   * A chip's steps a cycle (0: smooth) and the bits each step's level is
+   * rounded to (0: not rounded)
    */
   readonly steps = new Int32Array(MAX_INPUTS)
   readonly bits = new Int32Array(MAX_INPUTS)
+  /**
+   * A chip's DC: added to its wave, which then stands on its DAC's zero
+   * as far as DC (0..1) has it, the wave's lowest at 0 at 1
+   */
+  readonly dc = new Float32Array(MAX_INPUTS)
   /** The inputs an oscillator's FM, and a ring's two sides, read */
   readonly fmSource = new Int8Array(MAX_INPUTS).fill(NO_INPUT)
   readonly ringA = new Int8Array(MAX_INPUTS).fill(NO_INPUT)
@@ -799,6 +808,13 @@ export class ChainVoice {
         case INPUT_OSC:
           this.#oscillate(i, out, gliding, length)
           break
+        case INPUT_CHIP: {
+          this.#oscillate(i, out, gliding, length)
+          const dc = settings.dc[i] as number
+          if (dc === 0) break
+          for (let j = 0; j < length; j++) out[j] = (out[j] as number) + dc
+          break
+        }
         case INPUT_NOISE: {
           const noise = this.#noises[settings.noiseOrdinal[i] as number]
           ;(noise as Noise).process(out, 0, length)

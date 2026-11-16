@@ -350,6 +350,7 @@ interface View {
 
 const INPUT_HINTS: Record<InputKind, string> = {
   osc: 'Wave and FM',
+  chip: 'Steps and DC',
   noise: 'White noise',
   ring: 'One × another',
 }
@@ -376,6 +377,7 @@ const EFFECT_HINTS: Record<EffectKind, string> = {
 
 const KIND_GLYPHS = {
   osc: GLYPHS.saw,
+  chip: GLYPHS.steppedTriangle,
   noise: GLYPHS.noise,
   ring: GLYPHS.ring,
   filter: GLYPHS.lowpass,
@@ -1771,6 +1773,15 @@ function viewOf(
               label="FM"
             />
           ),
+        }
+      }
+      if (part.kind === 'chip') {
+        return {
+          ...base,
+          knobs: [
+            ...knobsOf(picked, shownKnobs(INPUT_KINDS.chip.knobs, part.values)),
+            ...into,
+          ],
         }
       }
       if (part.kind === 'ring') {

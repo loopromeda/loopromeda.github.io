@@ -16,12 +16,21 @@ export const MIN_WIDTH = 0.02
 export const MAX_WIDTH = 0.98
 
 /**
- * The steps a cycle may be held in, in the order the Steps knob turns
- * through them: 0 is the smooth wave. A chip's wave is a table of a few
- * levels, each held for a step: the 2A03's pulse 8 steps, its triangle
- * 32, the N163's 4 to 240 drawn for the song.
+ * A chip input's waves (docs/plan/sound-chains.md, The chip), in the
+ * order its Wave knob steps through them, as oscillator waves
  */
-export const OSC_STEPS = [0, 4, 8, 16, 32, 64] as const
+export const CHIP_WAVES = [SQUARE, TRIANGLE, SAW, SINE] as const
+
+/** A chip's pulse widths, in the order its Duty knob turns through them */
+export const CHIP_DUTIES = [0.125, 0.25, 0.5, 0.75] as const
+
+/**
+ * The steps a chip's cycle may be held in, in the order its Steps knob
+ * turns through them. A chip's wave is a table of a few levels, each held
+ * for a step: the 2A03's pulse 8 steps, its triangle 32, the N163's 4 to
+ * 240 drawn for the song.
+ */
+export const CHIP_STEPS = [4, 8, 16, 32, 64] as const
 
 /** The most steps a cycle may be held in */
 export const MAX_STEPS = 64

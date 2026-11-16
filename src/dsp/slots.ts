@@ -17,10 +17,14 @@ export const MAX_EFFECTS = 4
 /** The mix's buses, each a row of effects (src/dsp/output.ts) */
 export const MAX_BUSES = 4
 
-/** Input kinds: an oscillator, white noise, two inputs multiplied */
+/**
+ * Input kinds: an oscillator, white noise, two inputs multiplied, and a
+ * chip's channel (an oscillator held in steps, on its DAC's DC)
+ */
 export const INPUT_OSC = 0
 export const INPUT_NOISE = 1
 export const INPUT_RING = 2
+export const INPUT_CHIP = 3
 
 /** Chain item kinds */
 export const ITEM_FILTER = 0

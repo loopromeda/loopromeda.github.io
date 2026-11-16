@@ -26,11 +26,10 @@ routes      source → any knob × amount            slide, random, wheel
 ```
 
 - **Inputs** make sound: an oscillator (wave, octave, semi, fine, width,
-  and FM from another input; its cycle held in 4 to 64 steps and their
-  levels rounded to a few bits, as a chip's wave table is, since
-  2026-11-15), noise, or a ring (the product of two other inputs). An
-  input is heard only through the chains that take it, and read raw by
-  the inputs that name it.
+  and FM from another input), a chip (a wave held in steps, on its DAC's
+  DC, since 2026-11-16: The chip, below), noise, or a ring (the product
+  of two other inputs). An input is heard only through the chains that
+  take it, and read raw by the inputs that name it.
 - **Chains** each take a mix of inputs (a send level per input; an input
   can feed several chains, or none) and pass it through their items in
   order. Items process: a filter, drive, more later. The chains are summed.
@@ -80,6 +79,59 @@ reference) takes effect at the next block, every gliding value jumping
 to its target; a voice sounding through it keeps each place's state, so
 it may click. Noise inputs and LFOs draw from the voice's generators in
 their order among their kind: the first LFO draws as the old LFO 1 did.
+
+## The chip
+
+A chip's channel, an input of its own (ashon, 2026-11-16: "오실레이터
+종류를 좀 나누면 좋지 않을까 싶고", then "chip으로 진행 해 보자"). Its
+waves held in steps came first, on the oscillator, 2026-11-15 ("파형을 만들어
+낼 때 계단형으로 파형을 만들어 내도록 하는 기능을 넣어보면 어때?"); with a DC
+knob as well the oscillator would have held nine knobs, so the steps
+moved here and the oscillator went back to its six.
+
+| knob   | choices                                  | shown               |
+| ------ | ---------------------------------------- | ------------------- |
+| Wave   | Pulse, Triangle, Saw, Sine               | always              |
+| Duty   | 12.5%, 25%, 50%, 75%                     | with Pulse          |
+| Octave | −2 to 2, Semi −12 to 12, Fine ±100 cents | always              |
+| Steps  | 4, 8, 16, 32 (the default), 64           | with any other wave |
+| Bits   | Off (the default), 1 to 8                | with any other wave |
+| DC     | 0 to 100% (the default 100%)             | always              |
+
+- **The wave** is the oscillator's, held in steps: a step's level is the
+  wave at its middle (a triangle at 32 steps is the 2A03's, 16 levels),
+  Bits rounds it to 2^bits values across −1..1, and each step's jump is
+  band-limited, the steps fading into the smooth wave where they come
+  closer than a sample allows (`src/dsp/oscillator.ts`). A pulse is not
+  held in steps: its duties are whole eighths already, the 2A03's.
+- **DC**: a chip's DAC puts out 0 up to its level, never below, so its
+  wave stands on a DC as high as the wave's own middle, which steps as
+  each note starts and ends; the console's output, a highpass, turns
+  each step into a low thump. That is what a chiptune's recording has in
+  its lows that a wave about its mean has not (the FXXL'S GXLD port,
+  2026-11-16: the port's lows under 60 Hz 12.7 dB off the original's on
+  average, 7.3 with the thumps simulated). At 100% the wave's lowest is
+  0: a triangle, a saw or a sine spans 0..2, a pulse of duty w its
+  0..2 too, its mean 2w; at 0 it plays about its mean, as an oscillator
+  does. The voice adds it to the wave before the chains, so a lowpass
+  keeps it, a highpass takes it off and a drive bends the wave
+  unevenly, as the chip's own would.
+- **The highpass** after the voices (one per side, in `ChainSynth`) is a
+  one-pole at 10 Hz, whole at the Nyquist frequency: the DC of a note
+  held falls to a third in about 17 ms, and a note let go thumps the
+  other way. It runs only while a chip on DC sounds, and on after the
+  last voice until it is silent, so every other sound renders as before,
+  sample for sample. Its corner is fixed, chosen by rendering the port
+  with every chip preset on DC: 5, 10 and 20 Hz came within 0.03 dB of
+  one another at 50%, and at 100%, the default, 10 Hz was nearest the
+  recording (its mean log-mel error 4.376 dB, 4.404 at 5 Hz).
+- **No FM**: a chip has no FM of its own, and its Duty is not routed (a
+  chip's width is one of four); its pitch is (Octave, Semi and Fine
+  route to it). An oscillator may read a chip as its FM, DC and all.
+- **Saved before**: an oscillator saved held in steps (Steps and Bits,
+  2026-11-15 to 16, never deployed) reads as a chip of its wave, pitch,
+  steps and bits, at no DC, as it sounded; its FM goes
+  (`src/state/sound/read.ts`).
 
 ## Limits
 

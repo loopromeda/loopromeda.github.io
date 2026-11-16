@@ -15,7 +15,7 @@ import {
   EQ_MIN_Q,
   EQ_TYPE_NAMES,
 } from '../../dsp/eq'
-import { MAX_BITS, OSC_STEPS } from '../../dsp/oscillator'
+import { CHIP_DUTIES, CHIP_STEPS, MAX_BITS } from '../../dsp/oscillator'
 import { LFO_SHAPE_NAMES, type ValueSpec } from '../params'
 
 /** One knob of a part, keyed within the part */
@@ -26,7 +26,8 @@ export interface KnobSpec extends ValueSpec {
   /**
    * Shown only while another knob of its part stands at a value (or, not,
    * anywhere else): a synced time's note value with Sync on, its own time
-   * with it off, an oscillator's Bits with Steps on (shownKnobs)
+   * with it off, a chip's Duty with its Pulse, its Steps and Bits with
+   * any other wave (shownKnobs)
    */
   readonly when?: {
     readonly key: string
@@ -193,6 +194,12 @@ export const MAX_EFFECTS = 4
 /** The oscillator waves, in src/dsp/oscillator.ts's order */
 export const WAVE_NAMES = ['Sine', 'Triangle', 'Saw', 'Square'] as const
 
+/** A chip's waves, in CHIP_WAVES' order (src/dsp/oscillator.ts) */
+export const CHIP_WAVE_NAMES = ['Pulse', 'Triangle', 'Saw', 'Sine'] as const
+
+/** A chip's pulse widths, CHIP_DUTIES */
+export const CHIP_DUTY_NAMES = CHIP_DUTIES.map((duty) => `${duty * 100}%`)
+
 /** The filter types, in src/dsp/filter.ts's order */
 export const FILTER_TYPE_NAMES = ['LP', 'HP', 'BP'] as const
 
@@ -262,6 +269,48 @@ function adsr(sustain: number): readonly KnobSpec[] {
   ]
 }
 
+/** An input's pitch above the note: its Octave, Semi and Fine */
+const PITCH_KNOBS = [
+  {
+    key: 'octave',
+    label: 'Octave',
+    min: -2,
+    max: 2,
+    default: 0,
+    curve: 'linear',
+    step: 1,
+    unit: 'oct',
+  },
+  {
+    key: 'semi',
+    label: 'Semi',
+    min: -12,
+    max: 12,
+    default: 0,
+    curve: 'linear',
+    step: 1,
+    unit: 'st',
+  },
+  {
+    key: 'fine',
+    label: 'Fine',
+    min: -100,
+    max: 100,
+    default: 0,
+    curve: 'linear',
+    step: 0,
+    unit: 'ct',
+  },
+] as const satisfies readonly KnobSpec[]
+
+/** Where an input's Octave, Semi and Fine route: its pitch */
+const PITCH_DEST = {
+  key: 'pitch',
+  label: 'Pitch',
+  scale: 48,
+  unit: 'st',
+} as const satisfies DestSpec
+
 /** What makes sound: an input is heard through the chains that take it */
 export const INPUT_KINDS = {
   osc: {
@@ -278,36 +327,7 @@ export const INPUT_KINDS = {
         unit: '',
         choices: WAVE_NAMES,
       },
-      {
-        key: 'octave',
-        label: 'Octave',
-        min: -2,
-        max: 2,
-        default: 0,
-        curve: 'linear',
-        step: 1,
-        unit: 'oct',
-      },
-      {
-        key: 'semi',
-        label: 'Semi',
-        min: -12,
-        max: 12,
-        default: 0,
-        curve: 'linear',
-        step: 1,
-        unit: 'st',
-      },
-      {
-        key: 'fine',
-        label: 'Fine',
-        min: -100,
-        max: 100,
-        default: 0,
-        curve: 'linear',
-        step: 0,
-        unit: 'ct',
-      },
+      ...PITCH_KNOBS,
       {
         key: 'width',
         label: 'Width',
@@ -319,19 +339,59 @@ export const INPUT_KINDS = {
         unit: '%',
       },
       level('fm', 'FM', 0),
-      // A chip's wave table: the cycle held in steps, their levels in a few
-      // bits (asked for by ashon, 2026-11-15: "파형을 만들어 낼 때 계단형으로
-      // 파형을 만들어 내도록 하는 기능을 넣어보면 어때?")
+    ],
+    dests: [
+      PITCH_DEST,
+      { key: 'width', label: 'Width', scale: 0.5, unit: '%' },
+      { key: 'fm', label: 'FM', scale: 1, unit: '%' },
+    ],
+    // The input whose signal modulates this one's phase, by fm
+    refs: ['fmSource'],
+  },
+  // A chip's channel (docs/plan/sound-chains.md, The chip): its wave table,
+  // the cycle held in steps, their levels in a few bits (ashon,
+  // 2026-11-15: "파형을 만들어 낼 때 계단형으로 파형을 만들어 내도록 하는
+  // 기능을 넣어보면 어때?"), standing on its DAC's DC; an input of its own
+  // so the Osc keeps its few knobs (ashon, 2026-11-16: "오실레이터 종류를
+  // 좀 나누면 좋지 않을까")
+  chip: {
+    label: 'Chip',
+    knobs: [
       {
-        key: 'steps',
-        label: 'Steps',
+        key: 'wave',
+        label: 'Wave',
         min: 0,
-        max: OSC_STEPS.length - 1,
+        max: CHIP_WAVE_NAMES.length - 1,
         default: 0,
         curve: 'linear',
         step: 1,
         unit: '',
-        choices: OSC_STEPS.map((n) => (n === 0 ? 'Off' : String(n))),
+        choices: CHIP_WAVE_NAMES,
+      },
+      {
+        key: 'duty',
+        label: 'Duty',
+        min: 0,
+        max: CHIP_DUTIES.length - 1,
+        default: 2,
+        curve: 'linear',
+        step: 1,
+        unit: '',
+        choices: CHIP_DUTY_NAMES,
+        when: { key: 'wave', is: 0 },
+      },
+      ...PITCH_KNOBS,
+      {
+        key: 'steps',
+        label: 'Steps',
+        min: 0,
+        max: CHIP_STEPS.length - 1,
+        default: 3,
+        curve: 'linear',
+        step: 1,
+        unit: '',
+        choices: CHIP_STEPS.map(String),
+        when: { key: 'wave', is: 0, not: true },
       },
       {
         key: 'bits',
@@ -343,16 +403,21 @@ export const INPUT_KINDS = {
         step: 1,
         unit: '',
         atMin: 'Off',
-        when: { key: 'steps', is: 0, not: true },
+        when: { key: 'wave', is: 0, not: true },
+      },
+      {
+        key: 'dc',
+        label: 'DC',
+        min: 0,
+        max: 1,
+        default: 1,
+        curve: 'linear',
+        step: 0,
+        unit: '%',
       },
     ],
-    dests: [
-      { key: 'pitch', label: 'Pitch', scale: 48, unit: 'st' },
-      { key: 'width', label: 'Width', scale: 0.5, unit: '%' },
-      { key: 'fm', label: 'FM', scale: 1, unit: '%' },
-    ],
-    // The input whose signal modulates this one's phase, by fm
-    refs: ['fmSource'],
+    dests: [PITCH_DEST],
+    refs: [],
   },
   noise: {
     label: 'Noise',

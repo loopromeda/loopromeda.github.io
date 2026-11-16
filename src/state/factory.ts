@@ -24,7 +24,11 @@ function preset(
  * Pulse 12 and 25), and the Kick and the Snare, are the sounds a 2A03 and
  * N163 chiptune was ported to Loopromeda with, matched to its recording
  * (2026-11-15): dry, as the chips are, each a tracker's note, struck at
- * once and cut when it ends.
+ * once and cut when it ends. Since 2026-11-16 their waves are chips',
+ * on their DACs' DC (docs/plan/sound-chains.md, The chip): each note
+ * thumps as it starts and ends, as the recording's do, which brought the
+ * port's lows (60 to 120 Hz) from 4.3 dB under the recording's to 1 dB,
+ * and its worst bar's chroma from 0.921 to 0.942.
  */
 
 /** The chip presets' amp: struck at once, held a little under full */
@@ -40,9 +44,9 @@ const CHIP_AMP = {
 const CHIP_PULSE_EQ = { kind: 'eq', high: -4, highFreq: 2500 } as const
 
 /** A chip pulse at a duty, the share of its cycle spent high */
-function chipPulse(width: number): WrittenSound {
+function chipPulse(duty: '12.5%' | '25%'): WrittenSound {
   return {
-    inputs: { pulse: { kind: 'osc', wave: 'Square', width } },
+    inputs: { pulse: { kind: 'chip', duty } },
     chains: { main: { sends: { pulse: 1 } } },
     amp: CHIP_AMP,
     effects: [CHIP_PULSE_EQ],
@@ -50,8 +54,9 @@ function chipPulse(width: number): WrittenSound {
 }
 
 /**
- * The chip basses: a saw, a pulse at 6% and a sine, octaves down, the
- * lows and the top of them lifted and the middle a little down
+ * The chip basses: an N163's saw (32 steps of 4 bits, on its DC), a
+ * pulse at 6% and a sine, octaves down, the lows and the top of them
+ * lifted and the middle a little down
  */
 function chipBass(
   octave: number,
@@ -59,7 +64,7 @@ function chipBass(
 ): WrittenSound {
   return {
     inputs: {
-      saw: { kind: 'osc', wave: 'Saw', octave },
+      saw: { kind: 'chip', wave: 'Saw', bits: 4, octave },
       pulse: { kind: 'osc', wave: 'Square', width: 0.06, octave },
       sine: { kind: 'osc', wave: 'Sine', octave },
     },
@@ -255,10 +260,9 @@ export const FACTORY_PRESETS: readonly Preset[] = [
     chipBass(-2, { filter: { kind: 'filter', cutoff: 1500 } })
   ),
   preset('NES Triangle', 'Bass', {
-    // The 2A03's triangle: 32 steps of 16 levels, and no volume of its own
-    inputs: {
-      triangle: { kind: 'osc', wave: 'Triangle', octave: -1, steps: '32' },
-    },
+    // The 2A03's triangle: 32 steps of 16 levels on its DAC's DC, and no
+    // volume of its own
+    inputs: { triangle: { kind: 'chip', wave: 'Triangle', octave: -1 } },
     chains: { main: { sends: { triangle: 1 } } },
     amp: { attack: 0.001, decay: 0.01, sustain: 1, release: 0.01, velocity: 0 },
     voice: { mode: 'Mono' },
@@ -296,7 +300,7 @@ export const FACTORY_PRESETS: readonly Preset[] = [
     sends: { b: 0.4 },
   }),
   preset('Chip Lead', 'Lead', {
-    ...chipPulse(0.25),
+    ...chipPulse('25%'),
     // The vibrato sets in after the note starts
     modulators: { vibrato: { kind: 'lfo', rate: 5.5, fade: 0.25 } },
     routes: [{ from: 'vibrato', to: 'voice.pitch', by: 0.3 }],
@@ -305,7 +309,7 @@ export const FACTORY_PRESETS: readonly Preset[] = [
   preset('4-bit Lead', 'Lead', {
     // A wave-table chip's (the N163's, the Game Boy's): a sine in 32 steps
     // of 16 levels, its vibrato setting in after the note starts
-    inputs: { wave: { kind: 'osc', wave: 'Sine', steps: '32', bits: 4 } },
+    inputs: { wave: { kind: 'chip', wave: 'Sine', bits: 4 } },
     chains: { main: { sends: { wave: 1 } } },
     modulators: { vibrato: { kind: 'lfo', rate: 6, fade: 0.3 } },
     routes: [{ from: 'vibrato', to: 'voice.pitch', by: 0.3 }],
@@ -707,14 +711,15 @@ export const FACTORY_PRESETS: readonly Preset[] = [
     sends: { c: 0.5 },
   }),
   preset('Chip Chords', 'Keys', {
-    // A saw falling to under half over a second, its lows lifted hard
-    inputs: { saw: { kind: 'osc', wave: 'Saw' } },
+    // A chip's saw falling to under half over a second, its lows lifted
+    // hard (15 dB before its DC thumped too, which they lift as well)
+    inputs: { saw: { kind: 'chip', wave: 'Saw' } },
     chains: { main: { sends: { saw: 1 } } },
     amp: { ...CHIP_AMP, decay: 1.2, sustain: 0.45 },
     effects: [
       {
         kind: 'eq',
-        low: 15,
+        low: 12,
         lowFreq: 82,
         mid: -0.3,
         midFreq: 2404,
@@ -723,8 +728,8 @@ export const FACTORY_PRESETS: readonly Preset[] = [
       },
     ],
   }),
-  preset('Chip Pulse 12', 'Keys', chipPulse(0.125)),
-  preset('Chip Pulse 25', 'Keys', chipPulse(0.25)),
+  preset('Chip Pulse 12', 'Keys', chipPulse('12.5%')),
+  preset('Chip Pulse 25', 'Keys', chipPulse('25%')),
 
   preset('Kick', 'Drums', {
     // A triangle 27 semitones under the key (A1 at C4), struck 30 higher

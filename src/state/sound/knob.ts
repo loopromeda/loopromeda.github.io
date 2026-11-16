@@ -95,13 +95,16 @@ export function setKnob(
     : setSend(sound, part, input, value)
 }
 
-/** An oscillator's knobs that set its pitch, which routes move as one */
+/**
+ * An oscillator's or a chip's knobs that set its pitch, which routes move
+ * as one
+ */
 const PITCH_KNOBS: readonly string[] = ['octave', 'semi', 'fine']
 
 /**
  * The destination key of part that holding its knob key routes to: the
- * knob's own (a cutoff, a send), an oscillator's pitch for its Octave,
- * Semi and Fine, or the one of the knob it stands for (a synced LFO's
+ * knob's own (a cutoff, a send), an oscillator's or a chip's pitch for its
+ * Octave, Semi and Fine, or the one of the knob it stands for (a synced LFO's
  * note value, its rate's); undefined for a knob nothing can move
  */
 export function knobDest(
@@ -114,7 +117,7 @@ export function knobDest(
   if (destOf(sound, part, key)) return key
   const found = findPart(sound, part)
   return found?.type === 'input' &&
-    found.part.kind === 'osc' &&
+    (found.part.kind === 'osc' || found.part.kind === 'chip') &&
     PITCH_KNOBS.includes(key)
     ? 'pitch'
     : undefined

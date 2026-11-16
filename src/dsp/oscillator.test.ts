@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
+  CHIP_DUTIES,
+  CHIP_STEPS,
+  CHIP_WAVES,
   MAX_WIDTH,
   MIN_WIDTH,
-  OSC_STEPS,
   Oscillator,
   SAW,
   SINE,
@@ -326,8 +328,10 @@ describe('Oscillator', () => {
     }
   })
 
-  it('lists the step counts the Steps knob turns through, Off first', () => {
-    expect(OSC_STEPS).toEqual([0, 4, 8, 16, 32, 64])
+  it("lists a chip's waves, duties and steps in its knobs' order", () => {
+    expect(CHIP_WAVES).toEqual([SQUARE, TRIANGLE, SAW, SINE])
+    expect(CHIP_DUTIES).toEqual([0.125, 0.25, 0.5, 0.75])
+    expect(CHIP_STEPS).toEqual([4, 8, 16, 32, 64])
   })
 
   it("holds the triangle in 32 steps of 16 levels, as the 2A03's", () => {

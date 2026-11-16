@@ -162,13 +162,30 @@ describe('shownKnobs', () => {
     expect(shownKnobs(AMP_SPEC.knobs, {})).toBe(AMP_SPEC.knobs)
   })
 
-  it("shows an oscillator's Bits only while its Steps is on", () => {
-    const osc = INPUT_KINDS.osc.knobs
-    expect(keys(shownKnobs(osc, { steps: 0 }))).not.toContain('bits')
-    expect(keys(shownKnobs(osc, {}))).not.toContain('bits')
-    expect(keys(shownKnobs(osc, { steps: 4 })).slice(-2)).toEqual([
+  it("shows a chip's Duty with its pulse, its Steps and Bits otherwise", () => {
+    const chip = INPUT_KINDS.chip.knobs
+    const pulse = ['wave', 'duty', 'octave', 'semi', 'fine', 'dc']
+    expect(keys(shownKnobs(chip, {}))).toEqual(pulse)
+    expect(keys(shownKnobs(chip, { wave: 0 }))).toEqual(pulse)
+    expect(keys(shownKnobs(chip, { wave: 1 }))).toEqual([
+      'wave',
+      'octave',
+      'semi',
+      'fine',
       'steps',
       'bits',
+      'dc',
+    ])
+  })
+
+  it('keeps the Osc to its wave, pitch, width and FM', () => {
+    expect(keys(INPUT_KINDS.osc.knobs)).toEqual([
+      'wave',
+      'octave',
+      'semi',
+      'fine',
+      'width',
+      'fm',
     ])
   })
 })

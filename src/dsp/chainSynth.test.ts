@@ -4,10 +4,11 @@ import { GHOST_MUTE, GHOST_SOFT } from './chainVoice'
 import { Clock } from './clock'
 import { LOWPASS } from './filter'
 import { LFO_MAX_RATE, LFO_MIN_RATE, LFO_SINE } from './lfo'
-import { SAW, SINE } from './oscillator'
+import { SAW, SINE, SQUARE, TRIANGLE } from './oscillator'
 import { midiToFrequency } from './pitch'
 import {
   DEST_PAN,
+  INPUT_CHIP,
   INPUT_OSC,
   INPUT_RING,
   ITEM_CUTOFF,
@@ -813,3 +814,131 @@ function loudestOf(samples: Float32Array, from: number): number {
   }
   return most
 }
+
+/**
+ * One chip input into one chain: wave, pulse width, steps, bits and DC;
+ * struck at once and held whole, unclipped
+ */
+function chip(
+  wave: number,
+  width: number,
+  steps: number,
+  bits: number,
+  dc: number
+): ChainSynth {
+  const synth = new ChainSynth(SAMPLE_RATE)
+  synth.clip = false
+  synth.inputCount = 1
+  synth.setInputKind(0, INPUT_CHIP)
+  synth.setChip(0, wave, 0, width, steps, bits, dc)
+  synth.chainCount = 1
+  synth.setSend(0, 0, 1)
+  synth.setAmp(0.001, 0.1, 1, 0.005)
+  return synth
+}
+
+/** chip's oscillator: an Osc input of wave and width, the same amp */
+function oscOf(wave: number, width: number): ChainSynth {
+  const synth = chip(wave, width, 0, 0, 0)
+  synth.setInputKind(0, INPUT_OSC)
+  synth.setOsc(0, wave, 0, width, 0)
+  return synth
+}
+
+/** The mean of samples over [from, to) */
+function meanOf(samples: Float32Array, from: number, to: number): number {
+  let sum = 0
+  for (let i = from; i < to; i++) sum += samples[i] as number
+  return sum / (to - from)
+}
+
+describe('ChainSynth’s chips', () => {
+  it('plays a chip on no DC, unstepped, as an oscillator does', () => {
+    for (const [wave, width] of [
+      [SAW, 0.5],
+      [TRIANGLE, 0.5],
+      [SQUARE, 0.25],
+    ] as const) {
+      const played = chip(wave, width, 0, 0, 0)
+      const osc = oscOf(wave, width)
+      played.noteOn(1, 57, 0.8)
+      osc.noteOn(1, 57, 0.8)
+      expect(render(played, 0.1)).toEqual(render(osc, 0.1))
+    }
+  })
+
+  it('never holds a pulse in steps: its widths are whole eighths', () => {
+    const stepped = chip(SQUARE, 0.25, 32, 4, 0)
+    const smooth = chip(SQUARE, 0.25, 0, 0, 0)
+    stepped.noteOn(1, 57, 0.8)
+    smooth.noteOn(1, 57, 0.8)
+    expect(render(stepped, 0.1)).toEqual(render(smooth, 0.1))
+  })
+
+  it('holds a triangle in steps, as an oscillator cannot', () => {
+    const stepped = chip(TRIANGLE, 0.5, 32, 0, 0)
+    const smooth = chip(TRIANGLE, 0.5, 0, 0, 0)
+    stepped.noteOn(1, 45, 0.8)
+    smooth.noteOn(1, 45, 0.8)
+    expect(furthest(render(stepped, 0.1), render(smooth, 0.1))).toBeGreaterThan(
+      0.005
+    )
+  })
+
+  it('stands a chip on its DC: a thump as a note starts, gone after', () => {
+    const synth = chip(SQUARE, 0.25, 0, 0, 1)
+    const osc = oscOf(SQUARE, 0.25)
+    synth.noteOn(1, 57, 0.8)
+    osc.noteOn(1, 57, 0.8)
+    const out = render(synth, 1)
+    const about = render(osc, 1)
+    const ms = SAMPLE_RATE / 1000
+    // A 25% pulse about its mean spans -0.5..1.5; on its DC, 0..2 as it
+    // starts, its mean a third of the peak it has once the DC is gone,
+    // and falling from there as the highpass takes it off
+    const peak = loudestOf(out, out.length / 2)
+    const lift = (from: number, to: number) =>
+      (meanOf(out, from * ms, to * ms) - meanOf(about, from * ms, to * ms)) /
+      peak
+    expect(lift(0, 10)).toBeGreaterThan(0.22)
+    expect(lift(0, 10)).toBeLessThan(1 / 3)
+    expect(lift(40, 50)).toBeLessThan(0.6 * lift(0, 10))
+    const later = meanOf(out, 500 * ms, 1000 * ms)
+    expect(Math.abs(later - meanOf(about, 500 * ms, 1000 * ms))).toBeLessThan(
+      0.01 * peak
+    )
+  })
+
+  it('thumps the other way as a note ends, then falls silent', () => {
+    const synth = chip(TRIANGLE, 0.5, 32, 0, 0.5)
+    synth.noteOn(1, 45, 0.8)
+    const held = render(synth, 1)
+    synth.noteOff(1)
+    const after = render(synth, 0.1)
+    expect(synth.activeVoices).toBe(0)
+    const ms = SAMPLE_RATE / 1000
+    // Its DC let go: below its middle, and still sounding with no voice
+    expect(meanOf(after, 5 * ms, 15 * ms)).toBeLessThan(
+      -0.2 * loudestOf(held, held.length / 2)
+    )
+    const last = after.subarray(after.length - 128)
+    expect(last.some((x) => x !== 0)).toBe(true)
+    render(synth, 3)
+    const quiet = render(synth, 0.01)
+    expect(quiet.every((x) => x === 0)).toBe(true)
+  })
+
+  it('lets a chip’s DC, its wave and its kind go with no highpass left', () => {
+    const synth = chip(SAW, 0.5, 0, 0, 0.8)
+    synth.noteOn(1, 45, 0.8)
+    render(synth, 0.5)
+    synth.setChip(0, SAW, 0, 0.5, 0, 0, 0)
+    synth.noteOff(1)
+    render(synth, 4)
+    // Silent, and the same as one that never stood on DC from here
+    const fresh = chip(SAW, 0.5, 0, 0, 0)
+    synth.noteOn(1, 45, 0.8)
+    fresh.noteOn(1, 45, 0.8)
+    expect(render(synth, 0.1)).toEqual(render(fresh, 0.1))
+  })
+})

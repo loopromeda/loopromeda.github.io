@@ -444,9 +444,9 @@ describe('the chain engine', () => {
 })
 
 /**
- * Two oscillators (a square and a saw in 8 steps), a noise and a ring of
- * the two into two chains, a filter and a drive, an LFO, an envelope and
- * two routes
+ * An oscillator (a square) and a chip (a saw in 8 steps, on its DC), a
+ * noise and a ring of the two into two chains, a filter and a drive, an
+ * LFO, an envelope and two routes
  */
 function busy(): Sound {
   let sound = setValue(initSound(), 'i1', 'wave', SQUARE)
@@ -454,8 +454,8 @@ function busy(): Sound {
     sound = added.sound
     return added.id as string
   }
-  const osc2 = step(addInput(sound, 'osc'))
-  sound = setValue(sound, osc2, 'steps', 2)
+  const osc2 = step(addInput(sound, 'chip'))
+  sound = setValue(setValue(sound, osc2, 'wave', 2), osc2, 'steps', 1)
   const noise = step(addInput(sound, 'noise'))
   const ring = step(addInput(sound, 'ring'))
   sound = setRef(setRef(sound, ring, 'a', 'i1'), ring, 'b', osc2)
@@ -473,10 +473,13 @@ function busy(): Sound {
 
 /** A knob turned of each kind, by name: the sound with it turned */
 const TURNS: readonly (readonly [string, (sound: Sound) => Sound])[] = [
-  ["an oscillator's pitch", (s) => setValue(s, 'i2', 'semi', 7)],
+  ["an oscillator's pitch", (s) => setValue(s, 'i1', 'semi', 7)],
   ["an oscillator's width", (s) => setValue(s, 'i1', 'width', 0.2)],
-  ["an oscillator's steps", (s) => setValue(s, 'i2', 'steps', 3)],
-  ["an oscillator's bits", (s) => setValue(s, 'i2', 'bits', 3)],
+  ["a chip's pitch", (s) => setValue(s, 'i2', 'semi', 7)],
+  ["a chip's wave", (s) => setValue(s, 'i2', 'wave', 0)],
+  ["a chip's steps", (s) => setValue(s, 'i2', 'steps', 3)],
+  ["a chip's bits", (s) => setValue(s, 'i2', 'bits', 3)],
+  ["a chip's DC", (s) => setValue(s, 'i2', 'dc', 0.4)],
   ['a send', (s) => setSend(s, 'c1', 'i2', 0.8)],
   ['a send to nothing', (s) => setSend(s, 'c2', 'i4', 0)],
   ['a send from nothing', (s) => setSend(s, 'c2', 'i1', 0.4)],

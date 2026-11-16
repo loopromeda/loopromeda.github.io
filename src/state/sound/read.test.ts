@@ -67,9 +67,46 @@ describe('readSound', () => {
       fine: 0,
       width: 0.5,
       fm: 0,
-      steps: 0,
-      bits: 0,
     })
+  })
+
+  it('reads an oscillator saved in steps as the chip it is now', () => {
+    const sound = readSound({
+      inputs: [
+        // Steps 32 and Bits 4 on a sine, a semitone up
+        {
+          id: 'i1',
+          kind: 'osc',
+          values: { wave: 0, semi: 1, fm: 0.5, steps: 4, bits: 4 },
+          refs: { fmSource: 'i2' },
+        },
+        // A square at 30%, in 8 steps: a pulse at the nearest duty
+        { id: 'i2', kind: 'osc', values: { wave: 3, width: 0.3, steps: 2 } },
+        { id: 'i3', kind: 'osc', values: { wave: 1, steps: 0 } },
+      ],
+      chains: [{ id: 'c1', sends: { i1: 1, i2: 1, i3: 1 } }],
+    })
+    const [sine, pulse, smooth] = sound.inputs
+    expect(sine).toEqual({
+      id: 'i1',
+      kind: 'chip',
+      values: {
+        wave: 3,
+        duty: 2,
+        octave: 0,
+        semi: 1,
+        fine: 0,
+        steps: 3,
+        bits: 4,
+        dc: 0,
+      },
+      refs: {},
+    })
+    expect(pulse?.kind).toBe('chip')
+    expect(pulse?.values).toMatchObject({ wave: 0, duty: 1, dc: 0 })
+    // Smooth, it stays an oscillator
+    expect(smooth?.kind).toBe('osc')
+    expect(sound.chains[0]?.sends).toEqual({ i1: 1, i2: 1, i3: 1 })
   })
 
   it('reads an LFO and a delay saved before Sync with their own time', () => {

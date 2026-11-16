@@ -3,7 +3,8 @@
  * own terms: each part a slot numbered by its place among its kind, the
  * references and routes as slot numbers, and each knob in the synth's
  * units (an oscillator's semitones from its octave, semi and fine; a
- * route's amount times its destination's scale). The worklet's processor
+ * chip's choices as its wave, width and steps; a route's amount times its
+ * destination's scale). The worklet's processor
  * loads each sound it is sent and sets each knob it is sent, the
  * session's mix (applyMix) and the kit's chain (applyKitChain); tests run
  * them to hear what a sound does. No AudioWorklet globals.
@@ -11,7 +12,7 @@
 import type { LaneTarget } from '../dsp/automation'
 import { ChainSynth } from '../dsp/chainSynth'
 import type { EffectRack } from '../dsp/effects'
-import { OSC_STEPS } from '../dsp/oscillator'
+import { CHIP_DUTIES, CHIP_STEPS, CHIP_WAVES } from '../dsp/oscillator'
 import type { Mixer, Part, Strip } from '../dsp/output'
 import {
   DEST_AMP,
@@ -26,6 +27,7 @@ import {
   FX_DOUBLER,
   FX_WIDTH,
   FX_REVERB,
+  INPUT_CHIP,
   INPUT_FM,
   INPUT_NOISE,
   INPUT_OSC,
@@ -85,7 +87,12 @@ import {
   type Sound,
 } from '../state/sound/sound'
 
-const INPUT_KIND = { osc: INPUT_OSC, noise: INPUT_NOISE, ring: INPUT_RING }
+const INPUT_KIND = {
+  osc: INPUT_OSC,
+  chip: INPUT_CHIP,
+  noise: INPUT_NOISE,
+  ring: INPUT_RING,
+}
 const ITEM_KIND = { filter: ITEM_FILTER, drive: ITEM_DRIVE }
 const MODULATOR_KIND = { env: MOD_ENV, lfo: MOD_LFO }
 const EFFECT_KIND: Record<EffectKind, number> = {
@@ -187,9 +194,19 @@ export class SoundPlayer {
             value('wave'),
             12 * value('octave') + value('semi') + value('fine') / 100,
             value('width'),
-            value('fm'),
-            OSC_STEPS[Math.round(value('steps'))] ?? 0,
-            value('bits')
+            value('fm')
+          )
+        )
+      } else if (input.kind === 'chip') {
+        hold(input.id, { ...input.values }, (value) =>
+          synth.setChip(
+            i,
+            CHIP_WAVES[Math.round(value('wave'))] ?? CHIP_WAVES[0],
+            12 * value('octave') + value('semi') + value('fine') / 100,
+            CHIP_DUTIES[Math.round(value('duty'))] ?? 0.5,
+            CHIP_STEPS[Math.round(value('steps'))] ?? 0,
+            value('bits'),
+            value('dc')
           )
         )
       } else if (input.kind === 'ring') {

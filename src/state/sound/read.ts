@@ -5,8 +5,10 @@
  * unknown kinds go; a part with a bad or repeated id gets a new one;
  * sends, references and routes that name nothing go too. A sound written
  * before the session's buses, which sent to its delay and its reverb,
- * sends to the buses the session's first mix has for them.
+ * sends to the buses the session's first mix has for them. An oscillator
+ * saved held in steps reads as the chip it is now.
  */
+import { CHIP_DUTIES } from '../../dsp/oscillator'
 import { clampValue } from '../params'
 import {
   AMOUNT_SPEC,
@@ -64,9 +66,11 @@ export function readSound(value: unknown): Sound {
 
   const inputData: Data[] = []
   const inputs: Input[] = []
-  for (const entry of list(value.inputs)) {
+  for (const given of list(value.inputs)) {
     if (inputs.length >= MAX_INPUTS) break
-    if (!isData(entry) || !isKey(INPUT_KINDS, entry.kind)) continue
+    if (!isData(given)) continue
+    const entry = asChip(given)
+    if (!isKey(INPUT_KINDS, entry.kind)) continue
     const kind = entry.kind
     inputData.push(entry)
     inputs.push({
@@ -207,6 +211,45 @@ function readSends(given: Data): Values {
 
 function isData(value: unknown): value is Data {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+/** A chip's wave (CHIP_WAVE_NAMES) for each oscillator wave (WAVE_NAMES) */
+const CHIP_WAVE_OF = [3, 1, 2, 0] as const
+
+/**
+ * An input as its kind is now: an oscillator held in steps (its Steps and
+ * Bits, from 2026-11-15 until the chip took them on 2026-11-16) as a chip
+ * of its wave, pitch, steps (its Steps less the Off the chip has not) and
+ * bits, on no DC, as it sounded, its square's width the nearest duty; its
+ * FM goes, which a chip has not. Anything else as it is.
+ */
+function asChip(entry: Data): Data {
+  const values = data(entry.values)
+  const steps = values.steps
+  if (entry.kind !== 'osc' || typeof steps !== 'number' || !(steps >= 0.5)) {
+    return entry
+  }
+  const wave = typeof values.wave === 'number' ? Math.round(values.wave) : 2
+  const width = typeof values.width === 'number' ? values.width : 0.5
+  let duty = 0
+  CHIP_DUTIES.forEach((d, i) => {
+    const best = CHIP_DUTIES[duty] as number
+    if (Math.abs(d - width) < Math.abs(best - width)) duty = i
+  })
+  return {
+    ...entry,
+    kind: 'chip',
+    values: {
+      wave: CHIP_WAVE_OF[wave as 0 | 1 | 2 | 3] ?? 2,
+      duty,
+      octave: values.octave,
+      semi: values.semi,
+      fine: values.fine,
+      steps: Math.round(steps) - 1,
+      bits: values.bits,
+      dc: 0,
+    },
+  }
 }
 
 /** value if it is a record, an empty one otherwise */

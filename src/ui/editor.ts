@@ -8,6 +8,8 @@
  */
 import {
   BUS_IDS,
+  CHIP_DUTY_NAMES,
+  CHIP_WAVE_NAMES,
   EFFECT_KINDS,
   EQ_POINT_KEYS,
   FILTER_TYPE_NAMES,
@@ -27,7 +29,7 @@ import {
   type MixOwner,
 } from '../state/mix'
 import { isCut } from '../dsp/eq'
-import { OSC_STEPS } from '../dsp/oscillator'
+import { CHIP_STEPS } from '../dsp/oscillator'
 import { formatValue } from '../state/params'
 import { setRef, setValue } from '../state/sound/edit'
 import {
@@ -157,6 +159,11 @@ export const GLYPHS = {
   steppedSine: 'M1 6 H3 V2.5 H7 V6 H9 V9.5 H13 V6 H17',
   steppedTriangle: 'M1 9 H3 V6 H5 V3 H7 V6 H9 V9 H11 V6 H13 V3 H15 V6 H17',
   steppedSaw: 'M1 10 H3 V7.3 H5 V4.7 H7 V2 H9 V10 H11 V7.3 H13 V4.7 H15 V2 H17',
+  // A chip's pulse at each of its duties, two cycles
+  pulse12: 'M1 10 V2 H2 V10 H9 V2 H10 V10 H17',
+  pulse25: 'M1 10 V2 H3 V10 H9 V2 H11 V10 H17',
+  pulse50: 'M1 10 V2 H5 V10 H9 V2 H13 V10 H17',
+  pulse75: 'M1 10 V2 H7 V10 H9 V2 H15 V10 H17',
   noise: 'M1 6 L3 3 L4 9 L6 2 L7 8 L9 4 L10 10 L12 3 L13 7 L15 2 L17 6',
   ring: 'M2 6 a4 4 0 1 0 8 0 a4 4 0 1 0 -8 0 M8 6 a4 4 0 1 0 8 0 a4 4 0 1 0 -8 0',
   lowpass: 'M1 4 H9 C12 4 13 6 17 11',
@@ -212,12 +219,18 @@ export const GLYPHS = {
 } as const
 
 const WAVE_GLYPHS = [GLYPHS.sine, GLYPHS.triangle, GLYPHS.saw, GLYPHS.square]
-/** The waves in steps: the square's steps change only its width */
-const STEPPED_GLYPHS = [
-  GLYPHS.steppedSine,
+/** A chip's waves, in CHIP_WAVE_NAMES' order, after its pulse */
+const CHIP_GLYPHS = [
   GLYPHS.steppedTriangle,
   GLYPHS.steppedSaw,
-  GLYPHS.square,
+  GLYPHS.steppedSine,
+]
+/** A chip's pulse, at each of CHIP_DUTIES */
+const PULSE_GLYPHS = [
+  GLYPHS.pulse12,
+  GLYPHS.pulse25,
+  GLYPHS.pulse50,
+  GLYPHS.pulse75,
 ]
 const FILTER_GLYPHS = [GLYPHS.lowpass, GLYPHS.highpass, GLYPHS.bandpass]
 const LFO_GLYPHS = [
@@ -262,8 +275,12 @@ export function glyphOf(sound: Sound, id: string): string {
       const { kind, values } = found.part
       if (kind === 'noise') return GLYPHS.noise
       if (kind === 'ring') return GLYPHS.ring
-      const glyphs = (values.steps ?? 0) > 0 ? STEPPED_GLYPHS : WAVE_GLYPHS
-      return glyphs[values.wave ?? 0] ?? GLYPHS.saw
+      if (kind === 'chip') {
+        const wave = Math.round(values.wave ?? 0)
+        if (wave > 0) return CHIP_GLYPHS[wave - 1] ?? GLYPHS.steppedTriangle
+        return PULSE_GLYPHS[Math.round(values.duty ?? 2)] ?? GLYPHS.pulse50
+      }
+      return WAVE_GLYPHS[values.wave ?? 0] ?? GLYPHS.saw
     }
     case 'item':
       return found.part.kind === 'drive'
@@ -526,19 +543,24 @@ export function heardThrough(sound: Sound, id: string): string | undefined {
 }
 
 /**
- * An input's own line: its wave, or its kind; a wave held in steps with
- * their count, and the bits their levels take: Triangle 32, Sine 32·4b
+ * An input's own line: an oscillator's wave, a chip's pulse with its duty
+ * or its wave with its steps, and the bits their levels take (Pulse 25%,
+ * Triangle 32, Sine 32·4b), or its kind
  */
 export function inputLine(sound: Sound, id: string): string {
   const found = findPart(sound, id)
   if (found?.type !== 'input') return ''
   const { kind, values } = found.part
-  if (kind !== 'osc') return INPUT_KINDS[kind].label
-  const wave = WAVE_NAMES[values.wave ?? 0] ?? ''
-  const steps = OSC_STEPS[Math.round(values.steps ?? 0)] ?? 0
-  if (steps === 0) return wave
+  if (kind === 'osc') return WAVE_NAMES[values.wave ?? 0] ?? ''
+  if (kind !== 'chip') return INPUT_KINDS[kind].label
+  const wave = Math.round(values.wave ?? 0)
+  const name = CHIP_WAVE_NAMES[wave] ?? ''
+  if (wave === 0) {
+    return `${name} ${CHIP_DUTY_NAMES[Math.round(values.duty ?? 2)] ?? ''}`
+  }
+  const steps = CHIP_STEPS[Math.round(values.steps ?? 0)] ?? 0
   const bits = Math.round(values.bits ?? 0)
-  return bits > 0 ? `${wave} ${steps}·${bits}b` : `${wave} ${steps}`
+  return bits > 0 ? `${name} ${steps}·${bits}b` : `${name} ${steps}`
 }
 
 /**
@@ -703,8 +725,9 @@ export function shapeKey(sound: Sound): string {
       input.kind,
       input.refs,
       input.values.wave,
-      // Its steps (on, a pictogram in steps, and Bits in its panel) and
-      // their bits, which its tile's name for a screen reader holds
+      // A chip's duty (its pulse's pictogram), steps and bits, which its
+      // tile's name for a screen reader holds
+      input.values.duty,
       input.values.steps,
       input.values.bits,
     ]),
