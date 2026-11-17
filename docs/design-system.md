@@ -136,7 +136,15 @@ They are built of these parts; they are not parts themselves.
   vocabulary: Tailwind's spacing, sizing, layout and type on its scale and
   every token as a fill, an ink, a line and a ring, built whether the app
   uses them or not) and the types.
-- The Claude Design project is synced from it with the design-sync skill:
-  its config, notes, conventions and stories are under `.design-sync/`,
-  which stays on the machine that syncs (gitignored), not in the
-  repository.
+- It lives in Claude as a Design System artifact (the Claude Design
+  project it began as moved there; its link is in `.design-sync/NOTES.md`).
+  The design-sync skill's converter builds `ds-bundle/` from `dist-ds/`,
+  and `.design-sync/to-claude.mjs` turns that into the artifact's files:
+  `tokens.json` (the colours from `src/index.css` and the Default theme in
+  both modes, the face, the spacing, the radii, the knob's size), the
+  components' bundle and stylesheet, each component's types, guide and
+  live preview, the README (`.design-sync/conventions.md`), these
+  guidelines and the cover; `.design-sync/check-claude.mjs` draws every
+  preview in the dark and the light before they are published. The config,
+  notes, conventions, stories and scripts are under `.design-sync/`, which
+  stays on the machine that syncs (gitignored), not in the repository.
