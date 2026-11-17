@@ -8,12 +8,11 @@ device-reports.jsonl
 .DS_Store
 # The design system as a package (pnpm build:ds), for Claude Design
 dist-ds/
-# Claude Design's sync (.design-sync/): its staged scripts, its output and
-# its machine state; the rest of .design-sync/ is kept
+# Claude Design's sync, kept on the machine that syncs, not in the
+# repository: its config, notes and stories (.design-sync/), its staged
+# scripts and its output
+.design-sync/
 .ds-sync/
 ds-bundle/
-.design-sync/.cache/
-.design-sync/learnings/
-.design-sync/node_modules
 # What tsc leaves building the design system's types (pnpm build:ds)
 *.tsbuildinfo

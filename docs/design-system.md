@@ -125,8 +125,8 @@ They are built of these parts; they are not parts themselves.
 2. Give its export a JSDoc ending in `@category <Group>`, one of the
    groups above or a new one.
 3. Export it from `src/ds/index.ts`, with the types its props name.
-4. Author its stories in `.design-sync/previews/<Name>.tsx` and re-sync
-   (`.design-sync/NOTES.md`).
+4. Author its stories in `.design-sync/previews/<Name>.tsx`, on the
+   machine that syncs, and re-sync (`.design-sync/NOTES.md`).
 
 ## Building and syncing
 
@@ -137,4 +137,6 @@ They are built of these parts; they are not parts themselves.
   every token as a fill, an ink, a line and a ring, built whether the app
   uses them or not) and the types.
 - The Claude Design project is synced from it with the design-sync skill:
-  its config, notes, conventions and stories are under `.design-sync/`.
+  its config, notes, conventions and stories are under `.design-sync/`,
+  which stays on the machine that syncs (gitignored), not in the
+  repository.
