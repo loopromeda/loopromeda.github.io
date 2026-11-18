@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Loop } from '../state/song'
 import {
-  COLUMNS,
   DRAG_SLOP,
   MIN_ROW,
   VELOCITY_TRAVEL,
@@ -14,6 +13,11 @@ import {
   rowsFit,
   shiftWindow,
 } from './steps'
+
+/** A bar of 4/4: 16 sixteenths across */
+const COLUMNS = 16
+/** A bar of 3/4, or of 6/8: 12 */
+const THREE = 12
 
 describe('rowsFit', () => {
   it('shows as many rows as stand at their least height', () => {
@@ -31,51 +35,89 @@ describe('rowsFit', () => {
 
 describe('cellAt', () => {
   it('counts columns from the left and rows from the bottom', () => {
-    expect(cellAt(0, 0.999, 8)).toEqual({ column: 0, row: 0 })
-    expect(cellAt(0.999, 0, 8)).toEqual({ column: COLUMNS - 1, row: 7 })
-    expect(cellAt(0.5, 0.5, 8)).toEqual({ column: 8, row: 4 })
+    expect(cellAt(0, 0.999, 8, COLUMNS)).toEqual({ column: 0, row: 0 })
+    expect(cellAt(0.999, 0, 8, COLUMNS)).toEqual({
+      column: COLUMNS - 1,
+      row: 7,
+    })
+    expect(cellAt(0.5, 0.5, 8, COLUMNS)).toEqual({ column: 8, row: 4 })
+  })
+
+  it('counts a bar of another meter’s steps across', () => {
+    expect(cellAt(0.999, 0, 8, THREE)).toEqual({ column: THREE - 1, row: 7 })
+    expect(cellAt(0.5, 0.5, 8, THREE)).toEqual({ column: 6, row: 4 })
+    expect(cellAt(1.3, 0, 8, THREE)).toEqual({ column: THREE - 1, row: 7 })
   })
 
   it('holds a touch past the edge to the nearest cell', () => {
-    expect(cellAt(-0.2, 1.4, 8)).toEqual({ column: 0, row: 0 })
-    expect(cellAt(1, 0, 8)).toEqual({ column: COLUMNS - 1, row: 7 })
-    expect(cellAt(1.3, -0.5, 8)).toEqual({ column: COLUMNS - 1, row: 7 })
+    expect(cellAt(-0.2, 1.4, 8, COLUMNS)).toEqual({ column: 0, row: 0 })
+    expect(cellAt(1, 0, 8, COLUMNS)).toEqual({ column: COLUMNS - 1, row: 7 })
+    expect(cellAt(1.3, -0.5, 8, COLUMNS)).toEqual({
+      column: COLUMNS - 1,
+      row: 7,
+    })
   })
 })
 
 describe('noteBox', () => {
   it('places a note by its step and its key, the lowest at the bottom', () => {
-    expect(noteBox({ step: 4, key: 60, length: 2 }, 0, 60, 4)).toEqual({
-      left: 4 / COLUMNS,
-      top: 3 / 4,
-      width: 2 / COLUMNS,
-      height: 1 / 4,
-      head: true,
-    })
-    expect(noteBox({ step: 0, key: 63, length: 1 }, 0, 60, 4)?.top).toBe(0)
+    expect(noteBox({ step: 4, key: 60, length: 2 }, 0, 60, 4, COLUMNS)).toEqual(
+      {
+        left: 4 / COLUMNS,
+        top: 3 / 4,
+        width: 2 / COLUMNS,
+        height: 1 / 4,
+        head: true,
+      }
+    )
+    expect(
+      noteBox({ step: 0, key: 63, length: 1 }, 0, 60, 4, COLUMNS)?.top
+    ).toBe(0)
   })
 
   it('places a note of a later bar within the bar shown', () => {
-    const box = noteBox({ step: 20, key: 2, length: 1 }, 1, 0, 16)
+    const box = noteBox({ step: 20, key: 2, length: 1 }, 1, 0, 16, COLUMNS)
     expect(box?.left).toBe(4 / COLUMNS)
     expect(box?.head).toBe(true)
   })
 
   it('cuts a note to the bar shown', () => {
-    const out = noteBox({ step: 14, key: 0, length: 4 }, 0, 0, 16)
+    const out = noteBox({ step: 14, key: 0, length: 4 }, 0, 0, 16, COLUMNS)
     expect(out?.left).toBe(14 / COLUMNS)
     expect(out?.width).toBe(2 / COLUMNS)
-    const held = noteBox({ step: 14, key: 0, length: 4 }, 1, 0, 16)
+    const held = noteBox({ step: 14, key: 0, length: 4 }, 1, 0, 16, COLUMNS)
     expect(held?.left).toBe(0)
     expect(held?.width).toBe(2 / COLUMNS)
     expect(held?.head).toBe(false)
   })
 
+  it('places and cuts a note in a bar of another meter', () => {
+    const box = noteBox({ step: 14, key: 0, length: 4 }, 1, 0, 16, THREE)
+    expect(box?.left).toBe(2 / THREE)
+    expect(box?.width).toBe(4 / THREE)
+    expect(box?.head).toBe(true)
+    const held = noteBox({ step: 10, key: 0, length: 4 }, 1, 0, 16, THREE)
+    expect(held?.left).toBe(0)
+    expect(held?.width).toBe(2 / THREE)
+    expect(held?.head).toBe(false)
+    expect(
+      noteBox({ step: 12, key: 0, length: 1 }, 0, 0, 16, THREE)
+    ).toBeUndefined()
+  })
+
   it('draws nothing of another bar, or of a key not shown', () => {
-    expect(noteBox({ step: 3, key: 0, length: 1 }, 1, 0, 16)).toBeUndefined()
-    expect(noteBox({ step: 16, key: 0, length: 1 }, 0, 0, 16)).toBeUndefined()
-    expect(noteBox({ step: 3, key: 59, length: 1 }, 0, 60, 12)).toBeUndefined()
-    expect(noteBox({ step: 3, key: 72, length: 1 }, 0, 60, 12)).toBeUndefined()
+    expect(
+      noteBox({ step: 3, key: 0, length: 1 }, 1, 0, 16, COLUMNS)
+    ).toBeUndefined()
+    expect(
+      noteBox({ step: 16, key: 0, length: 1 }, 0, 0, 16, COLUMNS)
+    ).toBeUndefined()
+    expect(
+      noteBox({ step: 3, key: 59, length: 1 }, 0, 60, 12, COLUMNS)
+    ).toBeUndefined()
+    expect(
+      noteBox({ step: 3, key: 72, length: 1 }, 0, 60, 12, COLUMNS)
+    ).toBeUndefined()
   })
 })
 
@@ -148,18 +190,28 @@ describe('rows other tracks play', () => {
   })
 
   it('marks the keys of the notes in the bar shown', () => {
-    const rows = othersRows([other(16, [0, 60], [4, 64])], 0)
+    const rows = othersRows([other(16, [0, 60], [4, 64])], 0, COLUMNS)
     expect([...rows]).toEqual([60, 64])
   })
 
   it('wraps each loop’s own length under the bar', () => {
-    expect([...othersRows([other(16, [3, 48])], 1)]).toEqual([48])
-    expect([...othersRows([other(32, [4, 48], [20, 52])], 0)]).toEqual([48])
-    expect([...othersRows([other(32, [4, 48], [20, 52])], 1)]).toEqual([52])
+    expect([...othersRows([other(16, [3, 48])], 1, COLUMNS)]).toEqual([48])
+    expect([...othersRows([other(32, [4, 48], [20, 52])], 0, COLUMNS)]).toEqual(
+      [48]
+    )
+    expect([...othersRows([other(32, [4, 48], [20, 52])], 1, COLUMNS)]).toEqual(
+      [52]
+    )
+  })
+
+  it('takes the bar shown in the song’s meter', () => {
+    // A bar of 3/4: steps 12 to 23 the second
+    const loop = other(24, [11, 48], [12, 52], [23, 55])
+    expect([...othersRows([loop], 1, THREE)]).toEqual([52, 55])
   })
 
   it('marks nothing without notes', () => {
-    expect(othersRows([other(0)], 0).size).toBe(0)
-    expect(othersRows([], 3).size).toBe(0)
+    expect(othersRows([other(0)], 0, COLUMNS).size).toBe(0)
+    expect(othersRows([], 3, COLUMNS).size).toBe(0)
   })
 })

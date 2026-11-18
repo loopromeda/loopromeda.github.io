@@ -33,6 +33,9 @@
 @source inline("justify-items-{start,end,center,stretch}");
 @source inline("{self,content,place-items,place-content,place-self}-{start,end,center,stretch,between,auto}");
 @source inline("{grid-cols,grid-rows}-{1,2,3,4,5,6,7,8,9,10,11,12,none,subgrid}");
+/* A bar of sixteenths across, in any meter the transport offers */
+@source inline("grid-cols-{14,16,18,20,24}");
+@source inline("{auto-cols,auto-rows}-{auto,min,max,fr}");
 @source inline("{col-span,row-span}-{1,2,3,4,5,6,7,8,9,10,11,12,full}");
 @source inline("{col,row}-start-{1,2,3,4,5,6,7}");
 @source inline("grid-flow-{row,col,dense}");

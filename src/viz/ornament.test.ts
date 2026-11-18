@@ -7,9 +7,10 @@ import {
   type OrnamentedNote,
 } from './ornament'
 
-/** A grid of eight rows from C4 (60) up, a bar of sixteenths */
+/** A grid of eight rows from C4 (60) up, a bar of 4/4's 16 sixteenths */
 const FIRST = 60
 const ROWS = 8
+const BAR = 16
 
 function note(
   step: number,
@@ -28,10 +29,10 @@ function rowTop(key: number): number {
 describe('an ornament’s marks', () => {
   it('are none for a note with none, or in another bar', () => {
     const plain = { step: 4, key: 62, length: 1, velocity: 1 }
-    expect(ornamentMarks(plain, 0, FIRST, ROWS, 32)).toBeUndefined()
+    expect(ornamentMarks(plain, 0, FIRST, ROWS, 32, BAR)).toBeUndefined()
     const trill = note(20, ORNAMENT_DEFAULTS.trill)
-    expect(ornamentMarks(trill, 0, FIRST, ROWS, 32)).toBeUndefined()
-    expect(ornamentMarks(trill, 1, FIRST, ROWS, 32)).toBeDefined()
+    expect(ornamentMarks(trill, 0, FIRST, ROWS, 32, BAR)).toBeUndefined()
+    expect(ornamentMarks(trill, 1, FIRST, ROWS, 32, BAR)).toBeDefined()
   })
 
   it('put a grace note on its own row, half as tall, before the note', () => {
@@ -40,7 +41,8 @@ describe('an ornament’s marks', () => {
       0,
       FIRST,
       ROWS,
-      16
+      16,
+      BAR
     )
     expect(marks?.graces).toEqual([
       {
@@ -61,6 +63,7 @@ describe('an ornament’s marks', () => {
       FIRST,
       ROWS,
       32,
+      BAR,
       false
     )
     expect(flam).toBeUndefined()
@@ -70,6 +73,7 @@ describe('an ornament’s marks', () => {
       FIRST,
       ROWS,
       32,
+      BAR,
       false
     )
     expect(wrapped?.graces).toEqual([
@@ -88,7 +92,8 @@ describe('an ornament’s marks', () => {
       0,
       FIRST,
       ROWS,
-      16
+      16,
+      BAR
     )
     expect(marks?.ticks.map((tick) => tick.x * 16)).toEqual([4.5, 5, 5.5])
     expect(marks?.ticks[0]).toMatchObject({
@@ -104,7 +109,8 @@ describe('an ornament’s marks', () => {
       0,
       FIRST,
       ROWS,
-      16
+      16,
+      BAR
     )
     const low = rowTop(62) + 0.8 / ROWS
     const high = rowTop(62) + 0.2 / ROWS
@@ -127,7 +133,8 @@ describe('an ornament’s marks', () => {
       0,
       FIRST,
       ROWS,
-      16
+      16,
+      BAR
     )
     expect(marks?.ticks.map((tick) => tick.x * 16)).toEqual([4.25, 4.5, 4.75])
   })
@@ -138,7 +145,8 @@ describe('an ornament’s marks', () => {
       0,
       FIRST,
       ROWS,
-      16
+      16,
+      BAR
     )
     const low = rowTop(62) + 0.8 / ROWS
     const high = rowTop(62) + 0.2 / ROWS
@@ -156,7 +164,8 @@ describe('an ornament’s marks', () => {
       1,
       FIRST,
       ROWS,
-      48
+      48,
+      BAR
     )
     const xs = marks?.path.map((point) => point.x * 16) ?? []
     expect(xs[0]).toBe(0)
@@ -164,12 +173,26 @@ describe('an ornament’s marks', () => {
     expect(xs).toHaveLength(33)
   })
 
+  it('place a grace in a bar of another meter', () => {
+    // 3/4: a bar of 12 steps, the second from step 12
+    const marks = ornamentMarks(
+      note(16, ORNAMENT_DEFAULTS.grace),
+      1,
+      FIRST,
+      ROWS,
+      24,
+      12
+    )
+    expect(marks?.graces[0]?.left).toBe(3.75 / 12)
+    expect(marks?.graces[0]?.width).toBe(0.25 / 12)
+  })
+
   it('leave out what falls on rows not shown', () => {
     const above = note(4, { ...ORNAMENT_DEFAULTS.grace, interval: 12 })
-    const marks = ornamentMarks(above, 0, FIRST, ROWS, 16)
+    const marks = ornamentMarks(above, 0, FIRST, ROWS, 16, BAR)
     expect(marks).toBeUndefined()
     const below = { ...note(4, ORNAMENT_DEFAULTS.trill), key: 80 }
-    expect(ornamentMarks(below, 0, FIRST, ROWS, 16)).toBeUndefined()
+    expect(ornamentMarks(below, 0, FIRST, ROWS, 16, BAR)).toBeUndefined()
   })
 })
 

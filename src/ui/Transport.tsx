@@ -5,24 +5,29 @@ import {
   type Ref,
   type RefObject,
 } from 'react'
-import {
-  BAR_STEPS,
-  MAX_SWING,
-  MAX_TEMPO,
-  MIN_SWING,
-  MIN_TEMPO,
-} from '../dsp/sequencer'
+import { MAX_SWING, MAX_TEMPO, MIN_SWING, MIN_TEMPO } from '../dsp/sequencer'
 import type { Engine } from '../engine/engine'
+import {
+  FOUR_FOUR,
+  barSteps,
+  beatSteps,
+  beatsOf,
+  meterName,
+  sameMeter,
+  type Meter,
+  type MeterUnit,
+} from '../state/meter'
 import type { RecordMode } from '../state/record'
 import type { AppSettings } from '../state/settings'
-import { loopOn, setLoopOn, setSwing, setTempo } from '../state/song'
+import { loopOn, setLoopOn, setMeter, setSwing, setTempo } from '../state/song'
 import { trackName, tracksKey } from '../state/tracks'
-import { COLUMNS } from '../viz/steps'
+import { positionText } from '../viz/position'
 import {
   BAR_HIT,
   ICON_BUTTON,
   SECTION_HEADING,
   SLIDER,
+  SMALL_OPTION,
   TALL_HIT,
   sliderFill,
 } from './controls'
@@ -152,18 +157,10 @@ export function useTransportKeys(engine: Engine): void {
   }, [engine])
 }
 
-/** Where the song is: bar, beat and sixteenth from 1, or the count's beats */
-export function positionText(step: number, counting: boolean): string {
-  if (counting) return `\u2212${Math.ceil(-step / 4)}`
-  if (step < 0) return '1.1.1'
-  const bar = Math.floor(step / BAR_STEPS) + 1
-  const beat = Math.floor((step % BAR_STEPS) / 4) + 1
-  return `${bar}.${beat}.${(step % 4) + 1}`
-}
-
 /**
  * Where the song is, beside Play on the tab rail: bar, beat and sixteenth
- * (`3.2.1`), the beats left while it counts in (`−4`), and while stopped
+ * (`3.2.1`) in the song's meter (src/viz/position.ts), the beats left
+ * while it counts in (`−4`, `−3` in 3/4, `−2` in 6/8), and while stopped
  * the beat Play starts from, dim. Written outside React a step at a time,
  * as the audio thread tells of them; it leads what is heard by the
  * output's latency. Not shown under 384 px wide, where the rail has no
@@ -181,7 +178,7 @@ export function Position({ engine }: { engine: Engine }) {
       const step = engine.step
       // Stopped, or not yet told of a step: the beat Play starts from
       const at = counting || (playing && step >= 0) ? step : engine.cue
-      const next = positionText(at, counting)
+      const next = positionText(at, counting, engine.getSong().meter)
       if (next !== shown) {
         text.textContent = next
         shown = next
@@ -191,9 +188,12 @@ export function Position({ engine }: { engine: Engine }) {
     show()
     const stopSteps = engine.watchSteps(show)
     const stopTransport = engine.subscribeTransport(show)
+    // Another meter: the same step stands elsewhere in its bar
+    const stopSong = engine.subscribeSong(show)
     return () => {
       stopSteps()
       stopTransport()
+      stopSong()
     }
   }, [engine])
   return (
@@ -254,6 +254,47 @@ const useTempo = (engine: Engine): number =>
 const useSwing = (engine: Engine): number =>
   useSyncExternalStore(engine.subscribeSong, () => engine.getSong().swing)
 
+const useMeter = (engine: Engine): Meter =>
+  useSyncExternalStore(engine.subscribeSong, () => engine.getSong().meter)
+
+/**
+ * The meters the transport offers, a row for each note value: the
+ * quarters' and the eighths' most played. A bar of them is 24 steps at
+ * most (12/8), so a phone's grid still gives each a finger.
+ */
+const METERS: readonly (readonly Meter[])[] = [
+  [
+    { count: 2, unit: 4 },
+    { count: 3, unit: 4 },
+    FOUR_FOUR,
+    { count: 5, unit: 4 },
+  ],
+  [
+    { count: 6, unit: 8 },
+    { count: 7, unit: 8 },
+    { count: 9, unit: 8 },
+    { count: 12, unit: 8 },
+  ],
+]
+
+/**
+ * The meters offered in unit's row, and the song's own where it is one
+ * not offered (read from a file): in its row, by its count
+ */
+function metersOf(unit: MeterUnit, song: Meter): readonly Meter[] {
+  const row = METERS[unit === 4 ? 0 : 1] ?? []
+  if (song.unit !== unit || row.some((each) => sameMeter(each, song))) {
+    return row
+  }
+  return [...row, song].sort((a, b) => a.count - b.count)
+}
+
+/** How the click counts a bar of meter: "2 beats a bar" */
+function beatsText(meter: Meter): string {
+  const beats = beatsOf(meter)
+  return `${beats} ${beats === 1 ? 'beat' : 'beats'} a bar`
+}
+
 /** As wide as it wants to be, in rem: two rows of a slider and its ends */
 const WANT_W = 20
 
@@ -265,7 +306,9 @@ const METRONOME = 'M6.5 2.5h5l3 13h-11zM9 11.5l4-7'
  * rail, above it in the play surface's header): the song's tempo on a
  * slider with a beat down and a beat up at its ends, the swing (the
  * share of each pair of sixteenths the first takes) from straight to a
- * triplet's and a little past; the click, the count-in and how
+ * triplet's and a little past, the meter (how many quarters or eighths
+ * a bar holds, docs/plan/tracks-and-song.md, K: each loop keeps its
+ * bars, which grow or shrink); the click, the count-in and how
  * recording meets a loop's notes (the device's settings); and each track
  * with its loop on or off (the song's). Each
  * change plays at once. Escape and the cross close it; so does a tap
@@ -286,6 +329,7 @@ export function TransportPicker({
 }) {
   const tempo = useTempo(engine)
   const swing = useSwing(engine)
+  const meter = useMeter(engine)
   const song = useSyncExternalStore(engine.subscribeSong, engine.getSong)
   // The tracks: which there are, in their order, and what they are called
   useSyncExternalStore(engine.subscribeSound, () =>
@@ -301,6 +345,8 @@ export function TransportPicker({
     engine.editSong((song) => setTempo(song, song.tempo + by))
   const swung = (value: number) =>
     engine.editSong((song) => setSwing(song, value / 100))
+  const metered = (value: Meter) =>
+    engine.editSong((song) => setMeter(song, value))
 
   return (
     <Popover
@@ -322,7 +368,7 @@ export function TransportPicker({
         </svg>
       }
       title="Transport"
-      note={`${tempo} BPM`}
+      note={`${tempo} BPM · ${meterName(meter)}`}
       closeLabel="Close the transport"
       onClose={onClose}
       bodyClassName="gap-3"
@@ -381,6 +427,46 @@ export function TransportPicker({
             style={sliderFill(percent, MIN_SWING * 100, MAX_SWING * 100)}
           />
         </div>
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <div className="flex items-baseline justify-between px-1">
+          <h3 id="tempo-meter" className={SECTION_HEADING}>
+            Meter
+          </h3>
+          <span className="font-mono text-[11px] text-(--ink-400)">
+            {beatsText(meter)}
+          </span>
+        </div>
+        <div
+          role="group"
+          aria-labelledby="tempo-meter"
+          aria-describedby="tempo-meter-hint"
+          className="flex flex-col gap-1 px-1"
+        >
+          {([4, 8] as const).map((unit) => (
+            <div key={unit} className="grid auto-cols-fr grid-flow-col gap-1">
+              {metersOf(unit, meter).map((each) => (
+                <button
+                  key={meterName(each)}
+                  type="button"
+                  aria-pressed={sameMeter(each, meter)}
+                  onClick={() => metered(each)}
+                  className={`${SMALL_OPTION} font-mono`}
+                >
+                  {meterName(each)}
+                </button>
+              ))}
+            </div>
+          ))}
+        </div>
+        <p
+          id="tempo-meter-hint"
+          className="px-1 text-[11px] leading-snug text-(--ink-500)"
+        >
+          Each loop keeps its count of bars, each as long as the meter makes it.
+          Notes past a loop’s new end are kept, unplayed, until it grows again.
+        </p>
       </div>
 
       <div className="flex flex-col gap-1.5">
@@ -446,8 +532,9 @@ const BEAT_LIGHT =
   'size-2 shrink-0 rounded-full bg-(--lift-4) data-on:bg-(--accent)'
 
 /**
- * A bar of sixteenths as a row of lights, the beats' larger: the one the
- * sequencer plays lit as it passes, none while it is stopped. Lit outside
+ * A bar of sixteenths as a row of lights, as many as the song's meter
+ * gives a bar, each beat's first larger: the one the sequencer plays lit
+ * as it passes, none while it is stopped. Lit outside
  * React, a step at a time as the audio thread tells of them; it leads
  * what is heard by the output's latency.
  */
@@ -458,13 +545,16 @@ export function StepLights({
   engine: Engine
   className?: string
 }) {
+  const meter = useMeter(engine)
+  const steps = barSteps(meter)
+  const beat = beatSteps(meter)
   const rowRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     const row = rowRef.current
     if (!row) return
     let lit = -1
     const show = (step: number) => {
-      const next = step < 0 ? -1 : step % COLUMNS
+      const next = step < 0 ? -1 : step % steps
       if (next === lit) return
       if (lit >= 0) row.children[lit]?.removeAttribute('data-on')
       if (next >= 0) row.children[next]?.setAttribute('data-on', '')
@@ -472,8 +562,12 @@ export function StepLights({
     }
     // Steps are told of as they change: the one playing now is read
     show(engine.step)
-    return engine.watchSteps(show)
-  }, [engine])
+    const stop = engine.watchSteps(show)
+    return () => {
+      stop()
+      if (lit >= 0) row.children[lit]?.removeAttribute('data-on')
+    }
+  }, [engine, steps])
 
   return (
     <div
@@ -481,8 +575,8 @@ export function StepLights({
       aria-hidden
       className={`flex items-center justify-between ${className}`}
     >
-      {Array.from({ length: COLUMNS }, (_, step) => (
-        <span key={step} className={step % 4 === 0 ? BEAT_LIGHT : LIGHT} />
+      {Array.from({ length: steps }, (_, step) => (
+        <span key={step} className={step % beat === 0 ? BEAT_LIGHT : LIGHT} />
       ))}
     </div>
   )

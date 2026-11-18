@@ -4,14 +4,17 @@
  * turns: toNormalized) up it. Where a finger draws, the steps a quick
  * stroke passes over, the shapes Fill writes and the outline drawn: in
  * fractions of the strip (0..1 across and down) where a place is meant,
- * the outline in a box COLUMNS wide and 1 tall. Pure math, no DOM.
+ * the outline in a box a column wide for each step of the bar and 1
+ * tall. Pure math, no DOM.
  */
-import { COLUMNS } from './steps'
 
-/** The column of the bar shown a finger at x (0..1 across) stands over */
-export function laneColumn(x: number): number {
-  const column = Math.floor(x * COLUMNS)
-  return column > 0 ? Math.min(column, COLUMNS - 1) : 0
+/**
+ * The column of the bar shown, columns steps across, a finger at x (0..1
+ * across) stands over
+ */
+export function laneColumn(x: number, columns: number): number {
+  const column = Math.floor(x * columns)
+  return column > 0 ? Math.min(column, columns - 1) : 0
 }
 
 /** The knob's position a finger at y (0..1 down the strip) sets */
@@ -101,9 +104,10 @@ const INSET = 0.12
 
 /**
  * The bar shown of a lane, levels its steps' (0..1, the top full) and
- * next the level of the step after its last, in a box COLUMNS wide and 1
- * tall: held, a bar on each step at its level; gliding, a line through
- * each step's level at its start, on to next at the bar's end
+ * next the level of the step after its last, in a box a column wide for
+ * each level and 1 tall: held, a bar on each step at its level; gliding,
+ * a line through each step's level at its start, on to next at the
+ * bar's end
  */
 export function laneOutline(
   levels: readonly number[],

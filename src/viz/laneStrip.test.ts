@@ -10,11 +10,14 @@ import {
 
 describe('a lane’s strip', () => {
   it('finds the step and the level under a finger, within the strip', () => {
-    expect(laneColumn(0)).toBe(0)
-    expect(laneColumn(0.5)).toBe(8)
-    expect(laneColumn(0.999)).toBe(15)
-    expect(laneColumn(1.2)).toBe(15)
-    expect(laneColumn(-0.1)).toBe(0)
+    expect(laneColumn(0, 16)).toBe(0)
+    expect(laneColumn(0.5, 16)).toBe(8)
+    expect(laneColumn(0.999, 16)).toBe(15)
+    expect(laneColumn(1.2, 16)).toBe(15)
+    expect(laneColumn(-0.1, 16)).toBe(0)
+    // A bar of 7/8: 14 steps
+    expect(laneColumn(0.5, 14)).toBe(7)
+    expect(laneColumn(1, 14)).toBe(13)
     expect(laneLevel(0)).toBe(1)
     expect(laneLevel(0.25)).toBe(0.75)
     expect(laneLevel(1.5)).toBe(0)

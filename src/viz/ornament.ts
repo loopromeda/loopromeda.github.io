@@ -18,7 +18,7 @@ import {
   type Ornament,
   type Sound,
 } from '../dsp/ornament'
-import { COLUMNS, type PlacedNote } from './steps'
+import type { PlacedNote } from './steps'
 
 /** The most steps a grace note starts before its note: three at ×2 */
 const LEAD = MAX_GRACES / Math.min(...SPEEDS)
@@ -58,11 +58,11 @@ export interface OrnamentedNote extends PlacedNote {
 }
 
 /**
- * The marks of note's ornament on a grid showing bar (0 the first) and
- * rows keys from first up, of a loop of steps: on a synth (pitched) or a
- * kit's pads. A grace before the loop's first step is drawn at its end,
- * where it plays. None where the note has no ornament, or none that
- * falls in the bar shown.
+ * The marks of note's ornament on a grid showing bar (0 the first) of
+ * columns steps and rows keys from first up, of a loop of steps: on a
+ * synth (pitched) or a kit's pads. A grace before the loop's first step
+ * is drawn at its end, where it plays. None where the note has no
+ * ornament, or none that falls in the bar shown.
  */
 export function ornamentMarks(
   note: OrnamentedNote,
@@ -70,12 +70,13 @@ export function ornamentMarks(
   first: number,
   rows: number,
   steps: number,
+  columns: number,
   pitched = true
 ): OrnamentMarks | undefined {
   const { ornament } = note
   if (!ornament) return undefined
-  const start = bar * COLUMNS
-  const end = start + COLUMNS
+  const start = bar * columns
+  const end = start + columns
   // Nowhere near the bar, or its graces wrapped to the loop's end
   const near = note.step + note.length > start && note.step - LEAD < end
   const wraps = steps > 0 && note.step < LEAD && end > steps - LEAD
@@ -97,9 +98,9 @@ export function ornamentMarks(
       const to = Math.min(at + sound.d, end)
       if (to > from && shown(key)) {
         graces.push({
-          left: (from - start) / COLUMNS,
+          left: (from - start) / columns,
           top: rowTop(key) + 0.25 / rows,
-          width: (to - from) / COLUMNS,
+          width: (to - from) / columns,
           height: 0.5 / rows,
         })
       }
@@ -110,7 +111,7 @@ export function ornamentMarks(
     if (!shown(note.key)) return
     const top = rowTop(note.key)
     ticks.push({
-      x: (at - start) / COLUMNS,
+      x: (at - start) / columns,
       top: top + 0.2 / rows,
       bottom: top + 0.8 / rows,
     })
@@ -123,6 +124,7 @@ export function ornamentMarks(
           sounds,
           ornament.kind === 'arp',
           start,
+          columns,
           rowTop(note.key),
           rows
         )
@@ -135,14 +137,15 @@ export function ornamentMarks(
  * where each starts, on to the note's end (a mordent, a trill), or a
  * stair for each (an arpeggio), on the row whose top is top of rows:
  * the highest a fifth of the row from its top, the lowest as far from
- * its bottom. Only what reaches the bar starting on step start, and the
- * points either side of it.
+ * its bottom. Only what reaches the bar of columns steps starting on step
+ * start, and the points either side of it.
  */
 function pitchPath(
   note: OrnamentedNote,
   sounds: readonly Sound[],
   stairs: boolean,
   start: number,
+  columns: number,
   top: number,
   rows: number
 ): Point[] {
@@ -154,7 +157,7 @@ function pitchPath(
   }
   const y = (off: number) =>
     top + (high === low ? 0.5 : 0.8 - (0.6 * (off - low)) / (high - low)) / rows
-  const x = (t: number) => (note.step + t - start) / COLUMNS
+  const x = (t: number) => (note.step + t - start) / columns
   const all: Point[] = []
   sounds.forEach((sound, k) => {
     const next = sounds[k + 1]

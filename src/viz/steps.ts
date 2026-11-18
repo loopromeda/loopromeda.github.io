@@ -1,16 +1,14 @@
 /**
  * The step grid's geometry (src/ui/StepGrid.tsx): a bar of sixteenths
- * across, a row for each key (a synth's note, a kit's pad) up it, the
- * lowest at the bottom. Which cell a touch falls in, where a note is
- * drawn, and what a finger dragged from a note makes of it: up and down
- * its velocity, sideways its length. In fractions of the grid (0..1
- * across and down) where a place is meant, so the same numbers draw the
- * notes and hit-test touches. Pure math, no DOM.
+ * across (columns of them, as the song's meter makes a bar: 16 in 4/4,
+ * 12 in 3/4 and 6/8, 14 in 7/8), a row for each key (a synth's note, a
+ * kit's pad) up it, the lowest at the bottom. Which cell a touch falls
+ * in, where a note is drawn, and what a finger dragged from a note makes
+ * of it: up and down its velocity, sideways its length. In fractions of
+ * the grid (0..1 across and down) where a place is meant, so the same
+ * numbers draw the notes and hit-test touches. Pure math, no DOM.
  */
 import type { Loop } from '../state/song'
-
-/** The steps across the grid: a bar of sixteenths */
-export const COLUMNS = 16
 
 /** The least a row stands, in CSS px: a finger still finds it */
 export const MIN_ROW = 20
@@ -39,10 +37,18 @@ export interface Cell {
   readonly row: number
 }
 
-/** The cell at x, y (0..1 across and down) of a grid of rows */
-export function cellAt(x: number, y: number, rows: number): Cell {
+/**
+ * The cell at x, y (0..1 across and down) of a grid of rows, a bar of
+ * columns steps across
+ */
+export function cellAt(
+  x: number,
+  y: number,
+  rows: number,
+  columns: number
+): Cell {
   return {
-    column: within(Math.floor(x * COLUMNS), 0, COLUMNS - 1),
+    column: within(Math.floor(x * columns), 0, columns - 1),
     row: within(Math.floor((1 - y) * rows), 0, rows - 1),
   }
 }
@@ -65,26 +71,27 @@ export interface NoteBox {
 }
 
 /**
- * Where note is drawn on a grid showing bar (0 the first) and rows keys
- * from first up, cut to the bar; nothing where it is in another bar or
- * at a key not shown
+ * Where note is drawn on a grid showing bar (0 the first) of columns
+ * steps and rows keys from first up, cut to the bar; nothing where it is
+ * in another bar or at a key not shown
  */
 export function noteBox(
   note: PlacedNote,
   bar: number,
   first: number,
-  rows: number
+  rows: number,
+  columns: number
 ): NoteBox | undefined {
   const row = note.key - first
   if (row < 0 || row >= rows) return undefined
-  const start = bar * COLUMNS
+  const start = bar * columns
   const from = Math.max(note.step, start)
-  const to = Math.min(note.step + note.length, start + COLUMNS)
+  const to = Math.min(note.step + note.length, start + columns)
   if (to <= from) return undefined
   return {
-    left: (from - start) / COLUMNS,
+    left: (from - start) / columns,
     top: (rows - 1 - row) / rows,
-    width: (to - from) / COLUMNS,
+    width: (to - from) / columns,
     height: 1 / rows,
     head: note.step >= start,
   }
@@ -141,18 +148,22 @@ export function shiftWindow(
 }
 
 /**
- * The rows of the grid another track plays in the bar shown: the keys of
- * the notes whose step falls in it, each loop's own length wrapped under
- * the bar (a two-bar loop shows its second bar under the second bar; a
- * one-bar loop shows its whole round under every bar).
+ * The rows of the grid another track plays in the bar shown, of columns
+ * steps: the keys of the notes whose step falls in it, each loop's own
+ * length wrapped under the bar (a two-bar loop shows its second bar under
+ * the second bar; a one-bar loop shows its whole round under every bar).
  */
-export function othersRows(others: readonly Loop[], bar: number): Set<number> {
+export function othersRows(
+  others: readonly Loop[],
+  bar: number,
+  columns: number
+): Set<number> {
   const rows = new Set<number>()
   for (const loop of others) {
     if (loop.steps <= 0) continue
     const within = new Set<number>()
-    for (let i = 0; i < COLUMNS; i++) {
-      within.add((bar * COLUMNS + i) % loop.steps)
+    for (let i = 0; i < columns; i++) {
+      within.add((bar * columns + i) % loop.steps)
     }
     for (const note of loop.notes) {
       if (within.has(note.step)) rows.add(note.key)

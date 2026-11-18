@@ -11,8 +11,8 @@ import {
 import type { Engine } from '../engine/engine'
 import { padName } from '../state/kit'
 import { laneGroups, ownValue, type LaneKnob } from '../state/lanes'
+import { barSteps, beatSteps, maxBars } from '../state/meter'
 import {
-  MAX_BARS,
   MAX_LANES,
   MIN_VELOCITY,
   addLane,
@@ -33,7 +33,6 @@ import {
 import { HIGHEST_NOTE, LOWEST_NOTE, isBlack, noteName } from '../viz/keyboard'
 import { ornamentMarks, type OrnamentMarks } from '../viz/ornament'
 import {
-  COLUMNS,
   cellAt,
   dragAxis,
   dragLength,
@@ -126,7 +125,10 @@ interface Drag {
 /**
  * The step sequencer, on the Seq tab: the loop of the tab's track (its
  * own pick, apart from the one played: Engine.getSeqTrack), a bar of
- * sixteenths across (src/viz/steps.ts) and a row for each key up it, the
+ * sixteenths across (src/viz/steps.ts), as many as the song's meter
+ * gives a bar (16 in 4/4, 12 in 3/4 and 6/8), each beat's first shaded
+ * (a quarter's, a dotted quarter's in 6/8, an eighth's in 7/8), and a
+ * row for each key up it, the
  * lowest at the bottom: a synth's notes, every semitone, or a kit's
  * pads, by their names. A tap on an empty step puts a note there and a
  * tap on a note takes it away; a finger dragged up or down from a note
@@ -192,7 +194,11 @@ export function StepGrid({ engine }: { engine: Engine }) {
     loopRef.current = loop
   })
 
-  const bars = barsOf(loop)
+  // A bar's steps across, and a beat's, in the song's meter
+  const { meter } = song
+  const columns = barSteps(meter)
+  const beat = beatSteps(meter)
+  const bars = barsOf(loop, meter)
   const [shown, setShown] = useState(0)
   const bar = Math.min(shown, bars - 1)
   // While it plays, the bar shown is the bar playing, until one is picked
@@ -200,8 +206,8 @@ export function StepGrid({ engine }: { engine: Engine }) {
   /** The loop's bar the step falls in: none for none */
   const barAt = useCallback(
     (step: number) =>
-      step < 0 ? -1 : Math.floor((step % loop.steps) / COLUMNS),
-    [loop.steps]
+      step < 0 ? -1 : Math.floor((step % loop.steps) / columns),
+    [loop.steps, columns]
   )
   /**
    * Shows a bar picked: while it plays, kept in sight (the bar playing
@@ -220,8 +226,8 @@ export function StepGrid({ engine }: { engine: Engine }) {
       const other = song.loops[each.id]?.[0]
       if (other) loops.push(other)
     }
-    return othersRows(loops, bar)
-  }, [tracks, track.id, song, kind, bar])
+    return othersRows(loops, bar, columns)
+  }, [tracks, track.id, song, kind, bar, columns])
   const total = kit ? kit.length : SYNTH_ROWS
   const high = kit ? kit.length - 1 : HIGHEST_NOTE
   // All the rows the whole reach holds: a synth's 128 notes, a kit's pads
@@ -329,7 +335,7 @@ export function StepGrid({ engine }: { engine: Engine }) {
       }
       head.hidden = playing !== bar
       if (playing === bar) {
-        head.style.left = `${((at % COLUMNS) / COLUMNS) * 100}%`
+        head.style.left = `${((at % columns) / columns) * 100}%`
       }
     }
     show(engine.step)
@@ -338,7 +344,7 @@ export function StepGrid({ engine }: { engine: Engine }) {
       stop()
       if (marked >= 0) chips.children[marked]?.removeAttribute('data-playing')
     }
-  }, [engine, loop.steps, bar, bars, barAt])
+  }, [engine, loop.steps, bar, bars, barAt, columns])
 
   // Played, the grid follows the bar playing again; stopped, it shows
   // the bar Play starts from as that moves (the arrow keys)
@@ -377,9 +383,10 @@ export function StepGrid({ engine }: { engine: Engine }) {
     const cell = cellAt(
       (event.clientX - box.left) / box.width,
       (event.clientY - box.top) / box.height,
-      rows
+      rows,
+      columns
     )
-    const step = bar * COLUMNS + cell.column
+    const step = bar * columns + cell.column
     const key = first + cell.row
     const was = loopRef.current
     const over = noteOver(was, step, key)
@@ -402,7 +409,7 @@ export function StepGrid({ engine }: { engine: Engine }) {
       y: event.clientY,
       velocity: note.velocity,
       length: note.length,
-      column: box.width / COLUMNS,
+      column: box.width / columns,
       room: roomAt(was, note.step, key),
     }
     // Held still, the note is picked for its ornament
@@ -482,17 +489,17 @@ export function StepGrid({ engine }: { engine: Engine }) {
     const out = []
     for (let row = rows - 1; row >= 0; row--) {
       const black = synth && isBlack(first + row)
-      for (let column = 0; column < COLUMNS; column++) {
-        const beat = column % 4 === 0
+      for (let column = 0; column < columns; column++) {
+        const onBeat = column % beat === 0
         out.push(
           <div
             key={`${row}:${column}`}
             className={
               black
-                ? beat
+                ? onBeat
                   ? BLACK_BEAT_CELL
                   : BLACK_CELL
-                : beat
+                : onBeat
                   ? BEAT_CELL
                   : CELL
             }
@@ -501,7 +508,7 @@ export function StepGrid({ engine }: { engine: Engine }) {
       }
     }
     return out
-  }, [rows, first, synth])
+  }, [rows, first, synth, columns, beat])
 
   // The ornaments' marks in the bar shown, each note's as faint as it is
   const marks = useMemo(() => {
@@ -513,14 +520,22 @@ export function StepGrid({ engine }: { engine: Engine }) {
     }[] = []
     for (const note of loop.notes) {
       if (!note.ornament) continue
-      const each = ornamentMarks(note, bar, first, rows, loop.steps, synth)
+      const each = ornamentMarks(
+        note,
+        bar,
+        first,
+        rows,
+        loop.steps,
+        columns,
+        synth
+      )
       if (!each) continue
       const opacity = 0.35 + 0.65 * note.velocity
       const id = `${note.step}:${note.key}`
       out.push({ id, opacity, ghost: !!note.ghost, marks: each })
     }
     return out
-  }, [loop, bar, first, rows, synth])
+  }, [loop, bar, first, rows, synth, columns])
   const keyName = (key: number) => (kit ? (kit[key] ?? '') : noteName(key))
 
   const template = {
@@ -535,16 +550,16 @@ export function StepGrid({ engine }: { engine: Engine }) {
           path="M4.5 9h9"
           disabled={bars <= 1}
           onClick={() => {
-            engine.editSeqLoop((each) => setBars(each, bars - 1))
+            engine.editSeqLoop((each) => setBars(each, bars - 1, meter))
             pickBar(Math.min(bar, bars - 2))
           }}
         />
         <SmallIconButton
           label="A bar longer"
           path="M4.5 9h9M9 4.5v9"
-          disabled={bars >= MAX_BARS}
+          disabled={bars >= maxBars(meter)}
           onClick={() => {
-            engine.editSeqLoop((each) => setBars(each, bars + 1))
+            engine.editSeqLoop((each) => setBars(each, bars + 1, meter))
             pickBar(bars)
           }}
         />
@@ -692,7 +707,7 @@ export function StepGrid({ engine }: { engine: Engine }) {
           <div
             style={{
               ...template,
-              gridTemplateColumns: `repeat(${COLUMNS}, minmax(0, 1fr))`,
+              gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
             }}
             className="absolute inset-0 grid"
           >
@@ -701,10 +716,11 @@ export function StepGrid({ engine }: { engine: Engine }) {
           <div
             ref={headRef}
             hidden
-            className="pointer-events-none absolute inset-y-0 w-[6.25%] bg-(--lift-3)"
+            style={{ width: `${100 / columns}%` }}
+            className="pointer-events-none absolute inset-y-0 bg-(--lift-3)"
           />
           {loop.notes.map((note) => {
-            const box = noteBox(note, bar, first, rows)
+            const box = noteBox(note, bar, first, rows, columns)
             if (!box) return null
             return (
               <div
@@ -723,7 +739,7 @@ export function StepGrid({ engine }: { engine: Engine }) {
                     <div className={box.head ? GHOST : HELD_GHOST} />
                     {box.head &&
                       (!note.ornament || note.ornament.kind === 'grace') && (
-                        <GhostMark steps={box.width * COLUMNS} />
+                        <GhostMark steps={box.width * columns} />
                       )}
                   </>
                 ) : (
@@ -790,7 +806,13 @@ export function StepGrid({ engine }: { engine: Engine }) {
             </svg>
           )}
           {ornamenting && pickedNote && (
-            <Ring note={pickedNote} bar={bar} first={first} rows={rows} />
+            <Ring
+              note={pickedNote}
+              bar={bar}
+              first={first}
+              rows={rows}
+              columns={columns}
+            />
           )}
         </div>
       </div>
@@ -822,6 +844,8 @@ export function StepGrid({ engine }: { engine: Engine }) {
                 knob={knob}
                 own={knob ? own(knob) : 0}
                 bar={bar}
+                columns={columns}
+                beat={beat}
                 aside={reach > rows}
                 label={kit ? 'w-14' : 'w-9'}
                 onHint={setHint}
@@ -867,13 +891,16 @@ function Ring({
   bar,
   first,
   rows,
+  columns,
 }: {
   note: Note
   bar: number
   first: number
   rows: number
+  /** A bar's steps across */
+  columns: number
 }) {
-  const box = noteBox(note, bar, first, rows)
+  const box = noteBox(note, bar, first, rows, columns)
   if (!box) return null
   return (
     <div

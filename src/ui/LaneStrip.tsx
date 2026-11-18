@@ -28,7 +28,6 @@ import {
   type Fill,
   type LanePoint,
 } from '../viz/laneStrip'
-import { COLUMNS } from '../viz/steps'
 import { ConfirmDialog } from './ConfirmDialog'
 import { SMALL_BUTTON, SMALL_OPTION } from './controls'
 import { SmallIconButton } from './IconButton'
@@ -60,7 +59,8 @@ interface Draw {
 /**
  * One knob lane of the Seq tab's loop, under its step grid (docs/plan/
  * tracks-and-song.md, F): its knob's value at each step of the bar shown,
- * the columns in line with the grid's, the knob's own value dashed across
+ * the columns in line with the grid's (as many as the song's meter gives
+ * a bar, each beat's first shaded), the knob's own value dashed across
  * it. A finger drawn over it writes the steps it passes, in the knob's
  * turn (the top its highest); a lane off is put on by it. Over it: the
  * lane's name, Step or Glide, on or off, Fill (a shape over the whole
@@ -75,6 +75,8 @@ export function LaneStrip({
   knob,
   own,
   bar,
+  columns,
+  beat,
   aside,
   label,
   onHint,
@@ -87,6 +89,9 @@ export function LaneStrip({
   /** The knob's own value, in its units */
   own: number
   bar: number
+  /** A bar's steps, and a beat's, in the song's meter */
+  columns: number
+  beat: number
   /** Whether a row navigator stands at the grid's left */
   aside: boolean
   /** The grid's labels' width: the readout stands under them */
@@ -99,7 +104,9 @@ export function LaneStrip({
   const drawRef = useRef<Draw | null>(null)
   const [filling, setFilling] = useState(false)
   const [removing, setRemoving] = useState(false)
-  const [focus, setFocus] = useState(0)
+  const [focused, setFocus] = useState(0)
+  // The step focused, within a bar of another meter's
+  const focus = Math.min(focused, columns - 1)
   const { part, key } = lane
   const name = knob?.name ?? `${part} · ${key}`
   const spec = knob?.spec
@@ -112,10 +119,10 @@ export function LaneStrip({
     if (!head || !value || !unit) return
     const show = (step: number) => {
       const at = step < 0 ? -1 : step % loop.steps
-      const playing = at < 0 ? -1 : Math.floor(at / COLUMNS)
+      const playing = at < 0 ? -1 : Math.floor(at / columns)
       head.hidden = playing !== bar
       if (playing === bar) {
-        head.style.left = `${((at % COLUMNS) / COLUMNS) * 100}%`
+        head.style.left = `${((at % columns) / columns) * 100}%`
       }
       const now = at >= 0 && lane.on ? valueAt(lane.values, at, own) : own
       const [top, bottom] = spec ? readout(formatValue(spec, now)) : ['']
@@ -124,7 +131,7 @@ export function LaneStrip({
     }
     show(engine.step)
     return engine.watchSteps(show)
-  }, [engine, loop.steps, bar, lane, own, spec])
+  }, [engine, loop.steps, bar, columns, lane, own, spec])
 
   // A finger still down as the strip goes leaves no hint behind
   useEffect(() => () => onHint(''), [onHint])
@@ -142,9 +149,9 @@ export function LaneStrip({
 
   const pointAt = (event: PointerEvent<HTMLDivElement>): LanePoint => {
     const box = event.currentTarget.getBoundingClientRect()
-    const column = laneColumn((event.clientX - box.left) / box.width)
+    const column = laneColumn((event.clientX - box.left) / box.width, columns)
     return {
-      step: bar * COLUMNS + column,
+      step: bar * columns + column,
       level: laneLevel((event.clientY - box.top) / box.height),
     }
   }
@@ -161,7 +168,7 @@ export function LaneStrip({
     const { from, levels } = stroke(undefined, point)
     write(from, levels)
     hint(point.level)
-    setFocus(point.step % COLUMNS)
+    setFocus(point.step % columns)
     drawRef.current = { pointer: event.pointerId, last: point }
   }
 
@@ -187,27 +194,27 @@ export function LaneStrip({
 
   const levelAt = (step: number) =>
     spec ? toNormalized(spec, valueAt(lane.values, step, own)) : 0
-  const focused = bar * COLUMNS + focus
+  const focusStep = bar * columns + focus
 
   // The arrows move the step focused, and its value
   const keyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
-      const by = event.key === 'ArrowRight' ? 1 : COLUMNS - 1
-      setFocus((was) => (was + by) % COLUMNS)
+      const by = event.key === 'ArrowRight' ? 1 : columns - 1
+      setFocus((focus + by) % columns)
     } else if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
       const by = event.key === 'ArrowUp' ? KEY_STEP : -KEY_STEP
-      const level = Math.min(1, Math.max(0, levelAt(focused) + by))
-      write(focused, [level])
+      const level = Math.min(1, Math.max(0, levelAt(focusStep) + by))
+      write(focusStep, [level])
     } else {
       return
     }
     event.preventDefault()
   }
 
-  const levels = Array.from({ length: COLUMNS }, (_, column) =>
-    levelAt(bar * COLUMNS + column)
+  const levels = Array.from({ length: columns }, (_, column) =>
+    levelAt(bar * columns + column)
   )
-  const next = levelAt(((bar + 1) * COLUMNS) % loop.steps)
+  const next = levelAt(((bar + 1) * columns) % loop.steps)
   const outline = laneOutline(levels, next, lane.glide)
   const ownLevel = spec ? toNormalized(spec, own) : 0.5
   const ink = lane.on && spec ? 'text-(--modulator)' : 'text-(--ink-500)'
@@ -326,9 +333,9 @@ export function LaneStrip({
           aria-label={`${name}, step ${focus + 1} of bar ${bar + 1}`}
           aria-valuemin={0}
           aria-valuemax={100}
-          aria-valuenow={Math.round(levelAt(focused) * 100)}
+          aria-valuenow={Math.round(levelAt(focusStep) * 100)}
           aria-valuetext={
-            spec ? formatValue(spec, valueAt(lane.values, focused, own)) : ''
+            spec ? formatValue(spec, valueAt(lane.values, focusStep, own)) : ''
           }
           aria-disabled={!spec}
           onPointerDown={down}
@@ -339,22 +346,28 @@ export function LaneStrip({
           onKeyDown={keyDown}
           className="group relative min-w-0 flex-1 touch-none overflow-hidden rounded-md outline-none"
         >
-          <div className="absolute inset-0 grid grid-cols-16">
-            {Array.from({ length: COLUMNS }, (_, column) => (
+          <div
+            style={{
+              gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
+            }}
+            className="absolute inset-0 grid"
+          >
+            {Array.from({ length: columns }, (_, column) => (
               <div
                 key={column}
-                className={column % 4 === 0 ? BEAT_CELL : CELL}
+                className={column % beat === 0 ? BEAT_CELL : CELL}
               />
             ))}
           </div>
           <div
             ref={headRef}
             hidden
-            className="pointer-events-none absolute inset-y-0 w-[6.25%] bg-(--lift-3)"
+            style={{ width: `${100 / columns}%` }}
+            className="pointer-events-none absolute inset-y-0 bg-(--lift-3)"
           />
           <svg
             aria-hidden
-            viewBox={`0 0 ${COLUMNS} 1`}
+            viewBox={`0 0 ${columns} 1`}
             preserveAspectRatio="none"
             className={`pointer-events-none absolute inset-0 size-full ${ink}`}
           >
@@ -377,8 +390,11 @@ export function LaneStrip({
           )}
           <div
             aria-hidden
-            className="pointer-events-none absolute inset-y-0 hidden w-[6.25%] rounded-sm shadow-[inset_0_0_0_1.5px_var(--accent)] group-focus-visible:block"
-            style={{ left: `${(focus / COLUMNS) * 100}%` }}
+            className="pointer-events-none absolute inset-y-0 hidden rounded-sm shadow-[inset_0_0_0_1.5px_var(--accent)] group-focus-visible:block"
+            style={{
+              left: `${(focus / columns) * 100}%`,
+              width: `${100 / columns}%`,
+            }}
           />
         </div>
       </div>
