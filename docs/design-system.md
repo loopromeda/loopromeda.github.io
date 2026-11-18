@@ -95,7 +95,7 @@ Engine-free: each takes plain props and callbacks. Grouped by the
 | Category   | Components                                                                          |
 | ---------- | ----------------------------------------------------------------------------------- |
 | Controls   | `ValueKnob`, `Switch`, `IconButton`, `SmallIconButton`, `BarIconButton`, `Dropdown` |
-| Overlays   | `Popover`, `MoreMenu`, `ConfirmDialog`                                              |
+| Overlays   | `Popover`, `MoreMenu`, `MenuButton`, `ConfirmDialog`                                |
 | Settings   | `SettingGroup`, `SettingRow`, `SwitchRow`, `ChoiceRow`                              |
 | Layout     | `FadeRow`                                                                           |
 | Navigation | `KeysNavigator`, `RowNavigator`                                                     |

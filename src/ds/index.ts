@@ -60,7 +60,12 @@ export { Dropdown } from '../ui/Dropdown'
 
 // Overlays
 export { Popover } from '../ui/Popover'
-export { MENU_GLYPHS, MoreMenu, type MenuItem } from '../ui/MoreMenu'
+export {
+  MENU_GLYPHS,
+  MenuButton,
+  MoreMenu,
+  type MenuItem,
+} from '../ui/MoreMenu'
 export { ConfirmDialog } from '../ui/ConfirmDialog'
 
 // Settings
