@@ -133,6 +133,406 @@ moved here and the oscillator went back to its six.
   steps and bits, at no DC, as it sounded; its FM goes
   (`src/state/sound/read.ts`).
 
+## The library
+
+Asked for by ashon, 2026-11-17, through Main: "사운드 쪽으로 넘겨서
+신디로 만들 수 있는 음원들을 인터넷에서 더 많이 찾아보고 구현작업도 해
+달라고 지시해 줘. 퀄리티는 프로급으로 쓸 수 있을 정도로 뽑히면 좋겠어."
+The sounds producers reach for were gathered by genre (84 of them, The
+list, below, each with where its recipe was learned: tutorials, papers
+and manuals, never a preset bank), the parts most of the missing ones
+needed were built, the factory presets were brought to targets measured
+offline, and new presets were made from the list.
+
+A second round followed the same day, ashon again: "사운드 프리셋을 더
+다양하게 만들고 카테고라이징도 깔끔하게 정돈하면 좋겠어." The categories
+became the roles a sound is played as (The categories, below), and 51
+presets more filled each one's gaps, from acoustic instruments the first
+round had not reached (a harpsichord, an accordion, a banjo, a trumpet) to
+starting points of one input each.
+
+### The parts it added
+
+- **Hard sync** (an oscillator's Sync, 0 to 48 semitones, Off at 0): the
+  wave runs Sync semitones above the note and restarts each time the
+  note's own cycle comes round, so the note heard is the note's and Sync
+  its colour; each restart and each of the wave's own jumps rounded by
+  polyBLEP. A route sweeps it (an envelope, the wheel): the sync lead.
+- **Phase** (an oscillator's and a super's, Reset or Free): Reset starts
+  each note's wave at the same place, so every note strikes alike, as a
+  kick, a sub, an 808 and an FM pair want; Free starts it anywhere,
+  drawn as each note starts, so a chord's notes never start as one on
+  their peaks (the in-phase onset: four notes of a pad peaking together
+  at 1.6 times their held peak, 1.0 since). A new oscillator is Free; a
+  sound saved before reads Reset, as it played.
+- **Super** (an input): a stack of 2 to 8 voices of one wave, the outer
+  ones Detune cents either way, the others spread a little unevenly
+  between, so no two pairs beat at one pace; Blend sets the outer
+  voices' level against the middle's, all of them together as loud as
+  one. Free, each voice starts anywhere of its own; Reset, at fixed
+  places apart. Its detune and width are routed. The supersaw, the
+  hoover, unison pads.
+- **Comb** (a chain item): a delay tuned to the note (Tune semitones
+  above it), fed back so it rings for Decay (to −60 dB) through a
+  damping lowpass (Damp), read between samples by a Hermite curve and
+  held under a soft ceiling. A short burst into it is a plucked string
+  (Karplus-Strong); anything else takes on its pitch, a resonator's.
+  The guitar, the harp, the koto.
+- **Formant** (a chain item): three bandpasses at a vowel's first three
+  formants, a tenor's A, E, I, O and U, Vowel (0 to 4) morphing between
+  them, Shift moving them all, Reso narrowing them; a saw comes through
+  about as loud. The choir, the talking lead, the growl.
+- **Phaser** (an effect): 4, 6 or 8 first-order allpasses around 700 Hz
+  swept by an LFO (Rate, Depth), each side's sweep a quarter cycle from
+  the other's, with Feedback. The string machine, the whoosh.
+- **The drive at twice the rate**: besides its first-order antialiasing
+  (ADAA), a drive now runs at twice the sample rate, the sound brought up
+  and back down by a halfband of two allpass paths (six sections, flat to
+  20 kHz at 48 kHz, 74 dB down past 28 kHz of the doubled rate), so only
+  what it makes past 1.5 times the rate folds back: a driven saw high up
+  went from −21 dB of aliasing to −43. About three samples late; at a
+  drive of nothing the sound passes exactly as it came, and as it starts
+  to drive it fades over to the doubled path in 2 ms, so nothing clicks.
+- **The width's mono corner at 24 dB an octave** (two 12 dB sections in a
+  row, −6 dB at the corner): a bass's side 50 Hz under a 200 Hz corner
+  now 45 dB down, not 20, so the lows stay in the middle.
+
+Two ways of playing the new parts recur in the presets. A **plucked
+string** is a burst of noise into a comb: its send stands at a hair over
+nothing (0.01), an envelope opens it for a few milliseconds and a second,
+slower one (attack twice the burst, held, released over 10 s) shuts it
+again, so nothing but the burst reaches the comb while the note rings
+(`plucked` in `src/state/factory.ts`). A **chord from one key** (the
+stabs) is four or five oscillators at fixed intervals, each Free, so the
+chord never starts on all its peaks at once.
+
+The comb's and the formant's pictures in the editor are their responses
+as `combGain` and `formantGain` (`src/dsp`) work them out.
+
+### The targets
+
+Every factory preset is played offline through the app's own path (a
+Strip, its SoundPlayer, the Mixer with the session's first mix: B a
+delay, C a reverb), the master's soft clip off so what would reach it
+shows, and measured. Each is played as its role is, a phrase in its
+range: a lead a melody from C4, a bass a sixteenth line from C2, a pad
+four chords of four or five notes, a pluck an arpeggio, keys chords
+struck and let go, a bell a few struck notes, brass and an organ
+chords, a drum five hits, an effect a held note. The chip presets keep
+their port's levels (The chip) and are not held to these.
+
+| Measure   | Target                                                                                                                                                                                                                            |
+| --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Loudness  | its role's, every preset within ±1.5 LU (integrated, over its phrase): a lead −17 LUFS, a bass and an organ −20, a pad and brass −21, a pluck and a bell −22, keys −23, an effect −18                                             |
+| A drum's  | by its loudest 400 ms (momentary), bare (no inserts, no sends: a pad's chain is the kit's), ±1.5 LU: a kick, a snare, a tom, a clap −23; an open hat, a crash, a cowbell, a conga −26; a closed hat, a shaker, a rim, a clave −30 |
+| Peak      | under 0.45 (−6.9 dBFS) on its phrase: nothing reaches the soft clip at −6 dBFS                                                                                                                                                    |
+| The lows  | a bass's and a kick's side under 150 Hz at least 20 dB under its middle; any sound's mono sum within 3 LU of its stereo                                                                                                           |
+| Clicks    | the highs (over 6 kHz) in 5 ms windows as a note ends, no more than 3 dB over the held note's; as it starts, over 5 ms of attack, against the 200 ms after it (a stab's bright start is no click)                                 |
+| Zipper    | the wheel swept in steps adds no more than 3 dB of highs (over 9 kHz) to it held still                                                                                                                                            |
+| Aliasing  | across the top octave of its range, at most −40 dB under the note (the note against itself rendered at four times the rate)                                                                                                       |
+| Denormals | a block of a dying tail costs no more than 1.2 times a held note's                                                                                                                                                                |
+| Velocity  | a hard note (1) at least 3 dB louder than a soft one (0.35); a plucked, struck or blown sound's at least 10% brighter too (its spectral centroid)                                                                                 |
+| The wheel | routed, and moving the sound by at least 1 dB (its bands' levels, the wheel down against up)                                                                                                                                      |
+| The range | its ends within 6 dB of its middle                                                                                                                                                                                                |
+| Cost      | 8 voices of the heaviest preset under the stress sound's 8 (`src/dsp/chainStress.ts`), and `pnpm bench` in its budget                                                                                                             |
+
+The roles' loudness is what their sounds can hold with their peaks at
+0.45, rounded down: a pad's chord peaks higher over its loudness than a
+lead's one note, a struck key's onset higher still, so the roles differ
+by their shapes, and within a role one preset is as loud as the next.
+A drum's hit is too short for the integrated loudness to hear as an ear
+does, so its loudest moment is held instead, at a kit's balance: the
+kick and the snare up front, the hats under them.
+
+### The categories
+
+A preset's category is what it is played as, one each, in the order a
+browser lists them (`PRESET_CATEGORIES`, `src/state/presets.ts`); the
+factory's are listed in that order (`byCategory`, `src/state/factory.ts`),
+each category's in the order written.
+
+| Category | What it holds                                                                                | Presets |
+| -------- | -------------------------------------------------------------------------------------------- | ------- |
+| Basic    | the starting points: Init, and one input each (a sine, a saw, a square, a super, an FM pair) | 6       |
+| Bass     | a line under 200 Hz, its lows in the middle                                                  | 20      |
+| Lead     | one line over a track, most of them mono or legato                                           | 20      |
+| Pad      | chords held, slow to come and go                                                             | 12      |
+| Keys     | played as a keyboard is: pianos, organs, a harpsichord, an accordion                         | 10      |
+| Pluck    | plucked and let ring: strings, a synth's plucks                                              | 10      |
+| Bell     | struck and chimed: FM bells, mallets, a music box, a steel drum                              | 10      |
+| Chord    | a chord from one key: the stabs                                                              | 8       |
+| Strings  | bowed: a section, a machine, a swell, a tremolo, pizzicato                                   | 7       |
+| Brass    | blown: a section, a horn, a trumpet                                                          | 5       |
+| Vocal    | voices: choirs, a chop                                                                       | 5       |
+| Atmos    | the beds and textures under a track: drones, wind, the sea                                   | 5       |
+| Drums    | the kit's pads                                                                               | 21      |
+| FX       | a moment, not a note: risers, impacts, zaps                                                  | 11      |
+
+There were two sets as well, Analog (the analog poly's ports) and Chip;
+ashon chose, 2026-11-18, to play both by role, so their presets went to
+the categories they are played as, their character kept in their names
+(Poly Brass, Chip Lead, NES Triangle, 4-bit Lead). A preset saved under
+either reads as Basic (`readCategory`), as any category not ours does.
+The kit's pad panel lists only the presets of its own preset's category,
+so every drum stays in Drums.
+
+### The list
+
+The sounds, by where they are heard (the first round's 84, then the
+second's 30 in the last three groups, besides the rows of the first it
+built), each with the factory preset that makes it (or one near it, in brackets; — none yet, with what it wants) and
+the source its recipe was learned from (the research notes kept more of each:
+the recipe, the numbers, two or three sources). The names are the sounds',
+never a product's or a player's.
+
+**Pop and EDM**
+
+| Sound                | Heard in                    | Preset                                  | Source                                                                                                        |
+| -------------------- | --------------------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| Supersaw lead        | trance, big room, pop       | Supersaw Lead                           | <https://musicproductionwiki.com/articles/how-to-recreate-the-supersaw>                                       |
+| Big room lead        | big room, festival          | Festival Lead                           | <https://www.syntorial.com/tutorials/crafting-the-supersaw-edm-dance-synth-lead-a-step-by-step-guide>         |
+| Trance pluck         | trance, melodic house       | Trance Pluck                            | <https://www.avid.com/resource-center/how-to-make-trance-plucks>                                              |
+| Trance gate pad      | trance                      | Gate Pad                                | <https://www.musicradar.com/news/20-speedy-synth-and-synthesis-tips>                                          |
+| Future bass chords   | future bass, pop            | Future Chords                           | <https://musicproductionwiki.com/articles/how-to-recreate-future-bass-chords>                                 |
+| House pluck          | progressive house, tropical | Soft Pluck, Square Pluck                | <https://ask.audio/articles/how-to-create-big-room-synth-plucks-in-logic-pro-x>                               |
+| Wobble bass          | dubstep                     | Wobble Bass                             | <https://musicradar.com/how-to/lfo-wobble-bass>                                                               |
+| Growl, riddim bass   | dubstep, riddim             | Growl Bass, Riddim Bass                 | <https://www.musicradar.com/tuition/tech/how-to-make-a-growling-bass-sound-using-fm-synthesis-606919>         |
+| Whistle lead         | tropical house, pop         | Whistle                                 | <https://www.adsrsounds.com/ni-massive-tutorials/tropical-house-whistle-lead-in-massive/>                     |
+| Sine sub bass        | pop, trap, house            | Sub Bass                                | <https://beatkitchen.io/guides/electronic-music/04-bass-design/>                                              |
+| Chip lead, arpeggio  | chiptune, game              | Chip Lead, Chip Pulse 12, Chip Pulse 25 | <https://www.nesdev.org/wiki/APU_basics>                                                                      |
+| Talking formant lead | electro, French house       | Talk Lead                               | <https://unison.audio/formant-filters/>                                                                       |
+| FM bell              | pop, future bass, trap      | FM Bell                                 | <https://www.pluginboutique.com/articles/1873-FM-Synthesis-Cookbook-Five-Classic-FM-Sounds-and-How-They-Work> |
+
+**House**
+
+| Sound                 | Heard in                | Preset            | Source                                                                                 |
+| --------------------- | ----------------------- | ----------------- | -------------------------------------------------------------------------------------- |
+| Deep house chord stab | deep house, garage      | Deep Stab         | <https://www.attackmagazine.com/technique/beat-dissected/dusted-deep-house/>           |
+| Organ bass            | 90s house, garage       | Organ Bass        | <https://www.attackmagazine.com/technique/video-tutorials/retro-90s-house-organ-bass/> |
+| House organ stab      | classic house           | Organ, Organ Stab | <https://www.soundonsound.com/techniques/synthesizing-tonewheel-organs-part-1>         |
+| House piano           | piano house             | House Piano       | <https://soundonsound.com/techniques/synthesizing-acoustic-pianos-roland-jx10-1102>    |
+| Rolling bass          | tech house              | (Saw Bass, near)  | <https://www.attackmagazine.com/technique/tutorials/warehouse-rolling-techno-bass/>    |
+| Rave chord stab       | rave, breakbeat, garage | Rave Stab         | <https://musicradar.com/how-to/rave-chord-stab>                                        |
+
+**Techno**
+
+| Sound            | Heard in           | Preset                           | Source                                                                                         |
+| ---------------- | ------------------ | -------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Acid bass        | acid house, techno | Acid Bass                        | <https://www.image-line.com/support/flstudio_online_manual/html/plugins/Transistor%20Bass.htm> |
+| Rumble kick      | techno             | — (wants ducking)                | <https://www.attackmagazine.com/technique/beat-dissected/dark-techno-rumble/>                  |
+| Dub chord        | dub techno         | Dub Chord                        | <https://www.attackmagazine.com/technique/synth-secrets/dub-techno-synth-chords/>              |
+| Techno stab      | techno, tech house | Minor Stab                       | <https://www.attackmagazine.com/technique/synth-secrets/techy-stabs-in-ni-massive/>            |
+| Melodic sequence | melodic techno     | (Poly Pluck, Future Pluck, near) | <https://www.musicradar.com/how-to/how-to-program-a-melodic-techno-synth-sound>                |
+| Metallic bell    | techno, electro    | (Poly Mod Bell, near)            | <https://docs.cycling74.com/max7/tutorials/06_synthesischapter05>                              |
+
+**Hip-hop, trap and lo-fi**
+
+| Sound               | Heard in             | Preset                    | Source                                                                                                              |
+| ------------------- | -------------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Boom bass           | trap, hip-hop, drill | Trap Bass, Boom           | <https://ampedstudio.com/blog/secrets-of-808-bass/>                                                                 |
+| Distorted boom bass | trap, drill          | Dirty Trap Bass           | <https://unison.audio/808-sound-design/>                                                                            |
+| Trap bell           | trap, R&B            | FM Bell                   | <https://rosetta.to/u/venustheory/uvi-falcon-2-sound-design-tutorial-creating-plucks-bells-and-keys-trap-ambient-e> |
+| Dark trap pad       | trap, cloud rap      | Dark Pad                  | <https://violetrecording.com/how-to-make-trap-beats/>                                                               |
+| Whine lead          | West Coast hip-hop   | Whine Lead                | <https://flypaper.soundfly.com/discovery/how-to-create-the-iconic-synth-sound-in-gin-and-juice/>                    |
+| Lo-fi keys          | lo-fi, neo-soul      | Lo-fi Keys (no crush yet) | <https://blog.native-instruments.com/how-to-make-lofi-music/>                                                       |
+| Lo-fi tape pad      | lo-fi, chillwave     | Tape Pad                  | <https://splice.com/blog/lo-fi-hip-hop-beat-10-minutes>                                                             |
+| Vinyl crackle       | lo-fi                | — (wants a dust source)   | <https://www.ujam.com/tutorials/the-ultimate-guide-to-lofi-hip-hop/>                                                |
+| Breathy flute       | lo-fi, ambient, film | Breath Flute              | <https://github.com/rupa/synth-secrets>                                                                             |
+
+**Synthwave**
+
+| Sound                | Heard in             | Preset                | Source                                                                   |
+| -------------------- | -------------------- | --------------------- | ------------------------------------------------------------------------ |
+| Driving bass         | synthwave, outrun    | Saw Bass, Analog Bass | <https://www.native-instruments.com/blogs/blog/synthwave>                |
+| Synthwave lead       | synthwave, retro pop | Saw Lead              | <https://www.edmprod.com/how-to-make-synthwave/>                         |
+| Retro arpeggio pluck | synthwave, italo     | Square Pluck          | <https://www.native-instruments.com/blogs/blog/synthwave>                |
+| Neon pad             | synthwave, 80s pop   | Warm Pad              | <https://www.musicradar.com/how-to/how-to-build-a-classic-80s-pad-sound> |
+| Gated snare          | synthwave, 80s pop   | — (wants a gate)      | <https://www.edmprod.com/how-to-make-synthwave/>                         |
+
+**Ambient, film and trailer**
+
+| Sound          | Heard in              | Preset                     | Source                                                                                                |
+| -------------- | --------------------- | -------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Evolving pad   | ambient, film         | Velvet Pad, Poly Sweep     | <https://www.musicradar.com/tuition/tech/how-to-create-an-evolving-multi-oscillator-pad-sound-619017> |
+| Shimmer pad    | ambient, post-rock    | — (wants a shimmer reverb) | <https://www.musicradar.com/how-to/how-to-create-an-ambient-synth-pad-from-scratch>                   |
+| Drone          | ambient, film         | Drone                      | <https://musicradar.com/how-to/create-ambient-drone-dune-3>                                           |
+| Glass pad      | ambient, new age      | Glass Pad, Crystal Pad     | <https://www.musicradar.com/how-to/atmospheric-pad-polysynth>                                         |
+| Wind, ocean    | ambient, film, games  | Wind, Ocean                | <https://babel.speldesign.uu.se/?p=2064998>                                                           |
+| Braam          | trailer, film         | Braam                      | <https://www.ableton.com/en/blog/learn-how-to-make-high-impact-sounds-for-movies-and-trailers/>       |
+| Impact         | trailer, drops        | Impact                     | <https://blog.native-instruments.com/5-quick-tips-for-epic-movie-trailer-impacts/>                    |
+| Sub drop       | trailer, EDM, trap    | Sub Drop                   | <https://outlierstudios.co/intres/impacts>                                                            |
+| Ostinato pulse | trailer, hybrid score | Staccato Strings           | <https://violetrecording.com/sound-design-for-trailers/>                                              |
+
+**Transitions**
+
+| Sound       | Heard in          | Preset     | Source                                                                                      |
+| ----------- | ----------------- | ---------- | ------------------------------------------------------------------------------------------- |
+| Noise riser | EDM, pop, trailer | Riser      | <https://violetrecording.com/how-to-make-risers-and-sweeps/>                                |
+| Downlifter  | EDM, pop, trailer | Downlifter | <https://musictech.net/tutorials/weekend-workshop-make-risers-and-downlifters-with-odin-2/> |
+| Whoosh      | film, transitions | Whoosh     | <https://www.musicradar.com/how-to/synth-sweep-fx>                                          |
+
+**Keys, organs, strings, brass and choirs**
+
+| Sound               | Heard in                 | Preset                                         | Source                                                                                   |
+| ------------------- | ------------------------ | ---------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| Poly brass          | synthwave, 80s pop, film | Poly Brass, Brass Stab                         | <https://www.soundonsound.com/techniques/creating-analogue-sounds-digital-synths-part-3> |
+| Solo brass          | film, funk               | Trumpet, French Horn                           | <https://www.soundonsound.com/techniques/synthesizing-brass-instruments>                 |
+| String machine      | disco, new wave, ambient | String Machine                                 | <https://www.soundonsound.com/techniques/synthesizing-strings-string-machines>           |
+| PWM pad             | synthwave, ambient       | PWM Pad, Hollow Pulse                          | <https://www.soundonsound.com/techniques/synthesizing-strings-pwm-string-sounds>         |
+| Synth strings       | pop, film, trance        | Strings, Poly Strings, String Swell            | <https://www.soundonsound.com/techniques/synthesizing-strings-string-machines>           |
+| Choir               | ambient, trance, film    | Formant Choir, Choir Pad, Aah Choir, Ooh Choir | <https://csound.com/docs/manual/MiscFormants.html>                                       |
+| Tine electric piano | neo-soul, lo-fi, house   | E-Piano                                        | <https://chicagoelectricpiano.com/?p=198>                                                |
+| FM electric piano   | 80s ballad, city pop     | (E-Piano, Poly Keys, near)                     | <https://www.attackmagazine.com/technique/tutorials/fm-electric-piano/>                  |
+| Drawbar organ       | gospel, rock, house      | Organ                                          | <https://www.soundonsound.com/techniques/synthesizing-tonewheel-organs-part-2>           |
+
+**Leads and basses**
+
+| Sound           | Heard in               | Preset                   | Source                                                                                 |
+| --------------- | ---------------------- | ------------------------ | -------------------------------------------------------------------------------------- |
+| Reese bass      | drum and bass, techno  | Reese Bass               | <https://www.attackmagazine.com/technique/tutorials/reese-bass-redux/>                 |
+| Hoover          | rave, hardcore         | Hoover                   | <https://www.wikiwand.com/en/articles/Hoover_sound>                                    |
+| Sync lead       | new wave, electro      | Sync Lead                | <https://craiganderton.org/understanding-synthesizer-hard-sync/>                       |
+| Mono lead       | prog, funk, synthwave  | Saw Lead, Unison Lead    | <https://www.soundonsound.com/techniques/brass-synthesis-minimoog>                     |
+| Fat analog bass | funk, synth-pop, house | Analog Bass, Unison Bass | <https://www.musicradar.com/news/5-house-bass-sounds>                                  |
+| FM bass         | 80s pop, synthwave     | FM Bass                  | <https://www.musictech.net/tutorials/learn-advanced-fm-synthesis-with-dexed/>          |
+| FM slap bass    | 80s funk, city pop     | Slap Bass                | <https://yamahasynth.com/learn/synth-programming/basics-of-fm-synthesis-lesson-5-new/> |
+
+**Plucked and struck**
+
+| Sound                   | Heard in                | Preset         | Source                                                                                        |
+| ----------------------- | ----------------------- | -------------- | --------------------------------------------------------------------------------------------- |
+| Plucked guitar          | pop, lo-fi, ambient     | Plucked String | <https://ccrma.stanford.edu/~jos/pasp/Extended_Karplus_Strong_Algorithm.html>                 |
+| Harp                    | film, ambient           | Harp           | <https://www.soundonsound.com/techniques/synthesizing-plucked-strings>                        |
+| Koto                    | world, game, ambient    | Koto           | <https://crypto.stanford.edu/~blynn/sound/karplusstrong.html>                                 |
+| Marimba                 | pop, tropical, film     | Marimba        | <https://ccrma.stanford.edu/CCRMA/Courses/150/percussion.html>                                |
+| Vibraphone              | jazz, lo-fi, film       | Vibes          | <https://ccrma.stanford.edu/CCRMA/Courses/150/percussion.html>                                |
+| Glockenspiel, xylophone | film, pop               | Glock          | <https://orchestrationonline.com/orchestration-tip-harmonic-spectra-of-xylophone-vs-marimba/> |
+| Kalimba                 | lo-fi, ambient, afropop | Kalimba        | <https://acoustics.org/pressroom/httpdocs/155th/chapman.htm>                                  |
+| Tubular bell            | film, ambient           | Tubular Bell   | <https://www.soundonsound.com/techniques/synthesizing-bells>                                  |
+
+**Drums**
+
+| Sound      | Heard in               | Preset                      | Source                                                                              |
+| ---------- | ---------------------- | --------------------------- | ----------------------------------------------------------------------------------- |
+| Kick       | house, techno, hip-hop | Kick, Punch Kick, Deep Kick | <https://www.soundonsound.com/techniques/practical-bass-drum-synthesis>             |
+| Snare      | all                    | Snare, Tight Snare          | <https://www.soundonsound.com/techniques/practical-snare-drum-synthesis>            |
+| Clap       | house, pop, trap       | Clap                        | <https://www.kvraudio.com/forum/viewtopic.php?p=8606994>                            |
+| Hats       | all electronic         | Closed Hat, Open Hat        | <https://www.ericasynths.lv/media/HIHAT_MANUAL_1.pdf>                               |
+| Cymbal     | electronic, synthwave  | Crash, Ride                 | <https://github.com/rupa/synth-secrets>                                             |
+| Toms       | synthwave, 80s, techno | Tom, Low Tom, High Tom      | <https://www.attackmagazine.com/technique/tutorials/drum-synthesis-in-logic-es2/2/> |
+| Cowbell    | house, Latin           | Cowbell                     | <https://speech.di.uoa.gr/ICMC-SMC-2014/images/VOL_2/1453.pdf>                      |
+| Rim, clave | electro, house         | Rim, Clave                  | <https://cim.mcgill.ca/~clark/nordmodularbook/nm_percussion.html>                   |
+| Shaker     | house, pop, lo-fi      | Shaker                      | <https://cim.mcgill.ca/~clark/nordmodularbook/nm_percussion.html>                   |
+
+**Starting points**
+
+| Sound           | Heard in | Preset                              | Source                                                                           |
+| --------------- | -------- | ----------------------------------- | -------------------------------------------------------------------------------- |
+| Single waves    | anywhere | Basic Sine, Basic Saw, Basic Square | <https://www.soundonsound.com/techniques/synth-school-part-4>                    |
+| Supersaw stack  | anywhere | Basic Super                         | <https://www.adamszabo.com/internet/adam_szabo_how_to_emulate_the_super_saw.pdf> |
+| Two-operator FM | anywhere | Basic FM                            | <https://www.soundonsound.com/techniques/introduction-frequency-modulation>      |
+
+**Acoustic instruments**
+
+| Sound               | Heard in             | Preset          | Source                                                                                   |
+| ------------------- | -------------------- | --------------- | ---------------------------------------------------------------------------------------- |
+| Upright bass        | jazz, soul, lo-fi    | Upright Bass    | <https://www.adsrsounds.com/zebra-tutorials/upright-bass/>                               |
+| Pan flute           | world, film, new age | Pan Flute       | <https://www.soundonsound.com/techniques/synthesizing-pan-pipes>                         |
+| Reed electric piano | soul, funk, lo-fi    | Reed Piano      | <https://www.muzines.co.uk/articles/practically-fm/3945>                                 |
+| Harpsichord         | baroque, film, pop   | Harpsichord     | <https://www.ee.columbia.edu/~dpwe/e6820/papers/ValPK04-harpsi.pdf>                      |
+| Pipe organ          | church, film         | Pipe Organ      | <https://www.colinpykett.org.uk/baroque-vs-romantic-principals.htm>                      |
+| Accordion           | folk, chanson, film  | Accordion       | <https://www.libertybellows.com/general-accordion-questions.htm>                         |
+| Palm-muted guitar   | rock, pop            | Muted Guitar    | <https://www.dsprelated.com/freebooks/pasp/Electric_Guitars.html>                        |
+| Banjo               | folk, country        | Banjo           | <https://acoustics.org/pressroom/httpdocs/159th/dickey.htm>                              |
+| Music box           | film, lullabies      | Music Box       | <https://en.wikipedia.org/wiki/Euler%E2%80%93Bernoulli_beam_theory>                      |
+| Celesta             | film, holidays       | Celesta         | <https://wiki.ubc.ca/Course:Phys341_2020/Celeste>                                        |
+| Steel drum          | calypso, tropical    | Steel Drum      | <https://www.hangblog.org/the-caribbean-steelpan-and-some-offsprings>                    |
+| Pizzicato           | film, pop            | Pizzicato       | <https://www.syntorial.com/tutorials/synth-quickie-strings/>                             |
+| Tremolo strings     | film, trailer        | Tremolo Strings | <https://cmtext.com/synthesis/chapter4_modulation3.php>                                  |
+| Horn section        | funk, soul, film     | Horn Section    | <https://www.soundonsound.com/techniques/creating-analogue-sounds-digital-synths-part-3> |
+| Tambourine          | pop, soul, gospel    | Tambourine      | <https://jefftk.com/p/what-noise-does-a-tambourine-make>                                 |
+| Woodblock           | Latin, film          | Woodblock       | <https://github.com/thestk/stk/blob/master/src/ModalBar.cpp>                             |
+
+**Synth sounds**
+
+| Sound             | Heard in                | Preset         | Source                                                                                                                                                                                                                                                    |
+| ----------------- | ----------------------- | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Synthwave bass    | synthwave, outrun       | Synthwave Bass | <https://www.attackmagazine.com/technique/synth-secrets/how-to-make-a-synthwave-laser-gun-bassline/>                                                                                                                                                      |
+| Rubber bass       | hip-hop, G-funk         | Rubber Bass    | <https://www.musicradar.com/tuition/tech/how-to-create-punchy-hip-hop-808-bass-570807>                                                                                                                                                                    |
+| Glide lead        | EDM, trance             | Glide Lead     | <https://www.musicradar.com/how-to/glide-and-rise-synth-patch>                                                                                                                                                                                            |
+| Lush supersaw pad | trance, pop             | Lush Pad       | <https://www.musicradar.com/how-to/supersaw-synth-sound>                                                                                                                                                                                                  |
+| Future bass pluck | future bass, pop        | Future Pluck   | <https://violetrecording.com/how-to-make-future-bass/>                                                                                                                                                                                                    |
+| Ninth chord       | neo-soul, R&B           | Ninth Chord    | <https://www.soundonsound.com/techniques/synth-chords-masterclass>                                                                                                                                                                                        |
+| Vocal chop        | future bass, house, pop | Vox Chop       | <https://www.adsrsounds.com/reaktor-tutorials/ni-razor-vowel-synth/>                                                                                                                                                                                      |
+| Deep-space drone  | ambient, film           | Deep Space     | <https://www.musicradar.com/tuition/tech/how-to-create-a-generative-evolving-ambient-drone-sound-in-ableton-live-590880>                                                                                                                                  |
+| Metallic drone    | industrial, film        | Metal Drone    | <https://www.soundonsound.com/techniques/amplitude-modulation>                                                                                                                                                                                            |
+| Laser zap         | techno, electro, games  | Laser          | <https://www.musicradar.com/tutorials/music-production-tutorials/how-did-the-zap-migrate-from-its-association-with-klingons-to-its-more-common-description-of-hi-q-how-to-conjure-the-spirit-of-early-techno-and-trigger-your-own-retro-zaps-in-software> |
+| Bubbles           | film, games             | Bubbles        | <https://www.musicradar.com/tuition/tech/10-classic-synth-fx-and-how-to-create-them-634904>                                                                                                                                                               |
+
+### Measured
+
+All 141 presets held to the targets (the factory's 150 but Init and the
+eight chip presets) meet every one above, measured 2026-11-18 by an
+offline harness (kept outside the repository) rendering each through
+Strip, SoundPlayer and Mixer: 59 from before, 31 new in the first round
+and 51 in the second. The new ones, by the categories they stand in:
+
+| Category | The first round                                                                      | The second                                                      |
+| -------- | ------------------------------------------------------------------------------------ | --------------------------------------------------------------- |
+| Basic    |                                                                                      | Basic Sine, Basic Saw, Basic Square, Basic Super, Basic FM      |
+| Bass     | Trap Bass, Dirty Trap Bass, Riddim Bass, Organ Bass                                  | Upright Bass, Synthwave Bass, Rubber Bass, Slap Bass            |
+| Lead     | Supersaw Lead, Festival Lead, Sync Lead, Talk Lead, Breath Flute, Whine Lead, Hoover | Pan Flute, Whistle, Glide Lead                                  |
+| Pad      | Gate Pad                                                                             | Lush Pad, Dark Pad, Tape Pad, Crystal Pad                       |
+| Keys     | House Piano                                                                          | Reed Piano, Harpsichord, Pipe Organ, Lo-fi Keys, Accordion      |
+| Pluck    | Trance Pluck, Plucked String, Harp, Koto                                             | Muted Guitar, Banjo, Future Pluck                               |
+| Bell     | Tubular Bell, Glock                                                                  | Music Box, Celesta, Steel Drum                                  |
+| Chord    | Deep Stab, Rave Stab, Dub Chord, Future Chords                                       | Organ Stab, Minor Stab, Ninth Chord                             |
+| Strings  | String Machine                                                                       | String Swell, Staccato Strings, Tremolo Strings, Pizzicato      |
+| Brass    |                                                                                      | Horn Section, Trumpet, French Horn                              |
+| Vocal    | Formant Choir                                                                        | Aah Choir, Ooh Choir, Vox Chop                                  |
+| Atmos    | Drone                                                                                | Ocean, Deep Space, Metal Drone                                  |
+| Drums    |                                                                                      | Punch Kick, Deep Kick, Tight Snare, Tambourine, Ride, Woodblock |
+| FX       | Braam, Impact, Sub Drop, Downlifter, Whoosh                                          | Laser, Bubbles                                                  |
+
+What it took, besides each sound's own recipe: a level (`trim` in
+`PLAYING`) for each, taken from its loudness or, where its peak bound it
+first, from that (a sound only ever turned down); a drive inside the
+voice where a sound's peaks stood too far over its loudness (the plucked
+strings, the noise of the effects), since an insert after the amp would
+flatten its velocity; less drive, FM and octave-up layering up the keys,
+where they would fold back past the top; the House Piano's FM pairs
+Free, as a sine's FM sounds alike from any phase, so its chords never
+start on their peaks together.
+
+The second round learned four things more:
+
+- **A plucked string's level is its drive's**, its burst's length and
+  its comb's decay, not its send's: the pluck's envelope opens the send
+  to about 1 whatever it stood at, so raising it does nothing.
+- **A super stack wants Free written out** (`phase: 'Free'`): the
+  presets' `free` frees oscillators only, and a stack left Reset starts
+  its saws in phase on every note, its range's ends 6 dB under its
+  middle (the String Swell's, before).
+- **A lowpass after a drive, not before it**: a drive after the lowpass
+  brings the highs back however soft the note, so velocity no longer
+  brightens it (the Vox Chop's, before).
+- **A comb rung short and bright reads as aliasing**: its peaks broad
+  and many past the top octave (the Muted Guitar at −30 dB, before); it
+  rings longer and duller now, and the amp mutes it.
+
+Checked afterwards against the research notes for the second round (a
+source for each of the 51, its recipe and numbers), each preset stood as
+written but two, which took the second mode of a struck bar where they
+had a ratio near it: the Celesta's FM at 2.76 times its note (it had 4,
+whose sidebands are harmonics), the Woodblock's partial at 2.777 (it had
+2.52). Where a sound departs from its source on purpose it is to meet the
+targets: the Harpsichord answers velocity, which a harpsichord does not,
+as every keyed preset here does.
+
+The heaviest new preset at 8 voices costs 0.20 ms a block (the
+Harpsichord, then the Vox Chop at 0.19), the stress sound 0.74 ms on the
+same run, and `pnpm bench` stays in its budget.
+
 ## Limits
 
 Nothing is allocated on the audio thread while it plays, so the most of
