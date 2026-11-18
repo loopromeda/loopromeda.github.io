@@ -2,7 +2,6 @@ import {
   useEffect,
   useRef,
   useSyncExternalStore,
-  type CSSProperties,
   type Ref,
   type RefObject,
 } from 'react'
@@ -19,7 +18,14 @@ import type { AppSettings } from '../state/settings'
 import { loopOn, setLoopOn, setSwing, setTempo } from '../state/song'
 import { trackName, tracksKey } from '../state/tracks'
 import { COLUMNS } from '../viz/steps'
-import { BAR_HIT, ICON_BUTTON, SECTION_HEADING, TALL_HIT } from './controls'
+import {
+  BAR_HIT,
+  ICON_BUTTON,
+  SECTION_HEADING,
+  SLIDER,
+  TALL_HIT,
+  sliderFill,
+} from './controls'
 import { BarIconButton, SmallIconButton } from './IconButton'
 import { Popover } from './Popover'
 import { ChoiceRow, SettingGroup, SwitchRow } from './SettingRows'
@@ -254,12 +260,6 @@ const WANT_W = 20
 /** A metronome, its arm off to the right, in an 18 px box */
 const METRONOME = 'M6.5 2.5h5l3 13h-11zM9 11.5l4-7'
 
-const SLIDER = 'range-slider h-11 min-w-0 flex-1'
-
-/** How far along its range a slider's value is: its track's fill */
-const fill = (value: number, min: number, max: number): CSSProperties =>
-  ({ '--fill': (value - min) / (max - min) }) as CSSProperties
-
 /**
  * The transport, a popover on the tempo's button (below it on the tab
  * rail, above it in the play surface's header): the song's tempo on a
@@ -345,8 +345,8 @@ export function TransportPicker({
           step={1}
           value={tempo}
           onChange={(event) => turn(Number(event.target.value))}
-          className={SLIDER}
-          style={fill(tempo, MIN_TEMPO, MAX_TEMPO)}
+          className={`${SLIDER} flex-1`}
+          style={sliderFill(tempo, MIN_TEMPO, MAX_TEMPO)}
         />
         <button
           type="button"
@@ -377,8 +377,8 @@ export function TransportPicker({
             step={1}
             value={percent}
             onChange={(event) => swung(Number(event.target.value))}
-            className={SLIDER}
-            style={fill(percent, MIN_SWING * 100, MAX_SWING * 100)}
+            className={`${SLIDER} flex-1`}
+            style={sliderFill(percent, MIN_SWING * 100, MAX_SWING * 100)}
           />
         </div>
       </div>

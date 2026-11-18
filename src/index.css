@@ -251,7 +251,7 @@ body {
  * carries a light outline. A rounded track, filled with the accent up to
  * the thumb's middle, and the thumb a disc of it with no rim. The element
  * sets --fill, the value's share of its range (0 to 1), as it is drawn
- * (Transport.tsx); keyboard focus rings the thumb.
+ * (controls.ts's SLIDER and sliderFill); keyboard focus rings the thumb.
  */
 @utility range-slider {
   --thumb: 1rem;

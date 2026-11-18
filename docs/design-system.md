@@ -61,7 +61,11 @@ so that controls side by side line up. Two heights only:
 - **44 px** (`h-11`), the touch target: everything outside a panel, a
   panel's actions, a list's rows. Rounded at 10 px, labels at 12 px.
   `BUTTON`, `BUTTON_DANGER`, `BUTTON_CONFIRM`, `OPTION` (one of a row,
-  chosen by `aria-pressed`), `OPTION_CELL`, `ICON_BUTTON`, `FIELD`.
+  chosen by `aria-pressed`), `OPTION_CELL`, `ICON_BUTTON`, `FIELD`,
+  `SLIDER` (an `<input type="range">` drawn by the app, never the
+  browser's, whose track has a light outline on a dark page: a rounded
+  track filled with the accent up to the thumb, the thumb a disc of it;
+  its `style` is `sliderFill(value, min, max)`).
 - **28 px** (`h-7`): a panel's header row and the rows of a panel raised
   over the page. Rounded at 6 px, labels at 11 px, the touch still 44 px
   tall (`TALL_HIT`). `SMALL_BUTTON`, `SMALL_DANGER`, `SMALL_CONFIRM`,

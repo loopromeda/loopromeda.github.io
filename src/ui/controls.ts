@@ -31,6 +31,7 @@
  * Every letter is Recursive (index.css): names in its sans, readouts in
  * its mono (font-mono), the same face with its MONO axis turned up.
  */
+import type { CSSProperties } from 'react'
 
 /**
  * A card's face, as a CSS value (index.css's --panel, in either mode):
@@ -104,6 +105,27 @@ export const ICON_BUTTON =
 /** A 44 px text field or select */
 export const FIELD =
   'h-11 min-w-0 rounded-[10px] bg-(--well) px-3 text-[13px] text-(--ink-100) outline-none focus-visible:shadow-[inset_0_0_0_1px_var(--accent)]'
+
+/**
+ * A 44 px tall slider, an input of type range drawn by the app and not
+ * the browser (index.css's range-slider), whose native track carries a
+ * light outline on a dark page: a rounded track filled with the accent
+ * up to the thumb, the thumb a disc of it. Its style is sliderFill's.
+ */
+export const SLIDER = 'range-slider h-11 min-w-0'
+
+/**
+ * A slider's style: how far along its range, min to max, value stands
+ * (0 to 1), which its track is filled to
+ */
+export function sliderFill(
+  value: number,
+  min: number,
+  max: number
+): CSSProperties {
+  const share = max > min ? (value - min) / (max - min) : 0
+  return { '--fill': Math.max(0, Math.min(1, share)) } as CSSProperties
+}
 
 /**
  * A touch kept still this long (ms) is held, not tapped: a knob held
