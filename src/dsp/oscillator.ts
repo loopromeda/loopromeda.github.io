@@ -68,12 +68,25 @@ export class Oscillator {
   private phaseInCycles = 0
   /** The last phase offset render() added, to tell its rate of change */
   private lastOffset = 0
+  /**
+   * Synced (renderSynced), the master's phase in cycles, whose wrap
+   * restarts the wave, and what the jumps of the sample before leave to
+   * the next sample's rounding
+   */
+  private masterPhase = 0
+  private carry = 0
 
   /**
    * The square's pulse width for process(), the share of each cycle spent
    * high: 0.5 is a square wave. Kept within MIN_WIDTH..MAX_WIDTH.
    */
   width = 0.5
+
+  /**
+   * What every frequency and phase step given is multiplied by: a unison
+   * voice's detune (1, none)
+   */
+  ratio = 1
 
   /** Steps a cycle is held in, 0 for the smooth wave (a whole number) */
   steps = 0
@@ -100,10 +113,12 @@ export class Oscillator {
     return this.phaseInCycles
   }
 
-  /** Sets the phase (in cycles; wrapped into [0, 1)) */
+  /** Sets the phase (in cycles; wrapped into [0, 1)), a sync's master too */
   reset(phase = 0): void {
     this.phaseInCycles = phase - Math.floor(phase)
+    this.masterPhase = this.phaseInCycles
     this.lastOffset = 0
+    this.carry = 0
   }
 
   /**
@@ -120,7 +135,7 @@ export class Oscillator {
     start = 0,
     end = out.length
   ): void {
-    const dt = increment(frequency / this.sampleRate)
+    const dt = increment((frequency * this.ratio) / this.sampleRate)
     // A local, not the import: the benchmark's module runner reads an
     // import through a getter
     const sin = sinCycles
@@ -198,8 +213,9 @@ export class Oscillator {
     const width = clampWidth(this.width)
     const steps = stepCount(this.steps)
     const table = steps > 0 ? this.levelsOf(wave, steps) : this.table
+    const ratio = this.ratio
     for (let i = start; i < end; i++) {
-      const step = increment(increments[i] as number)
+      const step = increment((increments[i] as number) * ratio)
       let read = t
       let dt = step
       if (offsets) {
@@ -237,6 +253,107 @@ export class Oscillator {
     this.phaseInCycles = t
     this.lastOffset = last
   }
+
+  /**
+   * render() hard synced, smooth waves only (no steps, no phase offsets):
+   * a master at increments[i] (times ratio) restarts the wave each time
+   * it comes round, the wave itself running syncs[i] times as fast (sync
+   * without syncs; below 1, 1). The wave's own jumps and each restart's
+   * are rounded by polyBLEP over the samples either side, the half after
+   * a jump carried to the next sample; the triangle's bends are left
+   * sharp. The note heard is the master's, the wave's pitch its colour.
+   */
+  renderSynced(
+    out: Float32Array,
+    increments: Float32Array,
+    wave: number,
+    start: number,
+    end: number,
+    sync: number,
+    syncs?: Float32Array,
+    widths?: Float32Array
+  ): void {
+    const sin = sinCycles
+    let s = this.phaseInCycles
+    let m = this.masterPhase
+    const ratio = this.ratio
+    const width = clampWidth(this.width)
+    for (let i = start; i < end; i++) {
+      const dm = increment((increments[i] as number) * ratio)
+      let r = syncs ? (syncs[i] as number) : sync
+      if (!(r > 1)) r = 1
+      const ds = increment(dm * r)
+      const w = widths ? clampWidth(widths[i]) : width
+      const y = naive(s, wave, w, sin) + this.carry
+      this.now = 0
+      this.carry = 0
+      if (dm > 0 && m + dm >= 1) {
+        // The master comes round x of a sample from now: the wave runs on
+        // to there, then restarts
+        const x = (1 - m) / dm
+        const until = ds * x
+        if (ds > 0) this.edges(s, until, 0, ds, wave, w)
+        let at = s + until
+        at -= Math.floor(at)
+        this.edge(x, naive(0, wave, w, sin) - naive(at, wave, w, sin))
+        // From the restart on to the next sample
+        const after = ds * (1 - x)
+        if (ds > 0) this.edges(0, after, x, ds, wave, w)
+        s = after
+        m = m + dm - 1
+      } else {
+        if (ds > 0) this.edges(s, ds, 0, ds, wave, w)
+        s += ds
+        s -= Math.floor(s)
+        m += dm
+        m -= Math.floor(m)
+      }
+      out[i] = y + this.now
+    }
+    this.phaseInCycles = s
+    this.masterPhase = m
+  }
+
+  /**
+   * The wave's own jumps as its phase runs from from over length (in
+   * cycles), starting offset of a sample after this one, ds cycles a
+   * sample: the saw's drop at its wrap, a pulse's rise there and its fall
+   * at w (edge)
+   */
+  private edges(
+    from: number,
+    length: number,
+    offset: number,
+    ds: number,
+    wave: number,
+    w: number
+  ): void {
+    const to = from + length
+    if (wave === SAW) {
+      if (to >= 1) this.edge(offset + (1 - from) / ds, -2)
+    } else if (wave === SQUARE) {
+      if (w > from && w <= to) this.edge(offset + (w - from) / ds, -2)
+      if (to >= 1 && from < 1) this.edge(offset + (1 - from) / ds, 2)
+      if (w + 1 > from && w + 1 <= to) {
+        this.edge(offset + (w + 1 - from) / ds, -2)
+      }
+    }
+  }
+
+  /**
+   * A jump x of a sample after this one (0..1), rounded by polyBLEP:
+   * its half before it to this sample (now), its half after to the next
+   * (carry)
+   */
+  private edge(x: number, jump: number): void {
+    const at = x > 0 ? (x < 1 ? x : 1) : 0
+    const before = 1 - at
+    this.now += jump * 0.5 * before * before
+    this.carry -= jump * 0.5 * at * at
+  }
+
+  /** What edge() adds to the sample being rendered */
+  private now = 0
 
   /**
    * The table of each of n steps' levels for wave at this.bits, worked
@@ -370,6 +487,25 @@ function smooth(
       return pulse(t, dt, w)
     case TRIANGLE:
       return triangle(t, dt)
+    default:
+      return sin(t)
+  }
+}
+
+/** The smooth wave at phase t, its jumps sharp (the square at width w) */
+function naive(
+  t: number,
+  wave: number,
+  w: number,
+  sin: (cycles: number) => number
+): number {
+  switch (wave) {
+    case SAW:
+      return 2 * t - 1
+    case SQUARE:
+      return (t < w ? 1 : -1) + 1 - 2 * w
+    case TRIANGLE:
+      return t < 0.5 ? 4 * t - 1 : 3 - 4 * t
     default:
       return sin(t)
   }

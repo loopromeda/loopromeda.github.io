@@ -60,10 +60,14 @@ src/dsp/      pure DSP (oscillators, envelopes, LFOs, filters, voices);
               chainVoice.ts one voice of it (its glide, in pitch, and
               in Slide for a note placed on the XY pad; a ghost note
               muted, its own envelope, lowpass and scrape, or soft,
-              a kit's); slots.ts
+              a kit's; its drives at twice the rate); oscillator.ts
+              the waves (a super's stack, hard sync, a phase Free or
+              Reset); comb.ts a delay tuned to the note, fed back (a
+              plucked string, Karplus-Strong, or a resonator);
+              formant.ts a vowel's three formants; slots.ts
               numbers the parts,
-              sources and destinations; effects.ts the chorus, delay
-              and reverb, the stereo tools (a Haas delay, a doubler
+              sources and destinations; effects.ts the chorus, the
+              phaser, delay and reverb, the stereo tools (a Haas delay, a doubler
               of two paths, a width) and the mastering tools (an EQ,
               a compressor, a limiter), in stereo, in racks: a sound's
               inserts, the kit's, a bus's, the master's; eq.ts the

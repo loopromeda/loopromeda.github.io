@@ -11,7 +11,7 @@
  */
 import type { LaneTarget } from '../dsp/automation'
 import { ChainSynth } from '../dsp/chainSynth'
-import type { EffectRack } from '../dsp/effects'
+import { PHASER_STAGES, type EffectRack } from '../dsp/effects'
 import { CHIP_DUTIES, CHIP_STEPS, CHIP_WAVES } from '../dsp/oscillator'
 import type { Mixer, Part, Strip } from '../dsp/output'
 import {
@@ -26,19 +26,28 @@ import {
   FX_HAAS,
   FX_DOUBLER,
   FX_WIDTH,
+  FX_PHASER,
   FX_REVERB,
   INPUT_CHIP,
+  INPUT_DETUNE,
   INPUT_FM,
   INPUT_NOISE,
   INPUT_OSC,
   INPUT_PITCH,
   INPUT_RING,
+  INPUT_SYNC,
   INPUT_WIDTH,
+  ITEM_COMB,
   ITEM_CUTOFF,
+  ITEM_DAMP,
   ITEM_DRIVE,
   ITEM_DRIVE_AMOUNT,
   ITEM_FILTER,
+  ITEM_FORMANT,
   ITEM_RESONANCE,
+  ITEM_SHIFT,
+  ITEM_TUNE,
+  ITEM_VOWEL,
   MAX_INPUTS,
   MOD_ENV,
   MOD_LFO,
@@ -89,11 +98,28 @@ import {
 
 const INPUT_KIND = {
   osc: INPUT_OSC,
+  // A stack of an oscillator's voices: an oscillator, unison set
+  super: INPUT_OSC,
   chip: INPUT_CHIP,
   noise: INPUT_NOISE,
   ring: INPUT_RING,
 }
-const ITEM_KIND = { filter: ITEM_FILTER, drive: ITEM_DRIVE }
+const ITEM_KIND = {
+  filter: ITEM_FILTER,
+  drive: ITEM_DRIVE,
+  comb: ITEM_COMB,
+  formant: ITEM_FORMANT,
+}
+/** An item's destinations by key, each kind's its own two */
+const ITEM_PARAM = {
+  cutoff: ITEM_CUTOFF,
+  resonance: ITEM_RESONANCE,
+  drive: ITEM_DRIVE_AMOUNT,
+  tune: ITEM_TUNE,
+  damp: ITEM_DAMP,
+  vowel: ITEM_VOWEL,
+  shift: ITEM_SHIFT,
+}
 const MODULATOR_KIND = { env: MOD_ENV, lfo: MOD_LFO }
 const EFFECT_KIND: Record<EffectKind, number> = {
   chorus: FX_CHORUS,
@@ -105,6 +131,7 @@ const EFFECT_KIND: Record<EffectKind, number> = {
   haas: FX_HAAS,
   doubler: FX_DOUBLER,
   width: FX_WIDTH,
+  phaser: FX_PHASER,
 }
 const NOTE_SOURCE: Record<NoteSource, number> = {
   velocity: SOURCE_VELOCITY,
@@ -188,7 +215,7 @@ export class SoundPlayer {
       synth.setInputKind(i, INPUT_KIND[input.kind])
       if (input.kind === 'osc') {
         synth.setFmSource(i, slot(input.refs.fmSource ?? null))
-        hold(input.id, { ...input.values }, (value) =>
+        hold(input.id, { ...input.values }, (value) => {
           synth.setOsc(
             i,
             value('wave'),
@@ -196,7 +223,34 @@ export class SoundPlayer {
             value('width'),
             value('fm')
           )
-        )
+          synth.setUnison(
+            i,
+            value('unison', 1),
+            value('detune'),
+            value('blend'),
+            value('phase') === 1
+          )
+          synth.setSync(i, value('sync'))
+        })
+      } else if (input.kind === 'super') {
+        synth.setFmSource(i, NO_INPUT)
+        hold(input.id, { ...input.values }, (value) => {
+          synth.setOsc(
+            i,
+            value('wave'),
+            12 * value('octave') + value('semi') + value('fine') / 100,
+            value('width'),
+            0
+          )
+          synth.setUnison(
+            i,
+            value('voices'),
+            value('detune'),
+            value('blend'),
+            value('phase') === 1
+          )
+          synth.setSync(i, 0)
+        })
       } else if (input.kind === 'chip') {
         hold(input.id, { ...input.values }, (value) =>
           synth.setChip(
@@ -239,6 +293,24 @@ export class SoundPlayer {
               value('cutoff'),
               value('resonance'),
               value('keytrack')
+            )
+          } else if (item.kind === 'comb') {
+            synth.setComb(
+              c,
+              k,
+              value('tune'),
+              value('decay'),
+              value('damp'),
+              value('mix')
+            )
+          } else if (item.kind === 'formant') {
+            synth.setFormant(
+              c,
+              k,
+              value('vowel'),
+              value('shift'),
+              value('resonance'),
+              value('mix')
             )
           } else {
             synth.setDrive(c, k, value('drive'))
@@ -326,7 +398,13 @@ export class SoundPlayer {
       }
       const i = inputs.get(target)
       if (i !== undefined) {
-        const param = { pitch: INPUT_PITCH, width: INPUT_WIDTH, fm: INPUT_FM }
+        const param = {
+          pitch: INPUT_PITCH,
+          width: INPUT_WIDTH,
+          fm: INPUT_FM,
+          sync: INPUT_SYNC,
+          detune: INPUT_DETUNE,
+        }
         const which = param[key as keyof typeof param]
         return which === undefined ? undefined : inputDest(i, which)
       }
@@ -338,14 +416,7 @@ export class SoundPlayer {
       }
       const at = items.get(target)
       if (at) {
-        const param =
-          key === 'cutoff'
-            ? ITEM_CUTOFF
-            : key === 'resonance'
-              ? ITEM_RESONANCE
-              : key === 'drive'
-                ? ITEM_DRIVE_AMOUNT
-                : undefined
+        const param = ITEM_PARAM[key as keyof typeof ITEM_PARAM]
         return param === undefined ? undefined : itemDest(at[0], at[1], param)
       }
       const m = modulators.get(target)
@@ -553,6 +624,16 @@ function setEffect(
       return
     case 'width':
       rack.setWidth(k, value('width'), value('mono'))
+      return
+    case 'phaser':
+      rack.setPhaser(
+        k,
+        value('rate'),
+        value('depth'),
+        value('feedback'),
+        PHASER_STAGES[Math.round(value('stages'))] ?? PHASER_STAGES[1],
+        value('mix')
+      )
   }
 }
 

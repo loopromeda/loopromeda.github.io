@@ -11,6 +11,8 @@ import {
   Limiter,
   LIMITER_LOOKAHEAD,
   MAX_DELAY_TIME,
+  PHASER_STAGES,
+  Phaser,
   Reverb,
   WIDTH_MONO_OFF,
   Width,
@@ -41,6 +43,7 @@ import {
   FX_HAAS,
   FX_LAST,
   FX_LIMITER,
+  FX_PHASER,
   FX_REVERB,
   FX_WIDTH,
 } from './slots'
@@ -822,7 +825,8 @@ describe('Width', () => {
     let sum = 0
     for (let i = from; i < to; i++) sum += apart(i) ** 2
     const side = Math.sqrt(sum / (to - from))
-    expect(db(side / ((0.2 * Math.SQRT1_2) / 2))).toBeLessThan(-20)
+    // Two octaves under it: 24 dB an octave, two sections of 12
+    expect(db(side / ((0.2 * Math.SQRT1_2) / 2))).toBeLessThan(-45)
     const high = new Width(SAMPLE_RATE)
     high.set(1, 200)
     const out = run(high, leftOnly(1, 4000))
@@ -844,5 +848,67 @@ describe('EffectRack, the stereo tools', () => {
     expect(firstSample(out.left, 0.5)).toBe(0)
     expect(firstSample(out.right, 0.5)).toBe(480)
     expect(rack.kindOf(1)).toBe(FX_DOUBLER)
+  })
+})
+
+describe('Phaser', () => {
+  it('names its stages in the order its knob turns', () => {
+    expect(PHASER_STAGES).toEqual([4, 6, 8])
+  })
+
+  it('cuts a notch where its row turns a half cycle, and passes between', () => {
+    // Four allpasses at 700 Hz turn a half cycle at 0.414 times it
+    const at = (hertz: number) => {
+      const phaser = new Phaser(SAMPLE_RATE)
+      phaser.set(0, 0, 0, 4, 0.5)
+      const out = run(phaser, sine(0.5, hertz))
+      return rms(out.left, 12000, 24000)
+    }
+    const notch = at(290)
+    const open = at(700)
+    expect(notch / open).toBeLessThan(0.1)
+    expect(open).toBeGreaterThan(0.12)
+  })
+
+  it('sweeps its sides a quarter cycle apart', () => {
+    const phaser = new Phaser(SAMPLE_RATE)
+    phaser.set(0.5, 1, 0.5, 6, 0.5)
+    const out = run(phaser, sine(1, 440))
+    let apart = 0
+    for (let i = 0; i < out.left.length; i++) {
+      apart = Math.max(
+        apart,
+        Math.abs((out.left[i] as number) - (out.right[i] as number))
+      )
+    }
+    expect(apart).toBeGreaterThan(0.05)
+  })
+
+  it('stays bounded at its most feedback', () => {
+    const phaser = new Phaser(SAMPLE_RATE)
+    phaser.set(0.2, 1, 1, 8, 1)
+    const out = run(phaser, sine(2, 300))
+    expect(out.left.every(Number.isFinite)).toBe(true)
+    expect(loudest(out.left)).toBeLessThan(2.5)
+  })
+
+  it('passes what goes in at a mix of 0', () => {
+    const phaser = new Phaser(SAMPLE_RATE)
+    phaser.set(1, 1, 0.5, 6, 0)
+    const out = run(phaser, sine(0.1, 440))
+    const plain = sine(0.1, 440)
+    for (let i = 0; i < out.left.length; i += 97) {
+      expect(out.left[i]).toBeCloseTo(plain.left[i] as number, 6)
+    }
+  })
+
+  it('plays on a rack slot', () => {
+    const rack = new EffectRack(SAMPLE_RATE)
+    rack.count = 1
+    rack.setKind(0, FX_PHASER)
+    rack.setPhaser(0, 0, 0, 0, 4, 0.5)
+    expect(rack.kindOf(0)).toBe(FX_PHASER)
+    const out = run(rack, sine(0.5, 290))
+    expect(rms(out.left, 12000, 24000)).toBeLessThan(0.02)
   })
 })

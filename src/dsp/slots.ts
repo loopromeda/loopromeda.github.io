@@ -14,6 +14,8 @@ export const MAX_MODULATORS = 8
 export const MAX_ROUTES = 16
 /** Effects in a row (src/dsp/effects.ts): inserts, a bus's, the master's */
 export const MAX_EFFECTS = 4
+/** An oscillator's unison voices at most, each a copy of it detuned */
+export const MAX_UNISON = 8
 /** The mix's buses, each a row of effects (src/dsp/output.ts) */
 export const MAX_BUSES = 4
 
@@ -26,9 +28,14 @@ export const INPUT_NOISE = 1
 export const INPUT_RING = 2
 export const INPUT_CHIP = 3
 
-/** Chain item kinds */
+/**
+ * Chain item kinds: a filter, a drive, a comb tuned to the note (a
+ * plucked string's, comb.ts) and a vowel's formants (formant.ts)
+ */
 export const ITEM_FILTER = 0
 export const ITEM_DRIVE = 1
+export const ITEM_COMB = 2
+export const ITEM_FORMANT = 3
 
 /**
  * Effect kinds: a chorus, a delay, a reverb, the mastering tools, then
@@ -43,8 +50,9 @@ export const FX_LIMITER = 5
 export const FX_HAAS = 6
 export const FX_DOUBLER = 7
 export const FX_WIDTH = 8
+export const FX_PHASER = 9
 /** The highest kind's number */
-export const FX_LAST = FX_WIDTH
+export const FX_LAST = FX_PHASER
 
 /** Modulator kinds */
 export const MOD_ENV = 0
@@ -85,11 +93,17 @@ export const DEST_AMP = 1
 /** The voice's place between the sides: added to its pan, -1..1 */
 export const DEST_PAN = 2
 
-/** An input's destinations: pitch (semitones), pulse width, FM depth */
+/**
+ * An input's destinations: pitch (semitones), pulse width, FM depth, the
+ * hard sync's pitch above the note (semitones) and the unison's detune
+ * (semitones)
+ */
 export const INPUT_PITCH = 0
 export const INPUT_WIDTH = 1
 export const INPUT_FM = 2
-const INPUT_DESTS = 3
+export const INPUT_SYNC = 3
+export const INPUT_DETUNE = 4
+const INPUT_DESTS = 5
 const FIRST_INPUT_DEST = 3
 
 /** Input i's destination param (INPUT_PITCH, INPUT_WIDTH or INPUT_FM) */
@@ -118,6 +132,12 @@ export function sendDest(c: number, i: number): number {
 export const ITEM_CUTOFF = 0
 export const ITEM_RESONANCE = 1
 export const ITEM_DRIVE_AMOUNT = 0
+/** A comb's: its tune (semitones) and its damp */
+export const ITEM_TUNE = 0
+export const ITEM_DAMP = 1
+/** A formant's: its vowel (0..4, A to U) and its shift (semitones) */
+export const ITEM_VOWEL = 0
+export const ITEM_SHIFT = 1
 const ITEM_DESTS = 2
 const FIRST_ITEM_DEST = FIRST_CHAIN_DEST + MAX_CHAINS * CHAIN_DESTS
 

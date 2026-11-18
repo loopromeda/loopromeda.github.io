@@ -110,6 +110,7 @@ describe('the chain engine', () => {
     expect(slots.MAX_ROUTES).toBe(kinds.MAX_ROUTES)
     expect(slots.MAX_EFFECTS).toBe(kinds.MAX_EFFECTS)
     expect(slots.MAX_BUSES).toBe(kinds.MAX_BUSES)
+    expect(slots.MAX_UNISON).toBe(kinds.MAX_UNISON)
   })
 
   it('plays the sound through its inserts and sends, as knobs move', () => {
@@ -422,6 +423,57 @@ describe('the chain engine', () => {
     expect(peak(render(sound))).toBe(0)
     sound = setRef(setRef(sound, 'i3', 'a', 'i1'), 'i3', 'b', 'i2')
     expect(peak(render(sound))).toBeGreaterThan(0.01)
+  })
+
+  it('plays a super input, a stack of its voices', () => {
+    let sound = addInput(initSound(), 'super').sound
+    sound = setSend(sound, 'c1', 'i1', 0)
+    const stack = render(sound)
+    expect(stack.every(Number.isFinite)).toBe(true)
+    expect(peak(stack)).toBeGreaterThan(0.05)
+    expect(peak(stack)).toBeLessThan(1)
+    // Its detune moves it, and a route to its detune does too
+    const wider = setValue(sound, 'i2', 'detune', 80)
+    expect(maxDifference(render(wider), stack)).toBeGreaterThan(0.01)
+    const routed = addRoute(sound, {
+      source: 'velocity',
+      target: 'i2',
+      key: 'detune',
+      amount: 0.5,
+    }).sound
+    expect(maxDifference(render(routed), stack)).toBeGreaterThan(0.01)
+  })
+
+  it('rings a comb at the note, and talks through a formant', () => {
+    let sound = addInput(initSound(), 'noise').sound
+    sound = setSend(sound, 'c1', 'i1', 0)
+    const added = addItem(sound, 'c1', 'comb')
+    const comb = added.id as string
+    const ringing = render(added.sound)
+    expect(ringing.every(Number.isFinite)).toBe(true)
+    expect(peak(ringing)).toBeGreaterThan(0.05)
+    const damped = setValue(added.sound, comb, 'damp', 0.9)
+    expect(maxDifference(render(damped), ringing)).toBeGreaterThan(0.01)
+    const plain = addItem(initSound(), 'c1', 'formant')
+    const formant = plain.id as string
+    const voiced = render(plain.sound)
+    expect(peak(voiced)).toBeGreaterThan(0.05)
+    const swept = addRoute(plain.sound, {
+      source: 'velocity',
+      target: formant,
+      key: 'vowel',
+      amount: 0.5,
+    })
+    expect(maxDifference(render(swept.sound), voiced)).toBeGreaterThan(0.01)
+  })
+
+  it('plays a phaser on an insert', () => {
+    const strip = new Strip(
+      new ChainSynth(SAMPLE_RATE),
+      new EffectRack(SAMPLE_RATE)
+    )
+    new SoundPlayer(strip).load(addEffect(initSound(), 'phaser').sound)
+    expect(strip.inserts.kindOf(0)).toBe(slots.FX_PHASER)
   })
 
   it('passes the signal through a drive of 0 unchanged', () => {

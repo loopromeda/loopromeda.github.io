@@ -15,8 +15,10 @@ import {
   EQ_MIN_Q,
   EQ_TYPE_NAMES,
 } from '../../dsp/eq'
+import { COMB_MAX_DECAY, COMB_MIN_DECAY } from '../../dsp/comb'
+import { PHASER_STAGES } from '../../dsp/effects'
 import { CHIP_DUTIES, CHIP_STEPS, MAX_BITS } from '../../dsp/oscillator'
-import { LFO_SHAPE_NAMES, type ValueSpec } from '../params'
+import { LFO_SHAPE_NAMES, VOWEL_NAMES, type ValueSpec } from '../params'
 
 /** One knob of a part, keyed within the part */
 export interface KnobSpec extends ValueSpec {
@@ -165,7 +167,7 @@ export interface DestSpec {
   readonly key: string
   readonly label: string
   readonly scale: number
-  readonly unit: 'st' | 'oct' | '%'
+  readonly unit: 'st' | 'oct' | '%' | 'vowel'
 }
 
 /** A kind of part: its name on screen, its knobs, what routes can move */
@@ -190,6 +192,8 @@ export const MAX_ROUTES = 16
  * master's
  */
 export const MAX_EFFECTS = 4
+/** An oscillator's unison voices at most */
+export const MAX_UNISON = 8
 
 /** The oscillator waves, in src/dsp/oscillator.ts's order */
 export const WAVE_NAMES = ['Sine', 'Triangle', 'Saw', 'Square'] as const
@@ -311,39 +315,79 @@ const PITCH_DEST = {
   unit: 'st',
 } as const satisfies DestSpec
 
+/** An oscillator's wave */
+const WAVE = {
+  key: 'wave',
+  label: 'Wave',
+  min: 0,
+  max: WAVE_NAMES.length - 1,
+  default: 2,
+  curve: 'linear',
+  step: 1,
+  unit: '',
+  choices: WAVE_NAMES,
+} as const satisfies KnobSpec
+
+/** An oscillator's pulse width, its square's share of a cycle spent high */
+const WIDTH = {
+  key: 'width',
+  label: 'Width',
+  min: 0.05,
+  max: 0.95,
+  default: 0.5,
+  curve: 'linear',
+  step: 0,
+  unit: '%',
+} as const satisfies KnobSpec
+
+/**
+ * Where each note starts an oscillator's wave: anywhere, as a
+ * free-running analog oscillator, for one added (a chord's notes never
+ * start as one, their first peaks piled up); at its start, as it always
+ * did, for one saved before
+ */
+const PHASE = {
+  key: 'phase',
+  label: 'Phase',
+  min: 0,
+  max: 1,
+  default: 1,
+  absent: 0,
+  curve: 'linear',
+  step: 1,
+  unit: '',
+  choices: ['Reset', 'Free'],
+} as const satisfies KnobSpec
+
 /** What makes sound: an input is heard through the chains that take it */
 export const INPUT_KINDS = {
   osc: {
     label: 'Osc',
     knobs: [
-      {
-        key: 'wave',
-        label: 'Wave',
-        min: 0,
-        max: WAVE_NAMES.length - 1,
-        default: 2,
-        curve: 'linear',
-        step: 1,
-        unit: '',
-        choices: WAVE_NAMES,
-      },
+      WAVE,
       ...PITCH_KNOBS,
+      WIDTH,
+      level('fm', 'FM', 0),
+      // Hard sync (docs/plan/sound-chains.md, The library): the wave this
+      // far above the note, restarted by the note's own cycle
       {
-        key: 'width',
-        label: 'Width',
-        min: 0.05,
-        max: 0.95,
-        default: 0.5,
+        key: 'sync',
+        label: 'Sync',
+        min: 0,
+        max: 48,
+        default: 0,
         curve: 'linear',
         step: 0,
-        unit: '%',
+        unit: 'st',
+        atMin: 'Off',
       },
-      level('fm', 'FM', 0),
+      PHASE,
     ],
     dests: [
       PITCH_DEST,
       { key: 'width', label: 'Width', scale: 0.5, unit: '%' },
       { key: 'fm', label: 'FM', scale: 1, unit: '%' },
+      { key: 'sync', label: 'Sync', scale: 48, unit: 'st' },
     ],
     // The input whose signal modulates this one's phase, by fm
     refs: ['fmSource'],
@@ -417,6 +461,54 @@ export const INPUT_KINDS = {
       },
     ],
     dests: [PITCH_DEST],
+    refs: [],
+  },
+  // A stack of an oscillator's voices, detuned apart and summed, as a
+  // supersaw is (docs/plan/sound-chains.md, The library): an input of its
+  // own, so the Osc keeps its few knobs
+  super: {
+    label: 'Super',
+    knobs: [
+      WAVE,
+      ...PITCH_KNOBS,
+      WIDTH,
+      {
+        key: 'voices',
+        label: 'Voices',
+        min: 2,
+        max: MAX_UNISON,
+        default: 7,
+        curve: 'linear',
+        step: 1,
+        unit: '',
+      },
+      {
+        key: 'detune',
+        label: 'Detune',
+        min: 0,
+        max: 100,
+        default: 25,
+        curve: 'quadratic',
+        step: 0,
+        unit: 'ct',
+      },
+      {
+        key: 'blend',
+        label: 'Blend',
+        min: 0,
+        max: 1,
+        default: 0.75,
+        curve: 'linear',
+        step: 0,
+        unit: '%',
+      },
+      PHASE,
+    ],
+    dests: [
+      PITCH_DEST,
+      { key: 'width', label: 'Width', scale: 0.5, unit: '%' },
+      { key: 'detune', label: 'Detune', scale: 1, unit: 'st' },
+    ],
     refs: [],
   },
   noise: {
@@ -505,7 +597,114 @@ export const ITEM_KINDS = {
     dests: [{ key: 'drive', label: 'Drive', scale: 1, unit: '%' }],
     refs: [],
   },
+  // A comb tuned to the note (docs/plan/sound-chains.md, The library): a
+  // burst into it rings as a plucked string (Karplus-Strong), anything
+  // else takes on its pitch, a resonator's
+  comb: {
+    label: 'Comb',
+    knobs: [
+      {
+        key: 'tune',
+        label: 'Tune',
+        min: -24,
+        max: 24,
+        default: 0,
+        curve: 'linear',
+        step: 1,
+        unit: 'st',
+      },
+      {
+        key: 'decay',
+        label: 'Decay',
+        min: COMB_MIN_DECAY,
+        max: COMB_MAX_DECAY,
+        default: 1.5,
+        curve: 'exponential',
+        step: 0,
+        unit: 's',
+      },
+      {
+        key: 'damp',
+        label: 'Damp',
+        min: 0,
+        max: 1,
+        default: 0.4,
+        curve: 'linear',
+        step: 0,
+        unit: '%',
+      },
+      itemMix(1),
+    ],
+    dests: [
+      { key: 'tune', label: 'Tune', scale: 48, unit: 'st' },
+      { key: 'damp', label: 'Damp', scale: 1, unit: '%' },
+    ],
+    refs: [],
+  },
+  // A voice's vowel, three formants at once (docs/plan/sound-chains.md,
+  // The library): a route sweeping it talks
+  formant: {
+    label: 'Formant',
+    knobs: [
+      {
+        key: 'vowel',
+        label: 'Vowel',
+        min: 0,
+        max: VOWEL_NAMES.length - 1,
+        default: 0,
+        curve: 'linear',
+        step: 0,
+        unit: 'vowel',
+      },
+      {
+        key: 'shift',
+        label: 'Shift',
+        min: -12,
+        max: 12,
+        default: 0,
+        curve: 'linear',
+        step: 0,
+        unit: 'st',
+      },
+      {
+        key: 'resonance',
+        label: 'Reso',
+        min: 0,
+        max: 1,
+        default: 0.5,
+        curve: 'linear',
+        step: 0,
+        unit: '%',
+      },
+      itemMix(1),
+    ],
+    dests: [
+      // A route's whole amount sweeps every vowel, A to U
+      {
+        key: 'vowel',
+        label: 'Vowel',
+        scale: VOWEL_NAMES.length - 1,
+        unit: 'vowel',
+      },
+      { key: 'shift', label: 'Shift', scale: 12, unit: 'st' },
+    ],
+    refs: [],
+  },
 } as const satisfies Readonly<Record<string, KindSpec>>
+
+/** An item's Mix: the dry signal at 0, the item's alone at 1 */
+function itemMix(initial: number): KnobSpec {
+  return {
+    key: 'mix',
+    label: 'Mix',
+    min: 0,
+    max: 1,
+    default: initial,
+    curve: 'linear',
+    step: 0,
+    unit: '%',
+  }
+}
 
 /** An effect's Mix: none of it at 0, it alone at 1, both whole between */
 function mix(initial: number): KnobSpec {
@@ -830,6 +1029,57 @@ export const EFFECT_KINDS = {
         unit: '%',
       },
       { ...hertz('mono', 'Mono Below', 20, 500, 20), atMin: 'Off' },
+    ],
+    dests: [],
+    refs: [],
+  },
+  // Notches swept up and down the spectrum, each side its own way
+  // (docs/plan/sound-chains.md, The library)
+  phaser: {
+    label: 'Phaser',
+    knobs: [
+      {
+        key: 'rate',
+        label: 'Rate',
+        min: 0.02,
+        max: 10,
+        default: 0.25,
+        curve: 'exponential',
+        step: 0,
+        unit: 'Hz',
+      },
+      {
+        key: 'depth',
+        label: 'Depth',
+        min: 0,
+        max: 1,
+        default: 0.7,
+        curve: 'linear',
+        step: 0,
+        unit: '%',
+      },
+      {
+        key: 'feedback',
+        label: 'Feedback',
+        min: 0,
+        max: 1,
+        default: 0.5,
+        curve: 'linear',
+        step: 0,
+        unit: '%',
+      },
+      {
+        key: 'stages',
+        label: 'Stages',
+        min: 0,
+        max: PHASER_STAGES.length - 1,
+        default: 1,
+        curve: 'linear',
+        step: 1,
+        unit: '',
+        choices: PHASER_STAGES.map(String),
+      },
+      mix(0.5),
     ],
     dests: [],
     refs: [],

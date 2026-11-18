@@ -12,7 +12,9 @@ import {
   INPUT_OSC,
   INPUT_RING,
   ITEM_CUTOFF,
+  ITEM_DRIVE,
   ITEM_FILTER,
+  ITEM_FORMANT,
   MOD_LFO,
   NO_INPUT,
   SOURCE_KEY,
@@ -224,7 +226,7 @@ describe('ChainSynth', () => {
     synth.setInputKind(1, 7)
     synth.setOsc(-1, SAW, 0, 0.5, 1)
     synth.setSend(0, 6, 1)
-    synth.setItemKind(0, 0, 3)
+    synth.setItemKind(0, 0, ITEM_FORMANT + 1)
     synth.setRoute(16, 1, 0, 1, 0)
     expect(play(synth)).toEqual(before)
   })
@@ -975,5 +977,243 @@ describe('ChainSynth’s chips', () => {
     synth.noteOn(1, 45, 0.8)
     fresh.noteOn(1, 45, 0.8)
     expect(render(synth, 0.1)).toEqual(render(fresh, 0.1))
+  })
+})
+
+describe('ChainSynth’s unison, phase and sync', () => {
+  /** One saw through an open filter, no other input */
+  function oneSaw(): ChainSynth {
+    const synth = twoSaws()
+    synth.inputCount = 1
+    synth.setOsc(0, SAW, 0, 0.5, 0)
+    return synth
+  }
+
+  /** The RMS of out from sample from */
+  function rms(out: Float32Array, from = 0): number {
+    let sum = 0
+    for (let i = from; i < out.length; i++) sum += (out[i] as number) ** 2
+    return Math.sqrt(sum / (out.length - from))
+  }
+
+  it('starts a note at its reset phase every time, free anywhere', () => {
+    const first = (free: boolean) => {
+      const synth = oneSaw()
+      synth.setUnison(0, 1, 0, 0, free)
+      const starts: number[] = []
+      for (let n = 0; n < 4; n++) {
+        synth.noteOn(n + 1, 60, 1)
+        const block = new Float32Array(128)
+        synth.process(block)
+        starts.push(block[40] as number)
+        synth.cut(n + 1)
+        render(synth, 0.05)
+      }
+      return starts
+    }
+    const reset = first(false)
+    expect(new Set(reset.map((v) => v.toFixed(5))).size).toBe(1)
+    const free = first(true)
+    expect(new Set(free.map((v) => v.toFixed(5))).size).toBe(4)
+  })
+
+  it('keeps a unison about as loud as one voice, and wider in pitch', () => {
+    const one = oneSaw()
+    const single = rms(play(one), 2400)
+    const stacked = oneSaw()
+    stacked.setUnison(0, 7, 30, 1, true)
+    const out = play(stacked)
+    expect(rms(out, 2400) / single).toBeGreaterThan(0.7)
+    expect(rms(out, 2400) / single).toBeLessThan(1.3)
+    // Detuned, it is no longer one saw sample for sample
+    expect(furthest(out, play(oneSaw()))).toBeGreaterThan(0.05)
+  })
+
+  it('plays a unison of no detune at the note, its voices apart', () => {
+    const stacked = oneSaw()
+    stacked.setUnison(0, 5, 0, 1, false)
+    const out = play(stacked)
+    // Its voices start apart, so the sum is no one saw, but repeats at
+    // the note's period
+    const period = SAMPLE_RATE / midiToFrequency(60)
+    const at = 6000
+    const later = at + Math.round(period * 20)
+    expect(Math.abs((out[later] as number) - (out[at] as number))).toBeLessThan(
+      0.05
+    )
+    expect(furthest(out, play(oneSaw()))).toBeGreaterThan(0.05)
+  })
+
+  it('syncs a saw to the note: its pitch stays the note’s', () => {
+    const synth = oneSaw()
+    synth.setSync(0, 7)
+    const out = play(synth)
+    // A synced saw crosses zero more than once a cycle, but repeats at
+    // the note's period: 261.6 Hz
+    const period = SAMPLE_RATE / midiToFrequency(60)
+    const at = 6000
+    const later = at + Math.round(period * 20)
+    expect(Math.abs((out[later] as number) - (out[at] as number))).toBeLessThan(
+      0.05
+    )
+    expect(furthest(out, play(oneSaw()))).toBeGreaterThan(0.1)
+  })
+})
+
+describe('ChainSynth’s drive', () => {
+  /** A saw at note through a drive of drive (none: no drive at all) */
+  function driven(note: number, drive?: number): Float32Array {
+    const synth = twoSaws()
+    synth.inputCount = 1
+    synth.setOsc(0, SAW, 0, 0.5, 0)
+    if (drive !== undefined) {
+      synth.setItemCount(0, 2)
+      synth.setItemKind(0, 1, ITEM_DRIVE)
+      synth.setDrive(0, 1, drive)
+    }
+    synth.noteOn(1, note, 1)
+    return render(synth, 0.5).subarray(4096, 4096 + 16384)
+  }
+
+  /** The share of x's power more than 3 bins from note's harmonics, dB */
+  function aliasing(x: Float32Array, note: number): number {
+    const n = x.length
+    const re = new Float64Array(n)
+    const im = new Float64Array(n)
+    for (let i = 0; i < n; i++) {
+      re[i] = (x[i] as number) * (0.5 - 0.5 * Math.cos((2 * Math.PI * i) / n))
+    }
+    for (let i = 1, j = 0; i < n; i++) {
+      let bit = n >> 1
+      for (; j & bit; bit >>= 1) j ^= bit
+      j ^= bit
+      if (i < j) [re[i], re[j]] = [re[j] as number, re[i] as number]
+    }
+    for (let size = 2; size <= n; size <<= 1) {
+      const turn = (-2 * Math.PI) / size
+      for (let start = 0; start < n; start += size) {
+        for (let k = 0; k < size / 2; k++) {
+          const c = Math.cos(turn * k)
+          const s = Math.sin(turn * k)
+          const a = start + k
+          const b = a + size / 2
+          const tr = (re[b] as number) * c - (im[b] as number) * s
+          const ti = (re[b] as number) * s + (im[b] as number) * c
+          re[b] = (re[a] as number) - tr
+          im[b] = (im[a] as number) - ti
+          re[a] = (re[a] as number) + tr
+          im[a] = (im[a] as number) + ti
+        }
+      }
+    }
+    const f0 = midiToFrequency(note)
+    const bin = SAMPLE_RATE / n
+    let total = 0
+    let off = 0
+    for (let k = 1; k < n / 2; k++) {
+      const power = (re[k] as number) ** 2 + (im[k] as number) ** 2
+      total += power
+      const harmonic = Math.round((k * bin) / f0) * f0
+      if (Math.abs(k * bin - harmonic) > 3 * bin) off += power
+    }
+    return 10 * Math.log10(off / total)
+  }
+
+  it('folds back far less than a plain tanh of the same saw', () => {
+    // D6, driven hard: tanh makes a near square, harmonics far past the
+    // Nyquist frequency
+    const note = 86
+    const gain = 8
+    // The same saw, every harmonic under the Nyquist frequency, through
+    // a plain tanh
+    const f0 = midiToFrequency(note)
+    const plain = new Float32Array(16384).map((_, i) => {
+      let saw = 0
+      for (let h = 1; h * f0 < SAMPLE_RATE / 2; h++) {
+        saw -= Math.sin((2 * Math.PI * h * f0 * i) / SAMPLE_RATE) / h
+      }
+      return Math.tanh((gain * 2 * saw) / Math.PI) / Math.tanh(gain)
+    })
+    const antialiased = driven(note, gain / 10)
+    // At twice the rate, and ADAA there: 20 dB less than the plain one's
+    expect(aliasing(antialiased, note)).toBeLessThan(-40)
+    expect(aliasing(antialiased, note)).toBeLessThan(aliasing(plain, note) - 20)
+  })
+
+  it('keeps the band heard, at twice the rate and back', () => {
+    // G9, 12.5 kHz, through a drive of next to nothing, on its path at
+    // twice the rate: the halfbands flat there, all that is left the
+    // tanh's mean between two of its samples (ADAA), cos(pi f / 2 rate)
+    const rms = (x: Float32Array) =>
+      Math.sqrt(x.reduce((sum, v) => sum + v * v, 0) / x.length)
+    const synth = twoSaws()
+    synth.inputCount = 1
+    synth.setOsc(0, SINE, 0, 0.5, 0)
+    synth.setItemCount(0, 2)
+    synth.setItemKind(0, 1, ITEM_DRIVE)
+    synth.setDrive(0, 1, 0.0002)
+    const plain = twoSaws()
+    plain.inputCount = 1
+    plain.setOsc(0, SINE, 0, 0.5, 0)
+    synth.noteOn(1, 127, 1)
+    plain.noteOn(1, 127, 1)
+    const level = rms(render(synth, 0.3).subarray(4096))
+    const hz = 440 * Math.pow(2, (127 - 69) / 12)
+    expect(level / rms(render(plain, 0.3).subarray(4096))).toBeCloseTo(
+      Math.cos((Math.PI * hz) / (2 * SAMPLE_RATE)),
+      3
+    )
+  })
+
+  it('passes the sound as it came at a drive of nothing, and fades over', () => {
+    // Undriven, exactly the sound; driven from its start, its own path
+    // from the first sample; turned up as it plays, over DRIVE_FADE, no
+    // step past what a 2 ms fade of a three-sample delay makes
+    const synth = twoSaws()
+    synth.inputCount = 1
+    synth.setOsc(0, SINE, 0, 0.5, 0)
+    synth.setItemCount(0, 2)
+    synth.setItemKind(0, 1, ITEM_DRIVE)
+    synth.setDrive(0, 1, 0)
+    const plain = twoSaws()
+    plain.inputCount = 1
+    plain.setOsc(0, SINE, 0, 0.5, 0)
+    synth.noteOn(1, 69, 1)
+    plain.noteOn(1, 69, 1)
+    const undriven = render(synth, 0.1)
+    const exact = render(plain, 0.1)
+    expect(undriven.every((v, i) => v === exact[i])).toBe(true)
+    // Next to nothing, so all but straight: only the fade could step
+    synth.setDrive(0, 1, 0.01)
+    const driven = render(synth, 0.1)
+    let step = 0
+    for (let i = 1; i < driven.length; i++) {
+      step = Math.max(
+        step,
+        Math.abs((driven[i] as number) - (driven[i - 1] as number))
+      )
+    }
+    // A sine at 440 Hz moves at most 2 pi 440 / 48000 of its peak a
+    // sample: the fade adds next to nothing to that
+    const peak = Math.max(...Array.from(driven, Math.abs))
+    expect(step / peak).toBeLessThan(1.2 * ((2 * Math.PI * 440) / SAMPLE_RATE))
+  })
+
+  it('keeps a full-scale peak at full scale', () => {
+    const synth = twoSaws()
+    synth.inputCount = 1
+    synth.setOsc(0, SINE, 0, 0.5, 0)
+    synth.setItemCount(0, 2)
+    synth.setItemKind(0, 1, ITEM_DRIVE)
+    synth.setDrive(0, 1, 0.5)
+    const plain = twoSaws()
+    plain.inputCount = 1
+    plain.setOsc(0, SINE, 0, 0.5, 0)
+    synth.noteOn(1, 48, 1)
+    plain.noteOn(1, 48, 1)
+    const peak = (x: Float32Array) =>
+      x.reduce((most, v) => Math.max(most, Math.abs(v)), 0)
+    const out = render(synth, 0.3)
+    expect(peak(out)).toBeCloseTo(peak(render(plain, 0.3)), 2)
   })
 })

@@ -33,6 +33,7 @@ import {
   FX_HAAS,
   FX_LAST,
   FX_LIMITER,
+  FX_PHASER,
   FX_REVERB,
   FX_WIDTH,
   MAX_EFFECTS,
@@ -740,8 +741,9 @@ const WIDTH_GLIDE = 0.02
  * A width: the sound split into what both sides share (mid) and what
  * sets them apart (side), the side scaled by width (0 mono, 1 as it was,
  * 2 twice as wide), and below mono hertz (off at WIDTH_MONO_OFF) the
- * side taken away, a highpass of 12 dB an octave, so the lows stand in
- * the middle whatever is wider above them.
+ * side taken away, a highpass of 24 dB an octave (two of 12 in a row,
+ * half the side left at the corner), so the lows stand in the middle
+ * whatever is wider above them.
  */
 export class Width {
   readonly #sampleRate: number
@@ -756,6 +758,8 @@ export class Width {
   #a2 = 0
   #s1 = 0
   #s2 = 0
+  #t1 = 0
+  #t2 = 0
   #fresh = true
 
   constructor(sampleRate: number) {
@@ -775,7 +779,7 @@ export class Width {
   }
 
   reset(): void {
-    this.#s1 = this.#s2 = 0
+    this.#s1 = this.#s2 = this.#t1 = this.#t2 = 0
     this.#fresh = true
   }
 
@@ -804,6 +808,8 @@ export class Width {
     const a2 = this.#a2
     let s1 = this.#s1
     let s2 = this.#s2
+    let t1 = this.#t1
+    let t2 = this.#t2
     for (let i = 0; i < length; i++) {
       const l = left[i] as number
       const r = right[i] as number
@@ -813,7 +819,10 @@ export class Width {
         const y = b0 * side + s1
         s1 = b1 * side - a1 * y + s2
         s2 = b2 * side - a2 * y
-        side = y
+        const z = b0 * y + t1
+        t1 = b1 * y - a1 * z + t2
+        t2 = b2 * y - a2 * z
+        side = z
       }
       side *= width
       left[i] = mid + side
@@ -822,6 +831,8 @@ export class Width {
     }
     this.#s1 = flush(s1)
     this.#s2 = flush(s2)
+    this.#t1 = flush(t1)
+    this.#t2 = flush(t2)
   }
 
   /** The highpass's coefficients from where its corner is now */
@@ -1337,6 +1348,147 @@ export class Limiter {
   }
 }
 
+/** The phaser's stages, as its Stages knob turns through them */
+export const PHASER_STAGES = [4, 6, 8] as const
+const MAX_STAGES = 8
+/**
+ * Where the phaser's notches stand: around this, in hertz, swept this
+ * many octaves either way at a Depth of 1
+ */
+const PHASER_CENTER = 700
+const PHASER_OCTAVES = 2.6
+/** Its allpasses' coefficients are worked out again this many samples apart */
+const PHASER_STEP = 8
+/** Its feedback at most */
+export const PHASER_MAX_FEEDBACK = 0.9
+
+/**
+ * A phaser: each side through a row of first-order allpasses whose
+ * corner an LFO sweeps, mixed back with the dry signal, so notches where
+ * the two are out of phase move up and down the spectrum; feedback from
+ * the row's end deepens them into peaks. The right side's sweep a quarter
+ * cycle behind the left's, so a sound the same on both sides moves apart.
+ * Rate in hertz; depth, feedback and mix 0..1; stages a count (two of
+ * them a notch), PHASER_STAGES' on its knob.
+ */
+export class Phaser {
+  readonly #sampleRate: number
+  #phase = 0
+  #step = 0
+  #stages = 6
+  readonly #depth = new Ramp(0.7)
+  readonly #feedback = new Ramp(0.4)
+  readonly #mix = new Ramp(0.5)
+  /** Each side's allpass states, and its row's last output */
+  readonly #left = new Float64Array(MAX_STAGES)
+  readonly #right = new Float64Array(MAX_STAGES)
+  #lastL = 0
+  #lastR = 0
+  #fresh = true
+
+  constructor(sampleRate: number) {
+    this.#sampleRate = sampleRate
+  }
+
+  set(
+    rate: number,
+    depth: number,
+    feedback: number,
+    stages: number,
+    mix: number
+  ): void {
+    this.#step = (rate > 0 ? rate : 0) / this.#sampleRate
+    this.#depth.goal = clamp01(depth)
+    this.#feedback.goal = clamp01(feedback) * PHASER_MAX_FEEDBACK
+    const count = Math.round(stages)
+    this.#stages = count >= 2 ? (count < MAX_STAGES ? count : MAX_STAGES) : 2
+    this.#mix.goal = clamp01(mix)
+  }
+
+  reset(): void {
+    this.#left.fill(0)
+    this.#right.fill(0)
+    this.#lastL = 0
+    this.#lastR = 0
+    this.#phase = 0
+    this.#fresh = true
+  }
+
+  process(left: Float32Array, right: Float32Array, length: number): void {
+    if (this.#fresh) {
+      this.#fresh = false
+      this.#depth.snap()
+      this.#feedback.snap()
+      this.#mix.snap()
+    }
+    const rate = this.#sampleRate
+    const stages = this.#stages
+    const statesL = this.#left
+    const statesR = this.#right
+    let depth = this.#depth.now
+    const depthStep = this.#depth.step(length)
+    let feedback = this.#feedback.now
+    const feedbackStep = this.#feedback.step(length)
+    let mix = this.#mix.now
+    const mixStep = this.#mix.step(length)
+    let phase = this.#phase
+    const step = this.#step
+    let lastL = this.#lastL
+    let lastR = this.#lastR
+    for (let start = 0; start < length; start += PHASER_STEP) {
+      const end = start + PHASER_STEP < length ? start + PHASER_STEP : length
+      const reach = PHASER_OCTAVES * depth
+      const aL = allpass(PHASER_CENTER * 2 ** (reach * sinCycles(phase)), rate)
+      const aR = allpass(
+        PHASER_CENTER * 2 ** (reach * sinCycles(phase - 0.25)),
+        rate
+      )
+      for (let i = start; i < end; i++) {
+        const inL = left[i] as number
+        const inR = right[i] as number
+        let yL = inL + feedback * lastL
+        let yR = inR + feedback * lastR
+        for (let k = 0; k < stages; k++) {
+          const sL = statesL[k] as number
+          const outL = aL * yL + sL
+          statesL[k] = yL - aL * outL
+          yL = outL
+          const sR = statesR[k] as number
+          const outR = aR * yR + sR
+          statesR[k] = yR - aR * outR
+          yR = outR
+        }
+        lastL = flush(yL)
+        lastR = flush(yR)
+        const dry = dryLevel(mix)
+        const wet = wetLevel(mix)
+        const scale = 1 / (dry + wet)
+        left[i] = (inL * dry + yL * wet) * scale
+        right[i] = (inR * dry + yR * wet) * scale
+        phase += step
+        if (phase >= 1) phase -= 1
+        depth += depthStep
+        feedback += feedbackStep
+        mix += mixStep
+      }
+    }
+    for (let k = 0; k < stages; k++) {
+      statesL[k] = flush(statesL[k] as number)
+      statesR[k] = flush(statesR[k] as number)
+    }
+    this.#phase = phase
+    this.#lastL = lastL
+    this.#lastR = lastR
+  }
+}
+
+/** A first-order allpass's coefficient for its corner at hz */
+function allpass(hz: number, rate: number): number {
+  const top = 0.45 * rate
+  const t = Math.tan((Math.PI * (hz < top ? hz : top)) / rate)
+  return (t - 1) / (t + 1)
+}
+
 /** No effect on a slot past the rack's count */
 const NO_EFFECT = -1
 /**
@@ -1367,6 +1519,7 @@ export class EffectRack {
   readonly #haas: (Haas | null)[] = []
   readonly #doubler: (Doubler | null)[] = []
   readonly #width: (Width | null)[] = []
+  readonly #phaser: (Phaser | null)[] = []
   readonly #slots: number
   readonly #kind: Int8Array
   #count = 0
@@ -1393,6 +1546,7 @@ export class EffectRack {
       this.#haas.push(null)
       this.#doubler.push(null)
       this.#width.push(null)
+      this.#phaser.push(null)
     }
     this.#restAfter = Math.round(REST_AFTER * sampleRate)
     this.#quiet = this.#restAfter
@@ -1441,6 +1595,9 @@ export class EffectRack {
         return
       case FX_DOUBLER:
         made(this.#doubler, k, () => new Doubler(rate))
+        return
+      case FX_PHASER:
+        made(this.#phaser, k, () => new Phaser(rate))
         return
       default:
         made(this.#width, k, () => new Width(rate))
@@ -1525,6 +1682,18 @@ export class EffectRack {
     this.#width[k]?.set(width, mono)
   }
 
+  /** stages: one of PHASER_STAGES' counts */
+  setPhaser(
+    k: number,
+    rate: number,
+    depth: number,
+    feedback: number,
+    stages: number,
+    mix: number
+  ): void {
+    this.#phaser[k]?.set(rate, depth, feedback, stages, mix)
+  }
+
   /**
    * The deepest slot k's compressor or limiter turned things down since
    * last asked, dB (0 or less); 0 for any other kind, and while it rests
@@ -1548,6 +1717,7 @@ export class EffectRack {
       this.#haas[k]?.reset()
       this.#doubler[k]?.reset()
       this.#width[k]?.reset()
+      this.#phaser[k]?.reset()
     }
     this.#quiet = this.#restAfter
   }
@@ -1598,6 +1768,9 @@ export class EffectRack {
           break
         case FX_WIDTH:
           this.#width[k]?.process(left, right, length)
+          break
+        case FX_PHASER:
+          this.#phaser[k]?.process(left, right, length)
       }
     }
     let output = 0

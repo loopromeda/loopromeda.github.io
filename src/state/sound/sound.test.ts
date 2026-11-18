@@ -66,6 +66,7 @@ describe('destinations and sources', () => {
       'IN 1 Pitch',
       'IN 1 Width',
       'IN 1 FM',
+      'IN 1 Sync',
       'Chain A Level',
       'Chain A IN 1',
       'Chain A IN 2',

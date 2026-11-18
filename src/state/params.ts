@@ -16,10 +16,29 @@ export type Curve = 'linear' | 'quadratic' | 'exponential' | 'bipolar'
  * kilohertz from 1 kHz, '%' signs the value when the range is two-sided,
  * 'pan' names a side, -1..1: L 50, C, R 100; 'dB' a tenth of a decibel
  * under 10 (−1.5 dB, +12 dB), 'ratio' a compressor's (2.5:1, 20:1), and
- * 'q' an EQ point's, two places under 10 (0.71, 10.0)
+ * 'q' an EQ point's, two places under 10 (0.71, 10.0), 'vowel' a
+ * formant's (A, A–E between A and E, E)
  */
 export type Unit =
-  '' | '%' | 'oct' | 'st' | 'ct' | 's' | 'Hz' | 'pan' | 'dB' | 'ratio' | 'q'
+  | ''
+  | '%'
+  | 'oct'
+  | 'st'
+  | 'ct'
+  | 's'
+  | 'Hz'
+  | 'pan'
+  | 'dB'
+  | 'ratio'
+  | 'q'
+  | 'vowel'
+
+/**
+ * A formant's vowels (src/dsp/formant.ts), in the order its Vowel knob
+ * turns through them: a 'vowel' value of 0 is A, 4 is U, between two a
+ * glide from one to the other
+ */
+export const VOWEL_NAMES = ['A', 'E', 'I', 'O', 'U'] as const
 
 /** One knob: its range, its mapping and how to display it */
 export interface ParamSpec extends ValueSpec {
@@ -691,6 +710,15 @@ export function formatValue(spec: ValueSpec, value: number): string {
   if (spec.unit === 'ratio') {
     const r = v < 9.95 ? Math.round(v * 10) / 10 : Math.round(v)
     return `${r}:1`
+  }
+  if (spec.unit === 'vowel') {
+    // Its vowel, or the two it glides between
+    const at = Math.floor(v)
+    const t = v - at
+    const name = (k: number) => VOWEL_NAMES[k] ?? VOWEL_NAMES[0]
+    if (t < 0.05) return name(at)
+    if (t > 0.95) return name(at + 1)
+    return `${name(at)}–${name(at + 1)}`
   }
   if (spec.unit === 'q') {
     // A filter's Q, two places under 10: 0.71, 4.00, 10.0

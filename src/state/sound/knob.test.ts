@@ -188,7 +188,7 @@ describe('partDests', () => {
     const sound = routed()
     const of = (part: string) => partDests(sound, part).map((d) => d.label)
     expect(of('x1')).toEqual(['Cutoff', 'Reso'])
-    expect(of('i1')).toEqual(['Pitch', 'Width', 'FM'])
+    expect(of('i1')).toEqual(['Pitch', 'Width', 'FM', 'Sync'])
     expect(of('c1')).toEqual(['Level', 'IN 1', 'IN 2'])
     expect(partDests(sound, 'c1')[2]?.key).toBe(sendKey('i2'))
     expect(of(VOICE)).toEqual(['Pitch'])

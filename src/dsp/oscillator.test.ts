@@ -472,3 +472,169 @@ describe('Oscillator', () => {
     expect(blocks).toEqual(whole)
   })
 })
+
+/** The power spectrum of x (its length a power of 2), Hann-windowed */
+function powerSpectrum(x: Float32Array): Float64Array {
+  const n = x.length
+  const re = new Float64Array(n)
+  const im = new Float64Array(n)
+  for (let i = 0; i < n; i++) {
+    re[i] = (x[i] as number) * (0.5 - 0.5 * Math.cos((2 * Math.PI * i) / n))
+  }
+  for (let i = 1, j = 0; i < n; i++) {
+    let bit = n >> 1
+    for (; j & bit; bit >>= 1) j ^= bit
+    j ^= bit
+    if (i < j) {
+      ;[re[i], re[j]] = [re[j] as number, re[i] as number]
+    }
+  }
+  for (let size = 2; size <= n; size <<= 1) {
+    const turn = (-2 * Math.PI) / size
+    for (let start = 0; start < n; start += size) {
+      for (let k = 0; k < size / 2; k++) {
+        const c = Math.cos(turn * k)
+        const s = Math.sin(turn * k)
+        const a = start + k
+        const b = a + size / 2
+        const tr = (re[b] as number) * c - (im[b] as number) * s
+        const ti = (re[b] as number) * s + (im[b] as number) * c
+        re[b] = (re[a] as number) - tr
+        im[b] = (im[a] as number) - ti
+        re[a] = (re[a] as number) + tr
+        im[a] = (im[a] as number) + ti
+      }
+    }
+  }
+  const power = new Float64Array(n / 2)
+  for (let k = 0; k < n / 2; k++) {
+    power[k] = (re[k] as number) ** 2 + (im[k] as number) ** 2
+  }
+  return power
+}
+
+/**
+ * The share of x's power away from the harmonics of f0 (more than three
+ * bins from each): what folded back, aliasing
+ */
+function aliased(x: Float32Array, f0: number): number {
+  const power = powerSpectrum(x)
+  const bin = SAMPLE_RATE / x.length
+  let total = 0
+  let off = 0
+  for (let k = 1; k < power.length; k++) {
+    const p = power[k] as number
+    total += p
+    const harmonic = Math.round((k * bin) / f0) * f0
+    if (Math.abs(k * bin - harmonic) > 3 * bin) off += p
+  }
+  return off / total
+}
+
+describe('Oscillator, hard synced', () => {
+  const steps = (frequency: number, length: number) =>
+    new Float32Array(length).fill(frequency / SAMPLE_RATE)
+
+  it('plays the plain wave at a sync of 1', () => {
+    for (const wave of [SAW, SQUARE]) {
+      const plain = render(wave, 440, 4800)
+      const synced = new Float32Array(4800)
+      new Oscillator(SAMPLE_RATE).renderSynced(
+        synced,
+        steps(440, 4800),
+        wave,
+        0,
+        4800,
+        1
+      )
+      // From the second sample: the plain wave counts its start as a jump
+      let most = 0
+      for (let i = 1; i < 4800; i++) {
+        most = Math.max(
+          most,
+          Math.abs((synced[i] as number) - (plain[i] as number))
+        )
+      }
+      expect(most).toBeLessThan(1e-3)
+    }
+  })
+
+  it("restarts the wave at the note's own cycle", () => {
+    // 480 Hz is 100 samples a cycle; the wave runs 2.37 times as fast
+    const out = new Float32Array(1000)
+    new Oscillator(SAMPLE_RATE).renderSynced(
+      out,
+      steps(480, 1000),
+      SAW,
+      0,
+      1000,
+      2.37
+    )
+    for (let i = 200; i < 900; i++) {
+      expect(out[i + 100]).toBeCloseTo(out[i] as number, 3)
+    }
+  })
+
+  it('rounds each restart, folding back far less than a sharp one', () => {
+    const length = 1 << 15
+    const f0 = 1234.5
+    const ratio = 2.71
+    const rounded = new Float32Array(length)
+    new Oscillator(SAMPLE_RATE).renderSynced(
+      rounded,
+      steps(f0, length),
+      SAW,
+      0,
+      length,
+      ratio
+    )
+    // The same wave, every jump sharp
+    const sharp = new Float32Array(length)
+    let m = 0
+    for (let i = 0; i < length; i++) {
+      const s = (((m * ratio) % 1) + 1) % 1
+      sharp[i] = 2 * s - 1
+      m += f0 / SAMPLE_RATE
+      if (m >= 1) m -= 1
+    }
+    expect(aliased(rounded, f0)).toBeLessThan(aliased(sharp, f0) / 4)
+  })
+
+  it('carries on seamlessly from block to block', () => {
+    const whole = new Float32Array(512)
+    new Oscillator(SAMPLE_RATE).renderSynced(
+      whole,
+      steps(700, 512),
+      SQUARE,
+      0,
+      512,
+      3.3
+    )
+    const parts = new Float32Array(512)
+    const oscillator = new Oscillator(SAMPLE_RATE)
+    const increments = steps(700, 512)
+    for (let start = 0; start < 512; start += 128) {
+      oscillator.renderSynced(
+        parts,
+        increments,
+        SQUARE,
+        start,
+        start + 128,
+        3.3
+      )
+    }
+    expect(Array.from(parts)).toEqual(Array.from(whole))
+  })
+})
+
+describe('Oscillator, detuned', () => {
+  it('plays at its ratio times the frequency given', () => {
+    const oscillator = new Oscillator(SAMPLE_RATE)
+    oscillator.ratio = 2
+    const out = new Float32Array(480)
+    oscillator.process(out, 100, SINE)
+    // 200 Hz: 240 samples a cycle
+    expect(out[60]).toBeCloseTo(1, 3)
+    expect(out[240]).toBeCloseTo(0, 3)
+  })
+})

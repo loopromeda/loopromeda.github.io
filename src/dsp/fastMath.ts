@@ -48,3 +48,14 @@ export function sinCycles(t: number): number {
               (x2 / 42) * (1 - (x2 / 72) * (1 - (x2 / 110) * (1 - x2 / 156))))))
   )
 }
+
+/**
+ * log(cosh(x)), tanh's antiderivative, within a few ulps of it: |x| and
+ * what is left of cosh's other exponential, so it neither overflows nor
+ * loses its last digits far from 0. A drive's antialiasing (ADAA) takes
+ * the difference of two of these over the difference of their xs.
+ */
+export function logCosh(x: number): number {
+  const a = x < 0 ? -x : x
+  return a + Math.log1p(Math.exp(-2 * a)) - Math.LN2
+}

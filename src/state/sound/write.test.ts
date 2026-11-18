@@ -57,6 +57,9 @@ describe('writeSound', () => {
       fine: 0,
       width: 0.5,
       fm: 0,
+      sync: 0,
+      // Written without, as a sound saved before it: its start, as before
+      phase: 0,
     })
     expect(sound.modulators[1]?.values.shape).toBe(4)
     expect(sound.voice).toEqual({ mode: 1, glide: 0.05 })

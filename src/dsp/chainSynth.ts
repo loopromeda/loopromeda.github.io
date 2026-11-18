@@ -10,12 +10,15 @@ import {
   INPUT_NOISE,
   INPUT_OSC,
   INPUT_RING,
-  ITEM_DRIVE,
+  INPUT_SYNC,
+  ITEM_COMB,
+  ITEM_FORMANT,
   MAX_CHAINS,
   MAX_INPUTS,
   MAX_ITEMS,
   MAX_MODULATORS,
   MAX_ROUTES,
+  MAX_UNISON,
   MOD_LFO,
   NO_INPUT,
   SOURCE_COUNT,
@@ -101,6 +104,13 @@ export class ChainSynth {
   /** Gliding values, so a knob turned mid-note never clicks */
   readonly #width: Smoother[] = []
   readonly #fm: Smoother[] = []
+  /**
+   * An oscillator's hard sync above the note in semitones, its unison's
+   * detune in cents and its blend
+   */
+  readonly #sync: Smoother[] = []
+  readonly #detune: Smoother[] = []
+  readonly #blend: Smoother[] = []
   readonly #chainLevel: Smoother[] = []
   /** Per chain × input (c * MAX_INPUTS + i) */
   readonly #send: Smoother[] = []
@@ -168,6 +178,9 @@ export class ChainSynth {
     }
     smoothers(MAX_INPUTS, 0.5, this.#width)
     smoothers(MAX_INPUTS, 0, this.#fm)
+    smoothers(MAX_INPUTS, 0, this.#sync)
+    smoothers(MAX_INPUTS, 0, this.#detune)
+    smoothers(MAX_INPUTS, 0, this.#blend)
     smoothers(MAX_CHAINS, 1, this.#chainLevel)
     smoothers(MAX_CHAINS * MAX_INPUTS, 0, this.#send)
     smoothers(MAX_CHAINS * MAX_ITEMS, Math.log2(20000), this.#itemValue)
@@ -250,11 +263,19 @@ export class ChainSynth {
     this.#change(this.#settings.itemCount, c, clampCount(count, MAX_ITEMS))
   }
 
-  /** Item k of chain c's kind: ITEM_FILTER or ITEM_DRIVE */
+  /**
+   * Item k of chain c's kind: ITEM_FILTER, ITEM_DRIVE, ITEM_COMB or
+   * ITEM_FORMANT; what a comb or a formant needs made for every voice
+   * here, as the sound is set, never as it plays
+   */
   setItemKind(c: number, k: number, kind: number): void {
     if (!isIndex(c, MAX_CHAINS) || !isIndex(k, MAX_ITEMS)) return
-    if (!isKind(kind, ITEM_DRIVE)) return
-    this.#change(this.#settings.itemKind, c * MAX_ITEMS + k, kind)
+    if (!isKind(kind, ITEM_FORMANT)) return
+    const item = c * MAX_ITEMS + k
+    if (kind === ITEM_COMB || kind === ITEM_FORMANT) {
+      for (const voice of this.#voices) voice.prepare(item, kind)
+    }
+    this.#change(this.#settings.itemKind, item, kind)
   }
 
   /** How many modulators the sound has, 0..MAX_MODULATORS */
@@ -297,6 +318,39 @@ export class ChainSynth {
   }
 
   /**
+   * Oscillator input i's unison: voices of it (1..MAX_UNISON), the
+   * outermost cents apart from the middle either way, those beside the
+   * middle at blend (0..1) of its level; and free, each note starts its
+   * voices anywhere in their cycles, as an analog synth's free-running
+   * oscillators do, so a chord's notes never start as one (else each at
+   * the same place, the voices apart)
+   */
+  setUnison(
+    i: number,
+    voices: number,
+    cents: number,
+    blend: number,
+    free: boolean
+  ): void {
+    if (!isIndex(i, MAX_INPUTS)) return
+    const settings = this.#settings
+    const count = Math.round(voices)
+    settings.unison[i] =
+      count > 1 ? (count < MAX_UNISON ? count : MAX_UNISON) : 1
+    settings.freePhase[i] = free ? 1 : 0
+    target(this.#detune[i], cents)
+    target(this.#blend[i], blend)
+  }
+
+  /**
+   * Oscillator input i's hard sync: its wave this many semitones above
+   * the note, restarted by the note's own cycle; 0, none
+   */
+  setSync(i: number, semitones: number): void {
+    if (isIndex(i, MAX_INPUTS)) target(this.#sync[i], semitones)
+  }
+
+  /**
    * Chip input i: wave (an index into WAVES), pitch above the note in
    * semitones, pulse width (its square), the steps a cycle is held in (0:
    * smooth) and the bits each step's level is rounded to (0: not
@@ -324,6 +378,9 @@ export class ChainSynth {
     settings.transpose[i] = Number.isFinite(transpose) ? transpose : 0
     target(this.#width[i], width)
     target(this.#fm[i], 0)
+    target(this.#sync[i], 0)
+    settings.unison[i] = 1
+    settings.freePhase[i] = 0
     // A wave spans -1..1 about its mean, a pulse of width w -2w..2-2w
     const pulse =
       width > MIN_WIDTH ? (width < MAX_WIDTH ? width : MAX_WIDTH) : MIN_WIDTH
@@ -368,6 +425,50 @@ export class ChainSynth {
   setDrive(c: number, k: number, drive: number): void {
     if (!isIndex(c, MAX_CHAINS) || !isIndex(k, MAX_ITEMS)) return
     target(this.#itemValue[c * MAX_ITEMS + k], drive)
+  }
+
+  /**
+   * Item k of chain c, a comb (comb.ts): tuned tune semitones above the
+   * note, ringing decay seconds to 60 dB down, damp 0..1, mix 0..1 of it
+   * in place of what reaches it
+   */
+  setComb(
+    c: number,
+    k: number,
+    tune: number,
+    decay: number,
+    damp: number,
+    mix: number
+  ): void {
+    if (!isIndex(c, MAX_CHAINS) || !isIndex(k, MAX_ITEMS)) return
+    const item = c * MAX_ITEMS + k
+    const settings = this.#settings
+    target(this.#itemValue[item], tune)
+    if (Number.isFinite(decay)) settings.itemDecay[item] = decay
+    if (Number.isFinite(damp)) settings.itemDamp[item] = damp
+    if (Number.isFinite(mix)) settings.itemMix[item] = mix
+  }
+
+  /**
+   * Item k of chain c, a formant filter (formant.ts): its vowel 0..4 (A
+   * to U), shifted shift semitones, reso 0..1 (wide to narrow), mix 0..1
+   * of it in place of what reaches it
+   */
+  setFormant(
+    c: number,
+    k: number,
+    vowel: number,
+    shift: number,
+    reso: number,
+    mix: number
+  ): void {
+    if (!isIndex(c, MAX_CHAINS) || !isIndex(k, MAX_ITEMS)) return
+    const item = c * MAX_ITEMS + k
+    const settings = this.#settings
+    target(this.#itemValue[item], vowel)
+    if (Number.isFinite(shift)) settings.itemShift[item] = shift
+    if (Number.isFinite(reso)) settings.resonance[item] = reso
+    if (Number.isFinite(mix)) settings.itemMix[item] = mix
   }
 
   /** Modulator m, an envelope: times in seconds, sustain in [0, 1] */
@@ -982,6 +1083,23 @@ export class ChainSynth {
         settings.widthMoving[i] = moving(width) ? 1 : 0
         width.fill(settings.width[i] as Float32Array, 0, length)
         fm.fill(settings.fm[i] as Float32Array, 0, length)
+        const sync = this.#sync[i] as Smoother
+        const synced =
+          kind === INPUT_OSC &&
+          (sounds(sync) || routed[inputDest(i, INPUT_SYNC)] === 1)
+        settings.syncOn[i] = synced ? 1 : 0
+        if (synced) sync.fill(settings.sync[i] as Float32Array, 0, length)
+        else sync.snap()
+        if ((settings.unison[i] as number) > 1) {
+          // Read as the chunk starts: a unison's detune and blend
+          const scratch = settings.unisonOut
+          const detune = this.#detune[i] as Smoother
+          detune.fill(scratch, 0, length)
+          settings.detune[i] = scratch[0] as number
+          const blend = this.#blend[i] as Smoother
+          blend.fill(scratch, 0, length)
+          settings.blend[i] = scratch[0] as number
+        }
       } else if (kind === INPUT_RING) {
         const a = settings.ringFromA[i] as number
         const b = settings.ringFromB[i] as number

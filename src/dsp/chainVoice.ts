@@ -1,6 +1,8 @@
 import { Adsr, AdsrShape, CHOKE, SUSTAIN } from './adsr'
-import { sinCycles, tanhApprox } from './fastMath'
+import { Comb } from './comb'
+import { logCosh, sinCycles, tanhApprox } from './fastMath'
 import { Filter, LOWPASS } from './filter'
+import { Formant } from './formant'
 import { LFO_MAX_RATE, LFO_MIN_RATE, Lfo } from './lfo'
 import { Noise } from './noise'
 import { Oscillator, SQUARE } from './oscillator'
@@ -13,16 +15,24 @@ import {
   DEST_PITCH,
   INPUT_FM,
   INPUT_CHIP,
+  INPUT_DETUNE,
   INPUT_NOISE,
   INPUT_OSC,
   INPUT_PITCH,
   INPUT_RING,
+  INPUT_SYNC,
   INPUT_WIDTH,
+  ITEM_COMB,
   ITEM_CUTOFF,
+  ITEM_DAMP,
   ITEM_DRIVE,
   ITEM_DRIVE_AMOUNT,
   ITEM_FILTER,
+  ITEM_FORMANT,
   ITEM_RESONANCE,
+  ITEM_SHIFT,
+  ITEM_TUNE,
+  ITEM_VOWEL,
   KEY_CENTER,
   KEY_SPAN,
   MAX_CHAINS,
@@ -30,6 +40,7 @@ import {
   MAX_ITEMS,
   MAX_MODULATORS,
   MAX_ROUTES,
+  MAX_UNISON,
   MOD_ENV,
   MOD_LFO,
   NO_INPUT,
@@ -53,6 +64,30 @@ import {
 export const FM_DEPTH = 1
 /** A drive of 1 multiplies the signal by this before its tanh */
 export const DRIVE_GAIN = 10
+/**
+ * Two samples into a drive closer than this (after its gain) are driven
+ * as their mean is, not by the difference of tanh's antiderivative over
+ * theirs, which would lose its digits
+ */
+const ADAA_CLOSE = 1e-6
+/**
+ * A drive runs at twice the sample rate (#drive): the sound interpolated
+ * up and filtered back down by a halfband of two allpass paths (polyphase
+ * IIR), these six sections, the first path's the even ones. Flat to 0.21
+ * of the higher rate (20 kHz at 48 kHz), 74 dB down past 0.29 of it.
+ */
+const HALFBAND = [
+  0.068204076, 0.240270358, 0.4486762359, 0.6411223671, 0.7999975637,
+  0.9344822355,
+] as const
+/** A drive's state: its tanh's last two, and each halfband section's */
+const DRIVEN = 26
+/**
+ * Seconds a drive takes to fade over from the sound as it came (a drive
+ * of nothing) to its own path at twice the rate, or back: that path is
+ * about three samples late, so a cut between them would click
+ */
+const DRIVE_FADE = 0.002
 /** A gliding pitch lands on its note once closer than this, in semitones */
 const GLIDE_LAND = 1e-4
 /** Velocity and slide changes glide over about 5 × this many seconds */
@@ -73,6 +108,27 @@ const LFO_SEEDS = [
   0xc2b2ae35, 0x27d4eb2f, 0x165667b1, 0xcc9e2d51, 0x1b873593, 0xe6546b65,
   0x85ebca77, 0xc2b2ae3d,
 ]
+
+/**
+ * Where each of an oscillator's unison voices stands, by how many there
+ * are (row n - 1, n of them), as a share of its detune either way: spread
+ * a little unevenly, so no two pairs beat at the same pace
+ */
+const UNISON_SPREAD: readonly (readonly number[])[] = [
+  [0],
+  [-1, 0.94],
+  [-1, 0, 0.97],
+  [-1, -0.33, 0.31, 0.95],
+  [-1, -0.5, 0, 0.48, 0.96],
+  [-1, -0.62, -0.21, 0.19, 0.6, 0.98],
+  [-1, -0.63, -0.3, 0, 0.29, 0.62, 0.97],
+  [-1, -0.72, -0.43, -0.14, 0.14, 0.42, 0.7, 0.98],
+]
+/**
+ * Where each unison voice of a note starts in its cycle, all but the
+ * first, while the phase is reset: apart, so they never start as one
+ */
+const UNISON_PHASE = 0.381966
 
 /** How a note starts (ChainVoice.start): as itself */
 export const GHOST_NONE = 0
@@ -154,6 +210,22 @@ export class ChainSettings {
   /** Per input, per sample of the chunk: pulse width, FM depth 0..1 */
   readonly width: Float32Array[] = []
   readonly fm: Float32Array[] = []
+  /**
+   * An oscillator's unison: how many voices of it sound (1..MAX_UNISON),
+   * and per chunk how far its outermost stand apart either way, in cents,
+   * and how loud those beside the middle are beside it, 0..1
+   */
+  readonly unison = new Int8Array(MAX_INPUTS).fill(1)
+  readonly detune = new Float64Array(MAX_INPUTS)
+  readonly blend = new Float64Array(MAX_INPUTS)
+  /** 1: each note starts an oscillator's voices anywhere in their cycle */
+  readonly freePhase = new Uint8Array(MAX_INPUTS)
+  /**
+   * Per chunk, 1 for each oscillator hard synced (its sync above the note,
+   * or routed), and per sample how far above, in semitones
+   */
+  readonly syncOn = new Uint8Array(MAX_INPUTS)
+  readonly sync: Float32Array[] = []
   /** Each input's signal over the chunk, for one voice at a time */
   readonly inputOut: Float32Array[] = []
 
@@ -178,9 +250,18 @@ export class ChainSettings {
   readonly keytrack = new Float64Array(MAX_CHAINS * MAX_ITEMS)
   /**
    * Per item, per sample: a filter's cutoff (log2 of hertz, before
-   * keytracking and routes) or a drive's amount, 0..1
+   * keytracking and routes), a drive's amount, 0..1, a comb's tune above
+   * the note (semitones) or a formant's vowel (0..4)
    */
   readonly itemValue: Float32Array[] = []
+  /**
+   * A comb's decay (seconds), its damp and its mix; a formant's shift
+   * (semitones), its Reso (in resonance) and its mix
+   */
+  readonly itemDecay = new Float64Array(MAX_CHAINS * MAX_ITEMS)
+  readonly itemDamp = new Float64Array(MAX_CHAINS * MAX_ITEMS)
+  readonly itemShift = new Float64Array(MAX_CHAINS * MAX_ITEMS)
+  readonly itemMix = new Float64Array(MAX_CHAINS * MAX_ITEMS)
 
   // Modulators
   modulatorCount = 0
@@ -259,6 +340,9 @@ export class ChainSettings {
   readonly widths: Float32Array
   readonly offsets: Float32Array
   readonly glide: Float32Array
+  /** And a unison voice's, and a sync's ratios */
+  readonly unisonOut: Float32Array
+  readonly syncs: Float32Array
   /** And a filter's: its cutoff (log2 of hertz) and resonance per sample */
   readonly octaves: Float32Array
   readonly resonances: Float32Array
@@ -269,6 +353,7 @@ export class ChainSettings {
     }
     buffers(MAX_INPUTS, this.width)
     buffers(MAX_INPUTS, this.fm)
+    buffers(MAX_INPUTS, this.sync)
     buffers(MAX_INPUTS, this.inputOut)
     buffers(MAX_CHAINS, this.chainLevel)
     buffers(MAX_CHAINS * MAX_INPUTS, this.send)
@@ -292,6 +377,8 @@ export class ChainSettings {
     this.widths = new Float32Array(chunk)
     this.offsets = new Float32Array(chunk)
     this.glide = new Float32Array(chunk)
+    this.unisonOut = new Float32Array(chunk)
+    this.syncs = new Float32Array(chunk)
     this.octaves = new Float32Array(chunk)
     this.resonances = new Float32Array(chunk)
   }
@@ -333,10 +420,24 @@ export class ChainSettings {
  */
 export class ChainVoice {
   readonly #settings: ChainSettings
-  /** One per input slot, per noise input, per item slot, per modulator */
+  /**
+   * One per input slot and unison voice (i * MAX_UNISON + k), per noise
+   * input, per item slot, per modulator
+   */
   readonly #oscillators: Oscillator[] = []
+  /** Where a free oscillator's voices start, drawn as each note does */
+  readonly #phases: Noise
   readonly #noises: Noise[] = []
   readonly #filters: Filter[] = []
+  /**
+   * A comb and a formant filter per item slot, made only for a slot set
+   * to one (prepare), never as the audio plays
+   */
+  readonly #combs: (Comb | undefined)[] = []
+  readonly #formants: (Formant | undefined)[] = []
+  readonly #sampleRate: number
+  /** Whether the pitch glides this chunk (settings.glide holds it) */
+  #gliding = false
   readonly #envs: Adsr[] = []
   readonly #lfos: Lfo[] = []
   readonly #random: Noise
@@ -368,8 +469,21 @@ export class ChainVoice {
   #slideLeft = 0
   /** Each LFO modulator's rate change in octaves, from the last chunk */
   readonly #lfoOctaves = new Float64Array(MAX_MODULATORS)
+  /** Each unison voice's level this chunk, its oscillator's place's */
+  readonly #unisonGains = new Float64Array(MAX_UNISON)
   /** Each oscillator's last two samples, which feedback FM reads */
   readonly #feedback = new Float64Array(MAX_INPUTS * 2)
+  /**
+   * Each item slot's drive, as its last sample left it: that sample
+   * after its gain and tanh's antiderivative there, then each halfband
+   * section's last in and out, up and down (#drive)
+   */
+  readonly #driven = new Float64Array(MAX_CHAINS * MAX_ITEMS * DRIVEN)
+  /**
+   * Each drive's share of its own path in what it gives, 0..1 (#drive),
+   * under 0 when a note starts: then at once what its drive asks
+   */
+  readonly #driveWet = new Float64Array(MAX_CHAINS * MAX_ITEMS).fill(-1)
   /**
    * MIDI note 0's phase step per sample: pitch p steps note0Step * 2^(p/12).
    * The per-sample loop reads only this field, no import (in the benchmark's
@@ -415,12 +529,18 @@ export class ChainVoice {
     // Spread small seeds (1, 2, 3...) over the whole 32-bit range, a
     // different way for each generator
     for (let i = 0; i < MAX_INPUTS; i++) {
-      this.#oscillators.push(new Oscillator(sampleRate))
+      for (let k = 0; k < MAX_UNISON; k++) {
+        this.#oscillators.push(new Oscillator(sampleRate))
+      }
       this.#noises.push(new Noise(Math.imul(seed + 7919 * i, 0x9e3779b1)))
     }
+    this.#phases = new Noise(Math.imul(seed, 0x9e3779b9) ^ 0x7f4a7c15)
     for (let f = 0; f < MAX_CHAINS * MAX_ITEMS; f++) {
       this.#filters.push(new Filter(sampleRate))
+      this.#combs.push(undefined)
+      this.#formants.push(undefined)
     }
+    this.#sampleRate = sampleRate
     for (let m = 0; m < MAX_MODULATORS; m++) {
       this.#envs.push(new Adsr(settings.envShape[m] as AdsrShape))
       const lfoSeed = Math.imul(seed, LFO_SEEDS[m] as number)
@@ -434,6 +554,19 @@ export class ChainVoice {
     this.#gain = new Smoother(sampleRate, SMOOTHING, 1)
     this.#slide = new Smoother(sampleRate, SMOOTHING, 0)
     this.#note0Step = midiToFrequency(0) / sampleRate
+  }
+
+  /**
+   * Makes what item slot item (c * MAX_ITEMS + k) needs to play kind: a
+   * comb's line, a formant's bands. Called as the sound is set, not as
+   * it plays; once made, kept.
+   */
+  prepare(item: number, kind: number): void {
+    if (kind === ITEM_COMB && !this.#combs[item]) {
+      this.#combs[item] = new Comb(this.#sampleRate)
+    } else if (kind === ITEM_FORMANT && !this.#formants[item]) {
+      this.#formants[item] = new Formant(this.#sampleRate)
+    }
   }
 
   /** True while the voice sounds or a note waits to start on it */
@@ -653,6 +786,7 @@ export class ChainVoice {
     const length = end - start
     this.#modulate(length)
     const gliding = this.#glide(length)
+    this.#gliding = gliding
     this.#inputs(length, gliding)
     const mix = this.#chains(length)
 
@@ -858,7 +992,9 @@ export class ChainVoice {
    * when nothing moves, else per sample, its pitch from the glide and the
    * routes, its pulse width from the settings and the routes, and its
    * phase from its FM source (or, reading itself, from its own last two
-   * samples, a sample at a time)
+   * samples, a sample at a time). Its unison voices each so, detuned and
+   * summed (unison); hard synced, each restarted by the note's own cycle
+   * (renderSynced), its FM unheard. Feedback FM plays one voice, unsynced.
    */
   #oscillate(
     i: number,
@@ -869,7 +1005,8 @@ export class ChainVoice {
     const settings = this.#settings
     const used = settings.destUsed
     const dests = settings.dests
-    const oscillator = this.#oscillators[i] as Oscillator
+    const first = i * MAX_UNISON
+    const oscillator = this.#oscillators[first] as Oscillator
     const wave = settings.wave[i] as number
     const transpose = settings.transpose[i] as number
     const pitchDest = inputDest(i, INPUT_PITCH)
@@ -879,9 +1016,6 @@ export class ChainVoice {
       wave === SQUARE &&
       (settings.widthMoving[i] === 1 || used[widthDest] === 1)
     const width = settings.width[i] as Float32Array
-    oscillator.width = width[0] as number
-    oscillator.steps = settings.steps[i] as number
-    oscillator.bits = settings.bits[i] as number
 
     let offsets: Float32Array | undefined
     let feedback = false
@@ -903,11 +1037,29 @@ export class ChainVoice {
         }
       }
     }
+    const voices = feedback ? 1 : (settings.unison[i] as number)
+    const synced = !feedback && settings.syncOn[i] === 1
+    if (synced) offsets = undefined
+    // Each voice's detune, from the middle, and its level
+    const gains = this.#unisonGains
+    if (voices > 1) this.#unison(i, voices)
+    else {
+      oscillator.ratio = 1
+      gains[0] = 1
+    }
 
-    if (!gliding && !pitched && !pulse && !offsets && !feedback) {
+    if (!gliding && !pitched && !pulse && !offsets && !feedback && !synced) {
       // process() takes hertz
-      const pitch = this.#pitch + transpose
-      oscillator.process(out, midiToFrequency(pitch), wave, 0, length)
+      const hertz = midiToFrequency(this.#pitch + transpose)
+      for (let k = 0; k < voices; k++) {
+        const into = k === 0 ? out : settings.unisonOut
+        const voice = this.#oscillators[first + k] as Oscillator
+        voice.width = width[0] as number
+        voice.steps = settings.steps[i] as number
+        voice.bits = settings.bits[i] as number
+        voice.process(into, hertz, wave, 0, length)
+        mixVoice(out, into, k, gains[k] as number, length)
+      }
       return
     }
     const increments = settings.increments
@@ -937,12 +1089,105 @@ export class ChainVoice {
       }
       pulseWidths = widths
     }
-    if (!feedback) {
-      oscillator.render(out, increments, wave, 0, length, pulseWidths, offsets)
+    if (feedback) {
+      oscillator.width = width[0] as number
+      oscillator.steps = settings.steps[i] as number
+      oscillator.bits = settings.bits[i] as number
+      this.#feedbackFm(i, oscillator, out, increments, pulseWidths, length)
       return
     }
-    // Feedback reads the mean of the last two samples, which keeps a high
-    // depth from flipping between two values each sample
+    let syncs: Float32Array | undefined
+    if (synced) {
+      // The sync's pitch above the note, as ratios, a few samples apart
+      syncs = settings.syncs
+      const sync = settings.sync[i] as Float32Array
+      const syncDest = inputDest(i, INPUT_SYNC)
+      const mod = used[syncDest] === 1 ? dests[syncDest] : undefined
+      for (let j = 0; j < length; j++) {
+        const semis = (sync[j] as number) + (mod ? (mod[j] as number) : 0)
+        syncs[j] = semis > 0 ? semis : 0
+      }
+      pitchesToSteps(syncs, length, 1)
+    }
+    for (let k = 0; k < voices; k++) {
+      const into = k === 0 ? out : settings.unisonOut
+      const voice = this.#oscillators[first + k] as Oscillator
+      voice.width = width[0] as number
+      voice.steps = settings.steps[i] as number
+      voice.bits = settings.bits[i] as number
+      if (syncs) {
+        voice.renderSynced(
+          into,
+          increments,
+          wave,
+          0,
+          length,
+          1,
+          syncs,
+          pulseWidths
+        )
+      } else {
+        voice.render(into, increments, wave, 0, length, pulseWidths, offsets)
+      }
+      mixVoice(out, into, k, gains[k] as number, length)
+    }
+  }
+
+  /**
+   * Input i's voices of its unison, n of them, for this chunk: each
+   * one's detune as its oscillator's ratio, from the middle by its place
+   * in UNISON_SPREAD, its detune moved by routes; and its level, those
+   * nearest the middle at 1, the others at the blend, all of them as
+   * loud together as one (the voices apart, their powers add up)
+   */
+  #unison(i: number, n: number): void {
+    const settings = this.#settings
+    const dest = inputDest(i, INPUT_DETUNE)
+    let cents = settings.detune[i] as number
+    if (settings.destUsed[dest] === 1) {
+      // A route's detune in semitones, as the chunk starts
+      cents += 100 * ((settings.dests[dest] as Float32Array)[0] as number)
+    }
+    if (!(cents > 0)) cents = 0
+    const spread = UNISON_SPREAD[n - 1] as readonly number[]
+    let middle = 1
+    for (let k = 0; k < n; k++) {
+      const at = Math.abs(spread[k] as number)
+      if (at < middle) middle = at
+    }
+    const blend = settings.blend[i] as number
+    const gains = this.#unisonGains
+    let power = 0
+    for (let k = 0; k < n; k++) {
+      const at = spread[k] as number
+      const voice = this.#oscillators[i * MAX_UNISON + k] as Oscillator
+      voice.ratio = 2 ** ((cents * at) / 1200)
+      const gain = Math.abs(at) <= middle + 1e-6 ? 1 : blend
+      gains[k] = gain
+      power += gain * gain
+    }
+    const norm = power > 0 ? 1 / Math.sqrt(power) : 0
+    for (let k = 0; k < n; k++) gains[k] = (gains[k] as number) * norm
+  }
+
+  /**
+   * Feedback FM on input i's one oscillator: it reads the mean of its own
+   * last two samples, which keeps a high depth from flipping between two
+   * values each sample, a sample at a time
+   */
+  #feedbackFm(
+    i: number,
+    oscillator: Oscillator,
+    out: Float32Array,
+    increments: Float32Array,
+    pulseWidths: Float32Array | undefined,
+    length: number
+  ): void {
+    const settings = this.#settings
+    const fmDest = inputDest(i, INPUT_FM)
+    const fmMod =
+      settings.destUsed[fmDest] === 1 ? settings.dests[fmDest] : undefined
+    const fm = settings.fm[i] as Float32Array
     const memory = this.#feedback
     let last = memory[2 * i] as number
     let before = memory[2 * i + 1] as number
@@ -951,7 +1196,15 @@ export class ChainVoice {
       let depth = fm[j] as number
       if (fmMod) depth = clamp01(depth + (fmMod[j] as number))
       phase[j] = (last + before) * 0.5 * depth * FM_DEPTH
-      oscillator.render(out, increments, wave, j, j + 1, pulseWidths, phase)
+      oscillator.render(
+        out,
+        increments,
+        settings.wave[i] as number,
+        j,
+        j + 1,
+        pulseWidths,
+        phase
+      )
       before = last
       last = out[j] as number
     }
@@ -989,11 +1242,11 @@ export class ChainVoice {
       const items = settings.itemCount[c] as number
       for (let k = 0; k < items; k++) {
         const item = c * MAX_ITEMS + k
-        if (settings.itemKind[item] === ITEM_FILTER) {
-          this.#filter(c, k, chain, length)
-        } else if (settings.itemKind[item] === ITEM_DRIVE) {
-          this.#drive(c, k, chain, length)
-        }
+        const kind = settings.itemKind[item]
+        if (kind === ITEM_FILTER) this.#filter(c, k, chain, length)
+        else if (kind === ITEM_DRIVE) this.#drive(c, k, chain, length)
+        else if (kind === ITEM_COMB) this.#comb(c, k, chain, length)
+        else if (kind === ITEM_FORMANT) this.#formant(c, k, chain, length)
       }
       const dest = chainLevelDest(c)
       addAt(
@@ -1052,19 +1305,64 @@ export class ChainVoice {
   /**
    * Item k of chain c, a drive, over chain[0..length): tanh(g·x) / tanh(g),
    * g = DRIVE_GAIN × drive, so a full-scale peak stays at full scale while
-   * quieter parts rise; nothing at a drive of 0. tanh is tanhApprox, a
-   * Math.tanh a sample being most of what a drive costs.
+   * quieter parts rise; nothing at a drive of 0. Antialiased twice over
+   * (docs/plan/sound-chains.md, The library): at twice the sample rate,
+   * the sound interpolated up and filtered back down by a halfband
+   * (HALFBAND), so only what it makes past 1.5 times the sample rate
+   * folds back into the band heard; and there, of the first order (ADAA),
+   * a sample is tanh's mean from the last sample to it, the difference of
+   * its antiderivative over theirs, about 13 dB quieter again. For about
+   * three samples' delay, and its top a little softer. At a drive of
+   * nothing the sound passes as it came, the halfbands kept running
+   * beside it; as it starts to drive it fades over to them in DRIVE_FADE,
+   * and back, so nothing jumps. tanh is tanhApprox, a Math.tanh a sample
+   * being most of what a plain drive costs.
    */
   #drive(c: number, k: number, chain: Float32Array, length: number): void {
     const settings = this.#settings
-    const drive = settings.itemValue[c * MAX_ITEMS + k] as Float32Array
+    const item = c * MAX_ITEMS + k
+    const drive = settings.itemValue[item] as Float32Array
     const dest = itemDest(c, k, ITEM_DRIVE_AMOUNT)
     const mod = settings.destUsed[dest] === 1 ? settings.dests[dest] : undefined
-    // A local, not the import: the benchmark's module runner reads an
+    // Locals, not the imports: the benchmark's module runner reads an
     // import through a getter
     const tanh = tanhApprox
+    const antiderivative = logCosh
+    const [c0, c1, c2, c3, c4, c5] = HALFBAND
+    const state = this.#driven
+    const at = item * DRIVEN
+    let last = state[at] as number
+    let lastArea = state[at + 1] as number
+    // Up: each section's last in (x) and out (y)
+    let ux0 = state[at + 2] as number
+    let ux1 = state[at + 3] as number
+    let ux2 = state[at + 4] as number
+    let ux3 = state[at + 5] as number
+    let ux4 = state[at + 6] as number
+    let ux5 = state[at + 7] as number
+    let uy0 = state[at + 8] as number
+    let uy1 = state[at + 9] as number
+    let uy2 = state[at + 10] as number
+    let uy3 = state[at + 11] as number
+    let uy4 = state[at + 12] as number
+    let uy5 = state[at + 13] as number
+    // Down
+    let dx0 = state[at + 14] as number
+    let dx1 = state[at + 15] as number
+    let dx2 = state[at + 16] as number
+    let dx3 = state[at + 17] as number
+    let dx4 = state[at + 18] as number
+    let dx5 = state[at + 19] as number
+    let dy0 = state[at + 20] as number
+    let dy1 = state[at + 21] as number
+    let dy2 = state[at + 22] as number
+    let dy3 = state[at + 23] as number
+    let dy4 = state[at + 24] as number
+    let dy5 = state[at + 25] as number
     let lastGain = Number.NaN
     let norm = 0
+    let wet = this.#driveWet[item] as number
+    const fade = 1 / (DRIVE_FADE * this.#sampleRate)
     for (let i = 0; i < length; i++) {
       let amount = drive[i] as number
       if (mod) amount = clamp01(amount + (mod[i] as number))
@@ -1073,8 +1371,193 @@ export class ChainVoice {
         lastGain = gain
         norm = gain < 1e-3 ? 0 : 1 / tanh(gain)
       }
-      if (norm !== 0) chain[i] = tanh(gain * (chain[i] as number)) * norm
+      const x = chain[i] as number
+      // Up: the first path's out the earlier of the two, the second's
+      // the later
+      let y = c0 * (x - uy0) + ux0
+      ux0 = x
+      uy0 = y
+      let p = y
+      y = c2 * (p - uy2) + ux2
+      ux2 = p
+      uy2 = y
+      p = y
+      y = c4 * (p - uy4) + ux4
+      ux4 = p
+      uy4 = y
+      let early = y
+      y = c1 * (x - uy1) + ux1
+      ux1 = x
+      uy1 = y
+      p = y
+      y = c3 * (p - uy3) + ux3
+      ux3 = p
+      uy3 = y
+      p = y
+      y = c5 * (p - uy5) + ux5
+      ux5 = p
+      uy5 = y
+      let late = y
+      if (norm === 0) {
+        // Undriven: the halfbands kept running, for when it starts
+        last = 0
+        lastArea = 0
+      } else {
+        // Both through tanh, each its mean from the one before
+        let u = gain * early
+        let area = antiderivative(u)
+        let step = u - last
+        early =
+          (step > ADAA_CLOSE || step < -ADAA_CLOSE
+            ? (area - lastArea) / step
+            : tanh(0.5 * (u + last))) * norm
+        last = u
+        lastArea = area
+        u = gain * late
+        area = antiderivative(u)
+        step = u - last
+        late =
+          (step > ADAA_CLOSE || step < -ADAA_CLOSE
+            ? (area - lastArea) / step
+            : tanh(0.5 * (u + last))) * norm
+        last = u
+        lastArea = area
+      }
+      // Down: the later through the first path, the earlier the second
+      y = c0 * (late - dy0) + dx0
+      dx0 = late
+      dy0 = y
+      p = y
+      y = c2 * (p - dy2) + dx2
+      dx2 = p
+      dy2 = y
+      p = y
+      y = c4 * (p - dy4) + dx4
+      dx4 = p
+      dy4 = y
+      const first = y
+      y = c1 * (early - dy1) + dx1
+      dx1 = early
+      dy1 = y
+      p = y
+      y = c3 * (p - dy3) + dx3
+      dx3 = p
+      dy3 = y
+      p = y
+      y = c5 * (p - dy5) + dx5
+      dx5 = p
+      dy5 = y
+      const out = 0.5 * (first + y)
+      const target = norm === 0 ? 0 : 1
+      if (wet < 0) wet = target
+      else if (wet < target) wet = wet + fade < 1 ? wet + fade : 1
+      else if (wet > target) wet = wet - fade > 0 ? wet - fade : 0
+      chain[i] = wet === 1 ? out : wet === 0 ? x : x + wet * (out - x)
     }
+    this.#driveWet[item] = wet
+    state[at] = last
+    state[at + 1] = lastArea
+    state[at + 2] = ux0
+    state[at + 3] = ux1
+    state[at + 4] = ux2
+    state[at + 5] = ux3
+    state[at + 6] = ux4
+    state[at + 7] = ux5
+    state[at + 8] = flush(uy0)
+    state[at + 9] = flush(uy1)
+    state[at + 10] = flush(uy2)
+    state[at + 11] = flush(uy3)
+    state[at + 12] = flush(uy4)
+    state[at + 13] = flush(uy5)
+    state[at + 14] = dx0
+    state[at + 15] = dx1
+    state[at + 16] = dx2
+    state[at + 17] = dx3
+    state[at + 18] = dx4
+    state[at + 19] = dx5
+    state[at + 20] = flush(dy0)
+    state[at + 21] = flush(dy1)
+    state[at + 22] = flush(dy2)
+    state[at + 23] = flush(dy3)
+    state[at + 24] = flush(dy4)
+    state[at + 25] = flush(dy5)
+  }
+
+  /**
+   * Item k of chain c, a comb, over chain[0..length): tuned to the note
+   * as it sounds (glide, bend, routes to the voice's pitch) and its tune
+   * above it (and routes to that), ringing for its decay, its damp moved
+   * by routes as the chunk starts
+   */
+  #comb(c: number, k: number, chain: Float32Array, length: number): void {
+    const settings = this.#settings
+    const item = c * MAX_ITEMS + k
+    const comb = this.#combs[item]
+    if (!comb) return
+    const used = settings.destUsed
+    const dests = settings.dests
+    const tune = settings.itemValue[item] as Float32Array
+    const tuneDest = itemDest(c, k, ITEM_TUNE)
+    const tuneMod = used[tuneDest] === 1 ? dests[tuneDest] : undefined
+    const both = used[DEST_PITCH] === 1 ? dests[DEST_PITCH] : undefined
+    const glide = this.#gliding ? settings.glide : undefined
+    const pitches = settings.octaves
+    for (let i = 0; i < length; i++) {
+      let pitch =
+        (glide ? (glide[i] as number) : this.#pitch) + (tune[i] as number)
+      if (tuneMod) pitch += tuneMod[i] as number
+      if (both) pitch += both[i] as number
+      pitches[i] = pitch
+    }
+    // Semitones from MIDI note 0, into hertz
+    pitchesToSteps(pitches, length, this.#note0Step * this.#sampleRate)
+    const dampDest = itemDest(c, k, ITEM_DAMP)
+    let damp = settings.itemDamp[item] as number
+    if (used[dampDest] === 1) {
+      damp += (dests[dampDest] as Float32Array)[0] as number
+    }
+    comb.process(
+      chain,
+      pitches,
+      settings.itemDecay[item] as number,
+      damp,
+      settings.itemMix[item] as number,
+      length
+    )
+  }
+
+  /**
+   * Item k of chain c, a formant filter, over chain[0..length): its vowel
+   * and its shift per sample, routes moving each
+   */
+  #formant(c: number, k: number, chain: Float32Array, length: number): void {
+    const settings = this.#settings
+    const item = c * MAX_ITEMS + k
+    const formant = this.#formants[item]
+    if (!formant) return
+    const used = settings.destUsed
+    const dests = settings.dests
+    const vowel = settings.itemValue[item] as Float32Array
+    const vowelDest = itemDest(c, k, ITEM_VOWEL)
+    const vowelMod = used[vowelDest] === 1 ? dests[vowelDest] : undefined
+    const shiftDest = itemDest(c, k, ITEM_SHIFT)
+    const shiftMod = used[shiftDest] === 1 ? dests[shiftDest] : undefined
+    const vowels = settings.octaves
+    const shifts = settings.resonances
+    const shift = settings.itemShift[item] as number
+    for (let i = 0; i < length; i++) {
+      vowels[i] =
+        (vowel[i] as number) + (vowelMod ? (vowelMod[i] as number) : 0)
+      shifts[i] = shift + (shiftMod ? (shiftMod[i] as number) : 0)
+    }
+    formant.process(
+      chain,
+      vowels,
+      shifts,
+      settings.resonance[item] as number,
+      settings.itemMix[item] as number,
+      length
+    )
   }
 
   #triggerLfos(): void {
@@ -1176,17 +1659,49 @@ export class ChainVoice {
     this.#randomValue = this.#random.next()
     this.#lfoOctaves.fill(0)
     this.#feedback.fill(0)
-    // Silent here, so these resets cannot click; every note starts alike
+    this.#driven.fill(0)
+    this.#driveWet.fill(-1)
+    // Silent here, so these resets cannot click: every note starts alike,
+    // a free oscillator's voices anywhere in their cycles
+    const settings = this.#settings
     for (let i = 0; i < MAX_INPUTS; i++) {
-      ;(this.#oscillators[i] as Oscillator).reset(0)
+      const free = settings.freePhase[i] === 1
+      for (let k = 0; k < MAX_UNISON; k++) {
+        const phase = free ? 0.5 + 0.5 * this.#phases.next() : k * UNISON_PHASE
+        ;(this.#oscillators[i * MAX_UNISON + k] as Oscillator).reset(phase)
+      }
     }
     for (let f = 0; f < this.#filters.length; f++) {
       ;(this.#filters[f] as Filter).reset()
+      // A comb and a formant from silence, theirs to ring from the note
+      this.#combs[f]?.reset()
+      this.#formants[f]?.reset()
     }
     for (let m = 0; m < MAX_MODULATORS; m++) (this.#envs[m] as Adsr).reset()
     this.#triggerLfos()
     this.#env.gateOn()
     for (let m = 0; m < MAX_MODULATORS; m++) (this.#envs[m] as Adsr).gateOn()
+  }
+}
+
+/**
+ * Unison voice k's signal at gain into out over [0, length): the first,
+ * rendered into out itself, scaled in place, the others added
+ */
+function mixVoice(
+  out: Float32Array,
+  voice: Float32Array,
+  k: number,
+  gain: number,
+  length: number
+): void {
+  if (k === 0) {
+    if (gain === 1) return
+    for (let j = 0; j < length; j++) out[j] = (out[j] as number) * gain
+    return
+  }
+  for (let j = 0; j < length; j++) {
+    out[j] = (out[j] as number) + (voice[j] as number) * gain
   }
 }
 
@@ -1294,6 +1809,11 @@ function clampPan(value: number): number {
 }
 
 /** value within [0, 1] */
+/** A state too small to hear, made 0 before it turns denormal */
+function flush(value: number): number {
+  return value > 1e-20 || value < -1e-20 ? value : 0
+}
+
 function clamp01(value: number): number {
   return value > 0 ? (value < 1 ? value : 1) : 0
 }

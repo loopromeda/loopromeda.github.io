@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { LFO_MAX_RATE, LFO_MIN_RATE } from '../../dsp/lfo'
-import { clampValue } from '../params'
+import { VOWELS } from '../../dsp/formant'
+import { PHASER_STAGES } from '../../dsp/effects'
+import { VOWEL_NAMES, clampValue, formatValue } from '../params'
 import {
   AMP_SPEC,
   CHAIN_SPEC,
@@ -13,12 +15,14 @@ import {
   MAX_ITEMS,
   MAX_MODULATORS,
   MAX_ROUTES,
+  MAX_UNISON,
   LFO_NOTES,
   MODULATOR_KINDS,
   VOICE_SPEC,
   noteWholes,
   shownKnobs,
   type KindSpec,
+  type KnobSpec,
 } from './kinds'
 
 const SPECS: [string, KindSpec][] = [
@@ -178,7 +182,7 @@ describe('shownKnobs', () => {
     ])
   })
 
-  it('keeps the Osc to its wave, pitch, width and FM', () => {
+  it('keeps the Osc to its wave, pitch, width, FM, sync and phase', () => {
     expect(keys(INPUT_KINDS.osc.knobs)).toEqual([
       'wave',
       'octave',
@@ -186,6 +190,30 @@ describe('shownKnobs', () => {
       'fine',
       'width',
       'fm',
+      'sync',
+      'phase',
     ])
+  })
+})
+
+describe('the library’s parts', () => {
+  it('names the formant’s vowels as the DSP orders them', () => {
+    expect(VOWEL_NAMES).toEqual(VOWELS)
+    const vowel = ITEM_KINDS.formant.knobs[0]
+    expect(formatValue(vowel, 0)).toBe('A')
+    expect(formatValue(vowel, 0.5)).toBe('A–E')
+    expect(formatValue(vowel, 1.98)).toBe('I')
+    expect(formatValue(vowel, 4)).toBe('U')
+  })
+
+  it('gives a phaser its stages as the DSP counts them', () => {
+    const knobs: readonly KnobSpec[] = EFFECT_KINDS.phaser.knobs
+    const stages = knobs.find((k) => k.key === 'stages')
+    expect(stages?.choices).toEqual(PHASER_STAGES.map(String))
+  })
+
+  it('stacks a super input’s voices up to the most the voice holds', () => {
+    const voices = INPUT_KINDS.super.knobs.find((k) => k.key === 'voices')
+    expect(voices?.max).toBe(MAX_UNISON)
   })
 })

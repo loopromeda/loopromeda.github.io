@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { sinCycles, tanhApprox } from './fastMath'
+import { logCosh, sinCycles, tanhApprox } from './fastMath'
 
 describe('tanhApprox', () => {
   it('stays within 1e-4 of tanh, and far closer near 0', () => {
@@ -49,5 +49,27 @@ describe('sinCycles', () => {
     expect(sinCycles(0.25)).toBeCloseTo(1, 8)
     expect(sinCycles(0.75)).toBeCloseTo(-1, 8)
     expect(sinCycles(Number.NaN)).toBeNaN()
+  })
+})
+
+describe('logCosh', () => {
+  it('is log(cosh(x)), near 0 and far from it', () => {
+    for (const x of [0, 1e-8, 0.001, 0.5, 1, 3, 10, 30]) {
+      const expected = Math.log(Math.cosh(x))
+      expect(logCosh(x)).toBeCloseTo(expected, 12)
+      expect(logCosh(-x)).toBe(logCosh(x))
+    }
+  })
+
+  it('goes on as |x| − log 2 where cosh overflows', () => {
+    expect(logCosh(1000)).toBeCloseTo(1000 - Math.LN2, 9)
+  })
+
+  it('has tanh as its slope', () => {
+    for (const x of [-2, -0.3, 0.2, 1.5]) {
+      const h = 1e-5
+      const slope = (logCosh(x + h) - logCosh(x - h)) / (2 * h)
+      expect(slope).toBeCloseTo(Math.tanh(x), 8)
+    }
   })
 })

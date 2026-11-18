@@ -117,7 +117,9 @@ export function knobDest(
   if (destOf(sound, part, key)) return key
   const found = findPart(sound, part)
   return found?.type === 'input' &&
-    (found.part.kind === 'osc' || found.part.kind === 'chip') &&
+    (found.part.kind === 'osc' ||
+      found.part.kind === 'super' ||
+      found.part.kind === 'chip') &&
     PITCH_KNOBS.includes(key)
     ? 'pitch'
     : undefined
