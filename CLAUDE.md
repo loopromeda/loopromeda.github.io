@@ -95,7 +95,8 @@ src/dsp/      pure DSP (oscillators, envelopes, LFOs, filters, voices);
               frames (from a beat given, moved by beats in time, a
               bar counted in first, if asked; a bar and a beat the
               song's meter's, in steps), and a lane
-              for each track playing its loop into the track's
+              for each track playing its loop (and a scene's
+              launched, from the next bar's first step) into the track's
               strips, each note and each sound of its ornament on
               its own frame (a strip's queue of what starts, stops
               and moves its pitch within a block), a ghost's muted
@@ -140,7 +141,9 @@ src/engine/   AudioContext lifecycle, unlock, node wiring; the sound,
               one the Seq tab shows, picked apart; the
               song, held here and edited, its tempo and each loop sent
               as it changes (its lanes resolved on the track's sound),
-              the transport, and the step playing, and recording (a
+              the transport, and the step playing, a scene launched
+              on the next bar (each loop counted from where it came
+              in: origin, loopStep), and recording (a
               Recorder fed where each note was heard, the output's
               latency taken off), and a note of the Seq tab's loop
               heard on its own while stopped (auditionNote); the
@@ -173,7 +176,10 @@ src/state/    params.ts: the knob schema and the old parameters;
               velocity, an ornament or none and whether it is a
               ghost, and its knob lanes,
               a knob's value at each
-              step), its edits, kept in localStorage; meter.ts: the
+              step; and its scenes, each a name and the loop each
+              track plays in it, or none, the loops shared and only
+              added, a copy a variation), its edits, kept in
+              localStorage; meter.ts: the
               song's meter (so many quarters or eighths to a bar: a
               bar's steps, a beat's, the click's, as dotted quarters
               in 6/8, the longest loop in it); lanes.ts: the
@@ -236,7 +242,8 @@ src/viz/      pure display math (scope trigger and decimation, envelope
               xy.ts, where a popover stands by its
               button in popover.ts, the step grid's cells (a bar's
               steps across, as the song's meter makes it), a note's
-              box and what a drag from a note makes of it in steps.ts,
+              box and what a drag from a note makes of it, and the
+              keys a scene's track row frames, in steps.ts,
               where the song stands (bar, beat and step, or the
               count-in's beats left, in its meter) in position.ts,
               a knob lane's strip (a stroke's steps, Fill's shapes,
@@ -252,11 +259,20 @@ src/viz/      pure display math (scope trigger and decimation, envelope
 src/ui/       React components; SoundEditor.tsx the sound as tiles
               (editor.ts: their names, lines, pictograms and colours),
               with the kit its pads and its chain, or, switched to Seq,
-              SeqView.tsx (a chip for each track, the one picked
-              there apart from the one played, and its StepGrid.tsx:
+              SeqView.tsx (All, then a chip for each track, the one
+              picked there apart from the one played, with scenes
+              the letter of the loop it plays; All, ScenesView.tsx:
+              the song's scenes in a row, one tapped launched and
+              blinking until it comes in, More's New scene,
+              Duplicate, Rename, Move and Delete, and under them a
+              row for each track, the bar it plays with its step
+              lit, its loop's letter (a picker of its loops, Silent,
+              New loop and a copy) and where it stands in the loop,
+              a tap opening the loop; a track's chip its
+              StepGrid.tsx:
               its loop a bar at a time, each as many steps as the
               song's meter makes it, its beats shaded, the bar
-              playing followed, a
+              playing followed, counted from the loop's start, a
               tap puts a note or takes it away, a drag from one sets
               how hard and how long, one held (or tapped with
               Ornaments on) is picked for its ornament, which
@@ -338,7 +354,9 @@ src/ui/       React components; SoundEditor.tsx the sound as tiles
               kept, the session saved under a name, one opened in its
               place, a project's file out and in; #/project), the
               More of their headers MoreMenu.tsx, a menu falling from
-              it (New, Rename, Export, Import, Delete apart),
+              it (New, Rename, Export, Import, Delete apart; as
+              MenuButton, from a button of its own, its items one of
+              a choice ticked, each with what it holds),
               SettingsDialog.tsx, a modal dialog, holds the settings
               (the theme in Dropdown.tsx, the app's own select, its
               list on the page, out of a panel's glass),

@@ -202,6 +202,50 @@ the last:
 What is recorded is the starting of loops and scenes, not sound: to be
 confirmed with ashon. To be built in that order, each usable by itself.
 
+#### Scenes
+
+ashon judged a demo (2026-11-16) and chose:
+
+> 데이터 양도 좀 줄이고 싶은데 함께 쓰기를 기본으로 하고, variation이
+> 필요하면 사본을 떠서 살짝 변주를 주어서 쓰도록 하자
+
+That is, scenes share loops by default, and a loop is copied where a
+variation is needed. The demo's other defaults stood. What it makes:
+
+- **A scene** is a name and, for each track, a loop by its place among
+  the track's own (A, B, C), or none: silence there. A song holds 1 to
+  64 scenes, and a track 1 to 26 loops.
+- **The scene picked** is the one played and edited: the Seq tab's
+  grid edits the loop its track plays there.
+- **Shared.** A loop played by several scenes is edited in all of them.
+  Copy of makes a variation that only the scene picked plays.
+- **Kept.** Loops are only ever added, never removed, so a place names
+  the same loop for as long as the song lasts. A track edited where it
+  is silent gets a new loop, played there.
+- **Launched.** While the song plays, a scene comes in on the next bar of
+  the song's meter, every track's loop from its first step, all at once.
+  Stopped, it is picked at once.
+  - Launching the scene playing takes back one waiting.
+  - Stopping with one waiting picks it.
+  - A meter changed while one waits launches it again, on the new bar.
+- **The loops' start.** The audio thread and the engine count each loop
+  from the bar its scene came in on (`Engine.origin`). Recording writes
+  in from there too.
+- **Read.** A song kept before scenes reads as one, each track playing
+  its first loop.
+- **Later.** Auto-advance, a scene's own length, waits for the timeline.
+
+The screen (UX's), as the demo drew it:
+
+- **All**, a chip before the tracks' on the Seq tab, shows the scenes in
+  a row, with a More menu: New scene, Duplicate, Rename, Move left and
+  right, Delete. A scene tapped while playing blinks until it comes in.
+- **Under the scenes**, one row per track draws the bar it plays now,
+  with a play head, its loop's letter and where it stands in the loop.
+- **A loop's letter** opens a picker: the track's loops, Silent, New
+  loop and Copy of.
+- **A row** opens that loop's step grid.
+
 ### F. Knob lanes
 
 Asked for by ashon, 2026-11-15 ("트랙에서 각종 노브 다이나믹도 컨트롤
