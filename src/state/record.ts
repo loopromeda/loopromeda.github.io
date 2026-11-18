@@ -8,8 +8,9 @@
  * the notes to what is there (one on the same step and key in its
  * place); Replace first empties the loop of the track played as the
  * sequencer passes over it, one time round, then adds. A loop of no notes
- * recorded into is not gone round: it grows a bar at a time ahead of the
- * song, as long as it is played into (up to MAX_BARS), and where the take
+ * recorded into is not gone round: it grows a bar of the song's meter at
+ * a time ahead of the song, as long as it is played into (up to the
+ * meter's maxBars), and where the take
  * stops, on the bar line nearest, is its length (ashon, 2026-11-15: the
  * first take sets it, as a looper's does). A note is written
  * once let go, and not before its step has played: one put on a step
@@ -18,9 +19,8 @@
  * thread's less the output's latency), and the loops go out through the
  * host.
  */
+import { barSteps, maxBars, type Meter } from './meter'
 import {
-  BAR_STEPS,
-  MAX_BARS,
   MAX_KEY,
   MIN_VELOCITY,
   type Loop,
@@ -40,6 +40,8 @@ export interface RecordHost {
   loopOf(track: string): Loop
   /** Plays what edit makes of track's loop */
   editLoop(track: string, edit: (loop: Loop) => Loop): void
+  /** The song's meter, whose bars a loop grows by */
+  meter(): Meter
 }
 
 /** A note held while recording, from where it was heard */
@@ -230,9 +232,11 @@ export class Recorder {
     const growing = this.#growing
     if (!growing || step < 0) return
     growing.reach = Math.max(growing.reach, step)
-    const bars = Math.min(MAX_BARS, Math.floor(step / BAR_STEPS) + 1 + AHEAD)
-    if (bars * BAR_STEPS <= this.#host.loopOf(growing.track).steps) return
-    this.#host.editLoop(growing.track, (loop) => setBars(loop, bars))
+    const meter = this.#host.meter()
+    const bar = barSteps(meter)
+    const bars = Math.min(maxBars(meter), Math.floor(step / bar) + 1 + AHEAD)
+    if (bars * bar <= this.#host.loopOf(growing.track).steps) return
+    this.#host.editLoop(growing.track, (loop) => setBars(loop, bars, meter))
   }
 
   /**
@@ -241,16 +245,14 @@ export class Recorder {
    * cut there; back as it was if nothing went in
    */
   #settle({ track, was, wrote }: Growing, reach: number): void {
+    const meter = this.#host.meter()
+    const bar = barSteps(meter)
     this.#host.editLoop(track, (loop) => {
-      if (!wrote) return setBars(loop, was / BAR_STEPS)
+      if (!wrote) return setBars(loop, was / bar, meter)
       let last = 0
       for (const note of loop.notes) last = Math.max(last, note.step + 1)
-      const bars = Math.max(
-        1,
-        Math.round(reach / BAR_STEPS),
-        Math.ceil(last / BAR_STEPS)
-      )
-      const cut = setBars(loop, bars)
+      const bars = Math.max(1, Math.round(reach / bar), Math.ceil(last / bar))
+      const cut = setBars(loop, bars, meter)
       const end = cut.steps
       if (!cut.notes.some((note) => note.step + note.length > end)) return cut
       return {

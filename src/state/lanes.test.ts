@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { laneGroups, laneKnob, lanesPlayed, ownValue, sameLanes } from './lanes'
+import { FOUR_FOUR } from './meter'
 import { initMix, setMixValue } from './mix'
 import {
   FADER,
@@ -87,7 +88,7 @@ describe('a knob’s own value', () => {
 
 describe('a loop’s lanes as they play', () => {
   it('plays those on at knobs the track has, held within each range', () => {
-    let loop = addLane(initLoop(), 'x1', 'cutoff', 1000)
+    let loop = addLane(initLoop(FOUR_FOUR), 'x1', 'cutoff', 1000)
     loop = addLane(loop, FADER, 'level', 0.5)
     loop = addLane(loop, 'x9', 'cutoff', 1000)
     loop = addLane(loop, AMP, 'pan', 0)
@@ -114,13 +115,17 @@ describe('a loop’s lanes as they play', () => {
   })
 
   it('plays as many values as the loop’s steps', () => {
-    const loop = setBars(addLane(setBars(initLoop(), 2), FADER, 'pan', 1), 1)
+    const loop = setBars(
+      addLane(setBars(initLoop(FOUR_FOUR), 2, FOUR_FOUR), FADER, 'pan', 1),
+      1,
+      FOUR_FOUR
+    )
     expect(lanesPlayed(loop, undefined)[0]?.values).toHaveLength(16)
-    expect(lanesPlayed(initLoop(), initSound())).toEqual([])
+    expect(lanesPlayed(initLoop(FOUR_FOUR), initSound())).toEqual([])
   })
 
   it('tells lanes that play alike', () => {
-    const loop = addLane(initLoop(), 'x1', 'cutoff', 1000)
+    const loop = addLane(initLoop(FOUR_FOUR), 'x1', 'cutoff', 1000)
     const played = lanesPlayed(loop, initSound())
     expect(sameLanes(played, lanesPlayed(loop, initSound()))).toBe(true)
     const glided = editLane(loop, 'x1', 'cutoff', (lane) =>

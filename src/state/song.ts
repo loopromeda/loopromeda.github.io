@@ -2,7 +2,8 @@
  * The session's song (docs/plan/tracks-and-song.md, D): the tempo and the
  * swing, and each track's loops of notes, by the track's id, kept apart
  * from its sound (a preset loaded leaves the notes; a track removed takes
- * its own away). A loop is one to 256 bars of sixteenths; a note
+ * its own away), in a meter (K, meter.ts). A loop is whole bars of
+ * sixteenths in the song's meter, as many as MAX_STEPS holds; a note
  * stands on a step at a key (a kit's pad, a synth's note), for a length
  * in steps, at a velocity, with an ornament or none (I: a grace, a
  * mordent, a trill, a roll or an arpeggio, src/dsp/ornament.ts), and
@@ -17,21 +18,22 @@
  */
 import { readOrnament, sameOrnament, type Ornament } from '../dsp/ornament'
 import {
-  BAR_STEPS,
   MAX_STEPS,
   MAX_SWING,
   MAX_TEMPO,
   MIN_SWING,
   MIN_TEMPO,
 } from '../dsp/sequencer'
+import {
+  barSteps,
+  FOUR_FOUR,
+  maxBars,
+  readMeter,
+  sameMeter,
+  type Meter,
+} from './meter'
 
-export type { Ornament }
-
-/** A bar's steps: sixteenths in four-four */
-export { BAR_STEPS }
-
-/** The longest loop, in bars */
-export const MAX_BARS = MAX_STEPS / BAR_STEPS
+export type { Meter, Ornament }
 
 export const DEFAULT_TEMPO = 120
 
@@ -91,7 +93,7 @@ export interface KnobLane {
 
 /** A loop: its length, its notes by step, then by key, and its knob lanes */
 export interface Loop {
-  /** Whole bars: BAR_STEPS up to MAX_STEPS */
+  /** Whole bars of the song's meter, up to MAX_STEPS */
   readonly steps: number
   readonly notes: readonly Note[]
   /** Its knob lanes, in the order they were added */
@@ -106,6 +108,8 @@ export interface Song {
    * up to MAX_SWING
    */
   readonly swing: number
+  /** How many notes of which value a bar holds: four-four unless set */
+  readonly meter: Meter
   /** Each track's loops, by its id; a track with none plays nothing */
   readonly loops: Readonly<Record<string, readonly Loop[]>>
   /**
@@ -115,20 +119,33 @@ export interface Song {
   readonly off: Readonly<Record<string, true>>
 }
 
-/** A bar of nothing: what a track with no loop shows */
-const EMPTY: Loop = { steps: BAR_STEPS, notes: [], lanes: [] }
+/** A bar of nothing for each bar's steps, the same each time asked */
+const EMPTY = new Map<number, Loop>()
 
-export function initLoop(): Loop {
-  return EMPTY
+/** A bar of nothing in meter: what a track with no loop shows */
+export function initLoop(meter: Meter): Loop {
+  const steps = barSteps(meter)
+  let empty = EMPTY.get(steps)
+  if (!empty) {
+    empty = { steps, notes: [], lanes: [] }
+    EMPTY.set(steps, empty)
+  }
+  return empty
 }
 
 export function initSong(): Song {
-  return { tempo: DEFAULT_TEMPO, swing: MIN_SWING, loops: {}, off: {} }
+  return {
+    tempo: DEFAULT_TEMPO,
+    swing: MIN_SWING,
+    meter: FOUR_FOUR,
+    loops: {},
+    off: {},
+  }
 }
 
 /** The loop a track plays: its first, or a bar of nothing */
 export function loopOf(song: Song, track: string): Loop {
-  return song.loops[track]?.[0] ?? EMPTY
+  return song.loops[track]?.[0] ?? initLoop(song.meter)
 }
 
 /** Whether a track's loop plays: unless it was put off */
@@ -145,9 +162,9 @@ export function setLoopOn(song: Song, track: string, on: boolean): Song {
   return { ...song, off }
 }
 
-/** The loop's length in bars */
-export function barsOf(loop: Loop): number {
-  return loop.steps / BAR_STEPS
+/** The loop's length in bars of meter */
+export function barsOf(loop: Loop, meter: Meter): number {
+  return loop.steps / barSteps(meter)
 }
 
 /** The note that starts on step at key */
@@ -280,13 +297,13 @@ export function removeNote(loop: Loop, step: number, key: number): Loop {
 }
 
 /**
- * The loop bars long, 1..MAX_BARS. Notes past a shorter end are kept, not
- * played: a loop made longer again has them back. A lane shorter than the
- * new length has its values repeated from the first; made shorter, the
- * lanes are kept as they are, like notes.
+ * The loop bars of meter long, 1 to its maxBars. Notes past a shorter end
+ * are kept, not played: a loop made longer again has them back. A lane
+ * shorter than the new length has its values repeated from the first;
+ * made shorter, the lanes are kept as they are, like notes.
  */
-export function setBars(loop: Loop, bars: number): Loop {
-  const steps = cleanSteps(bars * BAR_STEPS)
+export function setBars(loop: Loop, bars: number, meter: Meter): Loop {
+  const steps = cleanSteps(bars * barSteps(meter), meter)
   if (steps === loop.steps) return loop
   return { ...loop, steps, lanes: growLanes(loop.lanes, steps) }
 }
@@ -457,7 +474,7 @@ export function editLoop(
   edit: (loop: Loop) => Loop
 ): Song {
   const loops = song.loops[track] ?? []
-  const from = loops[0] ?? EMPTY
+  const from = loops[0] ?? initLoop(song.meter)
   const to = edit(from)
   if (to === from) return song
   return {
@@ -474,6 +491,22 @@ export function setTempo(song: Song, tempo: number): Song {
 export function setSwing(song: Song, swing: number): Song {
   const clean = cleanSwing(swing)
   return clean === song.swing ? song : { ...song, swing: clean }
+}
+
+/**
+ * The song in meter, each loop as many bars as it was (as many as the
+ * meter holds): its notes kept on their steps, those past a shorter end
+ * not played, its lanes grown as setBars grows them (ashon, 2026-11-17)
+ */
+export function setMeter(song: Song, meter: Meter): Song {
+  const clean = readMeter(meter)
+  if (sameMeter(clean, song.meter)) return song
+  const was = barSteps(song.meter)
+  const loops: Record<string, readonly Loop[]> = {}
+  for (const [id, kept] of Object.entries(song.loops)) {
+    loops[id] = kept.map((loop) => setBars(loop, loop.steps / was, clean))
+  }
+  return { ...song, meter: clean, loops }
 }
 
 /** The song with the loops of the tracks there are, by their ids */
@@ -501,10 +534,12 @@ export function fitSong(song: Song, ids: readonly string[]): Song {
  */
 export function readSong(value: unknown): Song {
   const given = record(value)
+  // Kept before meters: four-four
+  const meter = readMeter(given.meter)
   const loops: Record<string, readonly Loop[]> = {}
   for (const [id, kept] of Object.entries(record(given.loops))) {
     if (!Array.isArray(kept)) continue
-    const read = kept.map(readLoop)
+    const read = kept.map((each) => readLoop(each, meter))
     if (read.length > 0) loops[id] = read
   }
   const off: Record<string, true> = {}
@@ -514,14 +549,16 @@ export function readSong(value: unknown): Song {
   return {
     tempo: cleanTempo(given.tempo),
     swing: cleanSwing(given.swing),
+    meter,
     loops,
     off,
   }
 }
 
-function readLoop(value: unknown): Loop {
+function readLoop(value: unknown, meter: Meter): Loop {
   const given = record(value)
-  let loop: Loop = { steps: cleanSteps(given.steps), notes: [], lanes: [] }
+  const steps = cleanSteps(given.steps, meter)
+  let loop: Loop = { steps, notes: [], lanes: [] }
   if (Array.isArray(given.notes)) {
     for (const each of given.notes) {
       const note = record(each)
@@ -639,10 +676,11 @@ function byStep(a: Note, b: Note): number {
   return a.step - b.step || a.key - b.key
 }
 
-/** Whole bars, one to the most; anything else, one */
-function cleanSteps(value: unknown): number {
-  const bars = Math.round(number(value, BAR_STEPS) / BAR_STEPS)
-  return Math.max(1, Math.min(MAX_BARS, bars)) * BAR_STEPS
+/** Whole bars of meter, one to the most; anything else, one */
+function cleanSteps(value: unknown, meter: Meter): number {
+  const bar = barSteps(meter)
+  const bars = Math.round(number(value, bar) / bar)
+  return Math.max(1, Math.min(maxBars(meter), bars)) * bar
 }
 
 /**

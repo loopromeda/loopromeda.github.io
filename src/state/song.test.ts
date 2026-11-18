@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { MAX_STEPS } from '../dsp/sequencer'
+import { BAR_STEPS, MAX_STEPS } from '../dsp/sequencer'
+import { FOUR_FOUR, maxBars, type Meter } from './meter'
 import {
-  BAR_STEPS,
   FADER,
-  MAX_BARS,
   MAX_LANES,
   SONG_KEY,
   addLane,
@@ -34,6 +33,7 @@ import {
   setLaneOn,
   setLaneValues,
   setLoopOn,
+  setMeter,
   setOrnament,
   setSwing,
   setTempo,
@@ -62,6 +62,13 @@ function storage(broken = false): SongStorage & { map: Map<string, string> } {
 function note(step: number, key = 0, length = 1, velocity = 1): Note {
   return { step, key, length, velocity }
 }
+
+/** The longest loop in four-four, in bars */
+const MAX_BARS = maxBars(FOUR_FOUR)
+
+const THREE_FOUR: Meter = { count: 3, unit: 4 }
+const FIVE_FOUR: Meter = { count: 5, unit: 4 }
+const SIX_EIGHT: Meter = { count: 6, unit: 8 }
 
 function loop(notes: readonly Note[], steps = BAR_STEPS): Loop {
   return notes.reduce(putNote, { steps, notes: [], lanes: [] })
@@ -102,8 +109,8 @@ function until(values: readonly number[], steps: number): number[] {
 
 describe('a loop', () => {
   it('starts as a bar of nothing', () => {
-    expect(initLoop()).toEqual({ steps: 16, notes: [], lanes: [] })
-    expect(barsOf(initLoop())).toBe(1)
+    expect(initLoop(FOUR_FOUR)).toEqual({ steps: 16, notes: [], lanes: [] })
+    expect(barsOf(initLoop(FOUR_FOUR), FOUR_FOUR)).toBe(1)
   })
 
   it('keeps its notes by step, then by key', () => {
@@ -166,7 +173,7 @@ describe('a loop', () => {
   })
 
   it('leaves out a note that is none', () => {
-    const from = initLoop()
+    const from = initLoop(FOUR_FOUR)
     for (const bad of [
       note(-1),
       note(MAX_STEPS),
@@ -188,20 +195,36 @@ describe('a loop', () => {
 
   it('is one to 256 bars long', () => {
     const from = loop([note(0)])
-    expect(setBars(from, 2).steps).toBe(32)
-    expect(setBars(from, 4).steps).toBe(64)
-    expect(setBars(from, MAX_BARS + 8).steps).toBe(MAX_BARS * BAR_STEPS)
-    expect(setBars(from, 0).steps).toBe(16)
-    expect(setBars(from, NaN).steps).toBe(16)
-    expect(setBars(from, 1)).toBe(from)
+    expect(setBars(from, 2, FOUR_FOUR).steps).toBe(32)
+    expect(setBars(from, 4, FOUR_FOUR).steps).toBe(64)
+    expect(setBars(from, MAX_BARS + 8, FOUR_FOUR).steps).toBe(
+      MAX_BARS * BAR_STEPS
+    )
+    expect(setBars(from, 0, FOUR_FOUR).steps).toBe(16)
+    expect(setBars(from, NaN, FOUR_FOUR).steps).toBe(16)
+    expect(setBars(from, 1, FOUR_FOUR)).toBe(from)
+  })
+
+  it('is bars of the meter given, as many as the longest loop holds', () => {
+    const from = loop([note(0)], 12)
+    expect(setBars(from, 2, THREE_FOUR).steps).toBe(24)
+    expect(barsOf(setBars(from, 2, THREE_FOUR), THREE_FOUR)).toBe(2)
+    expect(setBars(from, 1, SIX_EIGHT)).toBe(from)
+    // 341 bars of 12 in 4096 steps; 204 of 20
+    expect(setBars(from, 999, THREE_FOUR).steps).toBe(341 * 12)
+    expect(setBars(from, 999, FIVE_FOUR).steps).toBe(204 * 20)
+    expect(setBars(from, 0, FIVE_FOUR).steps).toBe(20)
   })
 
   it('keeps the notes past a shorter end, and does not play them', () => {
     const long = loop([note(0), note(20), note(40)], 64)
-    const short = setBars(long, 1)
+    const short = setBars(long, 1, FOUR_FOUR)
     expect(short.notes).toHaveLength(3)
     expect(playedNotes(short)).toEqual([note(0)])
-    expect(playedNotes(setBars(short, 2))).toEqual([note(0), note(20)])
+    expect(playedNotes(setBars(short, 2, FOUR_FOUR))).toEqual([
+      note(0),
+      note(20),
+    ])
     expect(playedNotes(long)).toBe(long.notes)
   })
 
@@ -336,7 +359,7 @@ describe('a ghost note', () => {
 
 describe('a loop’s lanes', () => {
   it('starts with none and takes one at the loop’s own length', () => {
-    const from = initLoop()
+    const from = initLoop(FOUR_FOUR)
     expect(from.lanes).toEqual([])
     const made = addLane(from, 'amp', 'cutoff', 0.4)
     expect(made.lanes).toEqual([lane('amp', 'cutoff', held(0.4))])
@@ -346,19 +369,19 @@ describe('a loop’s lanes', () => {
     )
     expect(laneAt(made, 'amp', 'level')).toBeUndefined()
     expect(laneAt(from, 'amp', 'cutoff')).toBeUndefined()
-    const fader = addLane(setBars(from, 2), FADER, 'level', 0.75)
+    const fader = addLane(setBars(from, 2, FOUR_FOUR), FADER, 'level', 0.75)
     expect(fader.lanes).toEqual([lane(FADER, 'level', held(0.75, 32))])
   })
 
   it('takes no lane twice, no more than eight, and no value that is none', () => {
-    const from = addLane(initLoop(), 'amp', 'cutoff', 0.4)
+    const from = addLane(initLoop(FOUR_FOUR), 'amp', 'cutoff', 0.4)
     expect(addLane(from, 'amp', 'cutoff', 0.9)).toBe(from)
     expect(addLane(from, '', 'cutoff', 0.4)).toBe(from)
     expect(addLane(from, 'amp', '', 0.4)).toBe(from)
     expect(addLane(from, 'amp', 'level', NaN)).toBe(from)
     expect(addLane(from, 'amp', 'level', Infinity)).toBe(from)
     expect(addLane(from, 'amp', 'level', 0.4).lanes).toHaveLength(2)
-    let full = initLoop()
+    let full = initLoop(FOUR_FOUR)
     for (let at = 0; at < MAX_LANES; at++) {
       full = addLane(full, 'amp', `k${at}`, at / MAX_LANES)
     }
@@ -367,7 +390,7 @@ describe('a loop’s lanes', () => {
   })
 
   it('is itself where a lane is not there, or is not changed', () => {
-    const from = addLane(initLoop(), 'amp', 'cutoff', 0.4)
+    const from = addLane(initLoop(FOUR_FOUR), 'amp', 'cutoff', 0.4)
     expect(removeLane(from, 'amp', 'level')).toBe(from)
     expect(removeLane(from, 'voice', 'cutoff')).toBe(from)
     expect(editLane(from, 'amp', 'level', (each) => each)).toBe(from)
@@ -383,7 +406,7 @@ describe('a loop’s lanes', () => {
   })
 
   it('changes one lane at a time, and none of the loop beside it', () => {
-    const from = addLane(initLoop(), 'amp', 'cutoff', 0.4)
+    const from = addLane(initLoop(FOUR_FOUR), 'amp', 'cutoff', 0.4)
     expect(removeLane(from, 'amp', 'cutoff').lanes).toEqual([])
     const off = editLane(from, 'amp', 'cutoff', (each) =>
       setLaneOn(each, false)
@@ -422,19 +445,19 @@ describe('a loop’s lanes', () => {
   it('repeats a lane’s first bar as the loop grows, and keeps it as it shrinks', () => {
     const bar = Array.from({ length: BAR_STEPS }, (_, at) => at)
     const one = editLane(
-      addLane(initLoop(), 'amp', 'cutoff', 0),
+      addLane(initLoop(FOUR_FOUR), 'amp', 'cutoff', 0),
       'amp',
       'cutoff',
       (each) => setLaneValues(each, 0, bar)
     )
     expect(one.lanes[0]?.values).toEqual(bar)
-    const two = setBars(one, 2)
+    const two = setBars(one, 2, FOUR_FOUR)
     expect(two.lanes[0]?.values).toEqual([...bar, ...bar])
-    const back = setBars(two, 1)
+    const back = setBars(two, 1, FOUR_FOUR)
     expect(back.steps).toBe(BAR_STEPS)
     expect(back.lanes[0]?.values).toHaveLength(2 * BAR_STEPS)
     expect(back.lanes[0]?.values).toEqual([...bar, ...bar])
-    expect(setBars(one, 1)).toBe(one)
+    expect(setBars(one, 1, FOUR_FOUR)).toBe(one)
   })
 
   it('plays the lanes that are on, cut to the loop’s length', () => {
@@ -454,7 +477,7 @@ describe('a loop’s lanes', () => {
     const both = laneLoop([on, lane('amp', 'level', held(0.5), true)])
     expect(playedLanes(both)).toBe(both.lanes)
     expect(playedLanes(laneLoop([off]))).toEqual([])
-    expect(playedLanes(initLoop())).toBe(initLoop().lanes)
+    expect(playedLanes(initLoop(FOUR_FOUR))).toBe(initLoop(FOUR_FOUR).lanes)
   })
 
   it('keeps its lanes when its notes are cleared', () => {
@@ -471,6 +494,7 @@ describe('a song', () => {
     expect(initSong()).toEqual({
       tempo: 120,
       swing: 0.5,
+      meter: FOUR_FOUR,
       loops: {},
       off: {},
     })
@@ -483,11 +507,17 @@ describe('a song', () => {
       lanes: [],
     })
     expect(loopOf(initSong(), 't1')).toBe(loopOf(initSong(), 't2'))
+    const three = setMeter(initSong(), THREE_FOUR)
+    expect(loopOf(three, 't1').steps).toBe(12)
+    expect(loopOf(three, 't1')).toBe(loopOf(three, 't2'))
+    // A loop made in the meter: a bar of it
+    const put = editLoop(three, 't1', (from) => putNote(from, note(0)))
+    expect(loopOf(put, 't1').steps).toBe(12)
   })
 
   it('edits a track’s loop, the others’ as they were', () => {
     const one = editLoop(initSong(), 't1', (from) => putNote(from, note(0)))
-    const two = editLoop(one, 't2', (from) => setBars(from, 2))
+    const two = editLoop(one, 't2', (from) => setBars(from, 2, FOUR_FOUR))
     expect(loopOf(two, 't1')).toBe(loopOf(one, 't1'))
     expect(shape(loopOf(two, 't1'))).toEqual(['0:0:1'])
     expect(loopOf(two, 't2').steps).toBe(32)
@@ -503,7 +533,7 @@ describe('a song', () => {
 
   it('keeps a track’s later loops through an edit of its first', () => {
     const second: Loop = { steps: 32, notes: [note(3)], lanes: [] }
-    const song = { ...initSong(), loops: { t1: [initLoop(), second] } }
+    const song = { ...initSong(), loops: { t1: [initLoop(FOUR_FOUR), second] } }
     const edited = editLoop(song, 't1', (from) => putNote(from, note(0)))
     expect(edited.loops.t1?.[1]).toBe(second)
     expect(shape(loopOf(edited, 't1'))).toEqual(['0:0:1'])
@@ -524,6 +554,38 @@ describe('a song', () => {
     expect(setSwing(song, 0.2).swing).toBe(0.5)
     expect(setSwing(song, 1).swing).toBe(0.75)
     expect(setSwing(song, 0.5)).toBe(song)
+  })
+
+  it('keeps each loop’s bars in another meter, its notes where they were', () => {
+    let song = editLoop(initSong(), 't1', (from) =>
+      setBars(putNote(putNote(from, note(0)), note(20)), 2, FOUR_FOUR)
+    )
+    song = editLoop(song, 't1', (from) => addLane(from, 'amp', 'cutoff', 0.4))
+    song = editLoop(song, 't2', (from) => putNote(from, note(14)))
+    const three = setMeter(song, THREE_FOUR)
+    expect(three.meter).toEqual(THREE_FOUR)
+    const first = loopOf(three, 't1')
+    // Two bars of 12, the note on 20 still in; one of 12, 14 past its end
+    expect(first.steps).toBe(24)
+    expect(shape(first)).toEqual(['0:0:1', '20:0:1'])
+    expect(first.lanes[0]?.values).toHaveLength(32)
+    const second = loopOf(three, 't2')
+    expect(second.steps).toBe(12)
+    expect(playedNotes(second)).toEqual([])
+    // Back again: the note past the end plays as it did
+    const back = setMeter(three, FOUR_FOUR)
+    expect(loopOf(back, 't2').steps).toBe(16)
+    expect(playedNotes(loopOf(back, 't2'))).toEqual([note(14)])
+    expect(setMeter(three, { count: 3, unit: 4 })).toBe(three)
+    // A meter that is none is four-four
+    expect(setMeter(three, { count: 0, unit: 4 }).meter).toBe(FOUR_FOUR)
+  })
+
+  it('keeps as many bars as the meter holds', () => {
+    const song = editLoop(initSong(), 't1', (from) =>
+      setBars(from, 256, FOUR_FOUR)
+    )
+    expect(loopOf(setMeter(song, FIVE_FOUR), 't1').steps).toBe(204 * 20)
   })
 
   it('drops the loops of tracks no longer there', () => {
@@ -573,7 +635,11 @@ describe('a song kept', () => {
   it('is read back as it was', () => {
     let song = setSwing(setTempo(initSong(), 96), 0.6)
     song = editLoop(song, 't1', (from) =>
-      setBars(putNote(putNote(from, note(0, 60, 4, 0.5)), note(8, 64)), 2)
+      setBars(
+        putNote(putNote(from, note(0, 60, 4, 0.5)), note(8, 64)),
+        2,
+        FOUR_FOUR
+      )
     )
     song = editLoop(song, 't2', (from) => putNote(from, note(4, 3)))
     const kept = storage()
@@ -585,12 +651,29 @@ describe('a song kept', () => {
     expect(loadSong(kept)).toEqual(song)
   })
 
+  it('keeps its meter, its loops in bars of it', () => {
+    let song = setMeter(initSong(), SIX_EIGHT)
+    song = editLoop(song, 't1', (from) =>
+      setBars(putNote(from, note(18)), 2, SIX_EIGHT)
+    )
+    const kept = storage()
+    saveSong(kept, song)
+    expect(JSON.parse(kept.map.get(SONG_KEY) ?? '')).toMatchObject({
+      meter: { count: 6, unit: 8 },
+    })
+    expect(loadSong(kept)).toEqual(song)
+    // A length that is no whole bar of it: the bars nearest
+    const read = readSong({ meter: SIX_EIGHT, loops: { t1: [{ steps: 16 }] } })
+    expect(loopOf(read, 't1').steps).toBe(12)
+  })
+
   it('reads anything missing or out of range as its default', () => {
     expect(readSong(undefined)).toEqual(initSong())
     expect(readSong('song')).toEqual(initSong())
     expect(readSong({ tempo: 'fast', swing: 9, loops: [] })).toEqual({
       tempo: 120,
       swing: 0.75,
+      meter: FOUR_FOUR,
       loops: {},
       off: {},
     })
@@ -627,7 +710,7 @@ describe('a song kept', () => {
     let song = initSong()
     song = editLoop(song, 't1', (from) =>
       addLane(
-        setBars(addLane(from, 'amp', 'cutoff', 0.2), 2),
+        setBars(addLane(from, 'amp', 'cutoff', 0.2), 2, FOUR_FOUR),
         FADER,
         'level',
         0.6

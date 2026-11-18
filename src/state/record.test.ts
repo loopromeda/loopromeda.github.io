@@ -1,22 +1,24 @@
 import { describe, expect, it } from 'vitest'
+import { BAR_STEPS } from '../dsp/sequencer'
+import { FOUR_FOUR, maxBars, type Meter } from './meter'
 import { Recorder, type RecordHost } from './record'
-import {
-  BAR_STEPS,
-  MAX_BARS,
-  initLoop,
-  putNote,
-  setBars,
-  type Loop,
-  type Note,
-} from './song'
+import { initLoop, putNote, setBars, type Loop, type Note } from './song'
 
-/** Loops by track, each a bar unless given; and how often each was edited */
+/**
+ * Loops by track, each a bar unless given, in a meter (four-four unless
+ * set); and how often each was edited
+ */
 class Host implements RecordHost {
   readonly loops = new Map<string, Loop>()
   edits = 0
+  meterSet: Meter = FOUR_FOUR
 
   loopOf(track: string): Loop {
-    return this.loops.get(track) ?? initLoop()
+    return this.loops.get(track) ?? initLoop(this.meterSet)
+  }
+
+  meter(): Meter {
+    return this.meterSet
   }
 
   editLoop(track: string, edit: (loop: Loop) => Loop): void {
@@ -28,6 +30,9 @@ class Host implements RecordHost {
     return this.loopOf(track).notes
   }
 }
+
+/** The longest loop in four-four, in bars */
+const MAX_BARS = maxBars(FOUR_FOUR)
 
 const note = (step: number, key: number, length = 1, velocity = 1): Note => ({
   step,
@@ -63,7 +68,7 @@ describe('the recorder', () => {
 
   it('writes a kit’s pad for a step, and on the loop’s own step', () => {
     const host = new Host()
-    host.loops.set('t2', putNote(initLoop(), note(8, 1)))
+    host.loops.set('t2', putNote(initLoop(FOUR_FOUR), note(8, 1)))
     const recorder = new Recorder(host)
     recorder.start(16, 't2', 'overdub')
     for (let step = 16; step <= 20; step++) recorder.step(step)
@@ -126,7 +131,10 @@ describe('the recorder', () => {
 
   it('overdubs: what was there stays, a note on the same key in its place', () => {
     const host = new Host()
-    host.loops.set('t1', putNote(putNote(initLoop(), note(0, 60)), note(4, 64)))
+    host.loops.set(
+      't1',
+      putNote(putNote(initLoop(FOUR_FOUR), note(0, 60)), note(4, 64))
+    )
     const recorder = new Recorder(host)
     recorder.start(0, 't1', 'overdub')
     for (let step = 0; step <= 5; step++) recorder.step(step)
@@ -137,7 +145,7 @@ describe('the recorder', () => {
 
   it('replaces: empties the loop a step ahead, once round, keeping what is new', () => {
     const host = new Host()
-    let loop = initLoop()
+    let loop = initLoop(FOUR_FOUR)
     for (let step = 0; step < 16; step += 4)
       loop = putNote(loop, note(step, 36))
     host.loops.set('t2', loop)
@@ -165,7 +173,7 @@ describe('the recorder', () => {
 
   it('replaces from the step Play starts on, before it plays', () => {
     const host = new Host()
-    host.loops.set('t1', putNote(initLoop(), note(0, 60)))
+    host.loops.set('t1', putNote(initLoop(FOUR_FOUR), note(0, 60)))
     const recorder = new Recorder(host)
     recorder.start(0, 't1', 'replace')
     expect(host.notes('t1')).toEqual([])
@@ -176,8 +184,8 @@ describe('the recorder', () => {
 
   it('records into the track each note sounds on, replacing only one', () => {
     const host = new Host()
-    host.loops.set('t1', putNote(initLoop(), note(3, 60)))
-    host.loops.set('t2', putNote(initLoop(), note(3, 1)))
+    host.loops.set('t1', putNote(initLoop(FOUR_FOUR), note(3, 60)))
+    host.loops.set('t2', putNote(initLoop(FOUR_FOUR), note(3, 1)))
     const recorder = new Recorder(host)
     recorder.start(0, 't1', 'replace')
     for (let step = 0; step <= 4; step++) recorder.step(step)
@@ -207,6 +215,25 @@ describe('the recorder', () => {
     expect(host.notes('t1')).toEqual([note(35, 60)])
   })
 
+  it('grows and ends a loop in bars of the song’s meter', () => {
+    const host = new Host()
+    // Three-four: bars of 12
+    host.meterSet = { count: 3, unit: 4 }
+    const recorder = new Recorder(host)
+    const steps = () => host.loopOf('t1').steps
+    recorder.start(0, 't1', 'overdub')
+    expect(steps()).toBe(24)
+    for (let step = 0; step <= 12; step++) recorder.step(step)
+    expect(steps()).toBe(36)
+    recorder.noteOn(1, 't1', 60, 1, false, 13)
+    recorder.noteOff(1, 14)
+    for (let step = 13; step <= 37; step++) recorder.step(step)
+    // Stopped a little into bar 4: three bars
+    recorder.stop(38)
+    expect(steps()).toBe(36)
+    expect(host.notes('t1')).toEqual([note(13, 60)])
+  })
+
   it('keeps every note of a take grown, one held past its end cut there', () => {
     const host = new Host()
     const recorder = new Recorder(host)
@@ -229,7 +256,7 @@ describe('the recorder', () => {
 
   it('gives a loop of no notes its length back when nothing goes in', () => {
     const host = new Host()
-    host.loops.set('t1', setBars(initLoop(), 4))
+    host.loops.set('t1', setBars(initLoop(FOUR_FOUR), 4, FOUR_FOUR))
     const recorder = new Recorder(host)
     recorder.start(0, 't1', 'overdub')
     for (let step = 0; step <= 100; step++) recorder.step(step)

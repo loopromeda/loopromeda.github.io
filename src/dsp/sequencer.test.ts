@@ -6,7 +6,7 @@ import { ORNAMENT_DEFAULTS, type Ornament } from './ornament'
 import { SAW } from './oscillator'
 import { Strip } from './output'
 import {
-  COUNT_IN_STEPS,
+  BAR_STEPS,
   KitTarget,
   Lane,
   MAX_HELD,
@@ -364,11 +364,11 @@ describe('the count-in and the click', () => {
   it('counts a bar in, the lanes silent, then plays from the first step', () => {
     const { sequencer, tape, click, run } = clicked([[16, [note(0)]]])
     sequencer.play(true)
-    const fired = run(STEP * (COUNT_IN_STEPS + 2))
-    expect(fired.slice(0, 2)).toEqual([-COUNT_IN_STEPS, -COUNT_IN_STEPS + 1])
+    const fired = run(STEP * (BAR_STEPS + 2))
+    expect(fired.slice(0, 2)).toEqual([-BAR_STEPS, -BAR_STEPS + 1])
     expect(fired).toContain(0)
     // The first step a bar after play, where the count ends
-    expect(tape.ons()).toEqual([STEP * COUNT_IN_STEPS])
+    expect(tape.ons()).toEqual([STEP * BAR_STEPS])
     // Four beats counted in, the first higher; none after with the click off
     expect(click.beats).toEqual([
       { frame: 0, accent: true },
@@ -404,7 +404,64 @@ describe('the count-in and the click', () => {
     sequencer.play()
     run(STEP * 3)
     sequencer.play(true)
-    expect(run(STEP)).toEqual([-COUNT_IN_STEPS])
+    expect(run(STEP)).toEqual([-BAR_STEPS])
+  })
+  it('counts in a bar of the meter, and clicks its beats', () => {
+    // Three-four: a bar of 12, a beat of 4
+    const { sequencer, tape, click, run } = clicked([[16, [note(0)]]])
+    sequencer.setMeter(12, 4)
+    sequencer.clicking = true
+    sequencer.play(true)
+    const fired = run(STEP * (12 + 13))
+    expect(fired[0]).toBe(-12)
+    expect(tape.ons()).toEqual([STEP * 12])
+    const beats = (accent: boolean) =>
+      click.beats
+        .filter((beat) => beat.accent === accent)
+        .map((beat) => beat.frame / STEP)
+    // Counted in, then played: each bar's first higher
+    expect(beats(true)).toEqual([0, 12, 24])
+    expect(beats(false)).toEqual([4, 8, 16, 20])
+  })
+
+  it('clicks six-eight’s two beats, a dotted quarter each', () => {
+    const { sequencer, click, run } = clicked([[16, []]])
+    sequencer.setMeter(12, 6)
+    sequencer.clicking = true
+    sequencer.play()
+    run(STEP * 13)
+    expect(click.beats).toEqual([
+      { frame: 0, accent: true },
+      { frame: STEP * 6, accent: false },
+      { frame: STEP * 12, accent: true },
+    ])
+  })
+
+  it('takes four-four for a meter that is none', () => {
+    // Odd, not a share of the bar, past the longest loop, not a number
+    for (const [bar, beat] of [
+      [12, 3],
+      [12, 8],
+      [8192, 4],
+      [Number.NaN, 4],
+    ] as const) {
+      const { sequencer, click, run } = clicked([[16, []]])
+      sequencer.setMeter(12, 6)
+      sequencer.setMeter(bar, beat)
+      sequencer.clicking = true
+      sequencer.play()
+      run(STEP * 17)
+      expect(click.beats.map((each) => each.frame / STEP)).toEqual([
+        0, 4, 8, 12, 16,
+      ])
+      expect(click.beats.map((each) => each.accent)).toEqual([
+        true,
+        false,
+        false,
+        false,
+        true,
+      ])
+    }
   })
 })
 
@@ -420,10 +477,10 @@ describe('a beat to start on, and moving by beats', () => {
   it('counts a bar in before the bar it starts on', () => {
     const { sequencer, tape, run } = clicked([[32, [note(16, 2)]]])
     sequencer.play(true, 16)
-    const fired = run(STEP * (COUNT_IN_STEPS + 1))
-    expect(fired[0]).toBe(-COUNT_IN_STEPS)
+    const fired = run(STEP * (BAR_STEPS + 1))
+    expect(fired[0]).toBe(-BAR_STEPS)
     expect(fired.at(-1)).toBe(16)
-    expect(tape.ons(2)).toEqual([STEP * COUNT_IN_STEPS])
+    expect(tape.ons(2)).toEqual([STEP * BAR_STEPS])
   })
 
   it('moves by beats as it plays, in time', () => {
@@ -461,7 +518,7 @@ describe('a beat to start on, and moving by beats', () => {
     sequencer.play(true)
     run(STEP * 2)
     sequencer.seek(8)
-    const fired = run(STEP * (COUNT_IN_STEPS - 1))
+    const fired = run(STEP * (BAR_STEPS - 1))
     expect(fired.at(-2)).toBe(-1)
     expect(fired.at(-1)).toBe(32)
   })
@@ -471,6 +528,18 @@ describe('a beat to start on, and moving by beats', () => {
     sequencer.seek(1)
     sequencer.play()
     expect(run(STEP)).toEqual([0])
+  })
+  it('moves by the meter’s beats', () => {
+    const { sequencer, run } = clock([[48, []]])
+    // Six-eight: a beat of 6
+    sequencer.setMeter(12, 6)
+    sequencer.play(false, 12)
+    expect(run(STEP * 2)).toEqual([12, 13])
+    sequencer.seek(1)
+    expect(run(STEP)).toEqual([20])
+    // Back past the first: the first beat's same place
+    sequencer.seek(-9)
+    expect(run(STEP)).toEqual([3])
   })
 })
 

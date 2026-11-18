@@ -1,4 +1,3 @@
-import { BEAT_STEPS, COUNT_IN_STEPS } from '../dsp/sequencer'
 import {
   KIT_PADS,
   clampPadNote,
@@ -28,6 +27,7 @@ import {
   type Note,
   type Song,
 } from '../state/song'
+import { barSteps, beatSteps, sameMeter } from '../state/meter'
 import { Recorder, type RecordMode } from '../state/record'
 import { lanesPlayed, sameLanes, type PlayedLane } from '../state/lanes'
 import { knobChanges } from '../state/sound/diff'
@@ -289,15 +289,19 @@ export class Engine {
   readonly #reductions = new ReductionWatchers((message) => this.#post(message))
   /** Who shows the output's loudness, told each report */
   readonly #loudnessListeners = new Set<(report: LoudnessReport) => void>()
-  /** The session's song (src/state/song.ts): the tempo and the loops */
+  /**
+   * The session's song (src/state/song.ts): the tempo, the meter and the
+   * loops
+   */
   #song: Song = initSong()
   readonly #songListeners = new Set<() => void>()
   /**
-   * The tempo and swing, and each track's loop, as the worklet has them:
-   * a loop with the sound its lanes were found on (none, a kit's) and
-   * the lanes as they play
+   * The tempo, the swing and the meter's bar and beat (in steps), and
+   * each track's loop, as the worklet has them: a loop with the sound its
+   * lanes were found on (none, a kit's) and the lanes as they play
    */
-  #sentTempo: { tempo: number; swing: number } | undefined
+  #sentTempo:
+    { tempo: number; swing: number; bar: number; beat: number } | undefined
   readonly #sentLoops = new Map<
     string,
     {
@@ -313,7 +317,7 @@ export class Engine {
   /** Whether the sequencer plays, counting in from its Play */
   #playing = false
   #counted = false
-  /** The step Play starts from: a beat's first */
+  /** The step Play starts from: a beat's first, in the song's meter */
   #cue = 0
   /** The step the last Play started from: its count-in's steps before it */
   #from = 0
@@ -325,6 +329,7 @@ export class Engine {
     loopOf: (track) => loopOf(this.#song, track),
     editLoop: (track, edit) =>
       this.setSong(setLoopOn(editLoop(this.#song, track, edit), track, true)),
+    meter: () => this.#song.meter,
   })
   /** How recording meets the notes there: the device's setting */
   #recordMode: RecordMode = 'overdub'
@@ -559,7 +564,7 @@ export class Engine {
     this.#counted = countIn
     this.#from = from
     // Before the audio thread tells of a step: the count's, or none
-    this.#setStep(countIn ? -COUNT_IN_STEPS : -1)
+    this.#setStep(countIn ? -barSteps(this.#song.meter) : -1)
     if (this.#playing) return
     this.#playing = true
     for (const listener of this.#transportListeners) listener()
@@ -605,7 +610,7 @@ export class Engine {
       this.#post({ t: 'seek', beats })
       return
     }
-    this.#setCue(this.#cue + beats * BEAT_STEPS)
+    this.#setCue(this.#cue + beats * beatSteps(this.#song.meter))
   }
 
   /**
@@ -622,7 +627,8 @@ export class Engine {
   }
 
   #setCue(step: number): void {
-    const cue = Math.max(0, Math.floor(step / BEAT_STEPS) * BEAT_STEPS)
+    const beat = beatSteps(this.#song.meter)
+    const cue = Math.max(0, Math.floor(step / beat) * beat)
     if (cue === this.#cue) return
     this.#cue = cue
     for (const listener of this.#transportListeners) listener()
@@ -1081,13 +1087,16 @@ export class Engine {
    * Plays song instead (src/state/song.ts's edits, or read from
    * storage), with the loops of the tracks there are: the audio thread
    * gets the tempo and each loop that changed, whole, played from its
-   * next step on; listeners hear of it after
+   * next step on; listeners hear of it after. In another meter, Play
+   * starts from the beat the cue falls in.
    */
   setSong(song: Song): void {
     const fitted = fitSong(song, ids(this.#tracks))
     if (fitted === this.#song) return
+    const meterChanged = !sameMeter(fitted.meter, this.#song.meter)
     this.#song = fitted
     this.#syncSong()
+    if (meterChanged) this.#setCue(this.#cue)
     for (const listener of this.#songListeners) listener()
   }
 
@@ -1535,19 +1544,26 @@ export class Engine {
   }
 
   /**
-   * Brings the worklet's song up to date: the tempo and the swing if
-   * they moved, and each track's loop that is not the one last sent
-   * there, whole (the notes within its length and the lanes that play;
+   * Brings the worklet's song up to date: the tempo, the swing and the
+   * meter if they moved, and each track's loop that is not the one last
+   * sent there, whole (the notes within its length and the lanes that play;
    * none, put off), or whose lanes move other knobs now its sound
    * changed. Nothing before the worklet exists; start() catches it up.
    */
   #syncSong(): void {
     if (!this.#node) return
-    const { tempo, swing } = this.#song
+    const { tempo, swing, meter } = this.#song
+    const bar = barSteps(meter)
+    const beat = beatSteps(meter)
     const sent = this.#sentTempo
-    if (sent?.tempo !== tempo || sent.swing !== swing) {
-      this.#post({ t: 'tempo', tempo, swing })
-      this.#sentTempo = { tempo, swing }
+    if (
+      sent?.tempo !== tempo ||
+      sent.swing !== swing ||
+      sent.bar !== bar ||
+      sent.beat !== beat
+    ) {
+      this.#post({ t: 'tempo', tempo, swing, bar, beat })
+      this.#sentTempo = { tempo, swing, bar, beat }
     }
     for (const track of this.#tracks) {
       const { id } = track

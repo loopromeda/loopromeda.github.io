@@ -273,6 +273,7 @@ describe('sameSession', () => {
       song: {
         off: given.song.off,
         loops: given.song.loops,
+        meter: given.song.meter,
         swing: given.song.swing,
         tempo: given.song.tempo,
       },

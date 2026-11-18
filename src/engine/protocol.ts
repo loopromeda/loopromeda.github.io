@@ -181,8 +181,11 @@ export type ToWorklet =
    * sequencer plays, for the page to record it; or stop
    */
   | { t: 'record'; on: boolean }
-  /** Beats a minute, and the share of a pair of sixteenths the first takes */
-  | { t: 'tempo'; tempo: number; swing: number }
+  /**
+   * Beats a minute, the share of a pair of sixteenths the first takes,
+   * and the meter's bar and beat, in steps (src/state/meter.ts)
+   */
+  | { t: 'tempo'; tempo: number; swing: number; bar: number; beat: number }
   /**
    * The loop a track plays round (src/state/song.ts), whole: its length
    * in steps, the notes within it and the knob lanes it plays (none: its

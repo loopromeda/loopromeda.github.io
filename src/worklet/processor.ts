@@ -457,6 +457,7 @@ class SynthProcessor extends AudioWorkletProcessor {
         break
       case 'tempo':
         this.#sequencer.setTempo(message.tempo, message.swing)
+        this.#sequencer.setMeter(message.bar, message.beat)
         break
       case 'click':
         this.#sequencer.clicking = message.on
