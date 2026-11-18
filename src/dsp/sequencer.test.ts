@@ -360,6 +360,152 @@ function clicked(loops: readonly (readonly [number, readonly LaneNote[]])[]) {
   return { ...made, click, run }
 }
 
+describe('a loop launched', () => {
+  const grace = ORNAMENT_DEFAULTS.grace
+
+  it('comes in on the bar given, from its first step', () => {
+    const { sequencer, tapes, lanes, run } = clock([
+      [32, [note(0, 60), note(16, 61)]],
+      [16, [note(0, 1)]],
+    ])
+    sequencer.play()
+    run(STEP * 4)
+    expect(sequencer.nextBar).toBe(16)
+    const lane = lanes[0] as Lane
+    lane.launch(32, [note(0, 70), note(16, 71)], 16)
+    expect(lane.launching).toBe(16)
+    run(STEP * 60)
+    const tape = tapes[0] as Tape
+    expect(tape.ons(60)).toEqual([0])
+    expect(tape.ons(61)).toEqual([])
+    expect(tape.ons(70)).toEqual([16 * STEP, 48 * STEP])
+    expect(tape.ons(71)).toEqual([32 * STEP])
+    expect(lane.origin).toBe(16)
+    expect(lane.launching).toBeNaN()
+    // A lane not launched goes on as it was
+    expect((tapes[1] as Tape).ons(1)).toEqual(
+      [0, 16, 32, 48].map((n) => n * STEP)
+    )
+  })
+
+  it('plays its graces before the bar it comes in on', () => {
+    const { sequencer, tape, lanes, run } = clock([[16, []]])
+    sequencer.play()
+    run(STEP * 4)
+    ;(lanes[0] as Lane).launch(16, [note(0, 60, 2, 1, grace)], 16)
+    run(STEP * 14)
+    expect(tape.ons(59)).toEqual([STEP * 15.75])
+    expect(tape.ons(60)).toEqual([STEP * 16])
+  })
+
+  it('plays its first note launched as the bar comes, its grace gone by', () => {
+    const { sequencer, tape, lanes, run } = clock([
+      [16, [note(0, 50, 1, 1, grace)]],
+    ])
+    sequencer.play()
+    run(STEP * 16)
+    // The old loop's grace heard, its note not: the new one's in its place
+    expect(sequencer.nextBar).toBe(16)
+    ;(lanes[0] as Lane).launch(16, [note(0, 60, 1, 1, grace)], 16)
+    run(STEP * 2)
+    expect(tape.ons(49)).toEqual([STEP * 15.75])
+    expect(tape.ons(50)).toEqual([0])
+    expect(tape.ons(59)).toEqual([])
+    expect(tape.ons(60)).toEqual([STEP * 16])
+  })
+
+  it('lets the old loop’s notes sounding end where they were going to', () => {
+    const { sequencer, tape, lanes, run } = clock([
+      [16, [note(12, 60, 8), note(14, 62, 1, 1, ORNAMENT_DEFAULTS.trill)]],
+    ])
+    sequencer.play()
+    run(STEP * 4)
+    ;(lanes[0] as Lane).launch(16, [], 16)
+    run(STEP * 30)
+    expect(tape.ons(60)).toEqual([STEP * 12])
+    expect(tape.offs(60)).toEqual([STEP * 20])
+    // The trill's pitch moves no more once the loop came in
+    expect(tape.bends.every((bend) => bend.frame < STEP * 16)).toBe(true)
+  })
+
+  it('takes an edit as it waits, and plays on as it was when cancelled', () => {
+    const { sequencer, tape, lanes, run } = clock([[16, [note(0, 60)]]])
+    const lane = lanes[0] as Lane
+    sequencer.play()
+    run(STEP * 4)
+    lane.launch(16, [note(0, 70)], 16)
+    lane.setNext(16, [note(0, 72, 1, 1, grace)])
+    run(STEP * 28)
+    expect(tape.ons(70)).toEqual([])
+    expect(tape.ons(71)).toEqual([15.75, 31.75].map((n) => n * STEP))
+    expect(tape.ons(72)).toEqual([STEP * 16])
+    lane.launch(16, [note(0, 74, 1, 1, grace)], 48)
+    run(STEP * 16)
+    // A grace already heard as it was cancelled is let be
+    lane.cancel()
+    run(STEP * 4)
+    expect(tape.ons(73)).toEqual([STEP * 47.75])
+    expect(tape.ons(74)).toEqual([])
+    expect(tape.ons(72)).toEqual([16, 32, 48].map((n) => n * STEP))
+    expect(lane.launching).toBeNaN()
+    lane.setNext(16, [note(0, 76)])
+    run(STEP * 16)
+    expect(tape.ons(76)).toEqual([])
+  })
+
+  it('counts from the first step again stopped, or moved back before it', () => {
+    const { sequencer, tape, lanes, run } = clock([[32, [note(0, 60)]]])
+    const lane = lanes[0] as Lane
+    sequencer.play()
+    run(STEP * 4)
+    lane.launch(32, [note(0, 70)], 16)
+    run(STEP * 16)
+    expect(lane.origin).toBe(16)
+    // Back to the first beat: the loop's first step there, not its 17th
+    sequencer.seek(-Number.MAX_SAFE_INTEGER)
+    run(STEP)
+    expect(lane.origin).toBe(0)
+    expect(tape.ons(70)).toEqual([16 * STEP, 20 * STEP])
+    lane.launch(32, [note(0, 72)], 16)
+    sequencer.stop()
+    expect(lane.origin).toBe(0)
+    expect(lane.launching).toBeNaN()
+  })
+
+  it('comes in on the next bar’s first step, or the bar it starts on', () => {
+    const { sequencer, run } = clock([[16, []]])
+    sequencer.play(true)
+    expect(sequencer.nextBar).toBe(0)
+    run(STEP * 16)
+    expect(sequencer.nextBar).toBe(0)
+    run(STEP)
+    expect(sequencer.nextBar).toBe(16)
+    run(STEP * 15)
+    expect(sequencer.nextBar).toBe(16)
+    sequencer.play(false, 20)
+    expect(sequencer.nextBar).toBe(32)
+  })
+
+  it('comes in on a bar of the song’s meter', () => {
+    const { sequencer, tape, lanes, run } = clock([[12, [note(0, 60)]]])
+    // Three-four: a bar of 12 steps
+    sequencer.setMeter(12, 4)
+    sequencer.play()
+    run(STEP * 4)
+    expect(sequencer.nextBar).toBe(12)
+    ;(lanes[0] as Lane).launch(12, [note(0, 70)], sequencer.nextBar)
+    run(STEP * 20)
+    expect(tape.ons(60)).toEqual([0])
+    expect(tape.ons(70)).toEqual([12 * STEP])
+    sequencer.play(false, 20)
+    expect(sequencer.nextBar).toBe(24)
+    // Seven-eight: 14
+    sequencer.setMeter(14, 2)
+    sequencer.play(false, 16)
+    expect(sequencer.nextBar).toBe(28)
+  })
+})
+
 describe('the count-in and the click', () => {
   it('counts a bar in, the lanes silent, then plays from the first step', () => {
     const { sequencer, tape, click, run } = clicked([[16, [note(0)]]])

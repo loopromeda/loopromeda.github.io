@@ -197,7 +197,18 @@ export type ToWorklet =
       steps: number
       notes: readonly LoopNote[]
       lanes?: readonly LoopLane[]
+      /** The loop waiting to come in instead (launch): none, nothing */
+      next?: boolean
     }
+  /**
+   * Each track's loop given, in place of the one it plays, from the first
+   * step of the next bar (a scene launched while the song plays), every
+   * one from its first step there; the audio thread tells which step
+   * (launched). One waiting already waits no more.
+   */
+  | { t: 'launch'; id: number; loops: readonly LaunchedLoop[] }
+  /** The loops waiting to come in do not: those playing go on */
+  | { t: 'cancel' }
   /**
    * A track's note played on its own while the sequencer is stopped (its
    * step aside: now), its ornament's sounds too, a sixteenth at the tempo
@@ -302,6 +313,14 @@ export interface StepReport {
   readonly step: number
 }
 
+/** A track's loop as a launch gives it: as a 'loop' message's */
+export interface LaunchedLoop {
+  readonly track: string
+  readonly steps: number
+  readonly notes: readonly LoopNote[]
+  readonly lanes?: readonly LoopLane[]
+}
+
 /**
  * Where the sequencer stood as a note started or ended while recording:
  * the step last played and how far the next block starts into it (from
@@ -323,6 +342,8 @@ export type FromWorklet =
   | ({ t: 'load' } & LoadReport)
   | ({ t: 'glides' } & GlideReport)
   | ({ t: 'step' } & StepReport)
+  /** The loops launch id gave come in on step at: a bar's first */
+  | { t: 'launched'; id: number; at: number }
   | ({ t: 'stamp' } & StampReport)
   | ({ t: 'reduction' } & ReductionReport)
   | ({ t: 'loudness' } & LoudnessReport)

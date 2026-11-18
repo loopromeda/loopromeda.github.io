@@ -505,6 +505,8 @@ export class TrackKnobs implements LaneTarget {
   readonly #part: Part
   readonly #player: SoundPlayer | undefined
   #knobs: readonly LaneKnobAt[] = []
+  /** Those the lanes waiting to come in move (prepare), or none */
+  #next: readonly LaneKnobAt[] | undefined
 
   constructor(part: Part, player?: SoundPlayer) {
     this.#part = part
@@ -525,6 +527,19 @@ export class TrackKnobs implements LaneTarget {
   /** Hands lane l's value to knobs[l] instead: let those before go first */
   aim(knobs: readonly LaneKnobAt[]): void {
     this.#knobs = knobs.map(({ part, key }) => ({ part, key }))
+  }
+
+  /**
+   * Hands lane l's value to knobs[l] once the lanes waiting come in
+   * (land), none: as it does now. Allocates: for a message's handler.
+   */
+  prepare(knobs: readonly LaneKnobAt[] | undefined): void {
+    this.#next = knobs?.map(({ part, key }) => ({ part, key }))
+  }
+
+  land(): void {
+    if (this.#next) this.#knobs = this.#next
+    this.#next = undefined
   }
 
   set(lane: number, value: number): void {

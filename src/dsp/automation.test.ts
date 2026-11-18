@@ -113,3 +113,49 @@ describe('knob lanes', () => {
     expect(lanes.count).toBe(0)
   })
 })
+
+describe('knob lanes launched', () => {
+  it('come in on the step given, from their first step, the old let go', () => {
+    const { said, now, target } = listen()
+    let landed = 0
+    target.land = () => landed++
+    const lanes = new KnobLanes(target)
+    lanes.setLanes(4, [held([1, 2, 3, 4])])
+    lanes.update(1, 0)
+    lanes.launch(8, [held([10, 11, 12, 13, 14, 15, 16, 17])], 6)
+    lanes.setNext(8, [held([20, 21, 22, 23, 24, 25, 26, 27])])
+    lanes.update(5, 0)
+    expect(now.get(0)).toBe(2)
+    lanes.update(6, 0)
+    expect(landed).toBe(1)
+    expect(lanes.origin).toBe(6)
+    expect(said.slice(-2)).toEqual(['0 off', '0=20'])
+    lanes.update(15, 0)
+    // Step 15 is the new lanes' tenth: their second, round at 8
+    expect(now.get(0)).toBe(21)
+  })
+
+  it('wait no more when cancelled, and count from the first step rewound', () => {
+    const { now, target } = listen()
+    const lanes = new KnobLanes(target)
+    lanes.setLanes(4, [held([1, 2, 3, 4])])
+    lanes.launch(4, [held([9, 9, 9, 9])], 4)
+    lanes.cancel()
+    lanes.update(4, 0)
+    expect(now.get(0)).toBe(1)
+    lanes.setNext(4, [held([7, 7, 7, 7])])
+    lanes.update(8, 0)
+    expect(now.get(0)).toBe(1)
+    lanes.launch(4, [held([5, 6, 7, 8])], 10)
+    lanes.update(10, 0)
+    expect(now.get(0)).toBe(5)
+    // Back before it started: from the first step again
+    lanes.update(1, 0)
+    expect(lanes.origin).toBe(0)
+    expect(now.get(0)).toBe(6)
+    lanes.launch(4, [held([9, 9, 9, 9])], 20)
+    lanes.rewind()
+    lanes.update(20, 0)
+    expect(now.get(0)).toBe(5)
+  })
+})

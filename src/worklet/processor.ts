@@ -473,8 +473,15 @@ class SynthProcessor extends AudioWorkletProcessor {
       case 'loop': {
         const playing = this.#tracks.get(message.track)
         if (!playing) break
-        playing.lane.setLoop(message.steps, message.notes)
         const lanes = message.lanes ?? []
+        if (message.next) {
+          if (Number.isNaN(playing.lane.launching)) break
+          playing.lane.setNext(message.steps, message.notes)
+          playing.knobs.prepare(lanes)
+          playing.lanes.setNext(message.steps, lanes)
+          break
+        }
+        playing.lane.setLoop(message.steps, message.notes)
         // Knobs no lane moves now play their own values again; those
         // still moved take their new values as the next block starts
         if (!playing.knobs.aims(lanes)) {
@@ -484,6 +491,27 @@ class SynthProcessor extends AudioWorkletProcessor {
         playing.lanes.setLanes(message.steps, lanes)
         break
       }
+      case 'launch': {
+        const at = this.#sequencer.nextBar
+        for (const loop of message.loops) {
+          const playing = this.#tracks.get(loop.track)
+          if (!playing) continue
+          const lanes = loop.lanes ?? []
+          playing.lane.launch(loop.steps, loop.notes, at)
+          playing.knobs.prepare(lanes)
+          playing.lanes.launch(loop.steps, lanes, at)
+        }
+        const id = message.id
+        this.port.postMessage({ t: 'launched', id, at } satisfies FromWorklet)
+        break
+      }
+      case 'cancel':
+        for (const playing of this.#tracks.values()) {
+          playing.lane.cancel()
+          playing.knobs.prepare(undefined)
+          playing.lanes.cancel()
+        }
+        break
       case 'padNotes': {
         const playing = this.#tracks.get(message.track)
         if (playing?.kind !== 'kit') break
@@ -506,9 +534,18 @@ class SynthProcessor extends AudioWorkletProcessor {
     }
   }
 
-  /** Every knob a lane moved plays its own value again: the song stopped */
+  /**
+   * Every knob a lane moved plays its own value again, and the lanes
+   * count from the first step, none waiting: the song stopped
+   */
   #release(): void {
-    for (const lanes of this.#lanes) lanes.release()
+    for (const lanes of this.#lanes) {
+      lanes.release()
+      lanes.rewind()
+    }
+    for (const playing of this.#tracks.values()) {
+      playing.knobs.prepare(undefined)
+    }
   }
 
   /**

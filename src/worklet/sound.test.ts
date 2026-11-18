@@ -664,6 +664,27 @@ describe('SoundPlayer', () => {
     expect(fader(kit)).toEqual([0.5, 0])
   })
 
+  it('aims a track’s lanes waiting at their knobs as they come in', () => {
+    const part = new Part([
+      new Strip(new ChainSynth(SAMPLE_RATE), new EffectRack(SAMPLE_RATE)),
+    ])
+    const knobs = new TrackKnobs(part)
+    const level = [{ part: FADER, key: 'level' }]
+    const pan = [{ part: FADER, key: 'pan' }]
+    knobs.aim(level)
+    knobs.prepare(pan)
+    expect(knobs.aims(level)).toBe(true)
+    knobs.land()
+    expect(knobs.aims(pan)).toBe(true)
+    // None prepared, or the preparing taken back: as it was
+    knobs.land()
+    expect(knobs.aims(pan)).toBe(true)
+    knobs.prepare(level)
+    knobs.prepare(undefined)
+    knobs.land()
+    expect(knobs.aims(pan)).toBe(true)
+  })
+
   it('sets every kind of knob at once', () => {
     const before = busy()
     const after = TURNS.reduce((sound, [, turn]) => turn(sound), before)

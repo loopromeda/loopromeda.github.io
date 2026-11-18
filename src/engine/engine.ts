@@ -21,10 +21,12 @@ import {
   initSong,
   loopOf,
   loopOn,
+  pickScene,
   playedNotes,
   setLoopOn,
   type Loop,
   type Note,
+  type Scene,
   type Song,
 } from '../state/song'
 import { barSteps, beatSteps, sameMeter } from '../state/meter'
@@ -56,6 +58,7 @@ import {
   type EffectAt,
   type FromWorklet,
   type GlideReport,
+  type LaunchedLoop,
   type LoadReport,
   type LoudnessReport,
   type ToWorklet,
@@ -192,6 +195,17 @@ interface Sent {
   notes?: readonly KitPad[]
 }
 
+/**
+ * A track's loop as the worklet has it: with the sound its lanes were
+ * found on (none, a kit's) and the lanes as they play
+ */
+interface SentLoop {
+  readonly loop: Loop
+  readonly on: boolean
+  readonly sound: Sound | undefined
+  readonly lanes: readonly PlayedLane[]
+}
+
 /** Where a touch holds its note: a track, and of a kit the pad */
 interface Held {
   readonly track: string
@@ -223,11 +237,14 @@ const NO_NOTES: readonly number[] = []
  * structure changed; a kit's chain whole. The mix keeps a strip for each
  * track, by its place.
  *
- * And the session's song (src/state/song.ts): the tempo, the swing and
- * each track's loop, by the track's id, a track removed taking its own
- * away. The audio thread has the clock (src/dsp/sequencer.ts): it is
- * sent each loop whole as it changes, told to play and to stop, and
- * tells back each step as it passes.
+ * And the session's song (src/state/song.ts): the tempo, the swing,
+ * each track's loops, by the track's id, a track removed taking its own
+ * away, and the scenes that play them. The audio thread has the clock
+ * (src/dsp/sequencer.ts): it is sent the loop each track plays in the
+ * scene picked, whole as it changes, told to play and to stop, and
+ * tells back each step as it passes. A scene launched while it plays is
+ * sent as the loops waiting to come in on the next bar, and picked as
+ * they do.
  */
 export class Engine {
   #context: AudioContext | undefined
@@ -302,15 +319,17 @@ export class Engine {
    */
   #sentTempo:
     { tempo: number; swing: number; bar: number; beat: number } | undefined
-  readonly #sentLoops = new Map<
-    string,
-    {
-      loop: Loop
-      on: boolean
-      sound: Sound | undefined
-      lanes: readonly PlayedLane[]
-    }
-  >()
+  readonly #sentLoops = new Map<string, SentLoop>()
+  /**
+   * The scene launched while the song plays, to come in on the next bar:
+   * the scene, the launch's number, and the step it comes in on once the
+   * audio thread tells; and the loops sent for it, as #sentLoops are
+   */
+  #launch: { scene: Scene; id: number; at: number | undefined } | undefined
+  #launches = 0
+  readonly #sentNext = new Map<string, SentLoop>()
+  /** The step the loops playing started on: the first, or a scene's bar */
+  #origin = 0
   /** Whether the click sounds each beat, and Play counts a bar in */
   #click = false
   #countIn = false
@@ -331,6 +350,8 @@ export class Engine {
       this.setSong(setLoopOn(editLoop(this.#song, track, edit), track, true)),
     meter: () => this.#song.meter,
   })
+  /** A step of the song as the recorder counts it: from the loops' start */
+  #local = (step: number): number => step - this.#origin
   /** How recording meets the notes there: the device's setting */
   #recordMode: RecordMode = 'overdub'
   readonly #transportListeners = new Set<() => void>()
@@ -563,6 +584,7 @@ export class Engine {
     })
     this.#counted = countIn
     this.#from = from
+    this.#origin = 0
     // Before the audio thread tells of a step: the count's, or none
     this.#setStep(countIn ? -barSteps(this.#song.meter) : -1)
     if (this.#playing) return
@@ -663,7 +685,7 @@ export class Engine {
           : this.#step + 1
       this.#post({ t: 'record', on: true })
       // Replace empties the first step before the sequencer plays it
-      this.#recorder.start(next, track, this.#recordMode)
+      this.#recorder.start(this.#local(next), track, this.#recordMode)
       if (!this.#playing) this.play()
     } else {
       this.#endRecording()
@@ -674,7 +696,7 @@ export class Engine {
   #endRecording(): void {
     if (!this.#recorder.on) return
     this.#post({ t: 'record', on: false })
-    this.#recorder.stop(this.#step + 1)
+    this.#recorder.stop(this.#local(this.#step + 1))
   }
 
   /**
@@ -706,11 +728,124 @@ export class Engine {
 
   /**
    * The step the sequencer last played, counted from its start (a loop's
-   * own is it modulo the loop's length); -1 stopped. It leads what is
-   * heard by the output's latency.
+   * own is it less origin, modulo the loop's length); -1 stopped. It
+   * leads what is heard by the output's latency.
    */
   get step(): number {
     return this.#step
+  }
+
+  /**
+   * The step the loops playing started on: the first, or the bar the
+   * scene playing came in on (launchScene). It moves before the step
+   * listeners hear of the step it moved on.
+   */
+  get origin(): number {
+    return this.#origin
+  }
+
+  /**
+   * Where step (the sequencer's, as watchSteps tells it) stands in a loop
+   * of steps playing, counted from origin: -1 stopped or counting in
+   */
+  loopStep(step: number, steps: number): number {
+    if (step < 0 || !(steps > 0)) return -1
+    const at = (step - this.#origin) % steps
+    return at < 0 ? at + steps : at
+  }
+
+  /**
+   * The place of the scene launched, waiting to come in on the next bar;
+   * -1, none waits. Its listeners are the transport's.
+   */
+  get launching(): number {
+    const launch = this.#launch
+    return launch ? this.#song.scenes.indexOf(launch.scene) : -1
+  }
+
+  /** The step the scene launched comes in on: NaN, not yet known */
+  get launchAt(): number {
+    return this.#launch?.at ?? Number.NaN
+  }
+
+  /**
+   * Plays the scene at at: stopped, at once, picked (and edited); while
+   * the song plays, from the next bar, every track's loop from its first
+   * step there (the audio thread's clock), the song's scene picked as it
+   * comes in. Launching the scene playing takes back one waiting.
+   * Stopped with one waiting, it is picked.
+   */
+  launchScene(at: number): void {
+    const song = this.#song
+    const scene = song.scenes[at]
+    if (!scene) return
+    if (!this.#playing || !this.#node) {
+      this.#dropLaunch()
+      this.setSong(pickScene(song, at))
+      return
+    }
+    if (at === song.scene) {
+      if (!this.#launch) return
+      this.#post({ t: 'cancel' })
+      this.#dropLaunch()
+      for (const listener of this.#transportListeners) listener()
+      return
+    }
+    this.#launches++
+    this.#launch = { scene, id: this.#launches, at: undefined }
+    this.#sentNext.clear()
+    const loops = this.#nextLoops(pickScene(song, at), true)
+    this.#post({ t: 'launch', id: this.#launches, loops })
+    for (const listener of this.#transportListeners) listener()
+  }
+
+  /** Forgets the scene launched: none waits */
+  #dropLaunch(): void {
+    this.#launch = undefined
+    this.#sentNext.clear()
+  }
+
+  /**
+   * Each track's loop in song (a scene's, launched) not the one last
+   * sent for it, as #syncSong finds them, kept in #sentNext; all of them,
+   * given all
+   */
+  #nextLoops(song: Song, all = false): LaunchedLoop[] {
+    const loops: LaunchedLoop[] = []
+    const sentNext = this.#sentNext
+    for (const id of sentNext.keys()) {
+      if (!this.#tracks.some((track) => track.id === id)) sentNext.delete(id)
+    }
+    for (const track of this.#tracks) {
+      const { id } = track
+      const loop = loopOf(song, id)
+      const on = loopOn(song, id)
+      const sound = track.kind === 'synth' ? track.sound : undefined
+      const sent = sentNext.get(id)
+      const same = sent?.loop === loop && sent.on === on
+      if (!all && same && sent.sound === sound) continue
+      const lanes = on ? lanesPlayed(loop, sound) : []
+      sentNext.set(id, { loop, on, sound, lanes })
+      if (!all && same && sameLanes(sent.lanes, lanes)) continue
+      const notes = on ? playedNotes(loop) : []
+      loops.push({ track: id, steps: loop.steps, notes, lanes })
+    }
+    return loops
+  }
+
+  /**
+   * The scene launched comes in as step is played, if it is on or past
+   * the one it comes in on: the loops start there, and the song picks it
+   */
+  #land(step: number): void {
+    const launch = this.#launch
+    if (launch?.at === undefined || step < launch.at) return
+    const at = this.#song.scenes.indexOf(launch.scene)
+    this.#origin = launch.at
+    for (const [id, sent] of this.#sentNext) this.#sentLoops.set(id, sent)
+    this.#dropLaunch()
+    if (at >= 0) this.setSong(pickScene(this.#song, at))
+    for (const listener of this.#transportListeners) listener()
   }
 
   /**
@@ -729,6 +864,13 @@ export class Engine {
    */
   #stopped(): void {
     this.#endRecording()
+    this.#origin = 0
+    // A scene waiting to come in is the one picked: the audio thread let
+    // it go as it stopped, so its loops go there as the song's own
+    const launch = this.#launch
+    this.#dropLaunch()
+    const at = launch ? this.#song.scenes.indexOf(launch.scene) : -1
+    if (at >= 0) this.setSong(pickScene(this.#song, at))
     this.#setStep(-1)
     if (!this.#playing) return
     this.#playing = false
@@ -1088,7 +1230,8 @@ export class Engine {
    * storage), with the loops of the tracks there are: the audio thread
    * gets the tempo and each loop that changed, whole, played from its
    * next step on; listeners hear of it after. In another meter, Play
-   * starts from the beat the cue falls in.
+   * starts from the beat the cue falls in, and a scene waiting comes in
+   * on the next bar of it.
    */
   setSong(song: Song): void {
     const fitted = fitSong(song, ids(this.#tracks))
@@ -1096,7 +1239,17 @@ export class Engine {
     const meterChanged = !sameMeter(fitted.meter, this.#song.meter)
     this.#song = fitted
     this.#syncSong()
-    if (meterChanged) this.#setCue(this.#cue)
+    if (meterChanged) {
+      this.#setCue(this.#cue)
+      // Launched again after the tempo message: the audio thread's next
+      // bar is the new meter's by then
+      const waiting = this.launching
+      if (waiting >= 0) {
+        this.#post({ t: 'cancel' })
+        this.#dropLaunch()
+        this.launchScene(waiting)
+      }
+    }
     for (const listener of this.#songListeners) listener()
   }
 
@@ -1442,10 +1595,16 @@ export class Engine {
     } else if (message.t === 'step') {
       // One sent before a stop reached the audio thread is not shown
       if (!this.#playing) return
+      this.#land(message.step)
+      // Moved back before it (rewound): the loops count from the first
+      if (message.step >= 0 && message.step < this.#origin) this.#origin = 0
       this.#setStep(message.step)
-      this.#recorder.step(message.step)
+      this.#recorder.step(this.#local(message.step))
+    } else if (message.t === 'launched') {
+      if (this.#launch?.id === message.id) this.#launch.at = message.at
+      for (const listener of this.#transportListeners) listener()
     } else if (message.t === 'stamp') {
-      const at = this.#heard(message.at)
+      const at = this.#local(this.#heard(message.at))
       if (message.on) {
         const { id, track, key, velocity, kit } = message
         this.#recorder.noteOn(id, track, key, velocity, kit, at)
@@ -1470,6 +1629,7 @@ export class Engine {
     this.#sent.clear()
     this.#sentTempo = undefined
     this.#sentLoops.clear()
+    this.#dropLaunch()
   }
 
   /**
@@ -1587,6 +1747,20 @@ export class Engine {
       }
       const notes = on ? playedNotes(loop) : []
       this.#post({ t: 'loop', track: id, steps: loop.steps, notes, lanes })
+    }
+    // The scene waiting: its loops edited as they wait (one shared with
+    // the scene playing), or no longer there to come in
+    const launch = this.#launch
+    if (!launch) return
+    const at = this.#song.scenes.indexOf(launch.scene)
+    if (at < 0) {
+      this.#post({ t: 'cancel' })
+      this.#dropLaunch()
+      for (const listener of this.#transportListeners) listener()
+      return
+    }
+    for (const loop of this.#nextLoops(pickScene(this.#song, at))) {
+      this.#post({ t: 'loop', ...loop, next: true })
     }
   }
 

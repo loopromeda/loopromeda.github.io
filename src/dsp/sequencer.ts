@@ -254,33 +254,101 @@ function sameSounds(x: Sounds, a: number, y: Sounds, b: number): boolean {
 const NO_SOUNDS = soundsOf([], true)
 
 /**
+ * A loop as a lane plays it: its length, its notes by step (step s's are
+ * by[s] up to by[s + 1]), their sounds, and how many steps early the
+ * earliest sound is
+ */
+interface Tables {
+  readonly steps: number
+  readonly by: Uint32Array
+  readonly sounds: Sounds
+  readonly lead: number
+}
+
+/** Notes played round every steps steps, as a lane's tables */
+function tablesOf(
+  steps: number,
+  notes: readonly LaneNote[],
+  pitched: boolean
+): Tables {
+  const length = Math.max(0, Math.min(MAX_STEPS, Math.floor(steps) || 0))
+  const kept = notes
+    .filter(
+      (note) =>
+        Number.isInteger(note.step) &&
+        note.step >= 0 &&
+        note.step < length &&
+        Number.isInteger(note.key) &&
+        note.length >= 1
+    )
+    .sort((a, b) => a.step - b.step)
+  const by = new Uint32Array(length + 1)
+  for (const note of kept) by[note.step + 1] = (by[note.step + 1] as number) + 1
+  for (let s = 0; s < length; s++) {
+    by[s + 1] = (by[s + 1] as number) + (by[s] as number)
+  }
+  const sounds = soundsOf(kept, pitched)
+  let lead = 0
+  for (let n = 0; n < kept.length; n++) {
+    const early = -(sounds.t[sounds.first[n] as number] as number)
+    if (early > lead) lead = early
+  }
+  return {
+    steps: length,
+    by,
+    sounds,
+    lead: Math.min(MAX_LEAD, Math.ceil(lead)),
+  }
+}
+
+/** A loop of no steps: silence */
+const NO_LOOP = tablesOf(0, [], true)
+
+/** Step's place in a loop of steps steps that started on origin */
+function localStep(step: number, origin: number, steps: number): number {
+  const at = (step - origin) % steps
+  return at < 0 ? at + steps : at
+}
+
+/** What an active note's sounds are: the loop's, a trial's, the next's */
+const LOOP = 0
+const TRIAL = 1
+const NEXT = 2
+
+/**
  * One track's loop and the notes of it sounding. The loop plays round at
- * its own length, counted from the clock's first step, so loops of 16
- * and 32 steps stay in line. A note plays as its sounds (ornament.ts):
- * as each step fires, the sounds that fall within it are worked out, on
- * frames spread over the step's own length (a swung step's, longer or
- * shorter), with those of the notes a step or two on that start before
- * their own; what falls on the step's frame goes to the target at once,
- * the rest as advance reaches its frame. A note started is held until
- * its end; one held by another lets go as that starts the same key.
+ * its own length, counted from the step it started on (origin: the
+ * clock's first, or the bar a scene came in on), so loops of 16 and 32
+ * steps stay in line. Another loop may wait to come in on a step
+ * (launch), every lane's on the same: its notes that start before it
+ * are heard before it, and as it comes in the old loop's notes still
+ * sounding end where they were going to. A note plays as its sounds
+ * (ornament.ts): as each step fires, the sounds that fall within it are
+ * worked out, on frames spread over the step's own length (a swung
+ * step's, longer or shorter), with those of the notes a step or two on
+ * that start before their own; what falls on the step's frame goes to
+ * the target at once, the rest as advance reaches its frame. A note
+ * started is held until its end; one held by another lets go as that
+ * starts the same key.
  */
 export class Lane {
   readonly #target: Target
   readonly #pitched: boolean
-  #steps = 0
-  /** The loop's notes by step: step s's are by[s] up to by[s + 1] */
-  #by = new Uint32Array(1)
-  #sounds: Sounds = NO_SOUNDS
-  /** How many steps early the loop's earliest sound is */
-  #lead = 0
+  /** The loop playing */
+  #loop: Tables = NO_LOOP
+  /** The step it started on: its first step's */
+  #origin = 0
+  /** The loop waiting to come in, and the step it does */
+  #next: Tables | undefined
+  #nextAt = Number.NaN
   /** The note auditioned, as its sounds (audition) */
   #trial: Sounds = NO_SOUNDS
   /** The step the next fire is expected on: another is a jump */
   #expect = Number.NaN
   /**
-   * The notes being played out: each one's note (of the trial's sounds
-   * or the loop's), its step, the next of its sounds, and the key it
-   * holds and by what, 0 for none
+   * The notes being played out: each one's note (of the loop's sounds,
+   * the trial's or the loop waiting's), its step, the next of its
+   * sounds, and the key it holds and by what, 0 for none
    */
   readonly #activeNote = new Uint32Array(MAX_ACTIVE)
   readonly #activeTrial = new Uint8Array(MAX_ACTIVE)
@@ -334,6 +402,16 @@ export class Lane {
     return this.#active > 0 || this.#held > 0 || this.#pending > this.#head
   }
 
+  /** The step the loop playing started on, counted as the clock's are */
+  get origin(): number {
+    return this.#origin
+  }
+
+  /** The step the loop waiting comes in on: NaN, none waits */
+  get launching(): number {
+    return this.#nextAt
+  }
+
   /**
    * Plays notes round every steps steps instead (none: silence), from
    * the next step on; a note sounding ends where it was going to, and one
@@ -346,34 +424,13 @@ export class Lane {
    * message's handler, not process.
    */
   setLoop(steps: number, notes: readonly LaneNote[]): void {
-    const length = Math.max(0, Math.min(MAX_STEPS, Math.floor(steps) || 0))
-    const kept = notes
-      .filter(
-        (note) =>
-          Number.isInteger(note.step) &&
-          note.step >= 0 &&
-          note.step < length &&
-          Number.isInteger(note.key) &&
-          note.length >= 1
-      )
-      .sort((a, b) => a.step - b.step)
-    const by = new Uint32Array(length + 1)
-    for (const note of kept)
-      by[note.step + 1] = (by[note.step + 1] as number) + 1
-    for (let s = 0; s < length; s++) {
-      by[s + 1] = (by[s + 1] as number) + (by[s] as number)
-    }
-    const sounds = soundsOf(kept, this.#pitched)
-    let lead = 0
-    for (let n = 0; n < kept.length; n++) {
-      const early = -(sounds.t[sounds.first[n] as number] as number)
-      if (early > lead) lead = early
-    }
+    const loop = tablesOf(steps, notes, this.#pitched)
+    const { steps: length, by, sounds } = loop
     // The notes being played out, found again in the new loop, carried
     // on as they changed there, or let be
-    const was = this.#sounds
+    const was = this.#loop.sounds
     for (let e = 0; e < this.#active;) {
-      if (this.#activeTrial[e] === 1) {
+      if (this.#activeTrial[e] !== LOOP) {
         e++
         continue
       }
@@ -400,10 +457,58 @@ export class Lane {
         (sounds.first[found] as number)
       e++
     }
-    this.#steps = length
-    this.#by = by
-    this.#sounds = sounds
-    this.#lead = Math.min(MAX_LEAD, Math.ceil(lead))
+    this.#loop = loop
+  }
+
+  /**
+   * Plays notes round every steps steps from step at on (a bar's first:
+   * a scene coming in), in place of the loop playing, from its first
+   * step there; one waiting already waits no more. Its notes that start
+   * before at (a grace) are heard there. Allocates: for a message's
+   * handler.
+   */
+  launch(steps: number, notes: readonly LaneNote[], at: number): void {
+    this.#dropNext()
+    const from = Math.max(0, Math.floor(at) || 0)
+    // The loop playing's notes taken early from there on are not its
+    for (let e = 0; e < this.#active;) {
+      const ahead = (this.#activeStart[e] as number) >= from
+      if (this.#activeTrial[e] === LOOP && ahead) this.#retire(e)
+      else e++
+    }
+    this.#next = tablesOf(steps, notes, this.#pitched)
+    this.#nextAt = from
+    this.#readmit(this.#next, from, NEXT)
+  }
+
+  /**
+   * The loop waiting to come in is notes round every steps steps
+   * instead (its own edited as it waits); none waiting, nothing.
+   * Allocates: for a message's handler.
+   */
+  setNext(steps: number, notes: readonly LaneNote[]): void {
+    if (!this.#next) return
+    this.#dropNext()
+    this.#next = tablesOf(steps, notes, this.#pitched)
+    this.#readmit(this.#next, this.#nextAt, NEXT)
+  }
+
+  /** The loop waiting to come in does not: the one playing goes on */
+  cancel(): void {
+    if (!this.#next) return
+    this.#dropNext()
+    this.#readmit(this.#loop, this.#origin, LOOP)
+    this.#next = undefined
+    this.#nextAt = Number.NaN
+  }
+
+  /**
+   * The loop playing counts from the clock's first step again, and none
+   * waits: the song stopped
+   */
+  rewind(): void {
+    this.cancel()
+    this.#origin = 0
   }
 
   /**
@@ -413,7 +518,7 @@ export class Lane {
    */
   audition(note: LaneNote): void {
     for (let e = 0; e < this.#active;) {
-      if (this.#activeTrial[e] === 1) this.#retire(e)
+      if (this.#activeTrial[e] === TRIAL) this.#retire(e)
       else e++
     }
     const length = Math.max(1, Math.floor(note.length) || 1)
@@ -422,7 +527,7 @@ export class Lane {
     const early = -(this.#trial.t[0] as number)
     const e = this.#active++
     this.#activeNote[e] = 0
-    this.#activeTrial[e] = 1
+    this.#activeTrial[e] = TRIAL
     this.#activeStart[e] = Math.min(MAX_LEAD, Math.ceil(early))
     this.#activeNext[e] = 0
     this.#activeKey[e] = -1
@@ -444,7 +549,11 @@ export class Lane {
     this.#window = 0
     const jumped = step !== this.#expect
     this.#expect = step + 1
-    if (loop && this.#steps > 0) this.#admit(step, jumped)
+    if (this.#next && step >= this.#nextAt) this.#land()
+    // Moved back before it started (rewound), the loop counts from the
+    // first step again
+    if (step < this.#origin) this.#origin = 0
+    if (loop) this.#admit(step, jumped)
     this.#play(step, at, frames)
     this.#ends(step, at, frames)
     this.#send(at)
@@ -505,27 +614,95 @@ export class Lane {
     this.#expect = Number.NaN
   }
 
-  /** The notes of the loop whose first sound falls within step's */
+  /**
+   * The loop waiting comes in: the old one's notes being played out are
+   * let be (those sounding end as they were going to), the new one's
+   * already started go on as its own
+   */
+  #land(): void {
+    const next = this.#next as Tables
+    for (let e = 0; e < this.#active;) {
+      const trial = this.#activeTrial[e]
+      if (trial === LOOP) this.#retire(e)
+      else {
+        if (trial === NEXT) this.#activeTrial[e] = LOOP
+        e++
+      }
+    }
+    this.#loop = next
+    this.#origin = this.#nextAt
+    this.#next = undefined
+    this.#nextAt = Number.NaN
+  }
+
+  /** The notes of the loop waiting already started, let be */
+  #dropNext(): void {
+    for (let e = 0; e < this.#active;) {
+      if (this.#activeTrial[e] === NEXT) this.#retire(e)
+      else e++
+    }
+  }
+
+  /**
+   * The notes whose first sound falls within step's: of the loop
+   * playing, or from the step it comes in on, the loop waiting's
+   */
   #admit(step: number, jumped: boolean): void {
-    const sounds = this.#sounds
-    const steps = this.#steps
-    for (let a = 0; a <= this.#lead; a++) {
-      const local = (step + a) % steps
-      const end = this.#by[local + 1] as number
-      for (let n = this.#by[local] as number; n < end; n++) {
+    const next = this.#next
+    const loop = this.#loop
+    const most = next && next.lead > loop.lead ? next.lead : loop.lead
+    for (let a = 0; a <= most; a++) {
+      const at = step + a
+      const waiting = next !== undefined && at >= this.#nextAt
+      const { sounds, by, steps, lead } = waiting ? next : loop
+      if (steps === 0 || a > lead) continue
+      const local = localStep(at, waiting ? this.#nextAt : this.#origin, steps)
+      const end = by[local + 1] as number
+      for (let n = by[local] as number; n < end; n++) {
         const u = a + (sounds.t[sounds.first[n] as number] as number)
         // Later: a step on. Earlier: taken a step before, unless jumped
         if (u >= 1 || (u < 0 && !jumped)) continue
-        if (this.#active === MAX_ACTIVE) return
-        const e = this.#active++
-        this.#activeNote[e] = n
-        this.#activeTrial[e] = 0
-        this.#activeStart[e] = step + a
-        this.#activeNext[e] = sounds.first[n] as number
-        this.#activeKey[e] = -1
-        this.#activeHold[e] = 0
+        if (!this.#enter(n, waiting ? NEXT : LOOP, at, sounds)) return
       }
     }
+  }
+
+  /**
+   * The notes of loop (played from origin) on the steps from the one
+   * the loop waiting comes in on, whose first sounds fall before the
+   * next step: a step's look ahead took the other loop's there, so the
+   * next takes these as started already, their sounds gone by unheard
+   */
+  #readmit(loop: Tables, origin: number, kind: number): void {
+    const next = this.#expect
+    if (!(next >= 0) || loop.steps === 0) return
+    const { sounds, by, steps, lead } = loop
+    for (let a = 0; a <= lead; a++) {
+      const at = next + a
+      if (at < this.#nextAt) continue
+      const local = localStep(at, origin, steps)
+      const end = by[local + 1] as number
+      for (let n = by[local] as number; n < end; n++) {
+        if (a + (sounds.t[sounds.first[n] as number] as number) >= 0) continue
+        if (!this.#enter(n, kind, at, sounds)) return
+      }
+    }
+  }
+
+  /**
+   * Note n of sounds, of kind (LOOP, NEXT), on step start, is played
+   * out from its first sound: whether there was room
+   */
+  #enter(n: number, kind: number, start: number, sounds: Sounds): boolean {
+    if (this.#active === MAX_ACTIVE) return false
+    const e = this.#active++
+    this.#activeNote[e] = n
+    this.#activeTrial[e] = kind
+    this.#activeStart[e] = start
+    this.#activeNext[e] = sounds.first[n] as number
+    this.#activeKey[e] = -1
+    this.#activeHold[e] = 0
+    return true
   }
 
   /**
@@ -570,7 +747,13 @@ export class Lane {
   /** The sounds of the notes being played out that fall within step's */
   #play(step: number, at: number, frames: number): void {
     for (let e = 0; e < this.#active;) {
-      const sounds = this.#activeTrial[e] === 1 ? this.#trial : this.#sounds
+      const trial = this.#activeTrial[e]
+      const sounds =
+        trial === TRIAL
+          ? this.#trial
+          : trial === NEXT
+            ? (this.#next?.sounds ?? NO_SOUNDS)
+            : this.#loop.sounds
       const n = this.#activeNote[e] as number
       const start = this.#activeStart[e] as number
       const last = sounds.first[n + 1] as number
@@ -887,6 +1070,16 @@ export class Sequencer {
   }
 
   /**
+   * The first step of the bar after the step last fired, or of the one
+   * it starts on (counting in, or played from a beat within it): where a
+   * scene launched now comes in (Lane.launch), a bar the meter's
+   */
+  get nextBar(): number {
+    const next = this.#step
+    return Math.ceil(next / this.#bar) * this.#bar
+  }
+
+  /**
    * Steps lanes instead, each track's: one no longer among them is not
    * told to let go (its strips went with its track)
    */
@@ -966,11 +1159,17 @@ export class Sequencer {
     this.#trialUntil = 0
   }
 
-  /** Stops: every note sounding lets go at the start of the next block */
+  /**
+   * Stops: every note sounding lets go at the start of the next block,
+   * and each lane's loop counts from the first step again, none waiting
+   */
   stop(): void {
     this.#trial?.release(0)
     this.#trial = undefined
-    for (const lane of this.#lanes) lane.release(0)
+    for (const lane of this.#lanes) {
+      lane.release(0)
+      lane.rewind()
+    }
     this.#playing = false
     this.#step = 0
     this.#counting = 0
