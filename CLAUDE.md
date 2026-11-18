@@ -93,7 +93,8 @@ src/dsp/      pure DSP (oscillators, envelopes, LFOs, filters, voices);
               and the sounds it expands to;
               sequencer.ts the step sequencer's clock, counted in
               frames (from a beat given, moved by beats in time, a
-              bar counted in first, if asked), and a lane
+              bar counted in first, if asked; a bar and a beat the
+              song's meter's, in steps), and a lane
               for each track playing its loop into the track's
               strips, each note and each sound of its ornament on
               its own frame (a strip's queue of what starts, stops
@@ -164,14 +165,18 @@ src/state/    params.ts: the knob schema and the old parameters;
               sound) or a kit (its pads and chain), up to eight,
               named, added, moved and removed, and the track played
               and the pad picked, and the Seq tab's track kept;
-              song.ts: the session's song (the tempo, the swing and
-              each track's loops, by the track's id; a loop one to
-              256 bars of sixteenths and its notes, each a step, a
+              song.ts: the session's song (the tempo, the swing, the
+              meter and each track's loops, by the track's id; a loop
+              whole bars of sixteenths in the meter, up to 4096 steps,
+              and its notes, each a step, a
               key (a synth's note, a kit's pad), a length, a
               velocity, an ornament or none and whether it is a
               ghost, and its knob lanes,
               a knob's value at each
-              step), its edits, kept in localStorage; lanes.ts: the
+              step), its edits, kept in localStorage; meter.ts: the
+              song's meter (so many quarters or eighths to a bar: a
+              bar's steps, a beat's, the click's, as dotted quarters
+              in 6/8, the longest loop in it); lanes.ts: the
               knobs a track's lanes may move (its sound's, its
               fader's) and its lanes as they play; record.ts: what
               is played while recording written into a loop (on the
@@ -229,8 +234,11 @@ src/viz/      pure display math (scope trigger and decimation, envelope
               ridges in wheel.ts, the XY pad's pitch, Slide, lines and
               a glide's dot (where the note sounds, across and up) in
               xy.ts, where a popover stands by its
-              button in popover.ts, the step grid's cells, a note's
+              button in popover.ts, the step grid's cells (a bar's
+              steps across, as the song's meter makes it), a note's
               box and what a drag from a note makes of it in steps.ts,
+              where the song stands (bar, beat and step, or the
+              count-in's beats left, in its meter) in position.ts,
               a knob lane's strip (a stroke's steps, Fill's shapes,
               its outline) in laneStrip.ts, a note's ornament's
               marks on the grid (a grace's box on its row, a
@@ -246,7 +254,9 @@ src/ui/       React components; SoundEditor.tsx the sound as tiles
               with the kit its pads and its chain, or, switched to Seq,
               SeqView.tsx (a chip for each track, the one picked
               there apart from the one played, and its StepGrid.tsx:
-              its loop a bar at a time, the bar playing followed, a
+              its loop a bar at a time, each as many steps as the
+              song's meter makes it, its beats shaded, the bar
+              playing followed, a
               tap puts a note or takes it away, a drag from one sets
               how hard and how long, one held (or tapped with
               Ornaments on) is picked for its ornament, which
@@ -261,8 +271,9 @@ src/ui/       React components; SoundEditor.tsx the sound as tiles
               a Dropdown.tsx under 32rem wide, then
               the transport: Transport.tsx's Play, Record, the
               position and the tempo, whose popover holds the tempo,
-              the swing, the click, the count-in, Overdub or Replace
-              and each track's loop on or off;
+              the swing, the meter (2/4 to 5/4, 6/8 to 12/8), the
+              click, the count-in, Overdub or Replace and each
+              track's loop on or off;
               transportKeys.ts Space, the arrows and Home on it);
               the sound's Out and the
               mix's Master hold views of the output, as many side by

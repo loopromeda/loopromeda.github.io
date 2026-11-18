@@ -459,6 +459,53 @@ were approved ("좋아"). Built 2026-11-16.
 - Not built: a ghost recorded or played by hand (a take writes notes);
   a ghost's own velocity curve; a ghost on a kit muted.
 
+### K. Meter
+
+Asked for by ashon, 2026-11-17 ("시퀀서의 루프의 마디를 정할 때 박자도
+정의할 수 있을까?"). Proposed: one meter for the whole song, beside the
+tempo and the swing, the steps still sixteenths and the tempo still in
+quarters, of quarters or eighths, a loop keeping its bars when the meter
+changes; ashon agreed ("좋아 진행 해 보자"). Built 2026-11-17: the
+engine's part by Main, the screen's by UX.
+
+- **A song has a meter** (`src/state/meter.ts`, `Song.meter`): so many
+  quarters or eighths to a bar, a bar of 32 steps at most (8/4, 16/8:
+  the step grid shows a bar across); four-four unless set, and a song
+  kept before meters, or in one longer, reads as four-four. A bar is that
+  many sixteenths: 12 steps in 3/4 and 6/8, 20 in 5/4, 14 in 7/8.
+- **A beat** is a quarter in x/4; in x/8 a dotted quarter where the
+  eighths go in threes (6/8, 9/8, 12/8, 15/8), an eighth where they do
+  not (3/8, 5/8, 7/8). The click sounds each, the bar's first higher;
+  the count-in is a bar of them; the arrow keys move by them, and Play
+  starts on one (a cue between beats in a new meter goes back to the
+  beat it falls in).
+- **The tempo still counts quarters** (`src/dsp/clock.ts`), so a synced
+  delay or LFO keeps its time in any meter. A bar and a beat are always
+  an even number of steps, so the swing's pairs stay whole.
+- **A loop is whole bars of the meter** (`Loop.steps`), as many as 4096
+  steps hold (256 of 4/4, 341 of 3/4, 204 of 5/4). A meter set
+  (`setMeter`) keeps each loop's bars: two bars of 4/4 are 24 steps in
+  3/4, the notes kept on their steps, those past the new end not played
+  (back with the old meter, or the loop made longer), its lanes repeated
+  to the new length. A take into a loop of no notes grows by the meter's
+  bars and ends on its bar line nearest.
+- **On the audio thread** (`src/dsp/sequencer.ts`, `setMeter`): the
+  bar's steps and the beat's, sent with the tempo (`tempo` message); the
+  lanes play round at their own lengths as before.
+- **Picked** in the tempo popover (`src/ui/Transport.tsx`), under the
+  swing: 2/4, 3/4, 4/4 and 5/4, then 6/8, 7/8, 9/8 and 12/8 (24 steps
+  at most, so a phone's outer screen gives each column some 10 px), a
+  song's own beside them where it is in another; its beats a bar beside
+  the heading, and the meter after the tempo in the popover's note.
+- **Shown in it**: the step grid a bar of the meter across, each beat's
+  first shaded (`src/ui/StepGrid.tsx`, `src/viz/steps.ts`), the knob
+  lanes (`LaneStrip.tsx`) and the ornaments' marks with it, the bar's
+  lights a bar of the meter (the beats' larger), and the position as
+  bar, beat and step within the beat (`src/viz/position.ts`), the
+  count-in's beats left (−3 in 3/4, −2 in 6/8).
+- Not built: a loop's own meter (polymeter), a meter that changes within
+  the song, beats grouped unevenly (7/8 as 2+2+3), x/16.
+
 ## Projects
 
 Asked for by ashon, 2026-11-13 ("시퀀스와 현재 악기 구성을 전부 저장할
