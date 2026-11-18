@@ -1,8 +1,14 @@
 /**
  * The session's song (docs/plan/tracks-and-song.md, D): the tempo and the
- * swing, and each track's loops of notes, by the track's id, kept apart
+ * swing, each track's loops of notes, by the track's id, kept apart
  * from its sound (a preset loaded leaves the notes; a track removed takes
- * its own away), in a meter (K, meter.ts). A loop is whole bars of
+ * its own away), in a meter (K, meter.ts), and its scenes (E): each a
+ * name and the loop each track plays in it, by its place among the
+ * track's own (A, B, C), or none. A loop is shared by the scenes that
+ * play it: edited in one, it is edited in all, and a copy of it is a
+ * variation of its own (ashon, 2026-11-16). Loops are only ever added,
+ * so a place names the same loop for as long as the song lasts. The
+ * scene picked is the one played and edited. A loop is whole bars of
  * sixteenths in the song's meter, as many as MAX_STEPS holds; a note
  * stands on a step at a key (a kit's pad, a synth's note), for a length
  * in steps, at a velocity, with an ornament or none (I: a grace, a
@@ -10,11 +16,9 @@
  * may be a ghost (J: a synth's muted, a kit's pad hit softly); one at
  * most on a step and a key. A loop's knob
  * lanes (F) hold a knob's value at every step, each held to the next step
- * or gliding to it: a knob of the track's sound, or its fader. The first
- * loop of a track is the one played and edited for now: more, and scenes
- * and a timeline over them, come with E. A track's loop may be put off
- * (docs/plan/transport-and-midi.md, 1). Plain data, never changed in
- * place, kept in localStorage.
+ * or gliding to it: a knob of the track's sound, or its fader. A track's
+ * loop may be put off (docs/plan/transport-and-midi.md, 1). Plain data,
+ * never changed in place, kept in localStorage.
  */
 import { readOrnament, sameOrnament, type Ornament } from '../dsp/ornament'
 import {
@@ -48,6 +52,13 @@ export const FADER = 'fader'
 
 /** The most knob lanes a loop may carry */
 export const MAX_LANES = 8
+
+/** The longest a scene's name is */
+export const MAX_SCENE_NAME = 24
+
+/** The most scenes a song holds, and loops a track does */
+export const MAX_SCENES = 64
+export const MAX_LOOPS = 26
 
 /** One note of a loop */
 export interface Note {
@@ -100,6 +111,16 @@ export interface Loop {
   readonly lanes: readonly KnobLane[]
 }
 
+/** A scene: a name, and the loop each track plays in it */
+export interface Scene {
+  readonly name: string
+  /**
+   * The place of the loop each track plays, among its own, by the
+   * track's id; a track not here is silent in it
+   */
+  readonly loops: Readonly<Record<string, number>>
+}
+
 export interface Song {
   /** Beats a minute, MIN_TEMPO..MAX_TEMPO, to a hundredth */
   readonly tempo: number
@@ -117,6 +138,10 @@ export interface Song {
    * keys still sounding (a mute silences both)
    */
   readonly off: Readonly<Record<string, true>>
+  /** Its scenes, in their order: one at least */
+  readonly scenes: readonly Scene[]
+  /** The place of the scene picked: the one played, and edited */
+  readonly scene: number
 }
 
 /** A bar of nothing for each bar's steps, the same each time asked */
@@ -133,6 +158,11 @@ export function initLoop(meter: Meter): Loop {
   return empty
 }
 
+/** A scene's name where it has none, by its place: Scene 1 the first */
+export function sceneName(at: number): string {
+  return `Scene ${at + 1}`
+}
+
 export function initSong(): Song {
   return {
     tempo: DEFAULT_TEMPO,
@@ -140,12 +170,51 @@ export function initSong(): Song {
     meter: FOUR_FOUR,
     loops: {},
     off: {},
+    scenes: [{ name: sceneName(0), loops: {} }],
+    scene: 0,
   }
 }
 
-/** The loop a track plays: its first, or a bar of nothing */
+/** The scene picked */
+export function sceneOf(song: Song): Scene {
+  return song.scenes[song.scene] ?? (song.scenes[0] as Scene)
+}
+
+/**
+ * The place of the loop a track plays in a scene (the one picked unless
+ * given), among its own; none, silent there
+ */
+export function slotOf(
+  song: Song,
+  track: string,
+  scene = song.scene
+): number | undefined {
+  const at = song.scenes[scene]?.loops[track]
+  return at !== undefined && song.loops[track]?.[at] ? at : undefined
+}
+
+/**
+ * The loop a track plays in the scene picked, or a bar of nothing where
+ * it is silent there
+ */
 export function loopOf(song: Song, track: string): Loop {
-  return song.loops[track]?.[0] ?? initLoop(song.meter)
+  const at = slotOf(song, track)
+  const loop = at === undefined ? undefined : song.loops[track]?.[at]
+  return loop ?? initLoop(song.meter)
+}
+
+/** A loop's letter, by its place among its track's: A the first */
+export function loopLetter(at: number): string {
+  return String.fromCharCode(65 + Math.max(0, Math.min(25, at)))
+}
+
+/** The places of the scenes that play a track's loop at at */
+export function scenesPlaying(song: Song, track: string, at: number): number[] {
+  const playing: number[] = []
+  song.scenes.forEach((scene, s) => {
+    if (scene.loops[track] === at) playing.push(s)
+  })
+  return playing
 }
 
 /** Whether a track's loop plays: unless it was put off */
@@ -467,20 +536,166 @@ function cutLane(lane: KnobLane, steps: number): KnobLane {
     : { ...lane, values: lane.values.slice(0, steps) }
 }
 
-/** The song with the track's loop edited (its first; made if it has none) */
+/**
+ * The song with the loop the track plays in the scene picked edited,
+ * in every scene that plays it; where the track is silent there, the
+ * loop edit makes of a bar of nothing is added to its own, and played
+ * there
+ */
 export function editLoop(
   song: Song,
   track: string,
   edit: (loop: Loop) => Loop
 ): Song {
   const loops = song.loops[track] ?? []
-  const from = loops[0] ?? initLoop(song.meter)
+  const at = slotOf(song, track)
+  const from =
+    (at === undefined ? undefined : loops[at]) ?? initLoop(song.meter)
   const to = edit(from)
   if (to === from) return song
-  return {
-    ...song,
-    loops: { ...song.loops, [track]: [to, ...loops.slice(1)] },
+  if (at === undefined) return addLoop(song, track, to) ?? song
+  const edited = [...loops]
+  edited[at] = to
+  return { ...song, loops: { ...song.loops, [track]: edited } }
+}
+
+/**
+ * The song with loop added to the track's, at their end, and played in
+ * the scene picked; none where the track holds as many as it can
+ */
+function addLoop(song: Song, track: string, loop: Loop): Song | undefined {
+  const loops = song.loops[track] ?? []
+  if (loops.length >= MAX_LOOPS) return
+  const added = { ...song, loops: { ...song.loops, [track]: [...loops, loop] } }
+  return setPick(added, track, loops.length)
+}
+
+/**
+ * The song with a new loop for the track, as long as the one it plays in
+ * the scene picked and empty, played there in its place
+ */
+export function newLoop(song: Song, track: string): Song {
+  const { steps } = loopOf(song, track)
+  return addLoop(song, track, { steps, notes: [], lanes: [] }) ?? song
+}
+
+/**
+ * The song with a copy of the loop the track plays in the scene picked,
+ * played there in its place: a variation, the other scenes keeping the
+ * loop as it was. Silent there, the song as it is.
+ */
+export function copyLoop(song: Song, track: string): Song {
+  const at = slotOf(song, track)
+  const loop = at === undefined ? undefined : song.loops[track]?.[at]
+  if (!loop) return song
+  return addLoop(song, track, { ...loop }) ?? song
+}
+
+/**
+ * The song with the track playing its loop at at in a scene (the one
+ * picked unless given), or silent there (none, or a place it has no loop
+ * at)
+ */
+export function setPick(
+  song: Song,
+  track: string,
+  at: number | undefined,
+  scene = song.scene
+): Song {
+  const was = song.scenes[scene]
+  if (!was) return song
+  const kept = at !== undefined && song.loops[track]?.[at] ? at : undefined
+  if (was.loops[track] === kept) return song
+  const loops: Record<string, number> = { ...was.loops }
+  if (kept === undefined) delete loops[track]
+  else loops[track] = kept
+  const scenes = [...song.scenes]
+  scenes[scene] = { ...was, loops }
+  return { ...song, scenes }
+}
+
+/** The song with the scene at at picked: played, and edited */
+export function pickScene(song: Song, at: number): Song {
+  const scene = Math.max(0, Math.min(song.scenes.length - 1, Math.floor(at)))
+  return scene === song.scene || !Number.isFinite(at)
+    ? song
+    : { ...song, scene }
+}
+
+/**
+ * A name not taken by another of the scenes: name itself, or with the
+ * lowest number after it that is free ("Verse 2")
+ */
+function freeName(scenes: readonly Scene[], name: string): string {
+  const taken = new Set(scenes.map((scene) => scene.name))
+  if (!taken.has(name)) return name
+  const stem = name.replace(/ \d+$/, '')
+  for (let n = 2; ; n++) {
+    const each = `${stem} ${n}`.slice(-MAX_SCENE_NAME)
+    if (!taken.has(each)) return each
   }
+}
+
+/** The song with scene put after the one picked, and picked */
+function insertScene(song: Song, scene: Scene): Song {
+  if (song.scenes.length >= MAX_SCENES) return song
+  const at = song.scene + 1
+  const scenes = [...song.scenes]
+  scenes.splice(at, 0, scene)
+  return { ...song, scenes, scene: at }
+}
+
+/**
+ * The song with a new scene after the one picked, every track silent in
+ * it, named by its place (or the next free), and picked
+ */
+export function addScene(song: Song): Song {
+  const name = freeName(song.scenes, sceneName(song.scene + 1))
+  return insertScene(song, { name, loops: {} })
+}
+
+/**
+ * The song with the scene picked doubled: the copy after it, playing the
+ * same loops (shared, not copied), its name numbered, and picked
+ */
+export function duplicateScene(song: Song): Song {
+  const from = sceneOf(song)
+  return insertScene(song, { ...from, name: freeName(song.scenes, from.name) })
+}
+
+/**
+ * The song with the scene picked named name: trimmed, at most
+ * MAX_SCENE_NAME long; as it was for a name that is none
+ */
+export function renameScene(song: Song, name: string): Song {
+  const clean = name.trim().slice(0, MAX_SCENE_NAME)
+  const was = sceneOf(song)
+  if (!clean || clean === was.name) return song
+  const scenes = [...song.scenes]
+  scenes[song.scene] = { ...was, name: clean }
+  return { ...song, scenes }
+}
+
+/** The song with the scene picked moved by places, still picked */
+export function moveScene(song: Song, by: number): Song {
+  const from = song.scene
+  const to = Math.max(0, Math.min(song.scenes.length - 1, from + by))
+  if (to === from || !Number.isFinite(to)) return song
+  const scenes = [...song.scenes]
+  const [moved] = scenes.splice(from, 1)
+  scenes.splice(to, 0, moved as Scene)
+  return { ...song, scenes, scene: to }
+}
+
+/**
+ * The song without the scene picked, the one after it picked (the one
+ * before, where it was the last); its loops are kept. The only scene
+ * stays.
+ */
+export function removeScene(song: Song): Song {
+  if (song.scenes.length <= 1) return song
+  const scenes = song.scenes.filter((_, at) => at !== song.scene)
+  return { ...song, scenes, scene: Math.min(song.scene, scenes.length - 1) }
 }
 
 export function setTempo(song: Song, tempo: number): Song {
@@ -509,13 +724,19 @@ export function setMeter(song: Song, meter: Meter): Song {
   return { ...song, meter: clean, loops }
 }
 
-/** The song with the loops of the tracks there are, by their ids */
+/**
+ * The song with the loops of the tracks there are, by their ids, and its
+ * scenes playing those alone
+ */
 export function fitSong(song: Song, ids: readonly string[]): Song {
   const kept = Object.keys(song.loops).filter((id) => ids.includes(id))
   const on = Object.keys(song.off).filter((id) => ids.includes(id))
   const loopsKept = kept.length === Object.keys(song.loops).length
   const offKept = on.length === Object.keys(song.off).length
-  if (loopsKept && offKept) return song
+  const scenesKept = song.scenes.every((scene) =>
+    Object.keys(scene.loops).every((id) => ids.includes(id))
+  )
+  if (loopsKept && offKept && scenesKept) return song
   return {
     ...song,
     loops: loopsKept
@@ -524,13 +745,22 @@ export function fitSong(song: Song, ids: readonly string[]): Song {
     off: offKept
       ? song.off
       : Object.fromEntries(on.map((id) => [id, true as const])),
+    scenes: scenesKept
+      ? song.scenes
+      : song.scenes.map((scene) => ({
+          ...scene,
+          loops: Object.fromEntries(
+            Object.entries(scene.loops).filter(([id]) => ids.includes(id))
+          ),
+        })),
   }
 }
 
 /**
  * A song from what was kept: anything missing or out of range at its
  * default, a note that is none left out, two on a step and a key the
- * later
+ * later. A scene's loop that is none is silence there; a song kept
+ * before scenes is one, each track playing its first loop.
  */
 export function readSong(value: unknown): Song {
   const given = record(value)
@@ -539,19 +769,41 @@ export function readSong(value: unknown): Song {
   const loops: Record<string, readonly Loop[]> = {}
   for (const [id, kept] of Object.entries(record(given.loops))) {
     if (!Array.isArray(kept)) continue
-    const read = kept.map((each) => readLoop(each, meter))
+    const read = kept.slice(0, MAX_LOOPS).map((each) => readLoop(each, meter))
     if (read.length > 0) loops[id] = read
   }
   const off: Record<string, true> = {}
   for (const [id, value] of Object.entries(record(given.off))) {
     if (value === true) off[id] = true
   }
+  const scenes: Scene[] = []
+  const kept = Array.isArray(given.scenes) ? given.scenes : []
+  for (const each of kept.slice(0, MAX_SCENES)) {
+    const scene = record(each)
+    const picks: Record<string, number> = {}
+    for (const [id, at] of Object.entries(record(scene.loops))) {
+      if (typeof at === 'number' && Number.isInteger(at) && loops[id]?.[at]) {
+        picks[id] = at
+      }
+    }
+    const name = text(scene.name).trim().slice(0, MAX_SCENE_NAME)
+    scenes.push({ name: name || sceneName(scenes.length), loops: picks })
+  }
+  if (scenes.length === 0) {
+    const first = Object.fromEntries(Object.keys(loops).map((id) => [id, 0]))
+    scenes.push({ name: sceneName(0), loops: first })
+  }
+  const picked = number(given.scene, 0)
   return {
     tempo: cleanTempo(given.tempo),
     swing: cleanSwing(given.swing),
     meter,
     loops,
     off,
+    scenes,
+    scene: Number.isInteger(picked)
+      ? Math.max(0, Math.min(scenes.length - 1, picked))
+      : 0,
   }
 }
 

@@ -5,9 +5,14 @@ import {
   FADER,
   MAX_LANES,
   SONG_KEY,
+  MAX_LOOPS,
+  MAX_SCENES,
   addLane,
+  addScene,
   barsOf,
   clearLoop,
+  copyLoop,
+  duplicateScene,
   editLane,
   editLoop,
   fitSong,
@@ -15,8 +20,18 @@ import {
   initSong,
   laneAt,
   loadSong,
+  loopLetter,
   loopOf,
   loopOn,
+  moveScene,
+  newLoop,
+  pickScene,
+  removeScene,
+  renameScene,
+  sceneOf,
+  scenesPlaying,
+  setPick,
+  slotOf,
   noteAt,
   noteOver,
   playedLanes,
@@ -490,13 +505,15 @@ describe('a loop’s lanes', () => {
 })
 
 describe('a song', () => {
-  it('starts at 120, even, with no loops', () => {
+  it('starts at 120, even, with no loops, in a scene of none', () => {
     expect(initSong()).toEqual({
       tempo: 120,
       swing: 0.5,
       meter: FOUR_FOUR,
       loops: {},
       off: {},
+      scenes: [{ name: 'Scene 1', loops: {} }],
+      scene: 0,
     })
   })
 
@@ -531,12 +548,17 @@ describe('a song', () => {
     expect(editLoop(song, 't1', (from) => removeNote(from, 9, 9))).toBe(song)
   })
 
-  it('keeps a track’s later loops through an edit of its first', () => {
+  it('keeps a track’s other loops through an edit of the one it plays', () => {
     const second: Loop = { steps: 32, notes: [note(3)], lanes: [] }
-    const song = { ...initSong(), loops: { t1: [initLoop(FOUR_FOUR), second] } }
+    const song = {
+      ...initSong(),
+      loops: { t1: [initLoop(FOUR_FOUR), second] },
+      scenes: [{ name: 'Scene 1', loops: { t1: 0 } }],
+    }
     const edited = editLoop(song, 't1', (from) => putNote(from, note(0)))
     expect(edited.loops.t1?.[1]).toBe(second)
     expect(shape(loopOf(edited, 't1'))).toEqual(['0:0:1'])
+    expect(edited.scenes).toBe(song.scenes)
   })
 
   it('holds its tempo and its swing within their ranges', () => {
@@ -588,14 +610,19 @@ describe('a song', () => {
     expect(loopOf(setMeter(song, FIVE_FOUR), 't1').steps).toBe(204 * 20)
   })
 
-  it('drops the loops of tracks no longer there', () => {
+  it('drops the loops of tracks no longer there, and their scenes’ picks', () => {
     let song = initSong()
     for (const id of ['t1', 't2', 't3']) {
       song = editLoop(song, id, (from) => putNote(from, note(0)))
     }
+    song = duplicateScene(song)
     const fitted = fitSong(song, ['t3', 't1', 't9'])
     expect(Object.keys(fitted.loops).sort()).toEqual(['t1', 't3'])
     expect(fitted.loops.t1).toBe(song.loops.t1)
+    expect(fitted.scenes.map((scene) => scene.loops)).toEqual([
+      { t1: 0, t3: 0 },
+      { t1: 0, t3: 0 },
+    ])
     expect(fitSong(fitted, ['t1', 't3'])).toBe(fitted)
     expect(fitSong(initSong(), [])).toEqual(initSong())
   })
@@ -619,6 +646,170 @@ describe('a song', () => {
     expect(fitted.off).toEqual({ t2: true })
     expect(fitted.loops).toBe(song.loops)
     expect(fitSong(fitted, ['t2'])).toBe(fitted)
+  })
+})
+
+describe('a song’s scenes', () => {
+  /** A song of t1 playing A (a note on 0), and of t2 playing A (on 4) */
+  const two = () =>
+    editLoop(
+      editLoop(initSong(), 't1', (from) => putNote(from, note(0))),
+      't2',
+      (from) => putNote(from, note(4))
+    )
+
+  it('plays a track’s loop in the scene picked, edited there', () => {
+    const song = two()
+    expect(song.loops.t1).toHaveLength(1)
+    expect(sceneOf(song).loops).toEqual({ t1: 0, t2: 0 })
+    expect(slotOf(song, 't1')).toBe(0)
+    expect(slotOf(song, 't9')).toBeUndefined()
+  })
+
+  it('shares a loop between the scenes that play it', () => {
+    const song = duplicateScene(two())
+    expect(song.scene).toBe(1)
+    expect(sceneOf(song).loops).toEqual({ t1: 0, t2: 0 })
+    const edited = editLoop(song, 't1', (from) => putNote(from, note(8)))
+    expect(edited.loops.t1).toHaveLength(1)
+    expect(shape(loopOf(pickScene(edited, 0), 't1'))).toEqual([
+      '0:0:1',
+      '8:0:1',
+    ])
+    expect(scenesPlaying(edited, 't1', 0)).toEqual([0, 1])
+  })
+
+  it('makes a variation of a copy, the other scenes keeping the loop', () => {
+    const song = copyLoop(duplicateScene(two()), 't1')
+    expect(song.loops.t1).toHaveLength(2)
+    expect(sceneOf(song).loops).toEqual({ t1: 1, t2: 0 })
+    const edited = editLoop(song, 't1', (from) => putNote(from, note(8)))
+    expect(shape(loopOf(edited, 't1'))).toEqual(['0:0:1', '8:0:1'])
+    expect(shape(loopOf(pickScene(edited, 0), 't1'))).toEqual(['0:0:1'])
+    expect(scenesPlaying(edited, 't1', 0)).toEqual([0])
+    expect(scenesPlaying(edited, 't1', 1)).toEqual([1])
+    expect(copyLoop(song, 't9')).toBe(song)
+  })
+
+  it('starts a new loop as long as the one it takes the place of', () => {
+    let song = editLoop(two(), 't1', (from) => setBars(from, 2, FOUR_FOUR))
+    song = newLoop(song, 't1')
+    expect(slotOf(song, 't1')).toBe(1)
+    expect(loopOf(song, 't1')).toEqual({ steps: 32, notes: [], lanes: [] })
+    expect(loopOf(newLoop(initSong(), 't9'), 't9').steps).toBe(16)
+    // A bar of the song's meter, where the track is silent
+    const three = setMeter(initSong(), THREE_FOUR)
+    expect(loopOf(newLoop(three, 't9'), 't9').steps).toBe(12)
+  })
+
+  it('is silent for a track it plays nothing of, an edit there a new loop', () => {
+    const song = addScene(two())
+    expect(sceneOf(song)).toEqual({ name: 'Scene 2', loops: {} })
+    expect(loopOf(song, 't1')).toEqual(initLoop(FOUR_FOUR))
+    expect(editLoop(song, 't1', (from) => from)).toBe(song)
+    const edited = editLoop(song, 't1', (from) => putNote(from, note(2)))
+    expect(edited.loops.t1).toHaveLength(2)
+    expect(sceneOf(edited).loops).toEqual({ t1: 1 })
+    expect(shape(loopOf(pickScene(edited, 0), 't1'))).toEqual(['0:0:1'])
+  })
+
+  it('picks a track’s loop, or silence, and no loop that is not there', () => {
+    const song = copyLoop(two(), 't1')
+    const back = setPick(song, 't1', 0)
+    expect(sceneOf(back).loops).toEqual({ t1: 0, t2: 0 })
+    expect(setPick(back, 't1', 0)).toBe(back)
+    const silent = setPick(back, 't2', undefined)
+    expect(sceneOf(silent).loops).toEqual({ t1: 0 })
+    expect(slotOf(silent, 't2')).toBeUndefined()
+    expect(sceneOf(setPick(back, 't1', 7)).loops).toEqual({ t2: 0 })
+    expect(setPick(back, 't1', 1, 9)).toBe(back)
+    // In another scene than the one picked
+    const other = setPick(addScene(back), 't1', 1, 0)
+    expect(other.scenes[0]?.loops).toEqual({ t1: 1, t2: 0 })
+    expect(sceneOf(other).loops).toEqual({})
+  })
+
+  it('adds and doubles a scene after the one picked, named free', () => {
+    let song = addScene(addScene(initSong()))
+    expect(song.scenes.map((scene) => scene.name)).toEqual([
+      'Scene 1',
+      'Scene 2',
+      'Scene 3',
+    ])
+    song = addScene(pickScene(song, 0))
+    expect(song.scene).toBe(1)
+    expect(song.scenes.map((scene) => scene.name)).toEqual([
+      'Scene 1',
+      'Scene 4',
+      'Scene 2',
+      'Scene 3',
+    ])
+    const verse = renameScene(song, 'Verse')
+    const doubled = duplicateScene(duplicateScene(verse))
+    expect(doubled.scenes.map((scene) => scene.name).slice(1, 4)).toEqual([
+      'Verse',
+      'Verse 2',
+      'Verse 3',
+    ])
+  })
+
+  it('holds no more scenes than it can, nor loops for a track', () => {
+    let song = initSong()
+    for (let n = 0; n < MAX_SCENES + 4; n++) song = addScene(song)
+    expect(song.scenes).toHaveLength(MAX_SCENES)
+    expect(addScene(song)).toBe(song)
+    let loops = two()
+    for (let n = 0; n < MAX_LOOPS + 4; n++) loops = copyLoop(loops, 't1')
+    expect(loops.loops.t1).toHaveLength(MAX_LOOPS)
+    expect(newLoop(loops, 't1')).toBe(loops)
+  })
+
+  it('is renamed, trimmed and cut short, and not to nothing', () => {
+    const song = initSong()
+    expect(sceneOf(renameScene(song, '  Chorus ')).name).toBe('Chorus')
+    expect(sceneOf(renameScene(song, 'x'.repeat(40))).name).toHaveLength(24)
+    expect(renameScene(song, '   ')).toBe(song)
+    expect(renameScene(song, 'Scene 1')).toBe(song)
+  })
+
+  it('is moved, still picked, and kept within the scenes', () => {
+    const song = renameScene(addScene(addScene(initSong())), 'Last')
+    const first = moveScene(song, -5)
+    expect(first.scene).toBe(0)
+    expect(first.scenes.map((scene) => scene.name)).toEqual([
+      'Last',
+      'Scene 1',
+      'Scene 2',
+    ])
+    expect(moveScene(first, -1)).toBe(first)
+    expect(moveScene(first, 1).scenes[1]?.name).toBe('Last')
+  })
+
+  it('is removed, its loops kept, the next picked; the last one stays', () => {
+    let song = copyLoop(duplicateScene(two()), 't1')
+    song = removeScene(song)
+    expect(song.scenes).toHaveLength(1)
+    expect(song.scene).toBe(0)
+    expect(song.loops.t1).toHaveLength(2)
+    expect(removeScene(song)).toBe(song)
+    const middle = removeScene(pickScene(addScene(addScene(song)), 1))
+    expect(middle.scenes.map((scene) => scene.name)).toEqual([
+      'Scene 1',
+      'Scene 3',
+    ])
+    expect(middle.scene).toBe(1)
+  })
+
+  it('picks a scene within those there are', () => {
+    const song = addScene(initSong())
+    expect(pickScene(song, 0).scene).toBe(0)
+    expect(pickScene(song, 9).scene).toBe(1)
+    expect(pickScene(song, 1)).toBe(song)
+    expect(pickScene(song, NaN)).toBe(song)
+  })
+
+  it('letters a track’s loops', () => {
+    expect([0, 1, 25].map(loopLetter)).toEqual(['A', 'B', 'Z'])
   })
 })
 
@@ -667,15 +858,60 @@ describe('a song kept', () => {
     expect(loopOf(read, 't1').steps).toBe(12)
   })
 
+  it('keeps its scenes and the one picked', () => {
+    let song = editLoop(initSong(), 't1', (from) => putNote(from, note(0)))
+    song = renameScene(copyLoop(duplicateScene(song), 't1'), 'Chorus')
+    song = setPick(addScene(song), 't1', 0)
+    expect(readSong(JSON.parse(JSON.stringify(song)))).toEqual(song)
+  })
+
+  it('reads a song kept before scenes as one, each track’s first loop', () => {
+    const second = { steps: 16, notes: [note(2)], lanes: [] }
+    const read = readSong({
+      loops: { t1: [{ steps: 16, notes: [note(0)] }, second], t2: [{}] },
+    })
+    expect(read.scenes).toEqual([{ name: 'Scene 1', loops: { t1: 0, t2: 0 } }])
+    expect(read.scene).toBe(0)
+    expect(shape(loopOf(read, 't1'))).toEqual(['0:0:1'])
+  })
+
+  it('reads a scene’s pick that is none as silence there', () => {
+    const read = readSong({
+      loops: { t1: [{ steps: 16 }, { steps: 16 }] },
+      scenes: [
+        { name: ' Verse ', loops: { t1: 1, t2: 0, t3: 'a' } },
+        { loops: { t1: 4 } },
+        { name: 9, loops: { t1: 0.5 } },
+        'scene',
+      ],
+      scene: 7,
+    })
+    expect(read.scenes).toEqual([
+      { name: 'Verse', loops: { t1: 1 } },
+      { name: 'Scene 2', loops: {} },
+      { name: 'Scene 3', loops: {} },
+      { name: 'Scene 4', loops: {} },
+    ])
+    expect(read.scene).toBe(3)
+    expect(readSong({ scenes: [], scene: 1.5 }).scene).toBe(0)
+    expect(readSong({ scenes: [] }).scenes).toHaveLength(1)
+  })
+
+  it('reads no more scenes, nor loops for a track, than it holds', () => {
+    const read = readSong({
+      loops: { t1: Array.from({ length: MAX_LOOPS + 3 }, () => ({})) },
+      scenes: Array.from({ length: MAX_SCENES + 3 }, () => ({})),
+    })
+    expect(read.loops.t1).toHaveLength(MAX_LOOPS)
+    expect(read.scenes).toHaveLength(MAX_SCENES)
+  })
+
   it('reads anything missing or out of range as its default', () => {
     expect(readSong(undefined)).toEqual(initSong())
     expect(readSong('song')).toEqual(initSong())
     expect(readSong({ tempo: 'fast', swing: 9, loops: [] })).toEqual({
-      tempo: 120,
+      ...initSong(),
       swing: 0.75,
-      meter: FOUR_FOUR,
-      loops: {},
-      off: {},
     })
     const read = readSong({
       tempo: 90,
