@@ -77,6 +77,13 @@ describe('FACTORY_PRESETS', () => {
     for (const name of names) expect(cleanName(name)).toBe(name)
   })
 
+  it("lists each category together, in the categories' order", () => {
+    const order = FACTORY_PRESETS.map((preset) =>
+      PRESET_CATEGORIES.indexOf(preset.category)
+    )
+    expect(order).toEqual([...order].sort((a, b) => a - b))
+  })
+
   it('has a preset in every category', () => {
     for (const category of PRESET_CATEGORIES) {
       expect(
@@ -179,10 +186,22 @@ describe('FACTORY_PRESETS', () => {
     }
   })
 
-  describe('the Analog presets', () => {
-    const analog = FACTORY_PRESETS.filter(
-      (preset) => preset.category === 'Analog'
-    ).map((preset) => [preset.name, preset.sound] as const)
+  describe("the analog poly's presets", () => {
+    const analog = [
+      'Poly Brass',
+      'Brass Stab',
+      'Poly Strings',
+      'Velvet Pad',
+      'Hollow Pulse',
+      'Poly Sweep',
+      'Poly Keys',
+      'Poly Pluck',
+      'Poly Mod Bell',
+      'Poly Mod Lead',
+      'Unison Lead',
+      'Analog Bass',
+      'Unison Bass',
+    ].map((name) => [name, named(name).sound] as const)
 
     it('are there', () => {
       expect(analog.length).toBeGreaterThan(0)

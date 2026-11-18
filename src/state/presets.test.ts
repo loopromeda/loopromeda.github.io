@@ -29,9 +29,9 @@ function file(presets: readonly unknown[], version = PRESET_FILE_VERSION) {
 const fromV1 = (values: PresetValues) => soundFromV1(fullValues(values))
 
 describe('PRESET_CATEGORIES', () => {
-  it('lists ten unique categories', () => {
-    expect(PRESET_CATEGORIES).toHaveLength(10)
-    expect(new Set(PRESET_CATEGORIES).size).toBe(10)
+  it('lists fourteen unique categories', () => {
+    expect(PRESET_CATEGORIES).toHaveLength(14)
+    expect(new Set(PRESET_CATEGORIES).size).toBe(14)
   })
 })
 
@@ -254,5 +254,18 @@ describe('readPresetFile', () => {
       sound: fromV1({ 'osc1.wave': 3, 'filter.cutoff': 800 }),
     })
     expect(read.presets[1]?.sound).toEqual(fromV1({}))
+  })
+
+  it('reads a preset saved under a set since played by role as Basic', () => {
+    const read = readPresetFile(
+      file([
+        { name: 'Mine', category: 'Analog', sound: initSound() },
+        { name: 'Ours', category: 'Chip', sound: initSound() },
+      ])
+    )
+    expect(read.presets.map((preset) => preset.category)).toEqual([
+      'Basic',
+      'Basic',
+    ])
   })
 })

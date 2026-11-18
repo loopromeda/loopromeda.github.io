@@ -10,18 +10,27 @@ import { readSound } from './sound/read'
 import type { Sound } from './sound/sound'
 import { soundFromV1 } from './sound/v1'
 
-/** Preset categories, in the order a browser lists them */
+/**
+ * Preset categories, in the order a browser lists them: what a sound is
+ * played as, one each (docs/plan/sound-chains.md, The categories). Basic
+ * holds the starting points; Bell the struck and the chimed; Chord a
+ * chord from one key; Atmos the beds and the textures under a track.
+ */
 export const PRESET_CATEGORIES = [
   'Basic',
   'Bass',
   'Lead',
   'Pad',
-  'Pluck',
   'Keys',
+  'Pluck',
+  'Bell',
+  'Chord',
+  'Strings',
+  'Brass',
+  'Vocal',
+  'Atmos',
   'Drums',
   'FX',
-  'Analog',
-  'Chip',
 ] as const
 
 /** One of the categories a preset can belong to */
@@ -214,7 +223,10 @@ function isPlainObject(x: unknown): x is Record<string, unknown> {
   return typeof x === 'object' && x !== null && !Array.isArray(x)
 }
 
-/** value as a category, or 'Basic' when it is not one of ours */
+/**
+ * value as a category, or 'Basic' when it is not one of ours (a preset
+ * saved under Analog or Chip, before those sets were played by role)
+ */
 function readCategory(value: unknown): PresetCategory {
   if (typeof value === 'string') {
     for (const category of PRESET_CATEGORIES) {
