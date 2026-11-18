@@ -351,12 +351,15 @@ interface View {
 const INPUT_HINTS: Record<InputKind, string> = {
   osc: 'Wave and FM',
   chip: 'Steps and DC',
+  super: 'Detuned stack',
   noise: 'White noise',
   ring: 'One × another',
 }
 const ITEM_HINTS: Record<ItemKind, string> = {
   filter: 'LP, HP or BP',
   drive: 'Soft clip',
+  comb: 'Plucked string',
+  formant: 'Vowels A to U',
 }
 const MODULATOR_HINTS: Record<ModulatorKind, string> = {
   env: 'Attack to release',
@@ -373,15 +376,19 @@ const EFFECT_HINTS: Record<EffectKind, string> = {
   haas: 'One side later',
   doubler: 'Detuned apart',
   width: 'Narrow to wide',
+  phaser: 'Sweeping notches',
 }
 
 const KIND_GLYPHS = {
   osc: GLYPHS.saw,
   chip: GLYPHS.steppedTriangle,
+  super: GLYPHS.superSaw,
   noise: GLYPHS.noise,
   ring: GLYPHS.ring,
   filter: GLYPHS.lowpass,
   drive: GLYPHS.drive,
+  comb: GLYPHS.comb,
+  formant: GLYPHS.formant,
   env: GLYPHS.env,
   lfo: GLYPHS.sine,
 }
@@ -1775,11 +1782,14 @@ function viewOf(
           ),
         }
       }
-      if (part.kind === 'chip') {
+      if (part.kind === 'chip' || part.kind === 'super') {
         return {
           ...base,
           knobs: [
-            ...knobsOf(picked, shownKnobs(INPUT_KINDS.chip.knobs, part.values)),
+            ...knobsOf(
+              picked,
+              shownKnobs(INPUT_KINDS[part.kind].knobs, part.values)
+            ),
             ...into,
           ],
         }

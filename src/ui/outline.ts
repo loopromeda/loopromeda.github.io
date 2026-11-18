@@ -1,6 +1,7 @@
 /**
  * A part's picture: an envelope's shape (the amp's, an Env's), an LFO's
- * cycles, a filter's response, a drive's curve, an EQ's curve. Their
+ * cycles, a filter's response, a drive's curve, a comb's peaks, a
+ * formant's humps, an EQ's curve. Their
  * tiles draw it as knobs turn (Picture.tsx): a chain's items, the amp,
  * the modulators in the rack, an EQ among the inserts. Pure: it reads the
  * sound and returns SVG path data.
@@ -8,10 +9,12 @@
 import { toNormalized } from '../state/params'
 import { knobSpec, knobValue } from '../state/sound/knob'
 import { AMP, findPart, type Sound } from '../state/sound/sound'
+import { COMB_POINTS, combResponse } from '../viz/comb'
 import { DRIVE_POINTS, driveCurve } from '../viz/drive'
 import { EQ_OUTLINE_POINTS, eqOutline, eqPoints } from '../viz/eq'
 import { OUTLINE_POINTS, envelopeOutline } from '../viz/envelope'
 import { RESPONSE_POINTS, filterResponse } from '../viz/filter'
+import { FORMANT_POINTS, formantResponse } from '../viz/formant'
 import { LFO_POINTS, lfoOutline } from '../viz/lfo'
 
 /** The box an outline is drawn in, in SVG units */
@@ -25,9 +28,12 @@ const ENVELOPE = new Float32Array(OUTLINE_POINTS * 2)
 const LFO = new Float32Array(LFO_POINTS * 2)
 const RESPONSE = new Float32Array(RESPONSE_POINTS * 2)
 const DRIVE = new Float32Array(DRIVE_POINTS * 2)
+const COMB = new Float32Array(COMB_POINTS * 2)
+const FORMANT = new Float32Array(FORMANT_POINTS * 2)
 const EQ = new Float32Array(EQ_OUTLINE_POINTS * 2)
 
-type OutlineKind = 'envelope' | 'lfo' | 'filter' | 'drive' | 'eq'
+type OutlineKind =
+  'envelope' | 'lfo' | 'filter' | 'drive' | 'comb' | 'formant' | 'eq'
 
 /** What picture part has, if any */
 export function outlineKind(
@@ -79,6 +85,18 @@ export function outlinePath(sound: Sound, part: string): string {
     case 'drive':
       driveCurve(DRIVE, value('drive'))
       return path(DRIVE, DRIVE_POINTS)
+    case 'comb':
+      combResponse(COMB, value('decay'), value('damp'), value('mix'))
+      return path(COMB, COMB_POINTS)
+    case 'formant':
+      formantResponse(
+        FORMANT,
+        value('vowel'),
+        value('shift'),
+        value('resonance'),
+        value('mix')
+      )
+      return path(FORMANT, FORMANT_POINTS)
     case 'eq': {
       const found = findPart(sound, part)
       if (found?.type !== 'effect') return ''

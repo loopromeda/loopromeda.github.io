@@ -19,6 +19,7 @@ import {
   WAVE_NAMES,
   effectTile,
   type EffectKind,
+  type ItemKind,
 } from '../state/sound/kinds'
 import {
   MASTER,
@@ -164,12 +165,27 @@ export const GLYPHS = {
   pulse25: 'M1 10 V2 H3 V10 H9 V2 H11 V10 H17',
   pulse50: 'M1 10 V2 H5 V10 H9 V2 H13 V10 H17',
   pulse75: 'M1 10 V2 H7 V10 H9 V2 H15 V10 H17',
+  // A Super's wave twice, one over the other a little apart: its voices,
+  // detuned
+  superSine:
+    'M1 3.5 C2.8 0.5 5.5 0.5 8 3.5 S13.2 6.5 15.5 3.5 M2.5 8.5 C4.3 5.5 7 5.5 9.5 8.5 S14.7 11.5 17 8.5',
+  superTriangle:
+    'M1 5 L4.6 1.5 L8.2 5 L11.8 1.5 L15.5 5 M2.5 10.5 L6.1 7 L9.7 10.5 L13.3 7 L17 10.5',
+  superSaw:
+    'M1 5.5 L6 1.5 V5.5 L11 1.5 V5.5 L15.5 2.5 M2.5 10.5 L7.5 6.5 V10.5 L12.5 6.5 V10.5 L17 7.5',
+  superSquare:
+    'M1 5 V1.5 H5.5 V5 H10 V1.5 H14.5 V5 M2.5 10.5 V7 H7 V10.5 H11.5 V7 H16 V10.5',
   noise: 'M1 6 L3 3 L4 9 L6 2 L7 8 L9 4 L10 10 L12 3 L13 7 L15 2 L17 6',
   ring: 'M2 6 a4 4 0 1 0 8 0 a4 4 0 1 0 -8 0 M8 6 a4 4 0 1 0 8 0 a4 4 0 1 0 -8 0',
   lowpass: 'M1 4 H9 C12 4 13 6 17 11',
   highpass: 'M1 11 C5 6 6 4 9 4 H17',
   bandpass: 'M1 11 C5 11 6 3 9 3 C12 3 13 11 17 11',
   drive: 'M1 10 H4 C7 10 9 2 12 2 H17',
+  // A comb's peaks, a note's harmonics evenly apart, falling to the
+  // highs; a vowel's three formants, the first the tallest
+  comb: 'M1 11 H2 L3 2 L4 11 H6 L7 3.5 L8 11 H10 L11 5 L12 11 H14 L15 6.5 L16 11 H17',
+  formant:
+    'M1 11 C2.5 11 3 2.5 4.5 2.5 S6.5 9 8 9 S9.5 5 10.5 5 S12 10 13 10 S14.5 6.5 15.2 6.5 S16.3 11 17 11',
   env: 'M1 11 L4 2 L8 6 H12 L17 11',
   sampleHold: 'M1 9 H5 V3 H9 V7 H13 V2 H17',
   smooth: 'M1 8 C4 2 6 2 9 6 S14 10 17 4',
@@ -196,6 +212,9 @@ export const GLYPHS = {
   pingPong:
     'M1 3 a2 2 0 1 0 4 0 a2 2 0 1 0 -4 0 M7.5 9 a1.5 1.5 0 1 0 3 0 a1.5 1.5 0 1 0 -3 0 M14 3 a1 1 0 1 0 2 0 a1 1 0 1 0 -2 0 M5.05 5.05 L7.3 7.3 M10.7 7.3 L13.66 4.34',
   doubler: 'M1 4 Q3.5 0.5 6 4 T11 4 T16 4 M1 9.5 Q4 6 7 9.5 T13 9.5',
+  // Notches cut into a level line, a phaser's, which it sweeps
+  phaser:
+    'M1 2.5 H2.5 C3.5 2.5 3.8 10 4.5 10 S5.5 2.5 6.5 2.5 H7.5 C8.5 2.5 8.8 10 9.5 10 S10.5 2.5 11.5 2.5 H12.5 C13.5 2.5 13.8 10 14.5 10 S15.5 2.5 16.5 2.5 H17',
   width:
     'M9 1.5 V10.5 M1.5 6 H6.5 M10.5 6 H16.5 M4 3.5 L1.5 6 L4 8.5 M14 3.5 L16.5 6 L14 8.5',
   // Bars of a meter, the master's
@@ -219,6 +238,13 @@ export const GLYPHS = {
 } as const
 
 const WAVE_GLYPHS = [GLYPHS.sine, GLYPHS.triangle, GLYPHS.saw, GLYPHS.square]
+/** A Super's waves, in WAVE_NAMES' order */
+const SUPER_GLYPHS = [
+  GLYPHS.superSine,
+  GLYPHS.superTriangle,
+  GLYPHS.superSaw,
+  GLYPHS.superSquare,
+]
 /** A chip's waves, in CHIP_WAVE_NAMES' order, after its pulse */
 const CHIP_GLYPHS = [
   GLYPHS.steppedTriangle,
@@ -264,6 +290,21 @@ export const EFFECT_GLYPHS: Record<EffectKind, string> = {
   haas: GLYPHS.haas,
   doubler: GLYPHS.doubler,
   width: GLYPHS.width,
+  phaser: GLYPHS.phaser,
+}
+
+/** An item's pictogram, by its kind, a filter's by its type */
+function itemGlyph(kind: ItemKind, values: Readonly<Record<string, number>>) {
+  switch (kind) {
+    case 'drive':
+      return GLYPHS.drive
+    case 'comb':
+      return GLYPHS.comb
+    case 'formant':
+      return GLYPHS.formant
+    case 'filter':
+      return FILTER_GLYPHS[values.type ?? 0] ?? GLYPHS.lowpass
+  }
 }
 
 /** The pictogram of the part id names, or '' for one with none (a chain) */
@@ -280,12 +321,13 @@ export function glyphOf(sound: Sound, id: string): string {
         if (wave > 0) return CHIP_GLYPHS[wave - 1] ?? GLYPHS.steppedTriangle
         return PULSE_GLYPHS[Math.round(values.duty ?? 2)] ?? GLYPHS.pulse50
       }
+      if (kind === 'super') {
+        return SUPER_GLYPHS[values.wave ?? 0] ?? GLYPHS.superSaw
+      }
       return WAVE_GLYPHS[values.wave ?? 0] ?? GLYPHS.saw
     }
     case 'item':
-      return found.part.kind === 'drive'
-        ? GLYPHS.drive
-        : (FILTER_GLYPHS[found.part.values.type ?? 0] ?? GLYPHS.lowpass)
+      return itemGlyph(found.part.kind, found.part.values)
     case 'modulator':
       return found.part.kind === 'env'
         ? GLYPHS.env
@@ -543,15 +585,20 @@ export function heardThrough(sound: Sound, id: string): string | undefined {
 }
 
 /**
- * An input's own line: an oscillator's wave, a chip's pulse with its duty
- * or its wave with its steps, and the bits their levels take (Pulse 25%,
- * Triangle 32, Sine 32·4b), or its kind
+ * An input's own line: an oscillator's wave, a Super's and its voices
+ * (Saw ×7), a chip's pulse with its duty or its wave with its steps, and
+ * the bits their levels take (Pulse 25%, Triangle 32, Sine 32·4b), or its
+ * kind
  */
 export function inputLine(sound: Sound, id: string): string {
   const found = findPart(sound, id)
   if (found?.type !== 'input') return ''
   const { kind, values } = found.part
   if (kind === 'osc') return WAVE_NAMES[values.wave ?? 0] ?? ''
+  if (kind === 'super') {
+    const wave = WAVE_NAMES[values.wave ?? 0] ?? ''
+    return `${wave} ×${Math.round(values.voices ?? 0)}`
+  }
   if (kind !== 'chip') return INPUT_KINDS[kind].label
   const wave = Math.round(values.wave ?? 0)
   const name = CHIP_WAVE_NAMES[wave] ?? ''
@@ -565,8 +612,9 @@ export function inputLine(sound: Sound, id: string): string {
 
 /**
  * A tile's second line, from its knobs: an oscillator's wave, a filter's
- * type and cutoff, a drive's amount, a chain's level, the amp's Env,
- * the voice's mode, a chorus's rate.
+ * type and cutoff, a drive's amount, a comb's decay, a formant's vowel
+ * (A–E), a chain's level, the amp's Env, the voice's mode, a chorus's
+ * rate.
  * An input no chain takes, but another reads, shows where it goes
  * instead (its pictogram still shows its wave): → IN 1 FM.
  */
@@ -584,16 +632,31 @@ export function tileLine(sound: Sound, id: string): string {
     }
     case 'chain':
       return percent(found.part.values.level ?? 0)
-    case 'item': {
-      const { kind, values } = found.part
-      return kind === 'filter'
-        ? `${FILTER_TYPE_NAMES[values.type ?? 0] ?? ''} ${shortHz(values.cutoff ?? 0)}`
-        : percent(values.drive ?? 0)
-    }
+    case 'item':
+      return itemLine(found.part.kind, found.part.values)
     case 'effect':
       return effectLine(found.part)
     default:
       return ''
+  }
+}
+
+/** An item's line, from its knobs (tileLine) */
+function itemLine(
+  kind: ItemKind,
+  values: Readonly<Record<string, number>>
+): string {
+  switch (kind) {
+    case 'filter':
+      return `${FILTER_TYPE_NAMES[values.type ?? 0] ?? ''} ${shortHz(values.cutoff ?? 0)}`
+    case 'drive':
+      return percent(values.drive ?? 0)
+    case 'comb':
+      return shortTime(values.decay ?? 0)
+    case 'formant': {
+      const spec = ITEM_KINDS.formant.knobs.find((knob) => knob.key === 'vowel')
+      return spec ? formatValue(spec, values.vowel ?? spec.default) : ''
+    }
   }
 }
 
@@ -602,7 +665,7 @@ export function tileLine(sound: Sound, id: string): string {
  * note value, synced), a reverb's decay; an EQ's boldest band (Low +3.0
  * dB), else its low cut, else Flat; a compressor's threshold and ratio, a
  * limiter's ceiling; a Haas's time and the side it holds back (15 ms R),
- * a doubler's detune (±9 ct), a width's
+ * a doubler's detune (±9 ct), a width's; a phaser's rate
  */
 export function effectLine(effect: {
   readonly kind: EffectKind
@@ -631,6 +694,8 @@ export function effectLine(effect: {
       return `±${Math.round(values.detune ?? 0)} ct`
     case 'width':
       return shown('width', 'width', values)
+    case 'phaser':
+      return shown('phaser', 'rate', values)
   }
 }
 

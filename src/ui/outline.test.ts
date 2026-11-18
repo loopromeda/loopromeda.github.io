@@ -11,12 +11,17 @@ import {
   outlinePath,
 } from './outline'
 
-/** The init sound plus an Env (m1), an LFO (m2) and a drive (x2) */
+/**
+ * The init sound plus an Env (m1), an LFO (m2), a drive (x2), a comb (x3)
+ * and a formant (x4)
+ */
 function parts(): Sound {
   let sound = initSound()
   sound = addModulator(sound, 'env').sound
   sound = addModulator(sound, 'lfo').sound
-  return addItem(sound, 'c1', 'drive').sound
+  sound = addItem(sound, 'c1', 'drive').sound
+  sound = addItem(sound, 'c1', 'comb').sound
+  return addItem(sound, 'c1', 'formant').sound
 }
 
 /** The path's points as [x, y] */
@@ -27,13 +32,15 @@ const points = (d: string) =>
   ])
 
 describe('outlineKind', () => {
-  it('pictures envelopes, LFOs, filters and drives, nothing else', () => {
+  it('pictures envelopes, LFOs and items, nothing else', () => {
     const sound = parts()
     expect(outlineKind(sound, AMP)).toBe('envelope')
     expect(outlineKind(sound, 'm1')).toBe('envelope')
     expect(outlineKind(sound, 'm2')).toBe('lfo')
     expect(outlineKind(sound, 'x1')).toBe('filter')
     expect(outlineKind(sound, 'x2')).toBe('drive')
+    expect(outlineKind(sound, 'x3')).toBe('comb')
+    expect(outlineKind(sound, 'x4')).toBe('formant')
     for (const part of ['i1', 'c1', VOICE, 'nope']) {
       expect(outlineKind(sound, part), part).toBeUndefined()
       expect(outlinePath(sound, part), part).toBe('')
@@ -44,7 +51,7 @@ describe('outlineKind', () => {
 describe('outlinePath', () => {
   it('stays inside its box, as the init sound has it', () => {
     const sound = parts()
-    for (const part of [AMP, 'm1', 'm2', 'x1', 'x2']) {
+    for (const part of [AMP, 'm1', 'm2', 'x1', 'x2', 'x3', 'x4']) {
       for (const [x, y] of points(outlinePath(sound, part))) {
         expect(x).toBeGreaterThanOrEqual(0)
         expect(x).toBeLessThanOrEqual(OUTLINE_WIDTH)
@@ -70,6 +77,13 @@ describe('outlinePath', () => {
     // A drive's amount bends its curve
     expect(outlinePath(setValue(sound, 'x2', 'drive', 1), 'x2')).not.toBe(
       outlinePath(sound, 'x2')
+    )
+    // A comb's decay, a formant's vowel
+    expect(outlinePath(setValue(sound, 'x3', 'decay', 0.1), 'x3')).not.toBe(
+      outlinePath(sound, 'x3')
+    )
+    expect(outlinePath(setValue(sound, 'x4', 'vowel', 2), 'x4')).not.toBe(
+      outlinePath(sound, 'x4')
     )
     // An LFO's shape changes its cycles
     expect(outlinePath(setValue(sound, 'm2', 'shape', 3), 'm2')).not.toBe(

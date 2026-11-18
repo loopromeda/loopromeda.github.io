@@ -198,7 +198,9 @@ src/state/    params.ts: the knob schema and the old parameters;
               parameters, a knob by part and key and the routes into it
               (knob.ts), and the knobs that moved between two (diff.ts)
 src/viz/      pure display math (scope trigger and decimation, envelope
-              and LFO outlines, filter response, drive curve, keyboard
+              and LFO outlines, filter response, drive curve, a comb's
+              peaks at a note's harmonics (comb.ts), a formant's humps
+              (formant.ts), keyboard
               and pad grid geometry, the sound editor's input column
               (and left of it what each input reads) and chains as
               groups (a head, the items squares in lines inside) in

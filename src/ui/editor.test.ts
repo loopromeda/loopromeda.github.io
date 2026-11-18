@@ -307,6 +307,41 @@ describe('tiles', () => {
     expect(glyphOf(sound, AMP)).toBe(GLYPHS.env)
   })
 
+  it('draws and writes a Super, a comb, a formant and a phaser', () => {
+    let sound = busy()
+    const step = (added: Added) => {
+      sound = added.sound
+      return added.id as string
+    }
+    const stack = step(addInput(sound, 'super'))
+    const comb = step(addItem(sound, 'c1', 'comb'))
+    const formant = step(addItem(sound, 'c1', 'formant'))
+    const phaser = step(addEffect(sound, 'phaser'))
+    // Its wave twice, and its voices
+    expect(glyphOf(sound, stack)).toBe(GLYPHS.superSaw)
+    expect(tileLine(sound, stack)).toBe('Saw ×7')
+    sound = setValue(setValue(sound, stack, 'wave', 3), stack, 'voices', 4)
+    expect(glyphOf(sound, stack)).toBe(GLYPHS.superSquare)
+    expect(tileLine(sound, stack)).toBe('Square ×4')
+    // A comb's decay; a formant's vowel, or the two it glides between
+    expect(glyphOf(sound, comb)).toBe(GLYPHS.comb)
+    expect(tileLine(sound, comb)).toBe('1.5 s')
+    expect(tileLine(setValue(sound, comb, 'decay', 0.25), comb)).toBe('250 ms')
+    expect(glyphOf(sound, formant)).toBe(GLYPHS.formant)
+    expect(tileLine(sound, formant)).toBe('A')
+    expect(tileLine(setValue(sound, formant, 'vowel', 0.5), formant)).toBe(
+      'A–E'
+    )
+    // A phaser's rate
+    expect(glyphOf(sound, phaser)).toBe(GLYPHS.phaser)
+    expect(tileLine(sound, phaser)).toBe(
+      effectLine({ kind: 'phaser', values: effectValues('phaser') })
+    )
+    expect(effectLine({ kind: 'phaser', values: effectValues('phaser') })).toBe(
+      '0.25 Hz'
+    )
+  })
+
   it('marks what a route moves', () => {
     expect(modulated(busy())).toEqual(new Set(['x2']))
   })
