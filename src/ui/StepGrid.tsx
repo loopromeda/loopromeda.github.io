@@ -26,6 +26,7 @@ import {
   setBars,
   setGhost,
   setOrnament,
+  slotOf,
   type KnobLane,
   type Loop,
   type Note,
@@ -203,11 +204,16 @@ export function StepGrid({ engine }: { engine: Engine }) {
   const bar = Math.min(shown, bars - 1)
   // While it plays, the bar shown is the bar playing, until one is picked
   const followRef = useRef(true)
-  /** The loop's bar the step falls in: none for none */
+  /**
+   * The loop's bar the step falls in, counted from the bar the loop
+   * started on (a scene's, launched: Engine.loopStep): none for none
+   */
   const barAt = useCallback(
-    (step: number) =>
-      step < 0 ? -1 : Math.floor((step % loop.steps) / columns),
-    [loop.steps, columns]
+    (step: number) => {
+      const at = engine.loopStep(step, loop.steps)
+      return at < 0 ? -1 : Math.floor(at / columns)
+    },
+    [engine, loop.steps, columns]
   )
   /**
    * Shows a bar picked: while it plays, kept in sight (the bar playing
@@ -217,13 +223,15 @@ export function StepGrid({ engine }: { engine: Engine }) {
     setShown(each)
     followRef.current = !engine.getPlaying() || each === barAt(engine.step)
   }
-  // The rows another track of the same kind plays in the bar shown
+  // The rows another track of the same kind plays in the bar shown, in
+  // the scene picked
   const kind = kit === undefined ? 'synth' : 'kit'
   const others = useMemo(() => {
     const loops: Loop[] = []
     for (const each of tracks) {
       if (each.kind !== kind || each.id === track.id) continue
-      const other = song.loops[each.id]?.[0]
+      const at = slotOf(song, each.id)
+      const other = at === undefined ? undefined : song.loops[each.id]?.[at]
       if (other) loops.push(other)
     }
     return othersRows(loops, bar, columns)
@@ -318,7 +326,7 @@ export function StepGrid({ engine }: { engine: Engine }) {
     if (!head || !chips) return
     let marked = -1
     const show = (step: number) => {
-      const at = step < 0 ? -1 : step % loop.steps
+      const at = engine.loopStep(step, loop.steps)
       const playing = barAt(step)
       // Paged to the bar playing: shown again, from the bar's own render
       if (followRef.current && playing >= 0 && playing !== bar) {

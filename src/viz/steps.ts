@@ -172,6 +172,31 @@ export function othersRows(
   return rows
 }
 
+/** The rows a scene's track row frames: at least, a line's whole height */
+export const ROW_LEAST = 6
+
+/**
+ * The keys a track's row in the scenes' view frames of its loop: from
+ * the lowest of its notes to the highest, at least least rows, the
+ * notes' own in the middle of them; least rows from 0 for a loop of none.
+ * A loop's whole span, so its bars stand alike as they pass.
+ */
+export function loopWindow(
+  notes: readonly PlacedNote[],
+  least = ROW_LEAST
+): { first: number; rows: number } {
+  let low = Infinity
+  let high = -Infinity
+  for (const note of notes) {
+    low = Math.min(low, note.key)
+    high = Math.max(high, note.key)
+  }
+  if (low > high) return { first: 0, rows: least }
+  const span = high - low + 1
+  const rows = Math.max(span, least)
+  return { first: low - Math.floor((rows - span) / 2), rows }
+}
+
 function within(value: number, low: number, high: number): number {
   return Math.max(low, Math.min(high, value))
 }

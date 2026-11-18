@@ -117,8 +117,9 @@ export function LaneStrip({
     const value = valueRef.current
     const unit = unitRef.current
     if (!head || !value || !unit) return
+    // Counted from the bar the loop started on: a scene's, launched
     const show = (step: number) => {
-      const at = step < 0 ? -1 : step % loop.steps
+      const at = engine.loopStep(step, loop.steps)
       const playing = at < 0 ? -1 : Math.floor(at / columns)
       head.hidden = playing !== bar
       if (playing === bar) {

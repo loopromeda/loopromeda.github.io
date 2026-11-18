@@ -8,6 +8,7 @@ import {
   dragAxis,
   dragLength,
   dragVelocity,
+  loopWindow,
   noteBox,
   othersRows,
   rowsFit,
@@ -213,5 +214,29 @@ describe('rows other tracks play', () => {
   it('marks nothing without notes', () => {
     expect(othersRows([other(0)], 0, COLUMNS).size).toBe(0)
     expect(othersRows([], 3, COLUMNS).size).toBe(0)
+  })
+})
+
+describe('loopWindow', () => {
+  const at = (key: number) => ({ step: 0, key, length: 1 })
+
+  it('frames a loop from its lowest key to its highest', () => {
+    expect(loopWindow([at(40), at(60), at(52)])).toEqual({
+      first: 40,
+      rows: 21,
+    })
+  })
+
+  it('stands a narrow loop in the middle of its least rows', () => {
+    // One key, six rows: two under it, three over it
+    expect(loopWindow([at(36)])).toEqual({ first: 34, rows: 6 })
+    expect(loopWindow([at(0), at(2)], 4)).toEqual({ first: 0, rows: 4 })
+    const { first, rows } = loopWindow([at(36)])
+    expect(noteBox(at(36), 0, first, rows, COLUMNS)?.top).toBeCloseTo(3 / 6)
+  })
+
+  it('frames least rows from 0 for a loop of no notes', () => {
+    expect(loopWindow([])).toEqual({ first: 0, rows: 6 })
+    expect(loopWindow([], 3)).toEqual({ first: 0, rows: 3 })
   })
 })
