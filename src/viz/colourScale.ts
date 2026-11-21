@@ -1,53 +1,35 @@
 /**
- * The colour scales levels are drawn in, the spectrogram's (asked for by
- * ashon, 2026-11-14: "스펙트로그램에서 데시벨 표현도 들어가야 하니 이
- * 부분은 적절히 컬러링을 넣어보는것은 어떨까? 컬러 스케일을 하나 만들어
- * 두면 좋겠네"), one for each mode. In the dark: from the views'
- * background, for nothing, through indigo, blue, teal and emerald (the
- * Emerald theme's accent) to yellow and near white, for the loudest. In
- * the light the other way about: from the light views' background
- * through a pale yellow, emerald, teal, blue and indigo to near black.
- * Along each its lightness (OKLab's L) moves evenly, so that equal steps
- * in dB are equal steps in lightness wherever they fall, and its hue
- * turns as it goes, so that a level is told by its colour as well as by
- * how light it is. Between its stops it is mixed in OKLab, and read from
- * a table of 256 colours made once. Pure: no DOM.
+ * The colour scale levels are drawn in, the spectrogram's: one hue, the
+ * theme's accent. In the dark it runs from the views' background, for
+ * nothing, through the accent to near white, for the loudest; in the
+ * light from the light views' background through the accent to near
+ * black. The scale's ends carry the accent's hue too, a breath of it, so
+ * the hue holds all along (ashon, 2026-11-21: "스펙트로그램도 기존 단색
+ * 기반으로 가 보면 좋겠는데", the one hue it was drawn in until a colour
+ * scale of many, 2026-11-14, replaced it). Along it the lightness
+ * (OKLab's L) moves evenly, so that equal steps in dB are equal steps in
+ * lightness wherever they fall; between its stops it is mixed in OKLab, a
+ * colour outside sRGB losing chroma, never its lightness or hue. It is
+ * read from a table of 256 colours made once a scale. Pure: no DOM.
  */
 
 /** An OKLab colour: lightness, then green to red, then blue to yellow */
 export type Lab = readonly [number, number, number]
 
-/**
- * The dark scale's colours, from nothing to the loudest: the views'
- * background, indigo, blue, teal, emerald (the Emerald theme's), yellow
- * and near white, each lighter than the one before
- */
-const DARK_COLOURS = [
-  '#0b0b0b',
-  '#311969',
-  '#125a98',
-  '#0c9999',
-  '#34d399',
-  '#e1e950',
-  '#fdfce1',
-] as const
+/** The mode a scale is drawn in */
+export type ScaleMode = 'dark' | 'light'
 
 /**
- * The light scale's: the light views' background, a pale yellow, emerald,
- * teal, blue, indigo and near black, each darker than the one before, the
- * dark scale's hues met the other way round
+ * Where a scale ends, by its mode: the lightness, and the chroma at the
+ * accent's hue. Near white in the dark (as emerald-50 was), near black
+ * in the light.
  */
-const LIGHT_COLOURS = [
-  '#ebebeb',
-  '#dad586',
-  '#50c08b',
-  '#0f9293',
-  '#0e5e9a',
-  '#35247b',
-  '#1e0e33',
-] as const
+const END: Readonly<Record<ScaleMode, readonly [number, number]>> = {
+  dark: [0.975, 0.03],
+  light: [0.22, 0.05],
+}
 
-/** How many colours the scale's table holds */
+/** How many colours a scale's table holds */
 const SIZE = 256
 
 const toLinear = (c: number) =>
@@ -71,18 +53,53 @@ export function oklab(hex: string): Lab {
   ]
 }
 
-/** An OKLab colour's sRGB channel k (0 red, 1 green, 2 blue), 0 to 1 */
-function channel([L, a, b]: Lab, k: number): number {
+/** An OKLab colour in linear sRGB, unclamped: red, green, blue */
+function linear([L, a, b]: Lab): [number, number, number] {
   const l = (L + 0.3963377774 * a + 0.2158037573 * b) ** 3
   const m = (L - 0.1055613458 * a - 0.0638541728 * b) ** 3
   const s = (L - 0.0894841775 * a - 1.291485548 * b) ** 3
-  const linear =
-    k === 0
-      ? 4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s
-      : k === 1
-        ? -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s
-        : -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s
-  return toGamma(Math.min(1, Math.max(0, linear)))
+  return [
+    4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
+    -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+    -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s,
+  ]
+}
+
+/** Whether an OKLab colour is one sRGB can show, within rounding */
+function shown(lab: Lab): boolean {
+  return linear(lab).every((c) => c >= -1e-4 && c <= 1 + 1e-4)
+}
+
+/**
+ * An OKLab colour sRGB can show: the colour itself, or, outside, the
+ * one of its lightness and hue with as much of its chroma as fits
+ */
+function inGamut(lab: Lab): Lab {
+  if (shown(lab)) return lab
+  const [L, a, b] = lab
+  let low = 0
+  let high = 1
+  for (let k = 0; k < 24; k++) {
+    const share = (low + high) / 2
+    if (shown([L, a * share, b * share])) low = share
+    else high = share
+  }
+  return [L, a * low, b * low]
+}
+
+/** An OKLab colour in sRGB, its channels 0 to 255 */
+function rgb(lab: Lab): [number, number, number] {
+  const [r, g, b] = linear(lab)
+  const byte = (c: number) =>
+    Math.round(toGamma(Math.min(1, Math.max(0, c))) * 255)
+  return [byte(r), byte(g), byte(b)]
+}
+
+/** An OKLab colour written #rrggbb */
+function hexOf(lab: Lab): string {
+  return `#${rgb(lab)
+    .map((c) => c.toString(16).padStart(2, '0'))
+    .join('')}`
 }
 
 /** A scale's stop: its colour, and where along the scale it stands, 0 to 1 */
@@ -94,9 +111,9 @@ export interface ScaleStop {
 /** A colour scale, its table made once */
 export interface ColourScale {
   /**
-   * Its stops: each colour, and where along the scale it stands, which is
-   * how far its lightness has moved from the first's, the first at 0 and
-   * the last at 1
+   * Its stops: the ground, the accent and the end, and where along the
+   * scale each stands, which is how far its lightness has moved from the
+   * ground's, the ground at 0 and the end at 1
    */
   readonly stops: readonly ScaleStop[]
   /**
@@ -114,14 +131,13 @@ export interface ColourScale {
 }
 
 /** A scale through colours, their lightness moving one way all along */
-function colourScale(colours: readonly string[]): ColourScale {
-  const labs = colours.map(oklab)
+function colourScale(labs: readonly Lab[]): ColourScale {
   const first = (labs[0] as Lab)[0]
   const last = (labs[labs.length - 1] as Lab)[0]
-  const stops = colours.map((hex, k) => ({
-    hex,
+  const stops = labs.map((lab) => ({
+    hex: hexOf(lab),
     // A share of the way, never -0 where the lightness falls
-    at: Math.abs(((labs[k] as Lab)[0] - first) / (last - first)),
+    at: Math.abs((lab[0] - first) / (last - first)),
   }))
 
   /** The colour at t along the scale, between the stops about it */
@@ -143,9 +159,8 @@ function colourScale(colours: readonly string[]): ColourScale {
   /** The table: SIZE opaque RGBA colours, evenly along it */
   const table = new Uint8ClampedArray(SIZE * 4)
   for (let i = 0; i < SIZE; i++) {
-    const lab = mix(i / (SIZE - 1))
-    for (let k = 0; k < 3; k++) table[i * 4 + k] = channel(lab, k) * 255
-    table[i * 4 + 3] = 255
+    const [r, g, b] = rgb(inGamut(mix(i / (SIZE - 1))))
+    table.set([r, g, b, 255], i * 4)
   }
 
   return {
@@ -175,28 +190,29 @@ function entry(t: number): number {
   return Math.round(clamped * (SIZE - 1)) * 4
 }
 
-/** The scales, by the mode they are drawn in */
-export const SCALES: Readonly<Record<'dark' | 'light', ColourScale>> = {
-  dark: colourScale(DARK_COLOURS),
-  light: colourScale(LIGHT_COLOURS),
-}
-
-/** The scales made from another ground, by mode and ground */
-const ON = new Map<string, ColourScale>()
+/** The scales made, by mode, ground and accent */
+const MADE = new Map<string, ColourScale>()
 
 /**
- * A mode's scale from the views' ground as a theme gives it (a pop
- * theme's page, tinted), so that nothing is drawn in the page's own
- * colour: its first stop that ground, the rest as they are. Made once a
- * ground.
+ * The spectrogram's scale in a mode: from the views' ground as the theme
+ * gives it (a pop theme's page, tinted), so that nothing is drawn in the
+ * page's own colour, through the theme's accent to the mode's end, near
+ * white or near black in the accent's hue. Made once a mode, ground and
+ * accent.
  */
-export function scaleOn(mode: 'dark' | 'light', ground: string): ColourScale {
-  const colours = mode === 'dark' ? DARK_COLOURS : LIGHT_COLOURS
-  if (ground === colours[0]) return SCALES[mode]
-  const key = `${mode}${ground}`
-  const made = ON.get(key)
+export function scaleFor(
+  mode: ScaleMode,
+  ground: string,
+  accent: string
+): ColourScale {
+  const key = `${mode}${ground}${accent}`
+  const made = MADE.get(key)
   if (made) return made
-  const scale = colourScale([ground, ...colours.slice(1)])
-  ON.set(key, scale)
+  const tint = oklab(accent)
+  const hue = Math.atan2(tint[2], tint[1])
+  const [L, chroma] = END[mode]
+  const end = inGamut([L, chroma * Math.cos(hue), chroma * Math.sin(hue)])
+  const scale = colourScale([oklab(ground), tint, end])
+  MADE.set(key, scale)
   return scale
 }

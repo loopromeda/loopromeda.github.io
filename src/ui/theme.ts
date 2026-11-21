@@ -28,9 +28,9 @@
  * The Default theme's accent is a reddish orange (ashon, 2026-11-21:
  * "루프로메다의 메인 테마 색상을 오렌지 색상으로 만들어 보고 싶어. 좀
  * 붉은빛이 도는 오렌지 색상"), so recording's red is a crimson, a turn
- * redder, and the orange chain went aqua and last, the violet leading.
- * The colours the app had first, its emerald accent, are the Emerald
- * theme's.
+ * redder, the orange chain went aqua and last, the violet leading; and
+ * the spectrogram draws its levels in the accent's hue. The colours the
+ * app had first, its emerald accent, are the Emerald theme's.
  */
 
 export const THEME_IDS = [

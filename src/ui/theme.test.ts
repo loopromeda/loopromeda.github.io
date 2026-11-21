@@ -19,6 +19,7 @@ import {
   themeOf,
   type Mode,
 } from './theme'
+import { scaleFor } from '../viz/colourScale'
 
 // The checks a theme owes its colours (docs/plan/sound-chains.md): the
 // colours are roles, so each theme's values pass the same tests the app's
@@ -197,6 +198,30 @@ describe('a theme', () => {
     const { dark, light } = themeOf(DEFAULT_THEME)
     expect(dark.chains).toEqual(['#a684ff', '#bbf451', '#f6339a', '#28effe'])
     expect(light.chains).toEqual(['#7357ce', '#1d7d00', '#cf0288', '#05397e'])
+  })
+
+  it('draws the spectrogram in every accent, between its ground and end', () => {
+    try {
+      for (const theme of THEMES) {
+        for (const tone of MODES) {
+          setTheme(theme.id, tone)
+          const { accent } = theme[tone]
+          const scale = scaleFor(tone, groundOf(tone).page, accent)
+          const [ground, through, end] = scale.stops
+          expect(through?.hex).toBe(accent)
+          // The accent on the way, room left on either side of it
+          expect(through?.at).toBeGreaterThan(0.4)
+          expect(through?.at).toBeLessThan(0.97)
+          // Its ends told apart from the accent and from each other
+          expect(oklabDistance(ground?.hex ?? '', accent)).toBeGreaterThan(30)
+          expect(
+            oklabDistance(end?.hex ?? '', ground?.hex ?? '')
+          ).toBeGreaterThan(60)
+        }
+      }
+    } finally {
+      setTheme(DEFAULT_THEME, 'dark')
+    }
   })
 })
 

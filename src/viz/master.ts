@@ -312,9 +312,10 @@ export function vectorPoint(
 
 /**
  * Writes an opaque RGBA colour for a level into out[at .. at + 3], on a
- * colour scale (src/viz/colourScale.ts, the mode's): t is (db - minDb) /
- * (maxDb - minDb) clamped to 0..1, -Infinity and NaN giving 0, the
- * background, and maxDb and over the scale's last colour.
+ * colour scale (src/viz/colourScale.ts, the theme's accent's in its
+ * mode): t is (db - minDb) / (maxDb - minDb) clamped to 0..1, -Infinity
+ * and NaN giving 0, the background, and maxDb and over the scale's last
+ * colour.
  */
 export function spectrogramColour(
   db: number,

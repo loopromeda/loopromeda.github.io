@@ -1,19 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import {
-  oklab,
-  scaleOn,
-  SCALES,
-  type ColourScale,
-  type ScaleStop,
-} from './colourScale'
+import { oklab, scaleFor, type ColourScale } from './colourScale'
 
-const DARK = SCALES.dark
-const LIGHT = SCALES.light
-const SCALE_STOPS = DARK.stops
-type Stop = ScaleStop
+/** The Default theme's accents, and the views' neutral grounds */
+const ORANGE = { dark: '#ff754a', light: '#be440c' }
+const GROUND = { dark: '#0b0b0b', light: '#ebebeb' }
 
-/** The colour at t along a scale (the dark's), as #rrggbb */
-function hexAt(t: number, scale: ColourScale = DARK): string {
+const DARK = scaleFor('dark', GROUND.dark, ORANGE.dark)
+const LIGHT = scaleFor('light', GROUND.light, ORANGE.light)
+
+/** The colour at t along a scale, as #rrggbb */
+function hexAt(t: number, scale: ColourScale): string {
   const out = new Uint8ClampedArray(4)
   scale.colour(t, out, 0)
   return `#${Array.from(out.slice(0, 3), (v) => v.toString(16).padStart(2, '0')).join('')}`
@@ -24,6 +20,15 @@ const hueOf = (hex: string) => {
   const [, a, b] = oklab(hex)
   return ((Math.atan2(b, a) * 180) / Math.PI + 360) % 360
 }
+
+/** A colour's chroma in OKLab */
+const chromaOf = (hex: string) => {
+  const [, a, b] = oklab(hex)
+  return Math.hypot(a, b)
+}
+
+/** How far apart two hues stand, the short way round, degrees */
+const turn = (a: number, b: number) => Math.abs(((a - b + 540) % 360) - 180)
 
 describe('oklab', () => {
   it('puts black at 0 and white at 1, both without hue', () => {
@@ -46,133 +51,113 @@ describe('oklab', () => {
   })
 })
 
-describe('the dark colour scale', () => {
-  it('runs from the views’ background to near white', () => {
-    expect(hexAt(0)).toBe('#0b0b0b')
-    expect(hexAt(1)).toBe('#fdfce1')
-    expect(SCALE_STOPS[0]?.at).toBe(0)
-    expect(SCALE_STOPS[SCALE_STOPS.length - 1]?.at).toBe(1)
+describe.each([
+  ['dark', DARK, 1],
+  ['light', LIGHT, -1],
+] as const)('the %s scale', (mode, scale, way) => {
+  const [ground, accent, end] = scale.stops
+
+  it('runs from the ground through the accent to its end', () => {
+    expect(scale.stops).toHaveLength(3)
+    expect(ground).toEqual({ hex: GROUND[mode], at: 0 })
+    expect(accent?.hex).toBe(ORANGE[mode])
+    expect(end?.at).toBe(1)
+    expect(hexAt(0, scale)).toBe(GROUND[mode])
+    expect(hexAt(1, scale)).toBe(end?.hex)
+    // The accent drawn as it is, within the table's step of 256
+    const [L, a, b] = oklab(hexAt(accent?.at as number, scale))
+    const [La, aa, ba] = oklab(ORANGE[mode])
+    expect(Math.hypot(L - La, a - aa, b - ba)).toBeLessThan(0.01)
   })
 
-  it('stands each stop where its lightness is, each further on', () => {
-    for (let k = 1; k < SCALE_STOPS.length; k++) {
-      const stop = SCALE_STOPS[k] as Stop
-      expect(stop.at).toBeGreaterThan((SCALE_STOPS[k - 1] as Stop).at)
-      // The table's nearest colour, within a step of 256
-      const [L] = oklab(hexAt(stop.at))
-      expect(Math.abs(L - oklab(stop.hex)[0])).toBeLessThan(0.006)
-    }
+  it('ends near white in the dark, near black in the light', () => {
+    const [L] = oklab(end?.hex as string)
+    if (mode === 'dark') expect(L).toBeGreaterThan(0.96)
+    else expect(L).toBeLessThan(0.25)
   })
 
-  it('grows evenly lighter along it', () => {
-    const first = oklab('#0b0b0b')[0]
-    const last = oklab('#fdfce1')[0]
-    let before = -1
+  it('moves its lightness evenly along it, one way', () => {
+    const first = oklab(GROUND[mode])[0]
+    const last = oklab(end?.hex as string)[0]
+    let before = way > 0 ? -1 : 2
     for (let i = 0; i <= 255; i++) {
       const t = i / 255
-      const [L] = oklab(hexAt(t))
-      expect(L).toBeGreaterThan(before)
+      const [L] = oklab(hexAt(t, scale))
+      expect((L - before) * way).toBeGreaterThan(0)
       // Off the straight line only by the rounding to 8 bits
       expect(Math.abs(L - (first + (last - first) * t))).toBeLessThan(0.006)
       before = L
     }
   })
 
-  it('turns its hue as it rises: indigo, blue, teal, emerald, yellow', () => {
-    const hue = (t: number) => {
-      const [, a, b] = oklab(hexAt(t))
-      return ((Math.atan2(b, a) * 180) / Math.PI + 360) % 360
+  it('holds the accent’s hue all along', () => {
+    const hue = hueOf(ORANGE[mode])
+    for (let i = 8; i <= 255; i++) {
+      const hex = hexAt(i / 255, scale)
+      // Where a colour has any chroma to tell its hue by, off it only by
+      // the rounding to 8 bits, most in the darkest
+      if (chromaOf(hex) < 0.02) continue
+      expect(turn(hueOf(hex), hue)).toBeLessThan(4)
     }
-    const [, indigo, blue, teal, emerald, yellow] = SCALE_STOPS.map((s) =>
-      hue(s.at)
-    )
-    expect(indigo).toBeGreaterThan(280)
-    expect(blue).toBeGreaterThan(235)
-    expect(blue).toBeLessThan(265)
-    expect(teal).toBeGreaterThan(180)
-    expect(teal).toBeLessThan(210)
-    expect(emerald).toBeGreaterThan(150)
-    expect(emerald).toBeLessThan(175)
-    expect(yellow).toBeGreaterThan(95)
-    expect(yellow).toBeLessThan(125)
   })
 
   it('clamps t, takes NaN as 0 and writes only its four bytes', () => {
-    expect(hexAt(-3)).toBe('#0b0b0b')
-    expect(hexAt(NaN)).toBe('#0b0b0b')
-    expect(hexAt(7)).toBe('#fdfce1')
+    expect(hexAt(-3, scale)).toBe(GROUND[mode])
+    expect(hexAt(NaN, scale)).toBe(GROUND[mode])
+    expect(hexAt(7, scale)).toBe(end?.hex)
     const out = new Uint8ClampedArray(12).fill(9)
-    DARK.colour(0.5, out, 4)
+    scale.colour(0.5, out, 4)
     expect(Array.from(out.slice(0, 4))).toEqual([9, 9, 9, 9])
     expect(out[7]).toBe(255)
     expect(Array.from(out.slice(8))).toEqual([9, 9, 9, 9])
   })
 
   it('writes the scale as a CSS gradient of seventeen steps', () => {
-    const css = DARK.gradient('to right')
-    expect(css.startsWith('linear-gradient(to right, rgb(11 11 11) 0%,')).toBe(
-      true
-    )
-    expect(css.endsWith(', rgb(253 252 225) 100%)')).toBe(true)
+    const css = scale.gradient('to right')
+    const n = Number.parseInt(GROUND[mode].slice(1, 3), 16)
+    expect(
+      css.startsWith(`linear-gradient(to right, rgb(${n} ${n} ${n}) 0%,`)
+    ).toBe(true)
+    expect(css.endsWith(' 100%)')).toBe(true)
     expect(css.match(/rgb\(/g)).toHaveLength(17)
   })
 })
 
-describe('the light colour scale', () => {
-  it('runs from the light views’ background to near black', () => {
-    expect(hexAt(0, LIGHT)).toBe('#ebebeb')
-    expect(hexAt(1, LIGHT)).toBe('#1e0e33')
-    expect(LIGHT.stops[0]?.at).toBe(0)
-    expect(LIGHT.stops[LIGHT.stops.length - 1]?.at).toBe(1)
-  })
-
-  it('grows evenly darker along it', () => {
-    const first = oklab('#ebebeb')[0]
-    const last = oklab('#1e0e33')[0]
-    let before = 2
-    for (let i = 0; i <= 255; i++) {
-      const t = i / 255
-      const [L] = oklab(hexAt(t, LIGHT))
-      expect(L).toBeLessThan(before)
-      expect(Math.abs(L - (first + (last - first) * t))).toBeLessThan(0.006)
-      before = L
-    }
-  })
-
-  it('meets the dark scale’s hues the other way round', () => {
-    const [, yellow, emerald, teal, blue, indigo] = LIGHT.stops.map((s) =>
-      hueOf(hexAt(s.at, LIGHT))
+describe('scaleFor', () => {
+  it('makes a scale once a mode, ground and accent', () => {
+    expect(scaleFor('dark', GROUND.dark, ORANGE.dark)).toBe(DARK)
+    expect(scaleFor('light', '#f5e5eb', '#786d03')).toBe(
+      scaleFor('light', '#f5e5eb', '#786d03')
     )
-    expect(yellow).toBeGreaterThan(95)
-    expect(yellow).toBeLessThan(125)
-    expect(emerald).toBeGreaterThan(150)
-    expect(emerald).toBeLessThan(175)
-    expect(teal).toBeGreaterThan(180)
-    expect(teal).toBeLessThan(210)
-    expect(blue).toBeGreaterThan(235)
-    expect(blue).toBeLessThan(265)
-    expect(indigo).toBeGreaterThan(275)
-  })
-})
-
-describe('scaleOn', () => {
-  it("is the mode's own scale on the neutral ground", () => {
-    expect(scaleOn('dark', '#0b0b0b')).toBe(SCALES.dark)
-    expect(scaleOn('light', '#ebebeb')).toBe(SCALES.light)
+    expect(scaleFor('dark', GROUND.dark, '#34d399')).not.toBe(DARK)
   })
 
-  it('starts from a tinted ground, the rest of the way as it was', () => {
-    const scale = scaleOn('dark', '#0e0818')
+  it('gives emerald for the Emerald theme’s accent, as it once was', () => {
+    const scale = scaleFor('dark', GROUND.dark, '#34d399')
+    expect(scale.stops[1]?.hex).toBe('#34d399')
+    // Where the one emerald scale stood it, about 0.7 of the way
+    expect(scale.stops[1]?.at).toBeGreaterThan(0.65)
+    expect(scale.stops[1]?.at).toBeLessThan(0.8)
+    expect(turn(hueOf(hexAt(0.4, scale)), 163)).toBeLessThan(3)
+  })
+
+  it('starts from a tinted ground, its own colour first', () => {
+    const scale = scaleFor('dark', '#0e0818', '#fff04d')
     expect(scale.stops[0]?.hex).toBe('#0e0818')
-    expect(scale.stops.slice(1).map((stop) => stop.hex)).toEqual(
-      SCALES.dark.stops.slice(1).map((stop) => stop.hex)
-    )
     const out = new Uint8ClampedArray(4)
     scale.colour(0, out, 0)
     expect([...out]).toEqual([0x0e, 0x08, 0x18, 255])
   })
 
-  it('makes a ground once', () => {
-    expect(scaleOn('light', '#f5e5eb')).toBe(scaleOn('light', '#f5e5eb'))
+  it('keeps a bright accent’s colours in sRGB, its hue held', () => {
+    // A laser yellow near white: the way up from it leaves the gamut
+    // unless its chroma is cut
+    const scale = scaleFor('dark', '#0b0b0b', '#fff04d')
+    const hue = hueOf('#fff04d')
+    for (let i = 16; i <= 255; i++) {
+      const hex = hexAt(i / 255, scale)
+      if (chromaOf(hex) < 0.02) continue
+      expect(turn(hueOf(hex), hue)).toBeLessThan(4)
+    }
   })
 })

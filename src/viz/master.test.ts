@@ -30,7 +30,7 @@ import {
   boardFits,
   xToHz,
 } from './master'
-import { SCALES } from './colourScale'
+import { scaleFor } from './colourScale'
 
 const SAMPLE_RATE = 48000
 const BINS = 2048
@@ -399,7 +399,11 @@ describe('vectorPoint', () => {
 })
 
 describe('spectrogramColour', () => {
-  const DARK = SCALES.dark
+  const DARK = scaleFor('dark', '#0b0b0b', '#ff754a')
+  const LIGHT = scaleFor('light', '#ebebeb', '#be440c')
+  const END = { dark: DARK.stops[2]?.hex, light: LIGHT.stops[2]?.hex }
+  const rgb = (hex = '') =>
+    [1, 3, 5].map((k) => Number.parseInt(hex.slice(k, k + 2), 16))
   const MIN = -60
   const MAX = 0
 
@@ -413,7 +417,7 @@ describe('spectrogramColour', () => {
   it('writes the colour scale’s near white at t 1', () => {
     const out = new Uint8ClampedArray(4)
     spectrogramColour(MAX, MIN, MAX, DARK, out, 0)
-    expect(Array.from(out)).toEqual([253, 252, 225, 255])
+    expect(Array.from(out)).toEqual([...rgb(END.dark), 255])
   })
 
   it('colours a level as the scale does at its place in the range', () => {
@@ -429,7 +433,7 @@ describe('spectrogramColour', () => {
   it('clamps outside the range and takes -Infinity and NaN as t 0', () => {
     const hot = new Uint8ClampedArray(4)
     spectrogramColour(10, MIN, MAX, DARK, hot, 0)
-    expect(Array.from(hot)).toEqual([253, 252, 225, 255])
+    expect(Array.from(hot)).toEqual([...rgb(END.dark), 255])
     const dead = new Uint8ClampedArray(4)
     spectrogramColour(-Infinity, MIN, MAX, DARK, dead, 0)
     expect(Array.from(dead)).toEqual([11, 11, 11, 255])
@@ -440,9 +444,16 @@ describe('spectrogramColour', () => {
 
   it('writes the light scale in the light: its ground, then near black', () => {
     const out = new Uint8ClampedArray(8)
-    spectrogramColour(MIN, MIN, MAX, SCALES.light, out, 0)
-    spectrogramColour(MAX, MIN, MAX, SCALES.light, out, 4)
-    expect(Array.from(out)).toEqual([235, 235, 235, 255, 30, 14, 51, 255])
+    spectrogramColour(MIN, MIN, MAX, LIGHT, out, 0)
+    spectrogramColour(MAX, MIN, MAX, LIGHT, out, 4)
+    expect(Array.from(out)).toEqual([
+      235,
+      235,
+      235,
+      255,
+      ...rgb(END.light),
+      255,
+    ])
   })
 
   it('always writes an opaque alpha', () => {

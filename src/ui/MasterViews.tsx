@@ -28,16 +28,16 @@ import {
   viewsSideBySide,
   type Levels,
 } from '../viz/master'
-import { scaleOn } from '../viz/colourScale'
+import { scaleFor } from '../viz/colourScale'
 import { FADE_IN, outputTap, useFrames } from './frames'
 import { Scope, type ScopeStats } from './Scope'
 import {
   alpha,
-  ground,
   groundOf,
   mode,
   palette,
   themeId,
+  themeOf,
   type Mode,
 } from './theme'
 
@@ -51,7 +51,8 @@ import {
  * silence not drawn. The output is drawn in the theme's accent, as the
  * scope draws it — read as it draws, so a theme switch shows on the next
  * frame; above 0 dB, going into the clip, in amber. The spectrogram's
- * levels are drawn on the colour scale (src/viz/colourScale.ts).
+ * levels are drawn on the colour scale (src/viz/colourScale.ts), in the
+ * accent's hue too.
  */
 
 /** What a view's name calls its output */
@@ -61,9 +62,10 @@ const named = (source: OutputSource) =>
 /**
  * The views' colours in a mode (src/ui/theme.ts's ground): their ground,
  * the grid's lines and the axis, the spectrum's peak line, going into
- * the clip (amber), a meter's empty track (a tile's face), and a meter's
- * track drawn in silence: the ground, a breath lifted, so that the two
- * sides still show apart
+ * the clip (amber), a meter's empty track (a tile's face), a meter's
+ * track drawn in silence (the ground, a breath lifted, so that the two
+ * sides still show apart), and the spectrogram's scale, its ground
+ * through the theme's accent in that mode
  */
 function viewColours(tone: Mode) {
   const { page, tile, over, neutral, hot } = groundOf(tone)
@@ -79,7 +81,7 @@ function viewColours(tone: Mode) {
     /** The spectrogram's lines: a grey, white or black (blendTowards) */
     line: tone === 'light' ? 0 : 255,
     lineColour: (share: number) => `rgba(${over}, ${share})`,
-    scale: scaleOn(tone, page),
+    scale: scaleFor(tone, page, themeOf(themeId())[tone].accent),
   }
 }
 
@@ -90,12 +92,12 @@ const KEY_TICKS = Array.from(
 )
 
 /**
- * The spectrogram's key: the mode's colour scale in a bar from the
- * spectral views' floor, the background's colour, to their top, near
- * white (near black in the light), the two named at its ends and a tick
- * under it at every 10 dB between. Fitted to a tile (fit), the bar runs
- * across it, 8rem at most (ashon: "너무 아래에 쫙 펼쳐져 있는데"), and
- * its ends are named under it (asked for by ashon, 2026-11-15:
+ * The spectrogram's key: its colour scale in a bar from the spectral
+ * views' floor, the background's colour, through the accent to their
+ * top, near white (near black in the light), the two named at its ends
+ * and a tick under it at every 10 dB between. Fitted to a tile (fit),
+ * the bar runs across it, 8rem at most (ashon: "너무 아래에 쫙 펼쳐져
+ * 있는데"), and its ends are named under it (asked for by ashon, 2026-11-15:
  * "스펙트로그램에서의 legend는 시각화 안에 들어가도 좋을 것 같아").
  */
 export function ColourKey({
@@ -105,11 +107,10 @@ export function ColourKey({
   className?: string
   fit?: boolean
 }) {
-  const light = mode() === 'light'
+  const tone = mode()
+  const light = tone === 'light'
   const label = `The spectrogram’s colours: ${SPECTRUM_FLOOR} dB ${light ? 'light' : 'dark'}, ${SPECTRUM_TOP} dB ${light ? 'near black' : 'near white'}`
-  const gradient = scaleOn(light ? 'light' : 'dark', ground().page).gradient(
-    'to right'
-  )
+  const gradient = viewColours(tone).scale.gradient('to right')
   if (fit) {
     return (
       <span
@@ -653,23 +654,27 @@ const histories = new Map<
  * The spectrum over time: a column a frame at the right, the older ones
  * scrolling left at SCROLL, low notes at the bottom on the spectrum's
  * logarithmic axis, each level on the colour scale from the background
- * through indigo, blue, teal and emerald to yellow and near white
- * (spectrogramColour), lighter by as much for every dB. A line across
- * marks each decade (100 Hz, 1 kHz, 10 kHz), and a line down each
- * second, drawn into the picture to scroll away with it: how long a tail
- * rings is counted in them. Labelled, the decades are named in the DOM
- * over it, each over its line, the highest under the top where its line
- * stands too near it to name above, and its colours (ColourKey) at its
- * lower left, over the oldest of the lowest notes, 100 Hz's name left
- * out where the view is under 6rem tall and the key would sit on it (the
- * Fold's outer screen); where it is wider than 16rem, the lines' second
- * is named at its lower right. In a tile, unlabelled, its colours
- * are keyed across its foot instead (ColourKey's fit), where it is 6rem
- * wide or more: a narrower one (a phone's tiles) has no room to spare
- * for it (ashon: "렌더링 영역이 작으면 legend는 그냥 제거해도 좋을 것
- * 같아"). In silence it scrolls the last sound away, then rests, its
+ * through the accent to near white (near black in the light), in the
+ * accent's hue (spectrogramColour), lighter by as much for every dB. A
+ * line across marks each decade (100 Hz, 1 kHz, 10 kHz), and a line
+ * down each second, drawn into the picture to scroll away with it: how
+ * long a tail rings is counted in them. Labelled, the decades are named
+ * in the DOM over it, each over its line, the highest under the top
+ * where its line stands too near it to name above, and its colours
+ * (ColourKey) at its lower left, over the oldest of the lowest notes,
+ * 100 Hz's name left out where the view is under 6rem tall and the key
+ * would sit on it (the Fold's outer screen); where it is wider than
+ * 16rem, the lines' second is named at its lower right. In a tile,
+ * unlabelled, its colours are keyed across its foot instead (ColourKey's
+ * fit), where it is 6rem wide or more: a narrower one (a phone's tiles)
+ * has no room to spare for it (ashon: "렌더링 영역이 작으면 legend는
+ * 그냥 제거해도 좋을 것 같아"). In silence it scrolls the last sound away, then rests, its
  * lines where they were. Resized, or drawn anew in another's place, it
- * goes on from what it showed (histories), not from empty.
+ * goes on from what it showed (histories), not from empty. In another
+ * theme or mode it is drawn anew in that one's colours, from what it
+ * showed when last in them or empty: what it drew keeps its pixels, not
+ * its levels, so it is not coloured again, and two scales never stand in
+ * it at once under one key.
  */
 export function Spectrogram({
   engine,

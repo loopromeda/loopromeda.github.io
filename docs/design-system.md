@@ -69,7 +69,9 @@ still would leave the chains' inks too faint to read as letters.
   (`ConfirmDialog`, `BUTTON_DANGER`, `SMALL_DANGER`). A failure is amber
   (`--warn`).
 - The accent's colour (a reddish orange in the Default theme, emerald in
-  Emerald) is the accent's jobs alone: focus, the go button, play. No
+  Emerald) is the accent's jobs alone: focus, the go button, play, and
+  the output drawn (the scope, the meters, the spectrogram's levels, in
+  its hue from the ground to near white, near black in the light). No
   chain wears it, and Play lit stands apart from Record lit. Running and
   ready (`--ok`) are emerald in every theme.
 - What is picked shows by brightness, not a hue: the secondary is
