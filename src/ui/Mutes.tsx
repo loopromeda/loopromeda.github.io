@@ -51,7 +51,7 @@ const ROW = 'group flex h-11 w-9 shrink-0 items-center justify-center'
 const LETTER =
   'flex items-center justify-center rounded-md font-mono text-[11px] font-semibold'
 const ROW_MUTE = `${LETTER} size-7 bg-(--lift) text-(--ink-400) group-aria-pressed:bg-(--warn)/20 group-aria-pressed:text-(--warn-ink)`
-const ROW_SOLO = `${LETTER} size-7 bg-(--lift) text-(--ink-400) group-aria-pressed:bg-(--ok)/20 group-aria-pressed:text-(--ok-ink)`
+const ROW_SOLO = `${LETTER} size-7 bg-(--lift) text-(--ink-400) group-aria-pressed:bg-(--secondary)/20 group-aria-pressed:text-(--ink-0)`
 /** In a panel's cell (OutputCells): half its height, by its word */
 const CELL =
   'flex min-h-0 flex-1 items-center justify-center rounded-md text-[11px] font-semibold tracking-wider'

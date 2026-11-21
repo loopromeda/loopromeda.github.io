@@ -55,7 +55,7 @@ export function PatchButton({
         {changed && (
           <span
             aria-hidden="true"
-            className="size-1.5 shrink-0 rounded-full bg-(--accent)"
+            className="size-1.5 shrink-0 rounded-full bg-(--ink-300)"
           />
         )}
       </span>

@@ -91,7 +91,7 @@ const REACH_ARC = arcAt(REACH_RADIUS)
 
 const clamp01 = (n: number) => (n < 0 ? 0 : n > 1 ? 1 : n)
 
-/** A knob's arc where nothing colours it: zinc-300 (zinc-700 in the light) */
+/** A knob's arc where nothing colours it: the ground's quiet ink */
 export const neutralArc = () => ground().quiet
 
 /**

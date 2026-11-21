@@ -59,12 +59,12 @@ export interface Look {
   readonly tint: string
 }
 
-/** Inputs and the amp, every chain's: zinc-200, zinc-800 in the light */
+/** Inputs and the amp, every chain's: the ground's neutral ink */
 export function neutralLook(): Look {
   return NEUTRAL_LOOKS[mode()]
 }
 
-/** The voice, quieter still: zinc-400 rings, zinc-300 ink (and the light's) */
+/** The voice, quieter still: the ground's dim rings, its quiet ink */
 export function voiceLook(): Look {
   return VOICE_LOOKS[mode()]
 }

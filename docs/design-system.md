@@ -18,15 +18,15 @@ redefined under `:root[data-mode='light']`. A screen uses them through
 Tailwind's arbitrary-property form, `bg-(--panel)`, `text-(--ink-400)`,
 `ring-(--lift-2)`, never a raw colour.
 
-| Family   | Tokens                                                                 | For                                                                  |
-| -------- | ---------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| Surfaces | `--bg`, `--panel`, `--tile`, `--key`, `--key-black`                    | the page; a card; a tile's face, a popover; a key or pad             |
-| Inks     | `--ink` (the page's text), `--ink-0`, `--ink-100` … `--ink-600`        | brightest (chosen) to dimmest (a hint), zinc's ladder                |
-| Lifts    | `--lift`, `--lift-2`, `--lift-3`, `--lift-4`, `--over`                 | a control at rest, pressed or chosen, rings, shares of `--over`      |
-| Depths   | `--well`, `--under`, `--veil`, `--scrim`, `--backdrop`, `--shadow`     | a field's well, a seam, what lies over or under a view               |
-| Roles    | `--accent`, `--secondary`, `--modulator`, `--on-colour`                | focus and the go button; what is picked; modulation; a label on them |
-| Statuses | `--ok`, `--warn`, `--danger`, `--ok-ink`, `--warn-ink`, `--danger-ink` | what went well, what to mind, what deletes, and labels on each       |
-| Keys     | `--key-held`, `--key-root`, `--key-black-held`, `--mod-ink`            | mixed from the accent and the modulator                              |
+| Family   | Tokens                                                             | For                                                                  |
+| -------- | ------------------------------------------------------------------ | -------------------------------------------------------------------- |
+| Surfaces | `--bg`, `--panel`, `--tile`, `--key`, `--key-black`                | the page; a card; a tile's face, a popover; a key or pad; quiet grey |
+| Inks     | `--ink` (the page's text), `--ink-0`, `--ink-100` … `--ink-600`    | brightest (chosen) to dimmest (a hint), greys with no tint           |
+| Lifts    | `--lift`, `--lift-2`, `--lift-3`, `--lift-4`, `--over`             | a control at rest, pressed or chosen, rings, shares of `--over`      |
+| Depths   | `--well`, `--under`, `--veil`, `--scrim`, `--backdrop`, `--shadow` | a field's well, a seam, what lies over or under a view               |
+| Roles    | `--accent`, `--secondary`, `--modulator`, `--on-colour`            | focus and the go button; what is picked; modulation; a label on them |
+| Statuses | `--ok`, `--warn`, `--danger`, `--record`, and an `-ink` of each    | running; to mind or failed; a removal confirmed; recording           |
+| Keys     | `--key-held`, `--key-root`, `--key-black-held`, `--mod-ink`        | mixed from the accent and the modulator                              |
 
 **The face** is Recursive, one variable font in two cuts: names in its sans
 (`font-sans`), readouts in its Mono (`font-mono`, the same face with its
@@ -42,6 +42,26 @@ toward their colours too. Every value is held to the same checks
 (`theme.test.ts`): readable on a tile and on a card, told apart from its
 neighbours. `themeOf(id)[mode]` reads a theme's palette in JS (a chain's
 ink for a knob's arc).
+
+**Quiet grey.** `NEUTRAL` gives the default surfaces in greys with no
+tint, each mode on its own terms rather than the other inverted: the dark
+a display (a near-black page, `#0b0b0b`, never `#000`), the light a
+printed page (paper under white cards). The pop themes keep their tints.
+
+**One colour, one meaning** (`theme.ts`'s header):
+
+- Red is recording's alone (`--record`: the rail's and the bar's Record).
+  A removal's own button is neutral; `--danger`, the same red, stands only
+  in the confirmation that asks before it (`ConfirmDialog`,
+  `BUTTON_DANGER`, `SMALL_DANGER`). A failure is amber (`--warn`).
+- The accent's colour (emerald in the Default theme) is the accent's jobs
+  alone: focus, the go button, running (`--ok`).
+- What is picked shows by brightness, not a hue: the secondary is
+  `SECONDARY[mode]`, a near-white ring in the dark, an ink ring in the
+  light, in every built-in theme (a tile, a tick, a switch, a Solo).
+- A chain's colour goes on lines, arcs, rings and threads, never over an
+  area: a tile's face stays grey, a group is its ring, a part's picture is
+  a line drawing (a faint area only behind a short tile's label).
 
 **ThemeRoot** (`src/ui/ThemeRoot.tsx`) puts a theme and an appearance
 (`system`, `dark`, `light`) on the page: it sets the roles' variables and
@@ -81,7 +101,9 @@ keeps its contents 12 px (`p-3`) from its edges where its controls are
 44 px, 10 px (`p-2.5`) where they are 28 px. Knobs stand in `knobRow(n)`,
 a grid whose cells `KNOB_SIZE` fits: a knob is a sixth of its row's width
 (less the gaps), or `--knob` (3 rem unless a panel sets it) at most.
-`MUTE_FACE` and `SOLO_FACE` are a track's Mute (amber) and Solo (emerald).
+`MUTE_FACE` and `SOLO_FACE` are a track's Mute (amber) and Solo (picked:
+the secondary's brightness). A removal's own button is `SMALL_ICON_BUTTON`,
+neutral; red waits for its confirmation.
 
 Rules the recipes keep: disabled is 40% opaque everywhere; pressed or
 chosen is `--lift-2`; cards and the controls on them are fills only, rings

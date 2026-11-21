@@ -64,8 +64,8 @@
 @source inline("{cursor-pointer,cursor-default,cursor-grab,pointer-events-none,pointer-events-auto,select-none,touch-none,sr-only}");
 
 /* Every colour token, as a fill, an ink, a line, a ring, an outline */
-@source inline("{bg,text,border,ring}-(--{bg,panel,tile,key,key-black,key-held,key-root,ink,ink-0,ink-100,ink-200,ink-300,ink-400,ink-500,ink-600,over,lift,lift-2,lift-3,lift-4,well,under,veil,scrim,backdrop,shadow,on-colour,accent,secondary,modulator,mod-ink,ok,warn,danger,ok-ink,warn-ink,danger-ink})");
+@source inline("{bg,text,border,ring}-(--{bg,panel,tile,key,key-black,key-held,key-root,ink,ink-0,ink-100,ink-200,ink-300,ink-400,ink-500,ink-600,over,lift,lift-2,lift-3,lift-4,well,under,veil,scrim,backdrop,shadow,on-colour,accent,secondary,modulator,mod-ink,ok,warn,danger,record,ok-ink,warn-ink,danger-ink,record-ink})");
 @source inline("{hover:,aria-pressed:}{bg,text}-(--{panel,tile,key,ink-0,ink-100,ink-200,lift,lift-2,lift-3,accent,secondary})");
-@source inline("{outline,fill,stroke,divide}-(--{bg,panel,tile,key,ink,ink-100,ink-200,ink-400,ink-500,lift-2,lift-3,accent,secondary,modulator,ok,warn,danger})");
-@source inline("{bg,text,border,ring}-(--{accent,secondary,modulator,ok,warn,danger,over})/{5,8,10,15,20,25,30,40,50,60,70,80}");
+@source inline("{outline,fill,stroke,divide}-(--{bg,panel,tile,key,ink,ink-100,ink-200,ink-400,ink-500,lift-2,lift-3,accent,secondary,modulator,ok,warn,danger,record})");
+@source inline("{bg,text,border,ring}-(--{accent,secondary,modulator,ok,warn,danger,record,over})/{5,8,10,15,20,25,30,40,50,60,70,80}");
 @source inline("{bg,text,border,ring,fill,stroke}-{transparent,current,white,black}");

@@ -262,7 +262,7 @@ export function Dropdown<T extends string | number>({
                     strokeLinecap="round"
                     strokeLinejoin="round"
                     aria-hidden="true"
-                    className="ml-auto shrink-0 text-(--accent)"
+                    className="ml-auto shrink-0 text-(--secondary)"
                   >
                     <path d="M2.5 7.5l3 3 6-6.5" />
                   </svg>

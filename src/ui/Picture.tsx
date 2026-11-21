@@ -10,11 +10,12 @@ import {
 } from './outline'
 
 /**
- * A part's picture (outline.ts): its line, and the area under it filled
- * faintly (an EQ's, between it and 0 dB), stretched to the box className
- * gives it (the stroke keeps its width). It follows the knobs by setting
- * the paths itself, so a knob turning re-renders nothing, and leaves them
- * be while the picture stays the same.
+ * A part's picture (outline.ts): a line drawing, its chain's colour on
+ * the line and not over an area (theme.ts), the area under it (an EQ's,
+ * between it and 0 dB) filled only where fillOpacity asks, stretched to
+ * the box className gives it (the stroke keeps its width). It follows the
+ * knobs by setting the paths itself, so a knob turning re-renders
+ * nothing, and leaves them be while the picture stays the same.
  */
 export function Picture({
   engine,
@@ -22,7 +23,7 @@ export function Picture({
   color,
   className,
   lineOpacity = 1,
-  fillOpacity = 0.12,
+  fillOpacity = 0,
 }: {
   engine: Engine
   part: string

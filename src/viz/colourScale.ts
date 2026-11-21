@@ -23,7 +23,7 @@ export type Lab = readonly [number, number, number]
  * white, each lighter than the one before
  */
 const DARK_COLOURS = [
-  '#0b0b10',
+  '#0b0b0b',
   '#311969',
   '#125a98',
   '#0c9999',
@@ -38,7 +38,7 @@ const DARK_COLOURS = [
  * dark scale's hues met the other way round
  */
 const LIGHT_COLOURS = [
-  '#e9e9ee',
+  '#ebebeb',
   '#dad586',
   '#50c08b',
   '#0f9293',

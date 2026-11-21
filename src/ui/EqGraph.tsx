@@ -437,12 +437,12 @@ export function EqGraph({
   )
 }
 
-/** A point's number in its badge: the accent's, picked */
+/** A point's number in its badge: picked, the secondary's brightness */
 function PointNumber({ p, lit }: { p: number; lit: boolean }) {
   return (
     <b
       aria-hidden
-      className={`flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-[5px] px-1 text-[10px] font-extrabold ${lit ? 'bg-(--accent) text-(--bg)' : 'bg-(--over)/8 text-(--ink-300)'}`}
+      className={`flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-[5px] px-1 text-[10px] font-extrabold ${lit ? 'bg-(--secondary) text-(--bg)' : 'bg-(--over)/8 text-(--ink-300)'}`}
     >
       {p + 1}
     </b>

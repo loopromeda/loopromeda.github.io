@@ -48,7 +48,7 @@ describe('oklab', () => {
 
 describe('the dark colour scale', () => {
   it('runs from the views’ background to near white', () => {
-    expect(hexAt(0)).toBe('#0b0b10')
+    expect(hexAt(0)).toBe('#0b0b0b')
     expect(hexAt(1)).toBe('#fdfce1')
     expect(SCALE_STOPS[0]?.at).toBe(0)
     expect(SCALE_STOPS[SCALE_STOPS.length - 1]?.at).toBe(1)
@@ -65,7 +65,7 @@ describe('the dark colour scale', () => {
   })
 
   it('grows evenly lighter along it', () => {
-    const first = oklab('#0b0b10')[0]
+    const first = oklab('#0b0b0b')[0]
     const last = oklab('#fdfce1')[0]
     let before = -1
     for (let i = 0; i <= 255; i++) {
@@ -98,8 +98,8 @@ describe('the dark colour scale', () => {
   })
 
   it('clamps t, takes NaN as 0 and writes only its four bytes', () => {
-    expect(hexAt(-3)).toBe('#0b0b10')
-    expect(hexAt(NaN)).toBe('#0b0b10')
+    expect(hexAt(-3)).toBe('#0b0b0b')
+    expect(hexAt(NaN)).toBe('#0b0b0b')
     expect(hexAt(7)).toBe('#fdfce1')
     const out = new Uint8ClampedArray(12).fill(9)
     DARK.colour(0.5, out, 4)
@@ -110,7 +110,7 @@ describe('the dark colour scale', () => {
 
   it('writes the scale as a CSS gradient of seventeen steps', () => {
     const css = DARK.gradient('to right')
-    expect(css.startsWith('linear-gradient(to right, rgb(11 11 16) 0%,')).toBe(
+    expect(css.startsWith('linear-gradient(to right, rgb(11 11 11) 0%,')).toBe(
       true
     )
     expect(css.endsWith(', rgb(253 252 225) 100%)')).toBe(true)
@@ -120,14 +120,14 @@ describe('the dark colour scale', () => {
 
 describe('the light colour scale', () => {
   it('runs from the light views’ background to near black', () => {
-    expect(hexAt(0, LIGHT)).toBe('#e9e9ee')
+    expect(hexAt(0, LIGHT)).toBe('#ebebeb')
     expect(hexAt(1, LIGHT)).toBe('#1e0e33')
     expect(LIGHT.stops[0]?.at).toBe(0)
     expect(LIGHT.stops[LIGHT.stops.length - 1]?.at).toBe(1)
   })
 
   it('grows evenly darker along it', () => {
-    const first = oklab('#e9e9ee')[0]
+    const first = oklab('#ebebeb')[0]
     const last = oklab('#1e0e33')[0]
     let before = 2
     for (let i = 0; i <= 255; i++) {
@@ -157,8 +157,8 @@ describe('the light colour scale', () => {
 
 describe('scaleOn', () => {
   it("is the mode's own scale on the neutral ground", () => {
-    expect(scaleOn('dark', '#0b0b10')).toBe(SCALES.dark)
-    expect(scaleOn('light', '#e9e9ee')).toBe(SCALES.light)
+    expect(scaleOn('dark', '#0b0b0b')).toBe(SCALES.dark)
+    expect(scaleOn('light', '#ebebeb')).toBe(SCALES.light)
   })
 
   it('starts from a tinted ground, the rest of the way as it was', () => {

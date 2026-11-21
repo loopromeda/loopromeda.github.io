@@ -74,12 +74,13 @@ export const OPTION = `${BUTTON_SHAPE} ${OPTION_FACE}`
 
 /**
  * A track's Mute and Solo, toggles (aria-pressed) dim as an option until
- * on: amber for what is silenced, emerald for what alone is heard
+ * on: amber for what is silenced, and what alone is heard lit as what is
+ * picked is, by brightness (the secondary)
  */
 export const MUTE_FACE =
   'bg-(--lift) text-(--ink-400) aria-pressed:bg-(--warn)/20 aria-pressed:text-(--warn-ink)'
 export const SOLO_FACE =
-  'bg-(--lift) text-(--ink-400) aria-pressed:bg-(--ok)/20 aria-pressed:text-(--ok-ink)'
+  'bg-(--lift) text-(--ink-400) aria-pressed:bg-(--secondary)/20 aria-pressed:text-(--ink-0)'
 
 /**
  * An option as wide as its cell in a grid of them, all of one size: its

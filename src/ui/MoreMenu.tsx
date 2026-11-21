@@ -67,7 +67,10 @@ export interface MenuItem {
   readonly glyph: string
   readonly onSelect: () => void
   readonly disabled?: boolean
-  /** It loses something (Delete): in the danger's ink */
+  /**
+   * It loses something (Delete): told by its glyph, in the others' grey
+   * (red is recording's: theme.ts)
+   */
   readonly danger?: boolean
   /**
    * One of a choice (a radio's), picked or not: a tick at its right where
@@ -294,7 +297,7 @@ export function MenuButton({
                     aria-checked={item.checked}
                     disabled={item.disabled}
                     onClick={() => pick(item)}
-                    className={`flex h-8 w-full shrink-0 items-center gap-2.5 rounded-md px-2.5 text-left text-[11px] font-semibold tracking-wider outline-none hover:bg-(--lift) focus-visible:bg-(--lift) active:bg-(--lift-2) disabled:opacity-40 ${item.danger ? 'text-(--danger-ink)' : 'text-(--ink-200)'}`}
+                    className={`flex h-8 w-full shrink-0 items-center gap-2.5 rounded-md px-2.5 text-left text-[11px] font-semibold tracking-wider outline-none hover:bg-(--lift) focus-visible:bg-(--lift) active:bg-(--lift-2) disabled:opacity-40 text-(--ink-200)`}
                   >
                     <svg
                       width="14"
@@ -306,7 +309,7 @@ export function MenuButton({
                       strokeLinecap="round"
                       strokeLinejoin="round"
                       aria-hidden="true"
-                      className={`shrink-0 ${item.danger ? '' : 'text-(--ink-400)'}`}
+                      className="shrink-0 text-(--ink-400)"
                     >
                       <path d={item.glyph} />
                     </svg>
@@ -327,7 +330,7 @@ export function MenuButton({
                         strokeLinecap="round"
                         strokeLinejoin="round"
                         aria-hidden="true"
-                        className={`shrink-0 text-(--accent) ${item.checked ? '' : 'invisible'}`}
+                        className={`shrink-0 text-(--secondary) ${item.checked ? '' : 'invisible'}`}
                       >
                         <path d={TICK} />
                       </svg>

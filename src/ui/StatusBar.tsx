@@ -10,8 +10,10 @@ const DOT: Readonly<Record<EngineState, string>> = {
   running: 'bg-(--ok)',
   suspended: 'bg-(--warn)',
   interrupted: 'bg-(--warn)',
-  closed: 'bg-(--danger)',
-  failed: 'bg-(--danger)',
+  // Amber, what to mind, the word beside it saying which: red is
+  // recording's (theme.ts)
+  closed: 'bg-(--warn)',
+  failed: 'bg-(--warn)',
 }
 
 /**
@@ -24,8 +26,8 @@ const ms = (seconds: number | undefined): string =>
   seconds === undefined ? '—' : `${(seconds * 1000).toFixed(1)} ms`
 
 /**
- * From these loads on, the reading turns amber, then red: little of each
- * block left to spare, then none (the audio may break up)
+ * From these loads on, the reading turns amber, then amber and bold:
+ * little of each block left to spare, then none (the audio may break up)
  */
 const BUSY = 0.7
 const FULL = 0.9
@@ -49,8 +51,8 @@ function DspLoad({ engine }: { engine: Engine }) {
         ? `The synth took ${percent}% of each block's time over the last half second; ${report.voices} ${report.voices === 1 ? 'voice' : 'voices'} sounding`
         : "The synth's share of each block's time"
       const load = report?.load ?? 0
-      span.classList.toggle('text-(--warn)', load >= BUSY && load < FULL)
-      span.classList.toggle('text-(--danger)', load >= FULL)
+      span.classList.toggle('text-(--warn)', load >= BUSY)
+      span.classList.toggle('font-bold', load >= FULL)
     }
     show()
     return engine.subscribeLoad(show)

@@ -233,7 +233,7 @@ export function RoutesInto({
                   onClick={() =>
                     engine.edit((current) => removePart(current, route.id))
                   }
-                  className="h-7 rounded-md bg-(--danger)/15 text-[11px] font-semibold text-(--danger-ink)"
+                  className="h-7 rounded-md bg-(--lift) text-[11px] font-semibold text-(--ink-200) active:bg-(--lift-2)"
                 >
                   Remove
                 </button>

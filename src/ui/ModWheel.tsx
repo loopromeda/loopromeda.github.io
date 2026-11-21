@@ -173,7 +173,7 @@ export function ModWheel({
         disabled={!onRoute}
         onClick={onRoute}
         style={{
-          background: modLook().tint,
+          background: 'var(--lift)',
           boxShadow: `inset 0 0 0 1.5px ${routed ? palette().modulator : modLook().ring}`,
         }}
         className="flex h-8 shrink-0 items-center justify-center rounded-[10px] disabled:opacity-40"

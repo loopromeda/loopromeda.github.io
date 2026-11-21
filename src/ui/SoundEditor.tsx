@@ -137,7 +137,7 @@ const GROUND = CARD_FACE
 const UNPICKED = ''
 /** A tile's face (index.css's tokens: either mode's) */
 const FACE = 'var(--tile)'
-/** A tile's text: zinc-100, zinc-900 in the light */
+/** A tile's text: the ladder's brightest but one, either mode's */
 const TEXT = 'var(--ink-100)'
 /** A dashed "+" tile's text and outline at rest */
 const ADD_TEXT = 'var(--ink-500)'
@@ -1993,7 +1993,7 @@ function MixLine({ engine, part }: { engine: Engine; part: string }) {
 function StripLine({ engine, place }: { engine: Engine; place: number }) {
   const state = useStripState(engine, place)
   if (state === 'mute') return <span className="text-(--warn-ink)">Mute</span>
-  if (state === 'solo') return <span className="text-(--ok-ink)">Solo</span>
+  if (state === 'solo') return <span className="text-(--ink-0)">Solo</span>
   return <MixLine engine={engine} part={stripId(place)} />
 }
 
@@ -2423,13 +2423,13 @@ function BusLevelThread({
 }
 
 /**
- * A bus's group in the mix, or the master's: a box in its look, a faint
- * face of its ink, its head across the top (a bus's letter or the
- * master's name, and its level), the tiles of its effects and its "+"
- * standing over it on their own (mixGeometry); the master's holds the
- * output's view under them. Tapped where no tile stands, it picks its
- * bus or the master; picked, its ring is heavier and its face takes the
- * tint, and it is outlined in its ink while one of its own is picked.
+ * A bus's group in the mix, or the master's: a box in its look, its
+ * colour on its ring alone (theme.ts), its head across the top (a bus's
+ * letter or the master's name, and its level), the tiles of its effects
+ * and its "+" standing over it on their own (mixGeometry); the master's
+ * holds the output's view under them. Tapped where no tile stands, it
+ * picks its bus or the master; picked, its ring is heavier with a halo
+ * round it, and it is outlined in its ink while one of its own is picked.
  */
 function Group({
   box,
@@ -2488,9 +2488,8 @@ function Group({
       className="z-0 overflow-hidden rounded-[9px]"
       style={{
         ...place(box),
-        background: picked
-          ? look.tint
-          : `color-mix(in srgb, ${look.ink} 6%, transparent)`,
+        // Its colour on its ring, not over its area (theme.ts)
+        background: 'transparent',
         boxShadow: shadow,
         color: TEXT,
       }}
@@ -2540,15 +2539,16 @@ function Group({
 
 /**
  * One tile: flat, its face cut from the ground, outlined by a ring in its
- * look. Picked, the ring is heavier and the face takes the tint; a member
+ * look. Picked, the ring is heavier with a halo round it; a member
  * of the picked chain is outlined in its ink; reached by the modulation
  * picked, a sky ring stands outside it. Dashed: a "+" that adds, or a
  * copy of an input standing in another chain's row. Given drag, it is
  * held to be dragged (tileDrag.ts). Given a picture, it draws that part's
  * (outline.ts) in its ink, live, in place of its pictogram: under the
- * label in a tall tile (two slots and up), its line and the area under
- * it; behind the label in a short one, the area alone, so that no line
- * runs through the letters. Either way it stands 3 px inside the tile's
+ * label in a tall tile (two slots and up), its line alone, a drawing in
+ * its chain's colour and not an area of it (theme.ts); behind the label
+ * in a short one, the area alone and faint, so that no line runs through
+ * the letters. Either way it stands 3 px inside the tile's
  * edges, its corners rounded as the tile's. An icon is its pictogram
  * alone, larger, its name left to its label for the ear. A "+" a thread
  * runs over (a row's) has its label at its foot, out of the thread's way,
@@ -2659,9 +2659,8 @@ function Tile({
   const face: CSSProperties =
     dashed === undefined
       ? {
-          background: picked
-            ? `linear-gradient(${look.tint}, ${look.tint}), ${FACE}`
-            : FACE,
+          // Picked by its rings, its face left as it is (theme.ts)
+          background: FACE,
           boxShadow: shadow,
           color: TEXT,
         }
@@ -2677,7 +2676,7 @@ function Tile({
                   ? look.ring
                   : ADD_LINE
           }`,
-          background: picked ? look.tint : 'transparent',
+          background: 'transparent',
           color:
             dashed === 'copy'
               ? picked
@@ -2800,7 +2799,7 @@ function Tile({
           part={picture}
           color={look.ink}
           lineOpacity={0}
-          fillOpacity={0.16}
+          fillOpacity={0.08}
           className="absolute top-[3px] left-[3px] -z-10 size-[calc(100%-6px)] rounded-[4px]"
         />
       )}

@@ -49,7 +49,7 @@ export function TrackButton({
       {state !== 'on' && (
         <span
           aria-hidden
-          className={`size-1.5 shrink-0 rounded-full ${state === 'solo' ? 'bg-(--ok)' : 'bg-(--warn)'}`}
+          className={`size-1.5 shrink-0 rounded-full ${state === 'solo' ? 'bg-(--secondary)' : 'bg-(--warn)'}`}
         />
       )}
       <span className="truncate">{name}</span>

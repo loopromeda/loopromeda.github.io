@@ -66,11 +66,14 @@ export function PlayButton({
   return small ? <SmallIconButton {...props} /> : <BarIconButton {...props} />
 }
 
-/** Record's button on the tab rail, the panel's 28 px: red while lit */
-const RAIL_RECORD = `${TALL_HIT} flex size-7 shrink-0 items-center justify-center rounded-md bg-(--lift) text-(--ink-200) aria-pressed:bg-(--danger)/20 aria-pressed:text-(--danger-ink)`
+/**
+ * Record's button on the tab rail, the panel's 28 px: red while lit, the
+ * one red on the screen (theme.ts)
+ */
+const RAIL_RECORD = `${TALL_HIT} flex size-7 shrink-0 items-center justify-center rounded-md bg-(--lift) text-(--ink-200) aria-pressed:bg-(--record)/20 aria-pressed:text-(--record-ink)`
 
 /** The same in the play surface's header, at its 36 px */
-const BAR_RECORD = `${BAR_HIT} flex size-9 shrink-0 items-center justify-center rounded-lg bg-(--lift) text-(--ink-200) aria-pressed:bg-(--danger)/20 aria-pressed:text-(--danger-ink)`
+const BAR_RECORD = `${BAR_HIT} flex size-9 shrink-0 items-center justify-center rounded-lg bg-(--lift) text-(--ink-200) aria-pressed:bg-(--record)/20 aria-pressed:text-(--record-ink)`
 
 /**
  * Records what is played into the loop of the track played, as the

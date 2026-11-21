@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   DEFAULT_THEME,
   NEUTRAL,
+  SECONDARY,
   THEMES,
   contrastRatio,
   ground,
@@ -38,8 +39,8 @@ const MODES = ['dark', 'light'] as const
 const NEUTRAL_INKS: Readonly<
   Record<Mode, { neutral: string; quiet: string; dim: string }>
 > = {
-  dark: { neutral: '#e4e4e7', quiet: '#d4d4d8', dim: '#a1a1aa' },
-  light: { neutral: '#27272a', quiet: '#3f3f46', dim: '#52525b' },
+  dark: { neutral: '#e5e5e5', quiet: '#d4d4d4', dim: '#a3a3a3' },
+  light: { neutral: '#262626', quiet: '#404040', dim: '#525252' },
 }
 
 describe('a theme', () => {
@@ -105,6 +106,26 @@ describe('a theme', () => {
     }
     for (const id of ['neon', 'candy', 'arcade'] as const) {
       expect(surfacesOf(themeOf(id), 'dark')).not.toBe(NEUTRAL.dark)
+    }
+  })
+
+  it('stands the neutral surfaces in greys with no tint', () => {
+    // Red, green and blue alike: no blue in the dark's near-black
+    const grey = (hex: string) => /^#(..)\1\1$/.test(hex)
+    for (const tone of MODES) {
+      for (const surface of Object.values(NEUTRAL[tone])) {
+        expect(grey(surface)).toBe(true)
+      }
+      expect(grey(SECONDARY[tone])).toBe(true)
+    }
+  })
+
+  it('shows what is picked by brightness in every built-in theme', () => {
+    for (const theme of THEMES) {
+      expect(theme.dark.secondary).toBe(SECONDARY.dark)
+      expect(theme.light.secondary).toBe(SECONDARY.light)
+      // Never the accent's colour: play's, not what is picked
+      expect(theme.dark.secondary).not.toBe(theme.dark.accent)
     }
   })
 
@@ -180,7 +201,7 @@ describe('a ground', () => {
 describe('markInks', () => {
   it('gives the default the icons’ emerald, near enough to see none', () => {
     const { ground, light, deep } = markInks(themeOf(DEFAULT_THEME), 'dark')
-    expect(ground).toBe('#0b0b10')
+    expect(ground).toBe(NEUTRAL.dark.page)
     expect(oklabDistance(light, '#6ee7b7')).toBeLessThan(1.5)
     expect(oklabDistance(deep, '#059669')).toBeLessThan(1.5)
   })

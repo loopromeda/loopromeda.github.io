@@ -26,6 +26,8 @@ import './ds.css'
 // Foundations
 export {
   DEFAULT_THEME,
+  NEUTRAL,
+  SECONDARY,
   THEMES,
   THEME_IDS,
   alpha,

@@ -90,7 +90,7 @@ describe('looks', () => {
     expect(lookOf(sound, 'i1')).toBe(neutralLook())
     expect(lookOf(sound, AMP)).toBe(neutralLook())
     expect(lookOf(sound, 'm1')).toEqual(modLook())
-    expect(lookOf(sound, VOICE).ink).toBe('#d4d4d8')
+    expect(lookOf(sound, VOICE).ink).toBe('#d4d4d4')
   })
 
   it('follows the theme it is given', () => {
@@ -102,8 +102,8 @@ describe('looks', () => {
       expect(modLook().ink).toBe('#d8b4fe')
       setTheme('ember', 'light')
       expect(chainLook(0).ink).toBe('#8c6501')
-      expect(neutralLook().ink).toBe('#27272a')
-      expect(voiceLook().ink).toBe('#3f3f46')
+      expect(neutralLook().ink).toBe('#262626')
+      expect(voiceLook().ink).toBe('#404040')
     } finally {
       setTheme(DEFAULT_THEME, 'dark')
     }

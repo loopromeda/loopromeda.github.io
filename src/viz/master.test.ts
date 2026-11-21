@@ -407,7 +407,7 @@ describe('spectrogramColour', () => {
     const out = new Uint8ClampedArray(8).fill(9)
     spectrogramColour(MIN, MIN, MAX, DARK, out, 4)
     expect(Array.from(out.slice(0, 4))).toEqual([9, 9, 9, 9])
-    expect(Array.from(out.slice(4))).toEqual([11, 11, 16, 255])
+    expect(Array.from(out.slice(4))).toEqual([11, 11, 11, 255])
   })
 
   it('writes the colour scale’s near white at t 1', () => {
@@ -432,17 +432,17 @@ describe('spectrogramColour', () => {
     expect(Array.from(hot)).toEqual([253, 252, 225, 255])
     const dead = new Uint8ClampedArray(4)
     spectrogramColour(-Infinity, MIN, MAX, DARK, dead, 0)
-    expect(Array.from(dead)).toEqual([11, 11, 16, 255])
+    expect(Array.from(dead)).toEqual([11, 11, 11, 255])
     const broken = new Uint8ClampedArray(4)
     spectrogramColour(NaN, MIN, MAX, DARK, broken, 0)
-    expect(Array.from(broken)).toEqual([11, 11, 16, 255])
+    expect(Array.from(broken)).toEqual([11, 11, 11, 255])
   })
 
   it('writes the light scale in the light: its ground, then near black', () => {
     const out = new Uint8ClampedArray(8)
     spectrogramColour(MIN, MIN, MAX, SCALES.light, out, 0)
     spectrogramColour(MAX, MIN, MAX, SCALES.light, out, 4)
-    expect(Array.from(out)).toEqual([233, 233, 238, 255, 30, 14, 51, 255])
+    expect(Array.from(out)).toEqual([235, 235, 235, 255, 30, 14, 51, 255])
   })
 
   it('always writes an opaque alpha', () => {

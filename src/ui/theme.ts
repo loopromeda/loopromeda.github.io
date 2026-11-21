@@ -13,6 +13,17 @@
  * 테마들도 넣어보면 좋겠어"), give the surfaces too; the others stand on
  * the neutral greys. A pure data file, no React, so the state may read
  * it (state/settings.ts).
+ *
+ * One colour, one meaning, in every theme (ashon, 2026-11-21, after a
+ * study of Teenage Engineering's instruments: "좋아 추천안으로 진행 해
+ * 보자"): the greys carry the interface, neutral, with no tint of blue; a
+ * chain's ink is its part's, on lines, arcs, rings and threads rather
+ * than areas; the modulation colour is modulation's; the accent is play's
+ * (the playhead, the go button, focus, a note, the traces); what is
+ * picked or current shows by brightness, not by a colour (the secondary,
+ * a near-white in the dark, ink in the light); and red is recording's
+ * (index.css's --record), seen elsewhere only in a removal's own
+ * confirmation.
  */
 
 export const THEME_IDS = [
@@ -33,9 +44,10 @@ export type Mode = 'dark' | 'light'
  * What a theme gives the app's colour roles: the four chains' inks in
  * A-to-D order, the modulation colour, the accent (focus, the playhead,
  * the go button, the traces, a note) and the secondary (what is picked
- * or current: a pad picked, its row, a navigator's frame). The built-in
- * themes give the secondary the accent's value; a theme of one's own
- * may part them.
+ * or current: a pad picked, its row, a navigator's frame, a choice
+ * ticked, Solo). The built-in themes give the secondary no colour but
+ * brightness (SECONDARY): a near-white ring in the dark, an ink one in
+ * the light; a theme of one's own may give it one.
  */
 export interface Palette {
   readonly chains: readonly [string, string, string, string]
@@ -57,22 +69,37 @@ export interface Surfaces {
   readonly keyBlack: string
 }
 
-/** The surfaces as index.css gives them: zinc's neutral greys */
+/**
+ * The surfaces as index.css gives them: greys with no tint, each mode on
+ * its own terms rather than the other turned over. The dark is a
+ * display, a near-black the colours shine on as light (not pure black:
+ * ashon kept a near-black, 2026-11-21); the light is a printed page,
+ * paper-white cards and tiles on a paper-grey page, drawn on in ink.
+ */
 export const NEUTRAL: Readonly<Record<Mode, Surfaces>> = {
   dark: {
-    page: '#0b0b10',
-    panel: '#16161c',
-    tile: '#1c1c23',
-    key: '#2a2a31',
-    keyBlack: '#111116',
+    page: '#0b0b0b',
+    panel: '#151515',
+    tile: '#1b1b1b',
+    key: '#2a2a2a',
+    keyBlack: '#101010',
   },
   light: {
-    page: '#e9e9ee',
-    panel: '#f5f5f8',
+    page: '#ebebeb',
+    panel: '#f8f8f8',
     tile: '#ffffff',
     key: '#ffffff',
-    keyBlack: '#2e2e35',
+    keyBlack: '#2b2b2b',
   },
+}
+
+/**
+ * What is picked or current, in the built-in themes: brightness, not a
+ * colour (index.css's --ink-100 in each mode)
+ */
+export const SECONDARY: Readonly<Record<Mode, string>> = {
+  dark: '#f5f5f5',
+  light: '#171717',
 }
 
 export interface Theme {
@@ -94,13 +121,14 @@ export interface Theme {
   readonly surfaces?: Readonly<Record<Mode, Surfaces>>
 }
 
-/** The roles' values, the accent standing in for the secondary */
+/** The roles' values in a mode, the secondary its brightness */
 function roles(
+  tone: Mode,
   chains: Palette['chains'],
   modulator: string,
   accent: string
 ): Palette {
-  return { chains, modulator, accent, secondary: accent }
+  return { chains, modulator, accent, secondary: SECONDARY[tone] }
 }
 
 /** The app's own colours, unchanged in the dark. */
@@ -109,11 +137,13 @@ export const THEMES: readonly Theme[] = [
     id: 'default',
     name: 'Default',
     dark: roles(
+      'dark',
       ['#ff8904', '#a684ff', '#bbf451', '#f6339a'],
       '#38bdf8',
       '#34d399'
     ),
     light: roles(
+      'light',
       ['#aa5405', '#7357ce', '#1d7d00', '#cf0288'],
       '#05749e',
       '#027c56'
@@ -123,11 +153,13 @@ export const THEMES: readonly Theme[] = [
     id: 'tidal',
     name: 'Tidal',
     dark: roles(
+      'dark',
       ['#60a5fa', '#bbf451', '#f6339a', '#fb923c'],
       '#c084fc',
       '#2dd4bf'
     ),
     light: roles(
+      'light',
       ['#286dbd', '#1d7d00', '#cf0288', '#a75705'],
       '#8b4fc2',
       '#037a6d'
@@ -139,11 +171,13 @@ export const THEMES: readonly Theme[] = [
     // The modulation colour a lavender: the violet it was stood too near
     // the indigo chain (C) to tell apart
     dark: roles(
+      'dark',
       ['#fde047', '#f472b6', '#818cf8', '#2dd4bf'],
       '#d8b4fe',
       '#f97316'
     ),
     light: roles(
+      'light',
       ['#8c6501', '#b83b81', '#4a65c9', '#005052'],
       '#9333ea',
       '#b34e02'
@@ -153,11 +187,13 @@ export const THEMES: readonly Theme[] = [
     id: 'orchard',
     name: 'Orchard',
     dark: roles(
+      'dark',
       ['#4ade80', '#fb923c', '#f6339a', '#818cf8'],
       '#fde047',
       '#a3e635'
     ),
     light: roles(
+      'light',
       ['#037d3e', '#ac5303', '#cf0288', '#5b61c9'],
       '#655702',
       '#507701'
@@ -169,12 +205,14 @@ export const THEMES: readonly Theme[] = [
     // A club at night: hot pink, electric cyan, acid lime and orange on
     // violet-black, the accent a laser yellow
     dark: roles(
+      'dark',
       ['#ff4fd8', '#3ee7ff', '#c6ff3d', '#ffa23d'],
       '#b49bff',
       '#fff04d'
     ),
     // No yellow reads on white: the accent a deep gold, the lime a green
     light: roles(
+      'light',
       ['#c601a5', '#0171b1', '#217c01', '#b14f03'],
       '#7c4fd8',
       '#7c6c04'
@@ -202,6 +240,7 @@ export const THEMES: readonly Theme[] = [
     // Sweets: bubblegum, mint, apricot and periwinkle on berry-black, the
     // modulation colour an ice blue, the accent lemon
     dark: roles(
+      'dark',
       ['#ff6fbf', '#45f0a8', '#ffb070', '#8aa0ff'],
       '#7fe0ff',
       '#fff07a'
@@ -209,6 +248,7 @@ export const THEMES: readonly Theme[] = [
     // Deepened, the bubblegum and the periwinkle met the violet: the
     // modulation colour a purple, set apart from both
     light: roles(
+      'light',
       ['#cf0288', '#027d23', '#aa5405', '#216db9'],
       '#9333ea',
       '#786d03'
@@ -236,12 +276,14 @@ export const THEMES: readonly Theme[] = [
     // A cabinet's primaries: yellow, sky blue, green and magenta on navy,
     // the accent orange
     dark: roles(
+      'dark',
       ['#ffd23f', '#4db5ff', '#34e0a1', '#ff5ccd'],
       '#b18cff',
       '#ff9248'
     ),
     // The yellow deepened goes orange, the accent's place: it goes gold
     light: roles(
+      'light',
       ['#ae5200', '#0372af', '#147c15', '#c61b9a'],
       '#8453bf',
       '#836801'
@@ -299,11 +341,11 @@ export interface Ground {
   readonly tile: string
   /** What lifts off the ground, as r, g, b: white, black in the light */
   readonly over: string
-  /** Inputs and the amp, every chain's: zinc-200, zinc-800 in the light */
+  /** Inputs and the amp, every chain's: --ink-200 */
   readonly neutral: string
-  /** Quieter: the voice's ink, a knob's arc nothing colours (zinc-300) */
+  /** Quieter: the voice's ink, a knob's arc nothing colours (--ink-300) */
   readonly quiet: string
-  /** Quieter still: the voice's ring, the wheel unrouted (zinc-400) */
+  /** Quieter still: the voice's ring, the wheel unrouted (--ink-400) */
   readonly dim: string
   /** Going into the clip: amber-400, amber-600 in the light */
   readonly hot: string
@@ -314,18 +356,18 @@ const GROUNDS: Readonly<Record<Mode, Ground>> = {
     page: NEUTRAL.dark.page,
     tile: NEUTRAL.dark.tile,
     over: '255, 255, 255',
-    neutral: '#e4e4e7',
-    quiet: '#d4d4d8',
-    dim: '#a1a1aa',
+    neutral: '#e5e5e5',
+    quiet: '#d4d4d4',
+    dim: '#a3a3a3',
     hot: '#fbbf24',
   },
   light: {
     page: NEUTRAL.light.page,
     tile: NEUTRAL.light.tile,
     over: '0, 0, 0',
-    neutral: '#27272a',
-    quiet: '#3f3f46',
-    dim: '#52525b',
+    neutral: '#262626',
+    quiet: '#404040',
+    dim: '#525252',
     hot: '#d97706',
   },
 }

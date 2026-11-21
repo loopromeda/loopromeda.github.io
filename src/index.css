@@ -116,37 +116,39 @@ body {
 /*
  * The roles' colours: the theme's (ui/theme.ts) in the page's mode, put
  * here by the page (App). These values are the Default theme's in the
- * dark, for the first paint
+ * dark, for the first paint. One colour, one meaning (theme.ts): the
+ * accent is play's, the secondary is brightness, not a colour
  */
 :root {
-  --accent: #34d399; /* focus, the playhead, the go button, a note */
-  --secondary: #34d399; /* what is picked or current */
+  --accent: #34d399; /* the playhead, the go button, focus, a note */
+  --secondary: #f5f5f5; /* what is picked or current: a white, an ink */
   --modulator: #38bdf8; /* modulation: a route, its source, its depth */
 }
 
 /*
- * The surfaces and inks, in the dark: the app's home. A token is the
- * colour itself, so a share of it is color-mix's (Tailwind's /opacity
- * on a token); the light below gives each its value in the light
- * (data-mode, set by App from the settings' appearance). The five
- * surfaces (--bg to --key-black) are the neutral's: the page puts the
- * theme's over them (ui/appearance.ts), a pop theme's tinted
+ * The surfaces and inks, in the dark: the app's home, a display. A token
+ * is the colour itself, so a share of it is color-mix's (Tailwind's
+ * /opacity on a token); the light below gives each its value in the
+ * light (data-mode, set by App from the settings' appearance). Greys with
+ * no tint (ui/theme.ts's NEUTRAL): the five surfaces (--bg to
+ * --key-black) are the neutral's, the page putting the theme's over them
+ * (ui/appearance.ts), a pop theme's tinted
  */
 :root {
   color-scheme: dark;
-  --bg: #0b0b10; /* the page, the wells that match it */
-  --panel: #16161c; /* cards, the rail, the dock, the glass */
-  --tile: #1c1c23; /* a tile's face, a popover */
-  --key: #2a2a31; /* a key or pad at rest */
-  --key-black: #111116; /* a black key at rest */
-  --ink: #e7e7ee; /* the page's own text */
+  --bg: #0b0b0b; /* the page, the wells that match it */
+  --panel: #151515; /* cards, the rail, the dock, the glass */
+  --tile: #1b1b1b; /* a tile's face, a popover */
+  --key: #2a2a2a; /* a key or pad at rest */
+  --key-black: #101010; /* a black key at rest */
+  --ink: #e8e8e8; /* the page's own text */
   --ink-0: #ffffff; /* what is chosen, at its brightest */
-  --ink-100: #f4f4f5; /* zinc's ladder, rung by rung */
-  --ink-200: #e4e4e7;
-  --ink-300: #d4d4d8;
-  --ink-400: #a1a1aa;
-  --ink-500: #71717a;
-  --ink-600: #52525b;
+  --ink-100: #f5f5f5; /* the greys' ladder, rung by rung */
+  --ink-200: #e5e5e5;
+  --ink-300: #d4d4d4;
+  --ink-400: #a3a3a3;
+  --ink-500: #737373;
+  --ink-600: #525252;
   --over: #ffffff; /* what lifts off a surface, at a share of it */
   --lift: rgb(255 255 255 / 0.05); /* a control at rest */
   --lift-2: rgb(255 255 255 / 0.1); /* pressed, a hairline ring */
@@ -159,12 +161,14 @@ body {
   --backdrop: rgb(0 0 0 / 0.7); /* under a dialog */
   --shadow: rgb(0 0 0 / 0.6); /* under what stands raised */
   --on-colour: #000000; /* a label on a role's colour: the accent */
-  --ok: #34d399; /* what went well: emerald */
-  --warn: #fbbf24; /* what to mind: amber */
-  --danger: #f87171; /* what failed, what deletes: red */
-  --ok-ink: #a7f3d0; /* each as a label on a share of itself */
+  --record: #ff5a4e; /* recording, and nothing else at rest: red */
+  --ok: #34d399; /* running, ready: the accent's go */
+  --warn: #fbbf24; /* what to mind, what failed: amber */
+  --danger: #ff5a4e; /* a removal's own confirmation: recording's red */
+  --record-ink: #ffd2cd; /* each as a label on a share of itself */
+  --ok-ink: #a7f3d0;
   --warn-ink: #fde68a;
-  --danger-ink: #fecaca;
+  --danger-ink: #ffd2cd;
 }
 
 /*
@@ -182,43 +186,46 @@ body {
 }
 
 /*
- * The light: zinc's ladder the other way up, what lifts darkening, and
- * the surfaces as the dark's are, rising toward white from the page
- * through the cards to the tiles and the keys
+ * The light: a printed page, not the dark turned over. Paper-white cards
+ * and tiles on a paper-grey page, ink for the text from near-black down,
+ * and what lifts a shade of ink on the paper
  */
 :root[data-mode='light'] {
   color-scheme: light;
-  --bg: #e9e9ee;
-  --panel: #f5f5f8;
+  --secondary: #171717;
+  --bg: #ebebeb;
+  --panel: #f8f8f8;
   --tile: #ffffff;
   --key: #ffffff;
-  --key-black: #2e2e35;
-  --ink: #18181b;
-  --ink-0: #09090b;
-  --ink-100: #18181b;
-  --ink-200: #27272a;
-  --ink-300: #3f3f46;
-  --ink-400: #52525b;
-  --ink-500: #71717a;
-  --ink-600: #a1a1aa;
+  --key-black: #2b2b2b;
+  --ink: #171717;
+  --ink-0: #0a0a0a;
+  --ink-100: #171717;
+  --ink-200: #262626;
+  --ink-300: #404040;
+  --ink-400: #525252;
+  --ink-500: #737373;
+  --ink-600: #a3a3a3;
   --over: #000000;
   --lift: rgb(0 0 0 / 0.05);
   --lift-2: rgb(0 0 0 / 0.09);
   --lift-3: rgb(0 0 0 / 0.14);
   --lift-4: rgb(0 0 0 / 0.28);
   --well: rgb(0 0 0 / 0.06);
-  --under: #a1a1aa;
+  --under: #a3a3a3;
   --veil: rgb(255 255 255 / 0.6);
   --scrim: color-mix(in srgb, var(--bg) 88%, transparent);
-  --backdrop: rgb(24 24 27 / 0.35);
+  --backdrop: rgb(23 23 23 / 0.35);
   --shadow: rgb(0 0 0 / 0.16);
   --on-colour: #ffffff;
+  --record: #d92d20;
   --ok: #047857;
   --warn: #b45309;
-  --danger: #dc2626;
+  --danger: #d92d20;
+  --record-ink: #b42318;
   --ok-ink: #065f46;
   --warn-ink: #92400e;
-  --danger-ink: #b91c1c;
+  --danger-ink: #b42318;
 }
 
 /*
@@ -238,7 +245,7 @@ body {
   inset: 0 0 auto;
   z-index: 60;
   height: env(safe-area-inset-top);
-  background: #0b0b10;
+  background: #0b0b0b;
   pointer-events: none;
 }
 
@@ -251,15 +258,15 @@ body {
 @utility select-chevron {
   appearance: none;
   field-sizing: content;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23a1a1aa' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23a3a3a3' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 0.5rem center;
   background-size: 0.625rem 0.375rem;
 }
 
-/* The chevron in the light: zinc-600, as the light's --ink-400 */
+/* The chevron in the light: the light's --ink-400 */
 :root[data-mode='light'] .select-chevron {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%2352525b' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23525252' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 }
 
 /*

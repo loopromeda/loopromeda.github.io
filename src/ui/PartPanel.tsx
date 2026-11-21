@@ -206,9 +206,13 @@ const ICONS = {
   open: 'M10.5 3.5h4v4M14.5 3.5l-4.5 4.5M7.5 14.5h-4v-4M3.5 14.5L8 10',
 } as const
 
-/** A header's small square button, and the one that removes */
+/**
+ * A header's small square button, and the one that removes: a grey, told
+ * by its bin; red is recording's, seen here only in the removal's own
+ * confirmation (ConfirmDialog)
+ */
 const ACTION_BUTTON = SMALL_ICON_BUTTON
-const REMOVE_BUTTON = `${TALL_HIT} flex size-7 shrink-0 items-center justify-center rounded-md bg-(--danger)/15 text-(--danger-ink)`
+const REMOVE_BUTTON = SMALL_ICON_BUTTON
 /**
  * A row of buttons that pans sideways when long (FadeRow): it runs to the
  * panel's edges, its buttons stood in from them as far as the panel's
@@ -1046,7 +1050,9 @@ function Feeds({
           style={
             feed.on
               ? {
-                  background: feed.look.tint,
+                  // The chain's colour on the ring and the letter, the
+                  // face a grey's (theme.ts)
+                  background: 'var(--lift-2)',
                   boxShadow: `inset 0 0 0 1.5px ${feed.look.ink}`,
                   color: feed.look.ink,
                 }
@@ -1123,7 +1129,7 @@ function Targets({
         type="button"
         onClick={() => onMap(source)}
         style={{
-          background: modLook().tint,
+          background: 'var(--lift)',
           boxShadow: `inset 0 0 0 1.5px ${palette().modulator}`,
         }}
         className={`${TALL_HIT} flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-[11px] font-semibold tracking-wider text-(--mod-ink)`}
