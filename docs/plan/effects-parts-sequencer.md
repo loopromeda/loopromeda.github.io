@@ -362,6 +362,17 @@ colours made once; a pixel's colour is a lookup. Its key, a bar of it
 from −80 to −10 dB with a tick every 10 dB, stands in the panel's row
 when the spectrogram is shown and at the lower left of the sheet's.
 
+On 2026-11-21 it went back to one hue, the theme's accent, when the
+Default's accent became a vermilion (ashon: "스펙트로그램도 기존 단색
+기반으로 가 보면 좋겠는데 가능할까?"): in the dark from the views'
+ground through the accent to a near white of its hue, in the light from
+the ground through the accent to a near black of its hue. The stops
+still stand by their lightness and are mixed in OKLab, so a level's
+dB still reads as an even step of lightness, and the key with its ticks
+stays. The Emerald theme gives the one emerald hue it had before. A
+switch of theme or mode draws the columns anew in the new scale (the
+canvas keeps pixels, not levels).
+
 Measured (M3 Max, `pnpm bench`), a full rack of four: compressors
 0.015 ms a block, EQs 0.009 (0.009 gliding; six points each since
 2026-11-15, all working: 0.015, 0.019 gliding), limiters 0.009; the
