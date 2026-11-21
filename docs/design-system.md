@@ -37,9 +37,10 @@ is named or typed is 13 px, a section's heading is 11 px small capitals
 
 **Themes** (`src/ui/theme.ts`) give the colour roles their values in each
 mode: the four chains' inks (A to D), the modulation colour, the accent and
-the secondary. `THEME_IDS`: Default, Tidal, Ember and Orchard stand on the
-neutral greys; Neon, Candy and Arcade, the pop themes, tint the surfaces
-toward their colours too. Every value is held to the same checks
+the secondary. `THEME_IDS`: Default (a reddish orange), Emerald (the
+colours the app had first), Tidal, Ember and Orchard stand on the neutral
+greys; Neon, Candy and Arcade, the pop themes, tint the surfaces toward
+their colours too. Every value is held to the same checks
 (`theme.test.ts`): readable on a tile, a card and a raised face (a menu's
 holding marks), told apart from its neighbours. `themeOf(id)[mode]` reads a theme's palette in JS (a chain's
 ink for a knob's arc).
@@ -62,12 +63,15 @@ still would leave the chains' inks too faint to read as letters.
 
 **One colour, one meaning** (`theme.ts`'s header):
 
-- Red is recording's alone (`--record`: the rail's and the bar's Record).
-  A removal's own button is neutral; `--danger`, the same red, stands only
-  in the confirmation that asks before it (`ConfirmDialog`,
-  `BUTTON_DANGER`, `SMALL_DANGER`). A failure is amber (`--warn`).
-- The accent's colour (emerald in the Default theme) is the accent's jobs
-  alone: focus, the go button, running (`--ok`).
+- Red is recording's alone (`--record`, a crimson: the rail's and the
+  bar's Record). A removal's own button is neutral; `--danger`, the same
+  red, stands only in the confirmation that asks before it
+  (`ConfirmDialog`, `BUTTON_DANGER`, `SMALL_DANGER`). A failure is amber
+  (`--warn`).
+- The accent's colour (a reddish orange in the Default theme, emerald in
+  Emerald) is the accent's jobs alone: focus, the go button, play. No
+  chain wears it, and Play lit stands apart from Record lit. Running and
+  ready (`--ok`) are emerald in every theme.
 - What is picked shows by brightness, not a hue: the secondary is
   `SECONDARY[mode]`, a near-white ring in the dark, an ink ring in the
   light, in every built-in theme (a tile, a tick, a switch, a Solo).

@@ -76,13 +76,13 @@ describe('looks', () => {
   it('colours a chain and its items by its place, A to D', () => {
     const sound = busy()
     expect(chainLook(0)).toEqual({
-      ring: 'rgba(255,137,4,0.6)',
-      ink: '#ff8904',
-      tint: 'rgba(255,137,4,0.16)',
+      ring: 'rgba(166,132,255,0.6)',
+      ink: '#a684ff',
+      tint: 'rgba(166,132,255,0.16)',
     })
-    expect(lookOf(sound, 'c1').ink).toBe('#ff8904')
-    expect(lookOf(sound, 'x2').ink).toBe('#ff8904')
-    expect(chainLook(3).ink).toBe('#f6339a')
+    expect(lookOf(sound, 'c1').ink).toBe('#a684ff')
+    expect(lookOf(sound, 'x2').ink).toBe('#a684ff')
+    expect(chainLook(3).ink).toBe('#28effe')
   })
 
   it('keeps inputs and the amp neutral, and modulators sky', () => {
@@ -94,14 +94,14 @@ describe('looks', () => {
   })
 
   it('follows the theme it is given', () => {
-    expect(chainLook(0).ink).toBe('#ff8904')
+    expect(chainLook(0).ink).toBe('#a684ff')
     expect(modLook().ink).toBe('#38bdf8')
     setTheme('ember', 'dark')
     try {
-      expect(chainLook(0).ink).toBe('#fde047')
+      expect(chainLook(0).ink).toBe('#fd9f23')
       expect(modLook().ink).toBe('#d8b4fe')
       setTheme('ember', 'light')
-      expect(chainLook(0).ink).toBe('#8c6501')
+      expect(chainLook(0).ink).toBe('#ac5303')
       expect(neutralLook().ink).toBe('#262626')
       expect(voiceLook().ink).toBe('#404040')
     } finally {

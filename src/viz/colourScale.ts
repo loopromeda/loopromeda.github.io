@@ -3,15 +3,15 @@
  * ashon, 2026-11-14: "스펙트로그램에서 데시벨 표현도 들어가야 하니 이
  * 부분은 적절히 컬러링을 넣어보는것은 어떨까? 컬러 스케일을 하나 만들어
  * 두면 좋겠네"), one for each mode. In the dark: from the views'
- * background, for nothing, through indigo, blue, teal and the app's
- * emerald to yellow and near white, for the loudest. In the light the
- * other way about: from the light views' background through a pale
- * yellow, emerald, teal, blue and indigo to near black. Along each its
- * lightness (OKLab's L) moves evenly, so that equal steps in dB are equal
- * steps in lightness wherever they fall, and its hue turns as it goes, so
- * that a level is told by its colour as well as by how light it is.
- * Between its stops it is mixed in OKLab, and read from a table of 256
- * colours made once. Pure: no DOM.
+ * background, for nothing, through indigo, blue, teal and emerald (the
+ * Emerald theme's accent) to yellow and near white, for the loudest. In
+ * the light the other way about: from the light views' background
+ * through a pale yellow, emerald, teal, blue and indigo to near black.
+ * Along each its lightness (OKLab's L) moves evenly, so that equal steps
+ * in dB are equal steps in lightness wherever they fall, and its hue
+ * turns as it goes, so that a level is told by its colour as well as by
+ * how light it is. Between its stops it is mixed in OKLab, and read from
+ * a table of 256 colours made once. Pure: no DOM.
  */
 
 /** An OKLab colour: lightness, then green to red, then blue to yellow */
@@ -19,8 +19,8 @@ export type Lab = readonly [number, number, number]
 
 /**
  * The dark scale's colours, from nothing to the loudest: the views'
- * background, indigo, blue, teal, emerald (the app's), yellow and near
- * white, each lighter than the one before
+ * background, indigo, blue, teal, emerald (the Emerald theme's), yellow
+ * and near white, each lighter than the one before
  */
 const DARK_COLOURS = [
   '#0b0b0b',

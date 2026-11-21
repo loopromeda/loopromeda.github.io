@@ -120,7 +120,7 @@ body {
  * accent is play's, the secondary is brightness, not a colour
  */
 :root {
-  --accent: #34d399; /* the playhead, the go button, focus, a note */
+  --accent: #ff754a; /* the playhead, the go button, focus, a note */
   --secondary: #f5f5f5; /* what is picked or current: a white, an ink */
   --modulator: #38bdf8; /* modulation: a route, its source, its depth */
 }
@@ -164,14 +164,14 @@ body {
   --backdrop: rgb(0 0 0 / 0.7); /* under a dialog */
   --shadow: rgb(0 0 0 / 0.6); /* under what stands raised */
   --on-colour: #000000; /* a label on a role's colour: the accent */
-  --record: #ff5a4e; /* recording, and nothing else at rest: red */
-  --ok: #34d399; /* running, ready: the accent's go */
+  --record: #eb1645; /* recording, and nothing else at rest: crimson */
+  --ok: #34d399; /* running, ready: emerald, apart from the accent */
   --warn: #fbbf24; /* what to mind, what failed: amber */
-  --danger: #ff5a4e; /* a removal's own confirmation: recording's red */
-  --record-ink: #ffd2cd; /* each as a label on a share of itself */
+  --danger: #eb1645; /* a removal's own confirmation: recording's red */
+  --record-ink: #ffd0d8; /* each as a label on a share of itself */
   --ok-ink: #a7f3d0;
   --warn-ink: #fde68a;
-  --danger-ink: #ffd2cd;
+  --danger-ink: #ffd0d8;
 }
 
 /*
@@ -229,14 +229,14 @@ body {
   --backdrop: rgb(23 23 23 / 0.35);
   --shadow: rgb(0 0 0 / 0.2);
   --on-colour: #ffffff;
-  --record: #d92d20;
+  --record: #b80e39;
   --ok: #047857;
-  --warn: #b45309;
-  --danger: #d92d20;
-  --record-ink: #b42318;
+  --warn: #894c09; /* deeper than amber-700, clear of the accent */
+  --danger: #b80e39;
+  --record-ink: #9f0b30;
   --ok-ink: #065f46;
-  --warn-ink: #92400e;
-  --danger-ink: #b42318;
+  --warn-ink: #7a3e06;
+  --danger-ink: #9f0b30;
 }
 
 /*

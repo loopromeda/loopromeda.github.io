@@ -24,10 +24,18 @@
  * a near-white in the dark, ink in the light); and red is recording's
  * (index.css's --record), seen elsewhere only in a removal's own
  * confirmation.
+ *
+ * The Default theme's accent is a reddish orange (ashon, 2026-11-21:
+ * "루프로메다의 메인 테마 색상을 오렌지 색상으로 만들어 보고 싶어. 좀
+ * 붉은빛이 도는 오렌지 색상"), so recording's red is a crimson, a turn
+ * redder, and the orange chain went aqua and last, the violet leading.
+ * The colours the app had first, its emerald accent, are the Emerald
+ * theme's.
  */
 
 export const THEME_IDS = [
   'default',
+  'emerald',
   'tidal',
   'ember',
   'orchard',
@@ -153,11 +161,36 @@ function roles(
   return { chains, modulator, accent, secondary: SECONDARY[tone] }
 }
 
-/** The app's own colours, unchanged in the dark. */
+/** The app's own colours, then the themes picked in their place */
 export const THEMES: readonly Theme[] = [
   {
     id: 'default',
     name: 'Default',
+    // The accent a reddish orange, clear of recording's crimson and of the
+    // amber that warns. The orange chain gone aqua, the one hue left free
+    // in the dark, as bright as the lime and as far from the sky of
+    // modulation as the checks ask; and gone last (D), the chain least
+    // used, so that the violet leads (A), the one a sound starts with
+    // (ashon, 2026-11-21: the app read aqua, not orange)
+    dark: roles(
+      'dark',
+      ['#a684ff', '#bbf451', '#f6339a', '#28effe'],
+      '#38bdf8',
+      '#ff754a'
+    ),
+    // On white no aqua stands apart from modulation's teal: the last chain
+    // a deep blue, the one place the violet, the green and the teal leave
+    light: roles(
+      'light',
+      ['#7357ce', '#1d7d00', '#cf0288', '#05397e'],
+      '#05749e',
+      '#be440c'
+    ),
+  },
+  {
+    id: 'emerald',
+    name: 'Emerald',
+    // The colours the app had first, the Default's until 2026-11-21
     dark: roles(
       'dark',
       ['#ff8904', '#a684ff', '#bbf451', '#f6339a'],
@@ -190,19 +223,22 @@ export const THEMES: readonly Theme[] = [
   {
     id: 'ember',
     name: 'Ember',
-    // The modulation colour a lavender: the violet it was stood too near
-    // the indigo chain (C) to tell apart
+    // An ember's glow: the accent its yellow heat, the first chain its
+    // orange (the Default's accent now the orange's redder side). The
+    // modulation colour a lavender: the violet it was stood too near the
+    // indigo chain (C) to tell apart
     dark: roles(
       'dark',
-      ['#fde047', '#f472b6', '#818cf8', '#2dd4bf'],
+      ['#fd9f23', '#f472b6', '#818cf8', '#2dd4bf'],
       '#d8b4fe',
-      '#f97316'
+      '#fde047'
     ),
+    // The pink turned magenta, clear of the deepened orange
     light: roles(
       'light',
-      ['#8c6501', '#b83b81', '#4a65c9', '#005052'],
+      ['#ac5303', '#c0279b', '#4a65c9', '#005052'],
       '#9333ea',
-      '#b34e02'
+      '#8c6501'
     ),
   },
   {
@@ -341,7 +377,7 @@ export const THEMES: readonly Theme[] = [
   },
 ]
 
-/** The theme when nothing was chosen: the colours the app has always had */
+/** The theme when nothing was chosen: the reddish orange's */
 export const DEFAULT_THEME: ThemeId = 'default'
 
 /** True for a stored value that names a theme */
@@ -470,7 +506,8 @@ export function groundOf(mode: Mode): Ground {
 const MARK_STEPS: Readonly<
   Record<Mode, Readonly<Record<'light' | 'deep', readonly [number, number]>>>
 > = {
-  // The icons' emerald, 300 down to 600 about the default's accent, 400
+  // The icons' emerald, 300 down to 600 about the Emerald theme's accent,
+  // 400: the steps every accent takes
   dark: { light: [0.072, 0.85], deep: [-0.177, 0.83] },
   // About the light's deeper accent, nearer it and as vivid: in the
   // icons' steps they came out muddy, and the upper end too pale for a
@@ -483,7 +520,7 @@ const MARK_STEPS: Readonly<
  * colour, its ink from the accent lightened a little to the accent
  * deepened (MARK_STEPS), its hue kept. So the favicon and the splash
  * follow the theme (asked for by ashon, 2026-11-15); the icons a home
- * screen keeps stay the default's.
+ * screen keeps stay the emerald they were drawn in (public/).
  */
 export function markInks(
   theme: Theme,

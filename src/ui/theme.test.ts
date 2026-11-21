@@ -35,6 +35,12 @@ const ON_COLOUR: Readonly<Record<Mode, string>> = {
 
 const MODES = ['dark', 'light'] as const
 
+/** Recording's red in each mode (index.css's --record) */
+const RECORD: Readonly<Record<Mode, string>> = {
+  dark: '#eb1645',
+  light: '#b80e39',
+}
+
 /** The inks every surface is read in, whatever the theme */
 const NEUTRAL_INKS: Readonly<
   Record<Mode, { neutral: string; quiet: string; dim: string }>
@@ -134,8 +140,9 @@ describe('a theme', () => {
     }
   }
 
-  it('stands the first four on the neutral, the pop themes on their own', () => {
-    for (const id of ['default', 'tidal', 'ember', 'orchard'] as const) {
+  it('stands the first five on the neutral, the pop themes on their own', () => {
+    const quiet = ['default', 'emerald', 'tidal', 'ember', 'orchard'] as const
+    for (const id of quiet) {
       expect(surfacesOf(themeOf(id), 'dark')).toBe(NEUTRAL.dark)
       expect(surfacesOf(themeOf(id), 'light')).toBe(NEUTRAL.light)
     }
@@ -164,11 +171,32 @@ describe('a theme', () => {
     }
   })
 
-  it("keeps the default theme at the app's own colours in the dark", () => {
-    const roles = themeOf(DEFAULT_THEME).dark
-    expect(roles.chains).toEqual(['#ff8904', '#a684ff', '#bbf451', '#f6339a'])
-    expect(roles.modulator).toBe('#38bdf8')
-    expect(roles.accent).toBe('#34d399')
+  it("keeps the app's first colours as the Emerald theme", () => {
+    const { dark, light } = themeOf('emerald')
+    expect(dark.chains).toEqual(['#ff8904', '#a684ff', '#bbf451', '#f6339a'])
+    expect(dark.modulator).toBe('#38bdf8')
+    expect(dark.accent).toBe('#34d399')
+    expect(light.chains).toEqual(['#aa5405', '#7357ce', '#1d7d00', '#cf0288'])
+    expect(light.modulator).toBe('#05749e')
+    expect(light.accent).toBe('#027c56')
+  })
+
+  it("stands the default's orange apart from its chains and recording", () => {
+    for (const tone of MODES) {
+      const { chains, accent } = themeOf(DEFAULT_THEME)[tone]
+      // No chain an orange beside it: a note's colour is play's alone
+      for (const ink of chains) {
+        expect(oklabDistance(accent, ink)).toBeGreaterThanOrEqual(15)
+      }
+      // Play lit beside Record lit, told apart: orange, then crimson
+      expect(oklabDistance(accent, RECORD[tone])).toBeGreaterThanOrEqual(8)
+    }
+  })
+
+  it("leads the default's chains with the violet, the aqua last", () => {
+    const { dark, light } = themeOf(DEFAULT_THEME)
+    expect(dark.chains).toEqual(['#a684ff', '#bbf451', '#f6339a', '#28effe'])
+    expect(light.chains).toEqual(['#7357ce', '#1d7d00', '#cf0288', '#05397e'])
   })
 })
 
@@ -234,8 +262,8 @@ describe('a ground', () => {
 })
 
 describe('markInks', () => {
-  it('gives the default the icons’ emerald, near enough to see none', () => {
-    const { ground, light, deep } = markInks(themeOf(DEFAULT_THEME), 'dark')
+  it('gives the Emerald theme the icons’ own, near enough to see none', () => {
+    const { ground, light, deep } = markInks(themeOf('emerald'), 'dark')
     expect(ground).toBe(NEUTRAL.dark.page)
     expect(oklabDistance(light, '#6ee7b7')).toBeLessThan(1.5)
     expect(oklabDistance(deep, '#059669')).toBeLessThan(1.5)
