@@ -132,7 +132,12 @@ curve, step, unit, choices), turned by a drag, finer with the finger off to
 the side, the arrow keys, a double tap for the default. A spec of two
 choices stands it upright as a switch. The app's `Knob`, `DepthKnob` and
 `MixKnob` are its dial with the engine behind them, following the sound
-instead of a value of their own.
+instead of a value of their own. While one is turned (from the finger's
+first move to its lift, or a moment after a key's nudge) its value reads
+larger and lighter, and the part's picture on its tile lights the piece
+the knob moves (an envelope's stage, a filter's corner or peak, an LFO's
+fade) and dims the rest (`src/ui/turning.ts`, `outlineLit`), set outside
+React as the drag is.
 
 The play surfaces take a `Hands` (`src/ui/hands.ts`), which holds who
 plays which note: `new Hands(player)`, the player's `noteOn`, `noteOff`,

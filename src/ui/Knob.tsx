@@ -38,6 +38,7 @@ import { HOLD, KNOB_READOUT, KNOB_SIZE } from './controls'
 import { CHOICE_GLYPHS } from './editor'
 import { keepHeld } from './held'
 import { ground, palette } from './theme'
+import { endTurning, startTurning } from './turning'
 
 /** CSS pixels of vertical drag that sweep a knob from end to end */
 const TRAVEL = 160
@@ -48,6 +49,12 @@ const DOUBLE_TAP = 300
 const TAP_SLOP = 4
 /** Knob travel the arrow keys move a continuous knob by */
 const KEY_STEP = 0.01
+
+/**
+ * How long a key's nudge keeps the knob lit (and its picture's piece), ms:
+ * a held key's repeats keep it lit throughout
+ */
+const KEY_LIT = 700
 /** The knob turns through 270°, from 7:30 to 4:30 on a clock face */
 const SWEEP = 270
 const RADIUS = 18
@@ -532,6 +539,8 @@ function Dial({
     lastTap: -Infinity,
     /** The pending hold's timer, 0 for none */
     hold: 0,
+    /** The timer that ends a key's turn, 0 for none */
+    keyed: 0,
   })
 
   const origin = spec.min < 0 && spec.max > 0 ? toNormalized(spec, 0) : 0
@@ -658,9 +667,29 @@ function Dial({
     }
   }
 
+  /**
+   * A turn starts: the knob lights up in its colour, its value reads
+   * larger and lighter, and its part's picture lights the piece the knob
+   * moves (turning.ts)
+   */
+  const turnStarts = () => {
+    rootRef.current?.setAttribute('data-turning', '')
+    wrapRef.current?.setAttribute('data-turning', '')
+    const knob = routedRef.current
+    if (knob) startTurning(knob.part, knob.knob)
+  }
+
+  /** The turn ends: all of that fades back */
+  const turnEnds = () => {
+    rootRef.current?.removeAttribute('data-turning')
+    wrapRef.current?.removeAttribute('data-turning')
+    const knob = routedRef.current
+    if (knob) endTurning(knob.part, knob.knob)
+  }
+
   /** The finger is off the knob: it stops lighting up and turns at full */
   const release = () => {
-    rootRef.current?.removeAttribute('data-turning')
+    turnEnds()
     pace(FULL_SPEED)
   }
 
@@ -693,7 +722,11 @@ function Dial({
     const g = gesture.current
     return () => {
       window.clearTimeout(g.hold)
+      window.clearTimeout(g.keyed)
       if (g.zone.speed < 1) countFine(-1)
+      // A knob gone mid-turn leaves no picture lit
+      const knob = routedRef.current
+      if (knob) endTurning(knob.part, knob.knob)
     }
   }, [])
 
@@ -742,7 +775,7 @@ function Dial({
       g.moved = true
       g.lastY = y
       window.clearTimeout(g.hold)
-      rootRef.current?.setAttribute('data-turning', '')
+      turnStarts()
     }
     const before = g.zone
     pace(fineZone(x - g.startX, g.zone))
@@ -811,6 +844,14 @@ function Dial({
     }
     event.preventDefault()
     set(next)
+    // Lit while the keys turn it, as a drag lights it
+    const g = gesture.current
+    turnStarts()
+    window.clearTimeout(g.keyed)
+    g.keyed = window.setTimeout(() => {
+      g.keyed = 0
+      if (g.pointerId === -1) turnEnds()
+    }, KEY_LIT)
   }
 
   return (
@@ -918,9 +959,14 @@ function Dial({
       >
         {spec.label}
       </span>
+      {/*
+       * Turned, larger, lighter and brighter, as it grows from its top,
+       * over the panel's face so it reads clear of its neighbours' values
+       * in a narrow column (the Fold's outer screen)
+       */}
       <span
         ref={textRef}
-        className="font-mono text-[11px] leading-tight whitespace-nowrap text-(--ink-200) tabular-nums"
+        className="origin-top font-mono text-[11px] leading-tight whitespace-nowrap text-(--ink-200) tabular-nums transition-[scale,color,background-color,font-weight] duration-300 in-data-turning:z-10 in-data-turning:scale-125 in-data-turning:rounded-sm in-data-turning:bg-(--panel) in-data-turning:font-light in-data-turning:text-(--ink-0) in-data-turning:duration-100"
       />
     </div>
   )

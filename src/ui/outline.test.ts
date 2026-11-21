@@ -8,6 +8,7 @@ import {
   OUTLINE_WIDTH,
   outlineFill,
   outlineKind,
+  outlineLit,
   outlinePath,
 } from './outline'
 
@@ -131,5 +132,64 @@ describe('outlineFill', () => {
     const [down, back] = points(outlineFill(line).slice(line.length))
     expect(down).toEqual([end, OUTLINE_HEIGHT])
     expect(back).toEqual([0, OUTLINE_HEIGHT])
+  })
+})
+
+describe('outlineLit', () => {
+  it('lights each of an envelope’s stages for its knob, in order', () => {
+    const sound = parts()
+    for (const part of [AMP, 'm1']) {
+      const line = points(outlinePath(sound, part))
+      const stages = ['attack', 'decay', 'sustain', 'release'].map((knob) =>
+        points(outlineLit(sound, part, knob))
+      )
+      // Each a run of the line's own points, the next starting where it ends
+      const sizes = stages.map((stage) => stage.length)
+      expect(sizes).toEqual([
+        STAGE_POINTS + 1,
+        STAGE_POINTS + 1,
+        2,
+        STAGE_POINTS + 1,
+      ])
+      expect(stages[0]?.[0]).toEqual(line[0])
+      stages.slice(1).forEach((stage, at) => {
+        expect(stage[0]).toEqual(stages[at]?.at(-1))
+      })
+      expect(stages[3]?.at(-1)).toEqual(line.at(-1))
+    }
+  })
+
+  it('lights a filter’s corner for its cutoff, a narrower peak for its resonance', () => {
+    const sound = setValue(parts(), 'x1', 'cutoff', 632)
+    const line = points(outlinePath(sound, 'x1'))
+    const corner = points(outlineLit(sound, 'x1', 'cutoff'))
+    const peak = points(outlineLit(sound, 'x1', 'resonance'))
+    expect(corner.length).toBeLessThan(line.length / 2)
+    expect(peak.length).toBeLessThan(corner.length)
+    // 632 Hz stands halfway along 20 Hz to 20 kHz: both about it
+    const middle = OUTLINE_WIDTH / 2
+    for (const piece of [corner, peak]) {
+      expect(piece[0]?.[0]).toBeLessThan(middle)
+      expect(piece.at(-1)?.[0]).toBeGreaterThan(middle)
+    }
+    // Its type moves the whole of it
+    expect(outlineLit(sound, 'x1', 'type')).toBe(outlinePath(sound, 'x1'))
+  })
+
+  it('lights an LFO’s fade-in for its fade, nothing for a fade of none', () => {
+    const faded = setValue(setValue(parts(), 'm2', 'rate', 1), 'm2', 'fade', 1)
+    const fade = points(outlineLit(faded, 'm2', 'fade'))
+    // A cycle's fade of the three cycles drawn: a third of the way across
+    expect(fade.at(-1)?.[0]).toBeCloseTo(OUTLINE_WIDTH / 3, 0)
+    expect(outlineLit(setValue(faded, 'm2', 'fade', 0), 'm2', 'fade')).toBe('')
+    expect(outlineLit(faded, 'm2', 'shape')).toBe(outlinePath(faded, 'm2'))
+  })
+
+  it('lights nothing for a knob the picture does not follow', () => {
+    const sound = parts()
+    expect(outlineLit(sound, AMP, 'velocity')).toBe('')
+    expect(outlineLit(sound, AMP, 'ghostLevel')).toBe('')
+    expect(outlineLit(sound, 'i1', 'wave')).toBe('')
+    expect(outlineLit(sound, 'x2', 'drive')).toBe(outlinePath(sound, 'x2'))
   })
 })
