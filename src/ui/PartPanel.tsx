@@ -1,4 +1,6 @@
 import {
+  useLayoutEffect,
+  useRef,
   useState,
   type FormEvent,
   useSyncExternalStore,
@@ -134,6 +136,7 @@ import { MutesCell } from './Mutes'
 import { OutputCells } from './OutputCells'
 import { palette } from './theme'
 import { knoblessDests, routesTo } from '../state/sound/knob'
+import { choiceColumns, choicesWidth } from '../viz/choices'
 import { noteName } from '../viz/keyboard'
 
 /** One kind a "+" offers: its pictogram, name and what it does */
@@ -627,58 +630,7 @@ export function PartPanel({
       >
         {view.body ??
           (view.choices ? (
-            <>
-              <div
-                className={
-                  // More than a row of four stand three to a row
-                  view.choices.length > 4
-                    ? 'grid grid-cols-[repeat(3,minmax(0,108px))] gap-2'
-                    : 'flex gap-2'
-                }
-              >
-                {view.choices.map((choice) => (
-                  <button
-                    key={choice.label}
-                    type="button"
-                    disabled={!choice.add}
-                    onClick={choice.add}
-                    className="flex h-[54px] min-w-0 max-w-[108px] flex-1 flex-col items-start justify-center gap-[3px] rounded-[7px] bg-(--tile) px-2.5 text-left text-(--ink-100) disabled:opacity-40"
-                    style={{
-                      boxShadow: `inset 0 0 0 1.5px ${choice.look.ring}`,
-                    }}
-                  >
-                    <span className="flex items-center gap-1.5">
-                      <svg
-                        viewBox="0 0 18 12"
-                        width={18}
-                        height={12}
-                        aria-hidden
-                      >
-                        <path
-                          d={choice.glyph}
-                          fill="none"
-                          stroke={choice.look.ink}
-                          strokeWidth={1.7}
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                      </svg>
-                      <span className="text-xs font-semibold">
-                        {choice.label}
-                      </span>
-                    </span>
-                    <span className="text-[10px] whitespace-nowrap text-(--ink-400)">
-                      {choice.hint}
-                    </span>
-                  </button>
-                ))}
-              </div>
-              {view.choiceNote && (
-                <p className="text-[11px] leading-snug text-(--ink-500)">
-                  {view.choiceNote}
-                </p>
-              )}
-            </>
+            <Choices choices={view.choices} note={view.choiceNote} />
           ) : (
             <>
               {view.knobs.length > 0 ||
@@ -1371,6 +1323,92 @@ function addTrackView(count: number, add: (kind: PartKind) => void): View {
     choiceNote:
       'A synth starts on the first preset, a kit as the factory’s, each with a strip at full level sending to A. It is the one played once added.',
   }
+}
+
+/**
+ * What a "+" offers, as cards (an effect, an input, a chain's item): each
+ * its pictogram and name, and a hint under, in rows as the panel's width
+ * gives them (choiceColumns). A phone's stands more than four three to a
+ * row; a wide panel spreads them out, all of them in a row where they fit,
+ * else in rows as even as they can be, each card up to CHOICE_MOST wide.
+ * Its note under them, as wide as they stand.
+ */
+function Choices({
+  choices,
+  note,
+}: {
+  choices: readonly Choice[]
+  note: string | undefined
+}) {
+  const box = useRef<HTMLDivElement>(null)
+  const [width, setWidth] = useState(0)
+
+  // The width the panel gives them, not the width they take
+  useLayoutEffect(() => {
+    const element = box.current
+    if (!element) return
+    const measure = () => setWidth(element.clientWidth)
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [])
+
+  const columns = choiceColumns(choices.length, width)
+  return (
+    <div ref={box} className="min-w-0">
+      <div
+        className="flex flex-col gap-2"
+        style={{ maxWidth: choicesWidth(columns) }}
+      >
+        <div
+          className="grid gap-2"
+          style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
+        >
+          {choices.map((choice) => (
+            <button
+              key={choice.label}
+              type="button"
+              disabled={!choice.add}
+              onClick={choice.add}
+              className="flex h-[54px] min-w-0 flex-col items-start justify-center gap-[3px] rounded-[7px] bg-(--tile) px-2.5 text-left text-(--ink-100) disabled:opacity-40"
+              style={{
+                boxShadow: `inset 0 0 0 1.5px ${choice.look.ring}`,
+              }}
+            >
+              <span className="flex items-center gap-1.5">
+                <svg
+                  viewBox="0 0 18 12"
+                  width={18}
+                  height={12}
+                  aria-hidden
+                  className="shrink-0"
+                >
+                  <path
+                    d={choice.glyph}
+                    fill="none"
+                    stroke={choice.look.ink}
+                    strokeWidth={1.7}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+                <span className="text-xs font-semibold whitespace-nowrap">
+                  {choice.label}
+                </span>
+              </span>
+              <span className="text-[10px] whitespace-nowrap text-(--ink-400)">
+                {choice.hint}
+              </span>
+            </button>
+          ))}
+        </div>
+        {note && (
+          <p className="text-[11px] leading-snug text-(--ink-500)">{note}</p>
+        )}
+      </div>
+    </div>
+  )
 }
 
 /**
