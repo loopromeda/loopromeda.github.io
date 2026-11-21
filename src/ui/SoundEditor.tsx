@@ -46,6 +46,7 @@ import { MARK, chainDrop, itemDrop, spanDrop } from '../viz/drop'
 import {
   GRAPH,
   graphGeometry,
+  panClear,
   roomBeside,
   type Box,
   type GraphGeometry,
@@ -784,6 +785,10 @@ function useRoom(
  * The frame both panes' tiles stand in: at rest it asks the card for the
  * taller of the two (rest), so that showing one or the other moves
  * nothing under them; it pans the tiles out from under the panel over it.
+ * Beside the panel (the Fold's inner screen), a tile picked under it, or
+ * the panel opened over it, pans it out from under (panClear), as little
+ * as it must; under the graph, or with the panel clear of it, nothing
+ * moves.
  */
 function Frame({
   frameRef,
@@ -792,6 +797,7 @@ function Frame({
   docked,
   width,
   height,
+  shown,
   contentRef,
   children,
 }: {
@@ -801,11 +807,36 @@ function Frame({
   docked: boolean
   width: number
   height: number
+  /** What is picked, said as a key: a new one pans its tile clear */
+  shown: string
   contentRef?: RefObject<HTMLDivElement | null>
   children: ReactNode
 }) {
   /** How far past the tiles the frame pans: all the panel covers, open */
   const clear = (reach: number) => (docked && reach > 0 ? reach : 0)
+  const ownRef = useRef<HTMLDivElement>(null)
+  const tilesRef = contentRef ?? ownRef
+  useLayoutEffect(() => {
+    const frame = frameRef.current
+    const tiles = tilesRef.current
+    if (!docked || !frame || !tiles) return
+    // The tile picked: each a button placed in the tiles' box (a chain's
+    // items through a wrapper that lays out nothing), the first in order
+    const tile = [
+      ...tiles.querySelectorAll<HTMLElement>('[aria-pressed="true"]'),
+    ].find((each) => each.offsetParent === tiles)
+    if (!tile) return
+    const left = panClear(
+      frame.scrollLeft,
+      frame.clientWidth,
+      room.right,
+      tile.offsetLeft,
+      tile.offsetWidth
+    )
+    if (left === undefined) return
+    const still = window.matchMedia('(prefers-reduced-motion: reduce)')
+    frame.scrollTo({ left, behavior: still.matches ? 'auto' : 'smooth' })
+  }, [frameRef, tilesRef, shown, docked, room.right])
   return (
     <div
       ref={frameRef}
@@ -832,7 +863,7 @@ function Frame({
         />
       )}
       <div
-        ref={contentRef}
+        ref={tilesRef}
         className="relative min-w-full"
         style={{ width, height }}
       >
@@ -1030,6 +1061,7 @@ function Graph({
       docked={docked}
       width={geometry.width}
       height={geometry.height}
+      shown={picked}
       contentRef={contentRef}
     >
       {geometry.mods.map(({ mod, box }) => (
@@ -1478,6 +1510,7 @@ function KitGraph({
       docked={docked}
       width={geometry.width}
       height={geometry.height}
+      shown={`${picked}/${pad}`}
     >
       {geometry.pads.map((box, k) => {
         const name = padName(pads[k], k)
@@ -1721,6 +1754,7 @@ function MixGraph({
       docked={docked}
       width={geometry.width}
       height={geometry.height}
+      shown={picked}
     >
       {geometry.strips.map((box, k) => {
         // The track played's strip carries its sends; another's, tapped,

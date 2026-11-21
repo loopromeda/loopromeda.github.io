@@ -3,6 +3,7 @@ import {
   GRAPH,
   graphGeometry,
   graphLayout,
+  panClear,
   roomBeside,
   type GeometrySound,
   type GraphLayout,
@@ -1022,5 +1023,36 @@ describe('roomBeside', () => {
       right: 0,
       bottom: 300,
     })
+  })
+})
+
+describe('panClear', () => {
+  // A frame 800 wide, the panel over its right 360 (its gap too)
+  const view = 800
+  const covered = 360
+
+  it('leaves a tile clear of the panel where it is', () => {
+    expect(panClear(0, view, covered, 100, 115)).toBeUndefined()
+    expect(panClear(0, view, covered, 386, 46)).toBeUndefined()
+  })
+
+  it('pans a tile under the panel out from under it, no further', () => {
+    // The Amp at 386 to 501, the clear 440 wide: its right and the margin
+    expect(panClear(0, view, covered, 386, 115)).toBe(501 + 8 - 440)
+    // Already panned some of the way
+    expect(panClear(40, view, covered, 386, 115)).toBe(69)
+  })
+
+  it('pans back to a tile left of the view, and from 0 at the least', () => {
+    expect(panClear(300, view, covered, 120, 100)).toBe(112)
+    expect(panClear(300, view, covered, 4, 100)).toBe(0)
+  })
+
+  it('shows the left of a tile wider than the clear', () => {
+    expect(panClear(0, view, covered, 300, 500)).toBe(292)
+  })
+
+  it('pans nothing where nothing is covered', () => {
+    expect(panClear(0, view, 0, 900, 100)).toBeUndefined()
   })
 })

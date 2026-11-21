@@ -1100,6 +1100,33 @@ export interface Room {
   readonly bottom: number
 }
 
+/** Kept clear around a tile panned into view: its picked ring and a breath */
+export const PAN_MARGIN = 8
+
+/**
+ * Where a frame scrolled to left, view wide, its right covered (a panel
+ * beside it, its gap included: Room's right), scrolls to show a tile
+ * from x, w wide, clear of the cover: as little as it must, the tile's
+ * left first where it is wider than what is clear, margin kept around
+ * it. Undefined where the tile is clear already, or nothing is covered.
+ */
+export function panClear(
+  left: number,
+  view: number,
+  covered: number,
+  x: number,
+  w: number,
+  margin = PAN_MARGIN
+): number | undefined {
+  if (covered <= 0) return undefined
+  const clear = view - covered
+  const from = x - margin
+  const to = x + w + margin
+  if (from >= left && to <= left + clear) return undefined
+  if (from < left || to - from > clear) return Math.max(0, from)
+  return to - clear
+}
+
 /**
  * The room frame leaves its tiles with a dock (the editor's panel) over
  * it, in whole pixels: a dock across the frame's width covers its bottom
