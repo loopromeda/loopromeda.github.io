@@ -1,3 +1,7 @@
 dist/
 coverage/
 pnpm-lock.yaml
+# Local tooling, kept out of git by .git/info/exclude, which Prettier does
+# not read
+.claude/
+.playwright-mcp/
