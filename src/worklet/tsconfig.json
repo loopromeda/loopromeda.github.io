@@ -1,0 +1,7 @@
+{
+  // For the editor's TypeScript server, which reads the tsconfig.json
+  // nearest a file: the audio thread's own config, its globals
+  // (AudioWorkletProcessor, sampleRate) and not the app's. pnpm typecheck
+  // reads tsconfig.worklet.json itself.
+  "extends": "../../tsconfig.worklet.json"
+}

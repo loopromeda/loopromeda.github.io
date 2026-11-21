@@ -1,0 +1,7 @@
+{
+  // For the editor's TypeScript server, which reads the tsconfig.json
+  // nearest a file: the service worker's own config, its globals
+  // (ServiceWorkerGlobalScope) and not the app's. pnpm typecheck reads
+  // tsconfig.sw.json itself.
+  "extends": "../../tsconfig.sw.json"
+}
