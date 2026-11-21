@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, type MouseEvent } from 'react'
-import { BUTTON, BUTTON_DANGER, CARD } from './controls'
+import { BUTTON, BUTTON_DANGER, RAISED } from './controls'
 
 /**
  * A modal question before something that cannot be taken back (removing a
@@ -63,7 +63,7 @@ export function ConfirmDialog({
       aria-labelledby="confirm-title"
       aria-describedby="confirm-message"
       onClick={outside}
-      className={`m-auto w-[calc(100%_-_1.5rem)] max-w-xs flex-col gap-3 p-3 text-inherit open:flex backdrop:bg-(--backdrop) ${CARD}`}
+      className={`m-auto w-[calc(100%_-_1.5rem)] max-w-xs flex-col gap-3 p-3 text-inherit open:flex backdrop:bg-(--backdrop) ${RAISED}`}
     >
       <h2 id="confirm-title" className="text-sm font-semibold text-(--ink-100)">
         {title}

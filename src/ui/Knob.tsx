@@ -961,12 +961,13 @@ function Dial({
       </span>
       {/*
        * Turned, larger, lighter and brighter, as it grows from its top,
-       * over the panel's face so it reads clear of its neighbours' values
-       * in a narrow column (the Fold's outer screen)
+       * over the face it stands on (--face: the panel's, a card's) so it
+       * reads clear of its neighbours' values in a narrow column (the
+       * Fold's outer screen)
        */}
       <span
         ref={textRef}
-        className="origin-top font-mono text-[11px] leading-tight whitespace-nowrap text-(--ink-200) tabular-nums transition-[scale,color,background-color,font-weight] duration-300 in-data-turning:z-10 in-data-turning:scale-125 in-data-turning:rounded-sm in-data-turning:bg-(--panel) in-data-turning:font-light in-data-turning:text-(--ink-0) in-data-turning:duration-100"
+        className="origin-top font-mono text-[11px] leading-tight whitespace-nowrap text-(--ink-200) tabular-nums transition-[scale,color,background-color,font-weight] duration-300 in-data-turning:z-10 in-data-turning:scale-125 in-data-turning:rounded-sm in-data-turning:bg-(--face) in-data-turning:font-light in-data-turning:text-(--ink-0) in-data-turning:duration-100"
       />
     </div>
   )

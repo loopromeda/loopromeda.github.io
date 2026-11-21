@@ -36,8 +36,8 @@ import type { CSSProperties } from 'react'
 /**
  * A card's face, as a CSS value (index.css's --panel, in either mode):
  * the sound's graph and the sheets that open over it stand on it, and
- * the graph's tiles are cut from it. The editor's panel, over the graph,
- * stands on glass (index.css): this face, opaque.
+ * the graph's tiles are cut from it. What stands over the cards wears a
+ * face of its own, a step lighter (RAISED).
  */
 export const CARD_FACE = 'var(--panel)'
 
@@ -46,12 +46,26 @@ export const CARD = 'rounded-xl bg-(--panel)'
 
 /**
  * What stands over the cards, raised: the editor's panel over the graph,
- * the presets over the controls. On glass (index.css): the card's face,
- * opaque (nothing under it blurred each frame), with a shadow and a faint
- * ring to stand it off them.
+ * a popover over the controls, a dialog over the page. On glass
+ * (index.css) at its level: --raised, a step lighter than the card in the
+ * dark (white over the paper in the light), opaque (nothing under it
+ * blurred each frame), with a shadow and a faint ring to stand it off
+ * them. What paints the face again reads it as --face, and a tile's face
+ * on it (--tile: a chip, a choice) is cut from it, flush, its ring
+ * telling it: a face lighter still would leave the chains' inks on it
+ * too faint to read as letters.
  */
 export const RAISED =
-  'glass rounded-xl shadow-[0_0_24px_var(--shadow)] ring-1 ring-(--lift-2)'
+  'glass rounded-xl [--face:var(--raised)] [--tile:var(--raised)] shadow-[0_0_24px_var(--shadow)] ring-1 ring-(--lift-2)'
+
+/**
+ * What falls over a raised face, a level up again: a menu from its
+ * button, a dropdown's choices. On glass at --raised-2, its shadow nearer
+ * and deeper and its ring stronger than a popover's, so it never reads as
+ * part of the popover or panel it opens over.
+ */
+export const MENU =
+  'glass rounded-xl [--face:var(--raised-2)] shadow-[0_2px_8px_var(--shadow),0_8px_32px_var(--shadow)] ring-1 ring-(--lift-3)'
 
 export const BUTTON_SHAPE =
   'flex h-11 shrink-0 items-center justify-center gap-2 rounded-[10px] px-3.5 text-xs font-semibold tracking-wider whitespace-nowrap disabled:opacity-40'

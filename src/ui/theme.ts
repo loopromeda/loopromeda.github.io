@@ -58,13 +58,26 @@ export interface Palette {
 
 /**
  * The surfaces the page is built of, in one mode (index.css's --bg,
- * --panel, --tile, --key and --key-black): the page, a card, a tile's
- * face (a popover's too), a key or pad at rest, a black key at rest
+ * --panel, --tile, --raised, --raised-2, --key and --key-black): the
+ * page, a card, a tile's face, what stands raised over the cards, what
+ * stands over that, a key or pad at rest, a black key at rest
  */
 export interface Surfaces {
   readonly page: string
   readonly panel: string
   readonly tile: string
+  /**
+   * The face of what stands over the cards: the editor's panel, a
+   * popover, a dialog. A step lighter than the card in the dark; white
+   * over the paper in the light, its shadow telling it off
+   */
+  readonly raised: string
+  /**
+   * A step lighter again: a menu over a raised face (white in the
+   * light). Only a menu's inks and marks stand on it: the chains' inks,
+   * read as letters, would want a darker face than this
+   */
+  readonly raised2: string
   readonly key: string
   readonly keyBlack: string
 }
@@ -75,12 +88,19 @@ export interface Surfaces {
  * display, a near-black the colours shine on as light (not pure black:
  * ashon kept a near-black, 2026-11-21); the light is a printed page,
  * paper-white cards and tiles on a paper-grey page, drawn on in ink.
+ * What stands over the cards is a step lighter for each level it stands
+ * up, so a panel over a card, or a menu over a popover, never wears the
+ * face under it (OKLab lightness +0.035 a step, the pop themes' tints
+ * kept); in the light it is white over the paper, its shadow telling it
+ * off.
  */
 export const NEUTRAL: Readonly<Record<Mode, Surfaces>> = {
   dark: {
     page: '#0b0b0b',
     panel: '#151515',
     tile: '#1b1b1b',
+    raised: '#1d1d1d',
+    raised2: '#262626',
     key: '#2a2a2a',
     keyBlack: '#101010',
   },
@@ -88,6 +108,8 @@ export const NEUTRAL: Readonly<Record<Mode, Surfaces>> = {
     page: '#ebebeb',
     panel: '#f8f8f8',
     tile: '#ffffff',
+    raised: '#ffffff',
+    raised2: '#ffffff',
     key: '#ffffff',
     keyBlack: '#2b2b2b',
   },
@@ -115,8 +137,8 @@ export interface Theme {
   readonly light: Palette
   /**
    * A pop theme's own surfaces: the neutral's, each at its lightness,
-   * tinted toward the theme's hue (the light's tiles and keys left
-   * white). Without them, the neutral.
+   * tinted toward the theme's hue (the light's tiles, raised faces and
+   * keys left white). Without them, the neutral.
    */
   readonly surfaces?: Readonly<Record<Mode, Surfaces>>
 }
@@ -222,6 +244,8 @@ export const THEMES: readonly Theme[] = [
         page: '#0e0818',
         panel: '#191324',
         tile: '#1f192b',
+        raised: '#211b2d',
+        raised2: '#2a2436',
         key: '#2d273a',
         keyBlack: '#140e1f',
       },
@@ -229,6 +253,8 @@ export const THEMES: readonly Theme[] = [
         page: '#ebe7f4',
         panel: '#f7f3ff',
         tile: '#ffffff',
+        raised: '#ffffff',
+        raised2: '#ffffff',
         key: '#ffffff',
         keyBlack: '#302d37',
       },
@@ -258,6 +284,8 @@ export const THEMES: readonly Theme[] = [
         page: '#15060d',
         panel: '#211119',
         tile: '#28171f',
+        raised: '#2a1921',
+        raised2: '#33222a',
         key: '#36252d',
         keyBlack: '#1b0c13',
       },
@@ -265,6 +293,8 @@ export const THEMES: readonly Theme[] = [
         page: '#f5e5eb',
         panel: '#fff1f7',
         tile: '#ffffff',
+        raised: '#ffffff',
+        raised2: '#ffffff',
         key: '#ffffff',
         keyBlack: '#372b30',
       },
@@ -293,6 +323,8 @@ export const THEMES: readonly Theme[] = [
         page: '#040a1e',
         panel: '#0c162b',
         tile: '#121c32',
+        raised: '#141e34',
+        raised2: '#1d283e',
         key: '#202a41',
         keyBlack: '#081025',
       },
@@ -300,6 +332,8 @@ export const THEMES: readonly Theme[] = [
         page: '#e3eaf8',
         panel: '#f1f6fe',
         tile: '#ffffff',
+        raised: '#ffffff',
+        raised2: '#ffffff',
         key: '#ffffff',
         keyBlack: '#2a2f39',
       },

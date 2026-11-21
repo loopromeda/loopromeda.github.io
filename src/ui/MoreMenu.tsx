@@ -9,7 +9,7 @@ import {
   type ReactNode,
 } from 'react'
 import { createPortal } from 'react-dom'
-import { RAISED, SMALL_ICON_BUTTON } from './controls'
+import { MENU, SMALL_ICON_BUTTON } from './controls'
 import { usePlacement } from './placement'
 
 /** Three dots in an 18 px box: what More shows */
@@ -84,8 +84,8 @@ export interface MenuItem {
 /**
  * More, a 28 px header button of three dots (a popover's, a panel's), and
  * the menu that falls from it (MenuButton's): its items in groups, a line
- * between two, each a picture and a name on a row of 32 px, on the card
- * every popover here wears (RAISED), its right under the button's. Near
+ * between two, each a picture and a name on a row of 32 px, on a menu's
+ * face (MENU), a level over a popover's, its right under the button's. Near
  * the page's foot it turns and stands on the button instead. A tap on an
  * item closes the menu and does what it says, within the tap (Import's
  * file picker and Export's share sheet need it). The keyboard is a
@@ -277,7 +277,7 @@ export function MenuButton({
                 height: placed.height,
               }
             }
-            className={`fixed z-40 flex flex-col gap-0.5 overflow-y-auto overscroll-contain p-1 ${RAISED} ${placed ? '' : 'invisible'}`}
+            className={`fixed z-40 flex flex-col gap-0.5 overflow-y-auto overscroll-contain p-1 ${MENU} ${placed ? '' : 'invisible'}`}
           >
             {shown.map((group, at) => (
               <Fragment key={group.map((item) => item.label).join()}>

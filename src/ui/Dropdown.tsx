@@ -7,7 +7,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
 } from 'react'
 import { createPortal } from 'react-dom'
-import { RAISED, TALL_HIT } from './controls'
+import { MENU, TALL_HIT } from './controls'
 import { usePlacement } from './placement'
 
 /** The list's want, rem wide: a name, its dots and the check */
@@ -58,8 +58,8 @@ function Dots({ colours }: { colours: readonly string[] }) {
  * The app's own choice from a list, in the browser's select's place: its
  * look and colours are this app's, not the operating system's. The button
  * reads as a select (28 px, the chevron, the chosen one's name and dots)
- * and the list falls below it, as a select's does, on the card every
- * popover here wears (usePlacement, RAISED): the chosen one lit with the
+ * and the list falls below it, as a select's does, placed as a popover is
+ * (usePlacement) on a menu's face (MENU): the chosen one lit with the
  * accent's check, the rest waiting. Near the page's foot it turns and
  * stands on the button instead. The keyboard is the select's — the arrows
  * walk the list, Home and End
@@ -237,7 +237,7 @@ export function Dropdown<T extends string | number>({
                 height: placed.height,
               }
             }
-            className={`fixed z-40 flex flex-col gap-0.5 p-1 ${RAISED} ${placed ? '' : 'invisible'}`}
+            className={`fixed z-40 flex flex-col gap-0.5 p-1 ${MENU} ${placed ? '' : 'invisible'}`}
           >
             {options.map((option) => (
               <button

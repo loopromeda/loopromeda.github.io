@@ -43,10 +43,12 @@ export function useTheme(theme: ThemeId, appearance: Appearance): Mode {
     root.style.setProperty('--accent', palette().accent)
     root.style.setProperty('--secondary', palette().secondary)
     root.style.setProperty('--modulator', palette().modulator)
-    const { page, panel, tile, key, keyBlack } = surfaces()
+    const { page, panel, tile, raised, raised2, key, keyBlack } = surfaces()
     root.style.setProperty('--bg', page)
     root.style.setProperty('--panel', panel)
     root.style.setProperty('--tile', tile)
+    root.style.setProperty('--raised', raised)
+    root.style.setProperty('--raised-2', raised2)
     root.style.setProperty('--key', key)
     root.style.setProperty('--key-black', keyBlack)
     // Android's bar wears the page's colour, its letters chosen to read

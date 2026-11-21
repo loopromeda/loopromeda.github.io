@@ -20,7 +20,8 @@ Tailwind's arbitrary-property form, `bg-(--panel)`, `text-(--ink-400)`,
 
 | Family   | Tokens                                                             | For                                                                  |
 | -------- | ------------------------------------------------------------------ | -------------------------------------------------------------------- |
-| Surfaces | `--bg`, `--panel`, `--tile`, `--key`, `--key-black`                | the page; a card; a tile's face, a popover; a key or pad; quiet grey |
+| Surfaces | `--bg`, `--panel`, `--tile`, `--key`, `--key-black`                | the page; a card; a tile's face; a key or pad; quiet grey            |
+| Raised   | `--raised`, `--raised-2`, `--face`                                 | a panel, popover or dialog; a menu over it; the face one stands on   |
 | Inks     | `--ink` (the page's text), `--ink-0`, `--ink-100` … `--ink-600`    | brightest (chosen) to dimmest (a hint), greys with no tint           |
 | Lifts    | `--lift`, `--lift-2`, `--lift-3`, `--lift-4`, `--over`             | a control at rest, pressed or chosen, rings, shares of `--over`      |
 | Depths   | `--well`, `--under`, `--veil`, `--scrim`, `--backdrop`, `--shadow` | a field's well, a seam, what lies over or under a view               |
@@ -39,14 +40,25 @@ mode: the four chains' inks (A to D), the modulation colour, the accent and
 the secondary. `THEME_IDS`: Default, Tidal, Ember and Orchard stand on the
 neutral greys; Neon, Candy and Arcade, the pop themes, tint the surfaces
 toward their colours too. Every value is held to the same checks
-(`theme.test.ts`): readable on a tile and on a card, told apart from its
-neighbours. `themeOf(id)[mode]` reads a theme's palette in JS (a chain's
+(`theme.test.ts`): readable on a tile, a card and a raised face (a menu's
+holding marks), told apart from its neighbours. `themeOf(id)[mode]` reads a theme's palette in JS (a chain's
 ink for a knob's arc).
 
 **Quiet grey.** `NEUTRAL` gives the default surfaces in greys with no
 tint, each mode on its own terms rather than the other inverted: the dark
 a display (a near-black page, `#0b0b0b`, never `#000`), the light a
 printed page (paper under white cards). The pop themes keep their tints.
+
+**A step up, a step lighter.** What stands over the cards never wears the
+face under it. In the dark each level is a step lighter (OKLab lightness
++0.035): a card `#151515`, a panel, popover or dialog on `--raised`
+`#1d1d1d`, a menu over one on `--raised-2` `#262626`, the pop themes the
+same steps in their tints. In the light a raised face is white over the
+paper, and its shadow (and a menu's nearer, deeper one, its ring a shade
+stronger) tells it off. `--face` is the face of the level a thing stands
+on, for what paints it again; a tile's face on a raised one (a chip, a
+choice) is cut from it, flush, its ring telling it, since a face lighter
+still would leave the chains' inks too faint to read as letters.
 
 **One colour, one meaning** (`theme.ts`'s header):
 
@@ -93,10 +105,13 @@ so that controls side by side line up. Two heights only:
 - The play surface's header stands its buttons at 36 px (`BAR_ICON_BUTTON`,
   its touch 44 px by `BAR_HIT`).
 
-Surfaces: `CARD` (a panel's face, rounded 12 px), `RAISED` (the same face,
-opaque, with a shadow and a faint ring, for what stands over the cards:
-nothing under it is blurred, which a phone's GPU paid for every frame the
-views under it were drawn). A card
+Surfaces: `CARD` (a panel's face, rounded 12 px), `RAISED` (`--raised`, a
+step lighter, opaque, with a shadow and a faint ring, for what stands over
+the cards: the editor's panel, a popover, a dialog; nothing under it is
+blurred, which a phone's GPU paid for every frame the views under it were
+drawn), `MENU` (`--raised-2`, a step lighter again, its shadow nearer and
+deeper and its ring stronger: a menu or a dropdown's list over a raised
+face). A card
 keeps its contents 12 px (`p-3`) from its edges where its controls are
 44 px, 10 px (`p-2.5`) where they are 28 px. Knobs stand in `knobRow(n)`,
 a grid whose cells `KNOB_SIZE` fits: a knob is a sixth of its row's width

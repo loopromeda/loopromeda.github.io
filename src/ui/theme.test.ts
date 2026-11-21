@@ -48,18 +48,20 @@ describe('a theme', () => {
     for (const tone of MODES) {
       const roles = theme[tone]
       const name = `${theme.name} (${tone})`
-      // What every colour has to be read on: the theme's tile's face and
-      // card's (index.css's --tile and --panel)
-      const { tile, panel } = surfacesOf(theme, tone)
+      // What every colour has to be read on: the theme's tile's face, a
+      // card's and the raised face's over them (index.css's --tile,
+      // --panel and --raised); a menu's (--raised-2) holds inks and marks
+      const { tile, panel, raised, raised2 } = surfacesOf(theme, tone)
+      const faces = [tile, panel, raised]
 
-      it(`reads ${name} on a tile's face and a card's`, () => {
+      it(`reads ${name} on a tile's face, a card's and a raised one's`, () => {
         const colours = [
           ...roles.chains,
           roles.modulator,
           roles.accent,
           roles.secondary,
         ]
-        for (const face of [tile, panel]) {
+        for (const face of faces) {
           for (const colour of colours) {
             expect(contrastRatio(colour, face)).toBeGreaterThanOrEqual(4.7)
           }
@@ -82,10 +84,43 @@ describe('a theme', () => {
 
       it(`reads the inks on ${name}'s surfaces`, () => {
         const { neutral, quiet, dim } = NEUTRAL_INKS[tone]
-        for (const face of [tile, panel]) {
+        for (const face of faces) {
           expect(contrastRatio(neutral, face)).toBeGreaterThanOrEqual(10)
           expect(contrastRatio(quiet, face)).toBeGreaterThanOrEqual(7)
           expect(contrastRatio(dim, face)).toBeGreaterThanOrEqual(4.5)
+        }
+      })
+
+      it(`reads ${name}'s inks and marks on a menu's face`, () => {
+        const { neutral, quiet, dim } = NEUTRAL_INKS[tone]
+        expect(contrastRatio(neutral, raised2)).toBeGreaterThanOrEqual(10)
+        expect(contrastRatio(quiet, raised2)).toBeGreaterThanOrEqual(7)
+        expect(contrastRatio(dim, raised2)).toBeGreaterThanOrEqual(4.5)
+        // A swatch, a pictogram, the chosen one's check: marks, not letters
+        const marks = [
+          ...roles.chains,
+          roles.modulator,
+          roles.accent,
+          roles.secondary,
+        ]
+        for (const mark of marks) {
+          expect(contrastRatio(mark, raised2)).toBeGreaterThanOrEqual(3)
+        }
+      })
+
+      it(`raises ${name}'s faces a step at a time over its cards`, () => {
+        const lightness = (hex: string) => oklabDistance(hex, '#000000')
+        if (tone === 'dark') {
+          // A step each (OKLab lightness, out of 100) that a phone's
+          // screen shows: a panel never wears the card under it, nor a
+          // menu the popover
+          expect(lightness(raised) - lightness(panel)).toBeGreaterThan(3)
+          expect(lightness(raised2) - lightness(raised)).toBeGreaterThan(3)
+        } else {
+          // White over the paper, the shadow telling it off
+          expect(raised).toBe('#ffffff')
+          expect(raised2).toBe('#ffffff')
+          expect(lightness(raised)).toBeGreaterThan(lightness(panel))
         }
       })
 

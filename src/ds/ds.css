@@ -57,15 +57,15 @@
 @source inline("rounded-{t,b,l,r}{,-md,-lg,-xl}");
 @source inline("{border,border-0,border-2,border-t,border-b,border-l,border-r,border-x,border-y,border-dashed,border-solid}");
 @source inline("{ring,ring-0,ring-1,ring-2,ring-inset,outline-none,outline-1,outline-2}");
-@source inline("{shadow,shadow-none,shadow-sm,shadow-md,shadow-lg,shadow-xl,shadow-[0_0_24px_var(--shadow)]}");
+@source inline("{shadow,shadow-none,shadow-sm,shadow-md,shadow-lg,shadow-xl,shadow-[0_0_24px_var(--shadow)],shadow-[0_2px_8px_var(--shadow),0_8px_32px_var(--shadow)]}");
 @source inline("opacity-{0,10,20,30,40,50,60,70,80,90,100}");
 @source inline("{divide-x,divide-y,backdrop-blur,backdrop-blur-sm,backdrop-blur-md}");
 @source inline("{transition,transition-colors,transition-opacity,transition-transform,duration-100,duration-150,duration-200,duration-300,ease-out,ease-in-out}");
 @source inline("{cursor-pointer,cursor-default,cursor-grab,pointer-events-none,pointer-events-auto,select-none,touch-none,sr-only}");
 
 /* Every colour token, as a fill, an ink, a line, a ring, an outline */
-@source inline("{bg,text,border,ring}-(--{bg,panel,tile,key,key-black,key-held,key-root,ink,ink-0,ink-100,ink-200,ink-300,ink-400,ink-500,ink-600,over,lift,lift-2,lift-3,lift-4,well,under,veil,scrim,backdrop,shadow,on-colour,accent,secondary,modulator,mod-ink,ok,warn,danger,record,ok-ink,warn-ink,danger-ink,record-ink})");
-@source inline("{hover:,aria-pressed:}{bg,text}-(--{panel,tile,key,ink-0,ink-100,ink-200,lift,lift-2,lift-3,accent,secondary})");
+@source inline("{bg,text,border,ring}-(--{bg,panel,tile,raised,raised-2,face,key,key-black,key-held,key-root,ink,ink-0,ink-100,ink-200,ink-300,ink-400,ink-500,ink-600,over,lift,lift-2,lift-3,lift-4,well,under,veil,scrim,backdrop,shadow,on-colour,accent,secondary,modulator,mod-ink,ok,warn,danger,record,ok-ink,warn-ink,danger-ink,record-ink})");
+@source inline("{hover:,aria-pressed:}{bg,text}-(--{panel,tile,raised,raised-2,face,key,ink-0,ink-100,ink-200,lift,lift-2,lift-3,accent,secondary})");
 @source inline("{outline,fill,stroke,divide}-(--{bg,panel,tile,key,ink,ink-100,ink-200,ink-400,ink-500,lift-2,lift-3,accent,secondary,modulator,ok,warn,danger,record})");
 @source inline("{bg,text,border,ring}-(--{accent,secondary,modulator,ok,warn,danger,record,over})/{5,8,10,15,20,25,30,40,50,60,70,80}");
 @source inline("{bg,text,border,ring,fill,stroke}-{transparent,current,white,black}");

@@ -130,15 +130,18 @@ body {
  * is the colour itself, so a share of it is color-mix's (Tailwind's
  * /opacity on a token); the light below gives each its value in the
  * light (data-mode, set by App from the settings' appearance). Greys with
- * no tint (ui/theme.ts's NEUTRAL): the five surfaces (--bg to
+ * no tint (ui/theme.ts's NEUTRAL): the seven surfaces (--bg to
  * --key-black) are the neutral's, the page putting the theme's over them
- * (ui/appearance.ts), a pop theme's tinted
+ * (ui/appearance.ts), a pop theme's tinted. What stands over the cards
+ * is a step lighter for each level it stands up (--raised, --raised-2)
  */
 :root {
   color-scheme: dark;
   --bg: #0b0b0b; /* the page, the wells that match it */
-  --panel: #151515; /* cards, the rail, the dock, the glass */
-  --tile: #1b1b1b; /* a tile's face, a popover */
+  --panel: #151515; /* cards, the rail, the sheets */
+  --tile: #1b1b1b; /* a tile's face on a card */
+  --raised: #1d1d1d; /* over the cards: the editor's panel, a popover */
+  --raised-2: #262626; /* over that: a menu */
   --key: #2a2a2a; /* a key or pad at rest */
   --key-black: #101010; /* a black key at rest */
   --ink: #e8e8e8; /* the page's own text */
@@ -183,6 +186,12 @@ body {
   --key-black-edge: color-mix(in oklab, var(--accent) 60%, #ffffff);
   --key-root: color-mix(in oklab, var(--accent) 15%, var(--key));
   --mod-ink: color-mix(in oklab, var(--modulator) 25%, var(--ink-100));
+  /*
+   * The face of the surface a thing stands on: a card's here, a raised
+   * one's where the recipes raise it (ui/controls.ts's RAISED, MENU), for
+   * what paints that face again (a value read clear of its neighbours)
+   */
+  --face: var(--panel);
 }
 
 /*
@@ -196,6 +205,8 @@ body {
   --bg: #ebebeb;
   --panel: #f8f8f8;
   --tile: #ffffff;
+  --raised: #ffffff;
+  --raised-2: #ffffff;
   --key: #ffffff;
   --key-black: #2b2b2b;
   --ink: #171717;
@@ -216,7 +227,7 @@ body {
   --veil: rgb(255 255 255 / 0.6);
   --scrim: color-mix(in srgb, var(--bg) 88%, transparent);
   --backdrop: rgb(23 23 23 / 0.35);
-  --shadow: rgb(0 0 0 / 0.16);
+  --shadow: rgb(0 0 0 / 0.2);
   --on-colour: #ffffff;
   --record: #d92d20;
   --ok: #047857;
@@ -332,15 +343,16 @@ body {
 
 /*
  * The face of what stands over the sound's graph and the mix (the
- * editor's panel, SoundEditor.tsx; the master's; a popover): the card
- * face, opaque. It was frosted glass, the canvas under it blurred (ashon,
- * 2026-11-12), and the views under it are drawn each display frame, so a
- * phone's GPU blurred them again every frame. With the mix choppy on the
- * phone ashon took the blur for it (2026-11-17: "마스터 패널의 반투명
- * 패널이 문제같긴 하네"); the frames' report then showed none missed for
- * it, Bluetooth's audio coming in chunks the cause (docs/platform-notes.md),
- * and the face stayed opaque.
+ * editor's panel, SoundEditor.tsx; a popover, a menu, a dialog): its
+ * level's face (--face, which ui/controls.ts's RAISED and MENU set to
+ * --raised and --raised-2), opaque. It was frosted glass, the canvas
+ * under it blurred (ashon, 2026-11-12), and the views under it are drawn
+ * each display frame, so a phone's GPU blurred them again every frame.
+ * With the mix choppy on the phone ashon took the blur for it
+ * (2026-11-17: "마스터 패널의 반투명 패널이 문제같긴 하네"); the frames'
+ * report then showed none missed for it, Bluetooth's audio coming in
+ * chunks the cause (docs/platform-notes.md), and the face stayed opaque.
  */
 @utility glass {
-  background-color: var(--panel);
+  background-color: var(--face);
 }

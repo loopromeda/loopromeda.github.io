@@ -18,7 +18,7 @@ import {
   type Latency,
   type VelocityMode,
 } from '../state/settings'
-import { CARD, SMALL_BUTTON, TALL_HIT } from './controls'
+import { RAISED, SMALL_BUTTON, TALL_HIT } from './controls'
 import { FadeRow } from './FadeRow'
 import { SmallIconButton } from './IconButton'
 import { PlatformChecks } from './PlatformChecks'
@@ -188,7 +188,7 @@ export function SettingsDialog({
       id="settings"
       aria-labelledby="settings-heading"
       onClick={outside}
-      className={`m-auto h-[min(36rem,calc(100dvh_-_2rem_-_env(safe-area-inset-top)_-_env(safe-area-inset-bottom)))] max-h-none w-[calc(100%_-_1.5rem)] max-w-lg flex-col gap-1.5 p-2.5 text-inherit open:flex backdrop:bg-(--backdrop) ${CARD}`}
+      className={`m-auto h-[min(36rem,calc(100dvh_-_2rem_-_env(safe-area-inset-top)_-_env(safe-area-inset-bottom)))] max-h-none w-[calc(100%_-_1.5rem)] max-w-lg flex-col gap-1.5 p-2.5 text-inherit open:flex backdrop:bg-(--backdrop) ${RAISED}`}
     >
       <div className="flex h-7 shrink-0 items-center justify-end gap-1.5">
         <h2

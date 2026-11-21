@@ -9,8 +9,9 @@
  *   page.
  * - Recipes: the controls' shared sizes and faces as class strings
  *   (ui/controls.ts): a 44 px BUTTON, a 28 px SMALL_BUTTON, an OPTION, a
- *   FIELD, a CARD, a RAISED panel, a knobRow's grid. Tailwind classes
- *   over the tokens, so a screen's own glue reads as the app's.
+ *   FIELD, a CARD, a RAISED panel over it, a MENU over that, a knobRow's
+ *   grid. Tailwind classes over the tokens, so a screen's own glue reads
+ *   as the app's.
  * - Components that stand without the engine: controls (ValueKnob,
  *   Switch, the icon buttons, Dropdown), overlays, settings rows,
  *   navigators, play surfaces (Keys, Pads, KitPads, XyPad, played through
