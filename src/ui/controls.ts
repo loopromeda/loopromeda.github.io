@@ -164,6 +164,9 @@ export const SMALL_CONFIRM = `${SMALL_BUTTON_SHAPE} bg-(--accent)/20 text-(--acc
 /** One of a row of 28 px options, the chosen one aria-pressed */
 export const SMALL_OPTION = `${SMALL_BUTTON_SHAPE} bg-(--lift) text-(--ink-400) aria-pressed:bg-(--lift-2) aria-pressed:text-(--ink-0)`
 
+/** One of a row of 28 px tabs, as an option looks: the one shown selected */
+export const SMALL_TAB = `${SMALL_BUTTON_SHAPE} bg-(--lift) text-(--ink-400) aria-selected:bg-(--lift-2) aria-selected:text-(--ink-0)`
+
 /** A 28 px square button holding a 14 px icon: a panel header's action */
 export const SMALL_ICON_BUTTON = `${TALL_HIT} flex size-7 shrink-0 items-center justify-center rounded-md bg-(--lift) text-(--ink-200) disabled:opacity-30 aria-pressed:bg-(--lift-2)`
 
@@ -176,37 +179,45 @@ export const SMALL_SELECT =
   'select-chevron h-7 min-w-0 truncate rounded-md bg-(--over)/8 pr-6 pl-2.5 text-[11px] font-semibold text-(--ink-200)'
 
 /**
- * Columns for one to eight knobs, written out for Tailwind to find:
- * across the panel, or 9rem each in the row a tall screen gives it
+ * Columns for one to sixteen cells, written out for Tailwind to find:
+ * across the panel, or up to 9rem each in the row a tall screen gives it
  */
 const KNOB_COLUMNS = [
-  'grid-cols-1 tall:grid-cols-[repeat(1,9rem)]',
-  'grid-cols-2 tall:grid-cols-[repeat(2,9rem)]',
-  'grid-cols-3 tall:grid-cols-[repeat(3,9rem)]',
-  'grid-cols-4 tall:grid-cols-[repeat(4,9rem)]',
-  'grid-cols-5 tall:grid-cols-[repeat(5,9rem)]',
-  'grid-cols-6 tall:grid-cols-[repeat(6,9rem)]',
-  'grid-cols-7 tall:grid-cols-[repeat(7,9rem)]',
-  'grid-cols-8 tall:grid-cols-[repeat(8,9rem)]',
+  'grid-cols-1 tall:grid-cols-[repeat(1,minmax(0,9rem))]',
+  'grid-cols-2 tall:grid-cols-[repeat(2,minmax(0,9rem))]',
+  'grid-cols-3 tall:grid-cols-[repeat(3,minmax(0,9rem))]',
+  'grid-cols-4 tall:grid-cols-[repeat(4,minmax(0,9rem))]',
+  'grid-cols-5 tall:grid-cols-[repeat(5,minmax(0,9rem))]',
+  'grid-cols-6 tall:grid-cols-[repeat(6,minmax(0,9rem))]',
+  'grid-cols-7 tall:grid-cols-[repeat(7,minmax(0,9rem))] [--knob-columns:7]',
+  'grid-cols-8 tall:grid-cols-[repeat(8,minmax(0,9rem))] [--knob-columns:8]',
+  'grid-cols-9 tall:grid-cols-[repeat(9,minmax(0,9rem))] [--knob-columns:9]',
+  'grid-cols-10 tall:grid-cols-[repeat(10,minmax(0,9rem))] [--knob-columns:10]',
+  'grid-cols-11 tall:grid-cols-[repeat(11,minmax(0,9rem))] [--knob-columns:11]',
+  'grid-cols-12 tall:grid-cols-[repeat(12,minmax(0,9rem))] [--knob-columns:12]',
+  'grid-cols-13 tall:grid-cols-[repeat(13,minmax(0,9rem))] [--knob-columns:13]',
+  'grid-cols-14 tall:grid-cols-[repeat(14,minmax(0,9rem))] [--knob-columns:14]',
+  'grid-cols-15 tall:grid-cols-[repeat(15,minmax(0,9rem))] [--knob-columns:15]',
+  'grid-cols-16 tall:grid-cols-[repeat(16,minmax(0,9rem))] [--knob-columns:16]',
 ] as const
 
 /**
- * A panel's count knobs, spread across its width: a column each, six at
- * most, so a part with few knobs leaves no empty stretch at the right. In
- * the row under the graph on a tall screen, where that would scatter
- * them, each column is 9rem from the left. Every knob is the size
- * KNOB_SIZE gives its row's width, whatever the row holds: knobs match
- * from part to part. Seven (a chain's level and six inputs) or eight (a
+ * A panel's count cells (knobs, a route's button, a view's), spread
+ * across its width: a column each, so a part with few knobs leaves no
+ * empty stretch at the right; most to a row, then they wrap. In the row
+ * under the graph on a tall screen, where that would scatter them, each
+ * column is up to 9rem from the left. Every knob is the size KNOB_SIZE
+ * gives its row's width, a sixth of it at the least, whatever the row
+ * holds: knobs match from part to part. Past six they stand in one row
+ * all the same, a little smaller where the row is short of room (a
  * strip's fader and four sends, then its Mute and Solo and its views,
- * OutputCells) stand in one row too, a little smaller, rather than leave
- * one or two alone under six; past eight they wrap.
+ * OutputCells). A part's panel pages what would wrap (PartPanel,
+ * knobPages): most is what its width holds.
  */
-export function knobRow(count: number): string {
-  const many = Math.min(Math.max(count, 1), KNOB_COLUMNS.length)
-  const columns = KNOB_COLUMNS[many - 1]
-  // Written out, for Tailwind to find
-  const narrow = { 7: ' [--knob-columns:7]', 8: ' [--knob-columns:8]' }[many]
-  return `@container grid ${columns} justify-items-center gap-x-1 gap-y-2${narrow ?? ''}`
+export function knobRow(count: number, most = 8): string {
+  const across = Math.min(most, KNOB_COLUMNS.length)
+  const many = Math.min(Math.max(count, 1), across)
+  return `@container grid ${KNOB_COLUMNS[many - 1]} justify-items-center gap-x-1 gap-y-2`
 }
 
 /**
@@ -219,8 +230,8 @@ export const PANEL_BODY = 'my-auto flex flex-col gap-2'
 
 /**
  * A knob's width in a knobRow: --knob, or a sixth of the row (less five
- * gaps) where six would not fit; a seventh in a row of seven, an eighth
- * in a row of eight (--knob-columns). The panel sets --knob with its
+ * gaps) where six would not fit; past six, as many parts of it as the
+ * row has columns (--knob-columns). The panel sets --knob with its
  * height (SoundEditor): 48 px beside the graph, up to 72 px under it on a
  * tall screen held upright, 72 px in a tall screen's row; 48 px
  * elsewhere.

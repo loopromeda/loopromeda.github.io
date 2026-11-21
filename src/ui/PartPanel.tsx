@@ -1,11 +1,14 @@
 import {
+  useId,
   useLayoutEffect,
   useRef,
   useState,
   type FormEvent,
   useSyncExternalStore,
   type HTMLAttributes,
+  type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
+  type RefObject,
 } from 'react'
 import type { Engine, OutputSource } from '../engine/engine'
 import type { EffectAt } from '../engine/protocol'
@@ -78,6 +81,7 @@ import {
   type Mix,
   type MixAdded,
   type MixOwner,
+  mixKnob,
 } from '../state/mix'
 import {
   AMP,
@@ -99,6 +103,7 @@ import {
   SMALL_FIELD,
   SMALL_ICON_BUTTON,
   SMALL_OPTION,
+  SMALL_TAB,
   TALL_HIT,
 } from './controls'
 import {
@@ -135,9 +140,15 @@ import type { MasterViewKind } from './MasterViews'
 import { MutesCell } from './Mutes'
 import { OutputCells } from './OutputCells'
 import { palette } from './theme'
-import { knoblessDests, routesTo } from '../state/sound/knob'
+import { knobSpec, knoblessDests, routesTo } from '../state/sound/knob'
 import { choiceColumns, choicesWidth } from '../viz/choices'
 import { noteName } from '../viz/keyboard'
+import {
+  KNOBS_LEAST,
+  knobPages,
+  knobsFit,
+  type KnobPage,
+} from '../viz/knobPages'
 
 /** One kind a "+" offers: its pictogram, name and what it does */
 interface Choice {
@@ -147,6 +158,18 @@ interface Choice {
   readonly look: Look
   /** Adds it; none at the limit */
   readonly add: (() => void) | undefined
+}
+
+/**
+ * One of the cells the knob row holds: a knob, a route's button, a view's,
+ * the loudness (two wide); its name, for a page of them
+ */
+interface Cell {
+  readonly key: string
+  /** How many of the row's columns it takes */
+  readonly width: number
+  readonly label: string
+  readonly node: ReactNode
 }
 
 /** One of a part's actions, a small button in the panel's header */
@@ -498,33 +521,181 @@ export function PartPanel({
               engine.getPart() === 'kit'
             )
   const { chip } = view
-  const mixKnobs = view.mixKnobs?.map(({ part, key }) => (
-    <MixKnob
-      key={`mix ${part} ${key}`}
-      engine={engine}
-      part={part}
-      knob={key}
-      color={view.color}
-    />
-  ))
-  /** The knob row's cells, the group's row as many across */
-  const cells =
-    view.knobs.length +
-    (view.knobless?.length ?? 0) +
-    (view.mixKnobs?.length ?? 0) +
-    (view.views ? 1 : 0) +
-    (view.views && view.mutes ? 1 : 0) +
-    (view.loudness ? LOUDNESS_SPAN : 0)
+  const mixCells: Cell[] = (view.mixKnobs ?? []).map(({ part, key }) => ({
+    key: `mix ${part} ${key}`,
+    width: 1,
+    label: mixKnob(engine.getMix(), part, key)?.label ?? key,
+    node: (
+      <MixKnob
+        key={`mix ${part} ${key}`}
+        engine={engine}
+        part={part}
+        knob={key}
+        color={view.color}
+      />
+    ),
+  }))
+  /** The knob row's cells, in order: the part's own section of them */
+  const own: Cell[] = [
+    ...(view.mixFirst ? mixCells : []),
+    ...view.knobs.map(({ part, key, hot, label, color }) => ({
+      key: `${part} ${key}`,
+      width: 1,
+      label: label ?? knobSpec(sound, part, key)?.label ?? key,
+      node: (
+        <Knob
+          key={`${part} ${key}`}
+          engine={engine}
+          part={part}
+          knob={key}
+          label={label}
+          color={color ?? view.color}
+          hot={hot}
+          onHold={(dest) => onRoute(part, dest)}
+        />
+      ),
+    })),
+    ...(view.mixFirst ? [] : mixCells),
+    ...(view.knobless ?? []).map(({ part, dest, count }) => ({
+      key: `${part} ${dest.key}`,
+      width: 1,
+      label: dest.label,
+      node: (
+        <button
+          key={`${part} ${dest.key}`}
+          type="button"
+          aria-label={`Route to ${view.title} ${dest.label}`}
+          onClick={() => onRoute(part, dest.key)}
+          className="flex min-w-0 flex-col items-center gap-0.5"
+        >
+          <span
+            aria-hidden
+            style={{ border: `1.5px dashed ${modLook().ring}` }}
+            className={`${KNOB_SIZE} relative flex aspect-square items-center justify-center rounded-full`}
+          >
+            <svg viewBox="0 0 18 12" width={24} height={16}>
+              <path
+                d={GLYPHS.route}
+                fill="none"
+                stroke={palette().modulator}
+                strokeWidth={1.4}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </span>
+          <span className="text-[11px] leading-tight whitespace-nowrap text-(--ink-400)">
+            {dest.label}
+          </span>
+          <span className="font-mono text-[11px] leading-tight whitespace-nowrap text-(--ink-200)">
+            {count === 0
+              ? 'Route'
+              : count === 1
+                ? '1 route'
+                : `${count} routes`}
+          </span>
+        </button>
+      ),
+    })),
+    ...(view.views
+      ? [
+          {
+            key: 'views',
+            width: view.mutes ? 2 : 1,
+            label: 'Views',
+            node: (
+              <OutputCells key="views" mutes={view.mutes} {...view.views} />
+            ),
+          },
+        ]
+      : []),
+    ...(view.loudness
+      ? [
+          {
+            key: 'loudness',
+            width: LOUDNESS_SPAN,
+            label: 'Loudness',
+            node: (
+              <LoudnessCell
+                key="loudness"
+                engine={engine}
+                className="col-span-2"
+              />
+            ),
+          },
+        ]
+      : []),
+  ]
+  /** The group's cells, a section of their own: the Amp's ghost notes */
+  const grouped: Cell[] | undefined = view.group?.knobs.map(
+    ({ part, key }) => ({
+      key: `${part} ${key}`,
+      width: 1,
+      label: knobSpec(sound, part, key)?.label ?? key,
+      node: (
+        <Knob
+          key={`${part} ${key}`}
+          engine={engine}
+          part={part}
+          knob={key}
+          color={view.color}
+          onHold={(dest) => onRoute(part, dest)}
+        />
+      ),
+    })
+  )
   /** The action being asked about, and the part it was for */
   const [asking, setAsking] = useState<{ id: string; action: Action }>()
   const question = asking?.id === picked ? asking.action : undefined
   const naming = view.naming?.id === named ? view.naming : undefined
 
+  // Where the knobs would wrap, pages of them: how many stand in a row is
+  // the body's width's, with the knob's size the panel sets (--knob)
+  const bodyRef = useRef<HTMLDivElement>(null)
+  const probeRef = useRef<HTMLSpanElement>(null)
+  const fit = useKnobsFit(bodyRef, probeRef)
+  const group =
+    view.group && grouped?.length
+      ? { title: view.group.title, cells: grouped }
+      : undefined
+  const sections = group ? [own, group.cells] : [own]
+  const pages =
+    view.body || view.choices
+      ? undefined
+      : knobPages(
+          sections.map((cells) => cells.map((cell) => cell.width)),
+          fit
+        )
+  /** The page shown, kept while the panel stays on the part */
+  const [paged, setPaged] = useState<{ id: string; page: number }>()
+  const page = pages
+    ? Math.min(paged?.id === picked ? paged.page : 0, pages.length - 1)
+    : 0
+  const pagesId = useId()
+  const feedsShown =
+    !view.choices && view.feeds !== undefined && view.feeds.length > 0
+  const tabs = pages && (
+    <PageTabs
+      id={pagesId}
+      label={`${view.title}’s knobs`}
+      names={pages.map((each) =>
+        pageName(each, sections, [view.title, group?.title ?? view.title])
+      )}
+      at={page}
+      onShow={(to) => setPaged({ id: picked, page: to })}
+    />
+  )
+
   return (
     <section
       aria-label={view.title}
-      className="flex min-h-[8.5rem] min-w-0 flex-col gap-2 rounded-xl p-2.5"
+      className="relative flex min-h-[8.5rem] min-w-0 flex-col gap-2 rounded-xl p-2.5"
     >
+      <span
+        ref={probeRef}
+        aria-hidden
+        className="pointer-events-none invisible absolute h-0 w-[var(--knob,3rem)]"
+      />
       <div className="flex h-7 shrink-0 items-center gap-2">
         <span
           aria-hidden
@@ -615,15 +786,32 @@ export function PartPanel({
         />
       )}
 
-      {!view.choices && view.feeds && view.feeds.length > 0 && (
-        <Feeds
-          title={view.title}
-          feeds={view.feeds}
-          through={view.through}
-          fm={view.fm}
-        />
-      )}
+      {feedsShown &&
+        view.feeds &&
+        (tabs ? (
+          // The pages' tabs at the row's end, for the knobs to keep the
+          // panel's height: the feeds pan in what they leave
+          <div className="flex items-center gap-3">
+            <div className="min-w-0 flex-1">
+              <Feeds
+                title={view.title}
+                feeds={view.feeds}
+                through={view.through}
+                fm={view.fm}
+              />
+            </div>
+            {tabs}
+          </div>
+        ) : (
+          <Feeds
+            title={view.title}
+            feeds={view.feeds}
+            through={view.through}
+            fm={view.fm}
+          />
+        ))}
       <div
+        ref={bodyRef}
         className={
           view.fill ? 'flex min-h-0 flex-1 flex-col gap-2' : PANEL_BODY
         }
@@ -633,94 +821,28 @@ export function PartPanel({
             <Choices choices={view.choices} note={view.choiceNote} />
           ) : (
             <>
-              {view.knobs.length > 0 ||
-              view.knobless?.length ||
-              view.mixKnobs?.length ? (
-                <div className={knobRow(cells)}>
-                  {view.mixFirst && mixKnobs}
-                  {view.knobs.map(({ part, key, hot, label, color }) => (
-                    <Knob
-                      key={`${part} ${key}`}
-                      engine={engine}
-                      part={part}
-                      knob={key}
-                      label={label}
-                      color={color ?? view.color}
-                      hot={hot}
-                      onHold={(dest) => onRoute(part, dest)}
-                    />
-                  ))}
-                  {!view.mixFirst && mixKnobs}
-                  {view.knobless?.map(({ part, dest, count }) => (
-                    <button
-                      key={`${part} ${dest.key}`}
-                      type="button"
-                      aria-label={`Route to ${view.title} ${dest.label}`}
-                      onClick={() => onRoute(part, dest.key)}
-                      className="flex min-w-0 flex-col items-center gap-0.5"
-                    >
-                      <span
-                        aria-hidden
-                        style={{ border: `1.5px dashed ${modLook().ring}` }}
-                        className={`${KNOB_SIZE} relative flex aspect-square items-center justify-center rounded-full`}
-                      >
-                        <svg viewBox="0 0 18 12" width={24} height={16}>
-                          <path
-                            d={GLYPHS.route}
-                            fill="none"
-                            stroke={palette().modulator}
-                            strokeWidth={1.4}
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
-                        </svg>
-                      </span>
-                      <span className="text-[11px] leading-tight whitespace-nowrap text-(--ink-400)">
-                        {dest.label}
-                      </span>
-                      <span className="font-mono text-[11px] leading-tight whitespace-nowrap text-(--ink-200)">
-                        {count === 0
-                          ? 'Route'
-                          : count === 1
-                            ? '1 route'
-                            : `${count} routes`}
-                      </span>
-                    </button>
-                  ))}
-                  {view.views && (
-                    <OutputCells mutes={view.mutes} {...view.views} />
-                  )}
-                  {view.loudness && (
-                    <LoudnessCell engine={engine} className="col-span-2" />
-                  )}
-                </div>
+              {own.length > 0 || group ? (
+                <>
+                  {!feedsShown && tabs}
+                  <KnobRows
+                    own={own}
+                    group={group}
+                    pages={pages}
+                    page={page}
+                    fit={fit}
+                    panel={
+                      pages
+                        ? { id: `${pagesId}-page`, tab: `${pagesId}-${page}` }
+                        : undefined
+                    }
+                  />
+                </>
               ) : (
                 view.note && (
                   <p className="text-xs leading-snug text-(--ink-400)">
                     {view.note}
                   </p>
                 )
-              )}
-              {view.group && (
-                <div
-                  role="group"
-                  aria-label={view.group.title}
-                  className="flex flex-col gap-1.5"
-                >
-                  <h3 className={SECTION_HEADING}>{view.group.title}</h3>
-                  <div className={knobRow(Math.max(cells, 4))}>
-                    {view.group.knobs.map(({ part, key }) => (
-                      <Knob
-                        key={`${part} ${key}`}
-                        engine={engine}
-                        part={part}
-                        knob={key}
-                        color={view.color}
-                        onHold={(dest) => onRoute(part, dest)}
-                      />
-                    ))}
-                  </div>
-                </div>
               )}
               {view.reduction && (
                 <Reduction
@@ -1406,6 +1528,194 @@ function Choices({
         {note && (
           <p className="text-[11px] leading-snug text-(--ink-500)">{note}</p>
         )}
+      </div>
+    </div>
+  )
+}
+
+/** How many columns cells take */
+const widthOf = (cells: readonly Cell[]) =>
+  cells.reduce((sum, cell) => sum + cell.width, 0)
+
+/**
+ * How many of a panel's cells stand in a row (knobsFit): box's width, and
+ * the knob's size the panel sets (--knob), probe's
+ */
+function useKnobsFit(
+  box: RefObject<HTMLElement | null>,
+  probe: RefObject<HTMLElement | null>
+): number {
+  const [fit, setFit] = useState(KNOBS_LEAST)
+  useLayoutEffect(() => {
+    const element = box.current
+    const knob = probe.current
+    if (!element || !knob) return
+    const measure = () =>
+      setFit(knobsFit(element.clientWidth, knob.offsetWidth))
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(element)
+    observer.observe(knob)
+    return () => observer.disconnect()
+  }, [box, probe])
+  return fit
+}
+
+/**
+ * A page's name, for its tab: its section's (titles: the part's, the
+ * group's) where it holds all of it, else its first knob's: a section too
+ * long for a row stands in pages each named for where it starts (Wave,
+ * then Voices), as the guide words of a dictionary
+ */
+function pageName(
+  { section, from, to }: KnobPage,
+  sections: readonly (readonly Cell[])[],
+  titles: readonly string[]
+): string {
+  const cells = sections[section] ?? []
+  if (from === 0 && to === cells.length) return titles[section] ?? ''
+  return cells[from]?.label ?? ''
+}
+
+/**
+ * The tabs of a panel's pages of knobs, each a 28 px option by its name,
+ * the one shown selected. The arrows, Home and End walk them, showing
+ * each.
+ */
+function PageTabs({
+  id,
+  label,
+  names,
+  at,
+  onShow,
+}: {
+  /** The tabs' ids start with it: id-0, id-1; the page's is id-page */
+  id: string
+  label: string
+  names: readonly string[]
+  at: number
+  onShow: (page: number) => void
+}) {
+  const step = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    const last = names.length - 1
+    const to =
+      event.key === 'ArrowRight'
+        ? at === last
+          ? 0
+          : at + 1
+        : event.key === 'ArrowLeft'
+          ? at === 0
+            ? last
+            : at - 1
+          : event.key === 'Home'
+            ? 0
+            : event.key === 'End'
+              ? last
+              : undefined
+    if (to === undefined) return
+    event.preventDefault()
+    onShow(to)
+    document.getElementById(`${id}-${to}`)?.focus()
+  }
+  return (
+    <div
+      role="tablist"
+      aria-label={label}
+      onKeyDown={step}
+      className="flex shrink-0 items-center gap-1.5"
+    >
+      {names.map((name, index) => (
+        <button
+          key={`${index} ${name}`}
+          type="button"
+          role="tab"
+          id={`${id}-${index}`}
+          aria-selected={index === at}
+          aria-controls={`${id}-page`}
+          tabIndex={index === at ? 0 : -1}
+          onClick={() => onShow(index)}
+          className={SMALL_TAB}
+        >
+          {name}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+/**
+ * The knobs of a part's panel, its own and a group's (the Amp's ghost
+ * notes): the page shown of them, where they are paged (PageTabs over
+ * them, or in its feeds' row, name it), else all in one row, the group's
+ * after a line and its name over them. ashon, 2026-11-21: "이렇게 두줄이
+ * 되는 경우는 페이지를 두고 전환하도록 하는건 어때?"
+ */
+function KnobRows({
+  own,
+  group,
+  pages,
+  page,
+  fit,
+  panel,
+}: {
+  own: readonly Cell[]
+  group: { title: string; cells: readonly Cell[] } | undefined
+  /** The pages, where they are paged, and the one shown */
+  pages: readonly KnobPage[] | undefined
+  page: number
+  /** How many stand in a row */
+  fit: number
+  /** The tab panel's id and its tab's, where they are paged */
+  panel: { id: string; tab: string } | undefined
+}) {
+  const row = (cells: readonly Cell[]) => knobRow(widthOf(cells), fit)
+  const shown = pages?.[page]
+  if (pages && shown) {
+    const cellsOf = ({ section, from, to }: KnobPage) =>
+      (section === 0 ? own : (group?.cells ?? [])).slice(from, to)
+    // Every page as many columns as the widest: a knob keeps its size and
+    // its place as the pages turn
+    const across = Math.max(...pages.map((each) => widthOf(cellsOf(each))))
+    const cells = cellsOf(shown)
+    return (
+      <div
+        role="tabpanel"
+        id={panel?.id}
+        aria-labelledby={panel?.tab}
+        className={knobRow(across, fit)}
+      >
+        {cells.map((cell) => cell.node)}
+      </div>
+    )
+  }
+  if (!group) {
+    return <div className={row(own)}>{own.map((cell) => cell.node)}</div>
+  }
+  const before = widthOf(own)
+  const all = [...own, ...group.cells]
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div aria-hidden className={row(all)}>
+        {before > 0 && <span style={{ gridColumn: `span ${before}` }} />}
+        <span
+          className={`${SECTION_HEADING} -ml-0.5 justify-self-stretch border-l border-(--lift-2) pl-2 leading-none`}
+          style={{ gridColumn: `span ${widthOf(group.cells)}` }}
+        >
+          {group.title}
+        </span>
+      </div>
+      <div className={`relative ${row(all)}`}>
+        {own.map((cell) => cell.node)}
+        {before > 0 && (
+          <span
+            aria-hidden
+            className="absolute -top-1.5 bottom-0 left-0 -ml-0.5 w-px bg-(--lift-2)"
+            style={{ gridColumn: `${before + 1}`, gridRow: '1' }}
+          />
+        )}
+        <div role="group" aria-label={group.title} className="contents">
+          {group.cells.map((cell) => cell.node)}
+        </div>
       </div>
     </div>
   )
