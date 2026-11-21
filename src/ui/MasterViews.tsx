@@ -463,7 +463,8 @@ export function MasterView({
  * The spectrum, 20 Hz to 20 kHz on a logarithmic axis (src/viz/master.ts):
  * the level of each column filled under its line, and a line of the
  * peaks falling slowly over it. Labelled, its decades and levels are
- * named in the DOM over it, not drawn.
+ * named in the DOM over it, not drawn, each decade right of its line but
+ * the highest, left of it so the edge never cuts it.
  */
 export function Spectrum({
   engine,
@@ -602,8 +603,13 @@ export function Spectrum({
           {DECADES.map((hz) => (
             <span
               key={hz}
-              className="absolute bottom-0.5 ml-1 font-mono text-[9px] leading-none text-(--ink-500)"
-              style={{ left: `${hzToX(hz, 100)}%` }}
+              className="absolute bottom-0.5 mx-1 font-mono text-[9px] leading-none text-(--ink-500)"
+              style={
+                // The highest named inside its line, clear of the edge
+                hz === DECADES[DECADES.length - 1]
+                  ? { right: `${100 - hzToX(hz, 100)}%` }
+                  : { left: `${hzToX(hz, 100)}%` }
+              }
             >
               {hz < 1000 ? hz : `${hz / 1000}k`}
             </span>
@@ -652,9 +658,12 @@ const histories = new Map<
  * marks each decade (100 Hz, 1 kHz, 10 kHz), and a line down each
  * second, drawn into the picture to scroll away with it: how long a tail
  * rings is counted in them. Labelled, the decades are named in the DOM
- * over it, and its colours (ColourKey) at its lower left, over the
- * oldest of the lowest notes; where it is wider than 16rem, the lines'
- * second is named at its lower right. In a tile, unlabelled, its colours
+ * over it, each over its line, the highest under the top where its line
+ * stands too near it to name above, and its colours (ColourKey) at its
+ * lower left, over the oldest of the lowest notes, 100 Hz's name left
+ * out where the view is under 6rem tall and the key would sit on it (the
+ * Fold's outer screen); where it is wider than 16rem, the lines' second
+ * is named at its lower right. In a tile, unlabelled, its colours
  * are keyed across its foot instead (ColourKey's fit), where it is 6rem
  * wide or more: a narrower one (a phone's tiles) has no room to spare
  * for it (ashon: "렌더링 영역이 작으면 legend는 그냥 제거해도 좋을 것
@@ -805,7 +814,7 @@ export function Spectrogram({
   )
   return (
     <div
-      className={`@container relative overflow-hidden contain-strict ${className}`}
+      className={`relative overflow-hidden contain-strict [container-type:size] ${className}`}
     >
       <canvas
         ref={canvasRef}
@@ -818,8 +827,10 @@ export function Spectrogram({
           {DECADES.map((hz) => (
             <span
               key={hz}
-              className="absolute left-1 -translate-y-full pb-0.5 font-mono text-[9px] leading-none text-(--ink-500)"
-              style={{ top: `${100 - hzToX(hz, 100)}%` }}
+              className={`absolute left-1 pb-0.5 font-mono text-[9px] leading-none text-(--ink-500) ${hz === DECADES[0] ? '[@container(max-height:6rem)]:hidden' : ''}`}
+              style={{
+                bottom: `min(${hzToX(hz, 100)}%, 100% - ${NAME_HEIGHT})`,
+              }}
             >
               {hz < 1000 ? hz : `${hz / 1000}k`}
             </span>
@@ -841,6 +852,13 @@ export function Spectrogram({
     </div>
   )
 }
+
+/**
+ * A decade's name on the labelled spectrogram, as tall as it stands
+ * (9 px letters, leading none, 2 px under them): the room it needs above
+ * its line
+ */
+const NAME_HEIGHT = '11px'
 
 /** The correlation's bar under the vectorscope, CSS px */
 const CORRELATION_BAR = 4
