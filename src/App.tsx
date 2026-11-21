@@ -299,7 +299,7 @@ export function App({
         <div className="w-full max-w-xs">
           <PlatformChecks platform={platform} />
         </div>
-        <p className="max-w-xs text-center text-sm break-words text-(--danger) select-text">
+        <p className="max-w-xs text-center text-sm break-words text-(--warn) select-text">
           {snapshot.error}
         </p>
         <button
