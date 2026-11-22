@@ -19,8 +19,12 @@ import {
 } from '../state/surface'
 import {
   HIGHEST_NOTE,
+  HOME_CODES,
   REACH_WHITES,
+  UPPER_CODES,
   cNote,
+  computerKeyNote,
+  computerStart,
   keysFit,
   keysPlace,
   middleC,
@@ -58,11 +62,15 @@ const STARTS: Readonly<Record<SurfaceKind, number>> = {
   xy: 3,
 }
 /**
- * What the arrows and Z and X move: the keys 7 white keys, the pads and the
- * XY pad an octave
+ * What the arrows and Z and X move: the keys 4 white keys, the pads and the
+ * XY pad an octave. The keys move less than an octave, as ashon asked
+ * ("옥타브가 아니라 적절히 좁게"), so each step starts the computer keys
+ * (computerStart) on another white key: a fifth up from most (C to G),
+ * each of the seven in turn over seven steps, two steps an octave and a
+ * white key. The navigator moves them a white key at a time.
  */
-const OCTAVE: Readonly<Record<SurfaceKind, number>> = {
-  keys: 7,
+const STEP: Readonly<Record<SurfaceKind, number>> = {
+  keys: 4,
   pads: 1,
   xy: 1,
 }
@@ -82,11 +90,11 @@ const NAVIGATOR_IN_HEADER = 600
 const NAVIGATOR_LEAST = 'min-w-16'
 
 /**
- * Computer keys (KeyboardEvent.code) for the keys: each plays as many
- * semitones above the keys' middle C (middleC) as its place here. The
- * home row is white keys, the row above black.
+ * Computer keys (KeyboardEvent.code) for the XY pad: each plays as many
+ * semitones above the C nearest its middle (middleC) as its place here.
+ * The keys' own are HOME_CODES and UPPER_CODES (computerKeyNote).
  */
-const KEY_CODES = [
+const XY_CODES = [
   'KeyA',
   'KeyW',
   'KeyS',
@@ -132,7 +140,9 @@ const PAD_CODES = [
  * Each computer key's engine id, the same on keys and pads: a key let go
  * after the surface changed still lets its note go
  */
-const CODES = [...new Set([...KEY_CODES, ...PAD_CODES])]
+const CODES = [
+  ...new Set([...XY_CODES, ...PAD_CODES, ...HOME_CODES, ...UPPER_CODES]),
+]
 const computerId = (code: string) => COMPUTER_ID - CODES.indexOf(code)
 
 /** Keys typed into a field (a preset's name) are text, not notes */
@@ -156,7 +166,7 @@ const sameGrid = (a: PadGrid, b: PadGrid) =>
   a.columns === b.columns && a.rows === b.rows
 
 /**
- * The octaves' range, between their arrows: read out, not shown, in a
+ * The range on screen, between the arrows: read out, not shown, in a
  * header too narrow for it (a wide one holds the transport too). Under
  * 29rem it went over the patch, which keeps its least (6rem) beside the
  * track's wide button from 26rem: shown to 26rem, a range as long as
@@ -186,18 +196,20 @@ const sameFit = (a: Fit, b: Fit) =>
  * Keys: as many octaves as fit at a finger's width (one on a phone held
  * upright, more on a wide window: keysFit), standing where keysPlace puts
  * them (one octave from middle C up, more around it); the arrows move
- * them an octave, the navigator (KeysNavigator, C−1 to G9 drawn small) a
- * white key at a time. Pads: as many as fit at a fingertip's size,
- * playing the notes of settings' key; the arrows shift them an octave.
+ * them 4 white keys (STEP), the navigator (KeysNavigator, C−1 to G9 drawn
+ * small) a white key at a time, and the computer keys follow them, from
+ * the white key at their middle (computerStart). Pads: as many as fit at
+ * a fingertip's size, playing the notes of settings' key; the arrows
+ * shift them an octave.
  * The XY pad: from a C, as many octaves as fit at a semitone a finger
  * finds (xyOctaves), a pitch with no steps across and Slide up; the
  * arrows shift it an octave.
  * Touches go straight to the engine; React renders only the keys or pads,
  * again when they move, the key or the size changes. The header row holds
- * `start` (the patch) at its left, and at its right the octave controls
+ * `start` (the patch) at its left, and at its right the arrows
  * and after them `end` (the surface, putting the controls away). A header
  * wide enough (a phone on its side too) holds `transport` (Play and the
- * tempo) after `start`, and between it and the octaves the keys'
+ * tempo) after `start`, and between it and the arrows the keys'
  * navigator, or where there is none the bar's sixteenths as lights
  * (StepLights); a narrower one has them in a row of their own under it,
  * and `start` takes the room the rest leaves. `beside`
@@ -205,7 +217,7 @@ const sameFit = (a: Fit, b: Fit) =>
  * pads and XY pad are fitted to. Given fullVelocity, every note plays at full
  * velocity, wherever a finger lands. Given away, the surface and the wheel
  * are hidden (not unmounted: a finger still holding a key lets it go),
- * the octave controls with them, the header and the transport's row
+ * the arrows with them, the header and the transport's row
  * left, the bar's lights in the navigator's place; `fold`, the button
  * that puts it away or brings it back, ends the transport's row, or a
  * header wide enough to hold the transport.
@@ -234,7 +246,7 @@ export function PlaySurface({
   start?: ReactNode
   /** Play and the tempo: after start, or in the row under a narrow header */
   transport: ReactNode
-  /** At the header's right, after the octave controls */
+  /** At the header's right, after the arrows */
   end?: ReactNode
   /** At the surface's left, as tall */
   beside?: ReactNode
@@ -307,6 +319,10 @@ export function PlaySurface({
   const highestNote =
     lowestNote + (pads ? span : 12 * (xy ? fit.xy : fit.octaves))
   const range = `${noteName(lowestNote)} – ${noteName(highestNote)}`
+  // Where the computer keys' home row starts on the keys: their middle
+  const keysStart = computerStart(lowestNote, fit.octaves)
+  // The arrows' names: the keys move 4 white keys, the rest an octave
+  const steps = kind === 'keys' ? `${STEP.keys} white keys` : 'Octave'
   // The navigator, for keys that do not reach C−1 to G9 at once
   const whites = whiteCount(fit.octaves)
   const navigator = !kit && !away && kind === 'keys' && whites < REACH_WHITES
@@ -357,7 +373,7 @@ export function PlaySurface({
     [kind, first, lowest, highest]
   )
   const shift = useCallback(
-    (octaves: number) => moveTo(first + octaves * OCTAVE[kind]),
+    (steps: number) => moveTo(first + steps * STEP[kind]),
     [moveTo, first, kind]
   )
   // The navigator counts the keys' place in white keys up from C−1
@@ -367,8 +383,8 @@ export function PlaySurface({
     [moveTo, place.down]
   )
 
-  // Computer keys, for a desktop: they play, Z and X shift the octave; on
-  // the kit, the pads' keys strike and pick them
+  // Computer keys, for a desktop: they play, Z and X move the surface as
+  // its arrows do; on the kit, the pads' keys strike and pick them
   useEffect(() => {
     if (kit) {
       const padOf = (code: string) => {
@@ -401,10 +417,9 @@ export function PlaySurface({
     }
     const noteOf = (code: string): number | undefined => {
       if (pads) return notes[PAD_CODES.indexOf(code)]
-      const semitones = KEY_CODES.indexOf(code)
-      return semitones < 0
-        ? undefined
-        : middleC(lowestNote, xy ? fit.xy : fit.octaves) + semitones
+      if (!xy) return computerKeyNote(code, keysStart)
+      const semitones = XY_CODES.indexOf(code)
+      return semitones < 0 ? undefined : middleC(lowestNote, fit.xy) + semitones
     }
     const down = (event: KeyboardEvent) => {
       if (event.repeat || event.metaKey || event.ctrlKey || event.altKey) return
@@ -439,7 +454,7 @@ export function PlaySurface({
     xy,
     notes,
     lowestNote,
-    fit.octaves,
+    keysStart,
     fit.xy,
     shift,
   ])
@@ -499,14 +514,14 @@ export function PlaySurface({
           className="flex shrink-0 items-center gap-2"
         >
           <BarIconButton
-            label="Octave down"
+            label={`${steps} down`}
             disabled={first <= lowest}
             onClick={() => shift(-1)}
             path="M11 4l-5 5 5 5"
           />
           <span className={fit.wide ? WIDE_RANGE : RANGE}>{range}</span>
           <BarIconButton
-            label="Octave up"
+            label={`${steps} up`}
             disabled={first >= highest}
             onClick={() => shift(1)}
             path="M7 4l5 5-5 5"
@@ -565,7 +580,7 @@ export function PlaySurface({
               lowest={lowestNote}
               octaves={fit.octaves}
               fullVelocity={fullVelocity}
-              label={`Keys ${range}. Computer keys A to K play them; Z and X shift them an octave`}
+              label={`Keys ${range}. Computer keys A to ; play the white keys from ${noteName(keysStart)}, W to P the black keys between them; Z and X move the keys ${STEP.keys} white keys`}
             />
           )}
         </div>

@@ -6,9 +6,13 @@ import {
   MIN_VELOCITY,
   MIN_WHITE,
   HIGHEST_NOTE,
+  HOME_CODES,
   LOWEST_NOTE,
   REACH_WHITES,
+  UPPER_CODES,
   cNote,
+  computerKeyNote,
+  computerStart,
   isBlack,
   keyAt,
   keyboardLayout,
@@ -183,6 +187,117 @@ describe('middleC', () => {
     expect(middleC(53, 3)).toBe(72)
     // C1 to C8: C4 and C5 as near the middle, the lower taken
     expect(middleC(24, 7)).toBe(60)
+  })
+})
+
+describe('the computer keys', () => {
+  const play = (start: number) =>
+    Object.fromEntries(
+      [...HOME_CODES, ...UPPER_CODES].map((code) => [
+        code,
+        computerKeyNote(code, start),
+      ])
+    )
+
+  it('start on middle C wherever keysPlace stands the keys', () => {
+    for (let octaves = 1; octaves <= 10; octaves++) {
+      expect(computerStart(keysPlace(octaves).lowest, octaves)).toBe(60)
+    }
+  })
+
+  it('start on the white key at the middle of the keys, as they move', () => {
+    // F2–F5: the 12th of 22 white keys, just right of the middle
+    expect(computerStart(whiteStep(41, 1), 3)).toBe(62) // G2–G5: D4
+    expect(computerStart(whiteStep(41, -3), 3)).toBe(55) // C2–C5: G3
+    expect(computerStart(50, 2)).toBe(62) // D3–D5: D4, the 8th of 15
+    // One octave from its lowest key: the home row reaches all eight
+    expect(computerStart(62, 1)).toBe(62) // D4–D5
+    for (let octaves = 1; octaves <= 9; octaves++) {
+      const { lowest, down, up } = keysPlace(octaves)
+      const moves = [-down, -4, -1, 1, 4, up]
+      for (const by of moves.filter((by) => by >= -down && by <= up)) {
+        expect(computerStart(whiteStep(lowest, by), octaves)).toBe(
+          whiteStep(60, by)
+        )
+      }
+    }
+  })
+
+  it('play white keys on the home row, the black keys between above it', () => {
+    // From C4, as always before: R and I between E and F, B and C
+    expect(play(60)).toEqual({
+      KeyA: 60,
+      KeyW: 61,
+      KeyS: 62,
+      KeyE: 63,
+      KeyD: 64,
+      KeyR: undefined,
+      KeyF: 65,
+      KeyT: 66,
+      KeyG: 67,
+      KeyY: 68,
+      KeyH: 69,
+      KeyU: 70,
+      KeyJ: 71,
+      KeyI: undefined,
+      KeyK: 72,
+      KeyO: 73,
+      KeyL: 74,
+      KeyP: 75,
+      Semicolon: 76,
+    })
+    // From D4: E and F now under E and R, B and C under U and I
+    expect(play(62)).toEqual({
+      KeyA: 62,
+      KeyW: 63,
+      KeyS: 64,
+      KeyE: undefined,
+      KeyD: 65,
+      KeyR: 66,
+      KeyF: 67,
+      KeyT: 68,
+      KeyG: 69,
+      KeyY: 70,
+      KeyH: 71,
+      KeyU: undefined,
+      KeyJ: 72,
+      KeyI: 73,
+      KeyK: 74,
+      KeyO: 75,
+      KeyL: 76,
+      KeyP: undefined,
+      Semicolon: 77,
+    })
+  })
+
+  it('play every key of the stretch they cover, each once', () => {
+    for (let start = 0; start <= 60; start++) {
+      if (isBlack(start)) continue
+      const notes = Object.values(play(start)).filter(
+        (note) => note !== undefined
+      )
+      const top = whiteStep(start, HOME_CODES.length - 1)
+      const span = Array.from(
+        { length: top - start + 1 },
+        (_, step) => start + step
+      )
+      expect([...notes].sort((a, b) => a - b)).toEqual(span)
+    }
+  })
+
+  it('play nothing past G9', () => {
+    const top = play(whiteStep(HIGHEST_NOTE, -7)) // G8
+    expect(top.KeyK).toBe(HIGHEST_NOTE) // G9
+    expect(top.KeyO).toBeUndefined() // G#9 is past MIDI's notes
+    expect(top.KeyL).toBeUndefined()
+    expect(top.Semicolon).toBeUndefined()
+    expect(top.KeyI).toBe(126) // F#9
+  })
+
+  it('leave the other keys alone', () => {
+    for (const code of ['KeyQ', 'KeyZ', 'KeyX', 'Quote', 'Space']) {
+      expect(computerKeyNote(code, 60)).toBeUndefined()
+    }
   })
 })
 

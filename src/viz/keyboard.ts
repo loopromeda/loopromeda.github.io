@@ -1,7 +1,8 @@
 /**
  * A piano keyboard's geometry: where each key sits and which key a point
  * falls on, both in fractions of the keyboard (0..1 across and down), so the
- * same numbers lay the keys out and hit-test touches. Pure math, no DOM.
+ * same numbers lay the keys out and hit-test touches; and what a computer's
+ * keys play on it. Pure math, no DOM.
  */
 
 /** A black key's width, as a share of a white key's */
@@ -156,11 +157,76 @@ export function keysPlace(octaves: number): KeysPlace {
 
 /**
  * The C nearest the middle of keys from lowest, octaves octaves wide, the
- * lower of two as near: where the computer keys start (C4 where the keys
- * stand around it, or from it)
+ * lower of two as near: where the XY pad's computer keys start, a C
  */
 export function middleC(lowest: number, octaves: number): number {
   return 12 * Math.ceil((lowest + 6 * octaves) / 12 - 0.5)
+}
+
+/**
+ * The computer keys (KeyboardEvent.code) that play the keys: the home
+ * row, A to ;, white keys up from where they start (computerStart)
+ */
+export const HOME_CODES = [
+  'KeyA',
+  'KeyS',
+  'KeyD',
+  'KeyF',
+  'KeyG',
+  'KeyH',
+  'KeyJ',
+  'KeyK',
+  'KeyL',
+  'Semicolon',
+] as const
+/**
+ * The row above, W to P: each the black key between the two home keys it
+ * stands between (W between A and S), none where they have none between
+ * them (E and F, B and C)
+ */
+export const UPPER_CODES = [
+  'KeyW',
+  'KeyE',
+  'KeyR',
+  'KeyT',
+  'KeyY',
+  'KeyU',
+  'KeyI',
+  'KeyO',
+  'KeyP',
+] as const
+
+/**
+ * The white key the computer keys' home row starts on, for keys from the
+ * white key lowest, octaves octaves wide: the one keysPlace stands middle
+ * C on, wherever the keys move. That is the white key at their middle (at
+ * or just right of it), or for one octave their lowest, the home row's
+ * ten then reaching all eight and two past them.
+ */
+export function computerStart(lowest: number, octaves: number): number {
+  const middle = octaves === 1 ? 0 : Math.floor(whiteCount(octaves) / 2)
+  return whiteStep(lowest, middle)
+}
+
+/**
+ * The note the computer key code plays, its home row starting on the white
+ * key start (computerStart); undefined for a key that plays none there,
+ * or a note past G9
+ */
+export function computerKeyNote(
+  code: string,
+  start: number
+): number | undefined {
+  const base = whiteIndex(start)
+  const home = (HOME_CODES as readonly string[]).indexOf(code)
+  const upper = (UPPER_CODES as readonly string[]).indexOf(code)
+  const note =
+    home >= 0
+      ? whiteAt(base + home)
+      : upper >= 0 && hasBlackAbove(base + upper)
+        ? whiteAt(base + upper) + 1
+        : undefined
+  return note !== undefined && note <= HIGHEST_NOTE ? note : undefined
 }
 
 /**
