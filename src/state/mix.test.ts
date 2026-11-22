@@ -84,6 +84,9 @@ describe('the mix', () => {
       size: 0.6,
       decay: 2,
       damp: 0.5,
+      bloom: 0,
+      length: 0.3,
+      tone: 1,
       mix: 1,
     })
     expect(mix.master).toEqual({ effects: [], values: { level: 1 } })

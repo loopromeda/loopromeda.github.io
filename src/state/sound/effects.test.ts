@@ -82,6 +82,9 @@ describe('inserts in a sound', () => {
       size: 0.6,
       decay: 10,
       damp: 0.5,
+      bloom: 0,
+      length: 0.3,
+      tone: 1,
       mix: 0.3,
     })
     expect(read.effects[0]?.values.rate).toBe(5)

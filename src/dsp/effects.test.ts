@@ -299,6 +299,304 @@ describe('Reverb', () => {
     }
     expect(highs(b)).toBeLessThan(highs(a) / 4)
   })
+
+  /** A reverb's impulse response in 100 ms windows, each window's energy */
+  const windows = (
+    bloom: number,
+    length: number,
+    decay = 2,
+    seconds = 4
+  ): number[] => {
+    const reverb = new Reverb(SAMPLE_RATE)
+    reverb.set(0.6, decay, 0.3, 1, bloom, length)
+    reverb.reset()
+    const { left, right } = run(reverb, impulse(seconds))
+    const window = 0.1 * SAMPLE_RATE
+    const out: number[] = []
+    for (let at = 0; at + window <= left.length; at += window) {
+      let energy = 0
+      for (let i = at; i < at + window; i++) {
+        energy += (left[i] as number) ** 2 + (right[i] as number) ** 2
+      }
+      out.push(energy)
+    }
+    return out
+  }
+  const peakAt = (energies: number[]) =>
+    energies.indexOf(Math.max(...energies)) * 0.1
+  const db = (energy: number, against: number) =>
+    10 * Math.log10(energy / against)
+  const sum = (energies: number[]) => energies.reduce((a, b) => a + b, 0)
+
+  it('swells with Bloom, quiet at first and loudest a lap in', () => {
+    const plain = windows(0, 0.3)
+    expect(peakAt(plain)).toBe(0)
+    const bloomed = windows(1, 0.3)
+    const peak = Math.max(...bloomed)
+    expect(peakAt(bloomed)).toBeGreaterThan(0.15)
+    expect(peakAt(bloomed)).toBeLessThan(0.45)
+    expect(db(bloomed[0] as number, peak)).toBeLessThan(-8)
+    // Halfway, already swelling; a little, the hit still the loudest
+    expect(peakAt(windows(0.5, 0.3))).toBeGreaterThan(0.15)
+    expect(peakAt(windows(0.1, 0.3))).toBe(0)
+  })
+
+  it('swells the slower the longer its Length', () => {
+    const short = peakAt(windows(1, 0.1))
+    const middle = peakAt(windows(1, 0.3))
+    const long = peakAt(windows(1, 1))
+    expect(short).toBeLessThan(middle)
+    expect(middle).toBeLessThan(long)
+    expect(long).toBeGreaterThan(0.6)
+  })
+
+  it('blooms about as loud, and falls over about its decay', () => {
+    for (const decay of [2, 5]) {
+      const plain = sum(windows(0, 0.3, decay, 2 * decay + 1))
+      const bloomed = windows(1, 0.3, decay, 2 * decay + 1)
+      expect(Math.abs(db(sum(bloomed), plain))).toBeLessThan(3)
+      // 60 dB down within the decay and a half after its peak
+      const peak = Math.max(...bloomed)
+      const after = Math.round((peakAt(bloomed) + 1.5 * decay) * 10)
+      const late = bloomed.slice(after)
+      expect(late.length).toBeGreaterThan(0)
+      expect(db(Math.max(...late), peak)).toBeLessThan(-50)
+    }
+  })
+
+  it('stays finite at its most, and dies away', () => {
+    const reverb = new Reverb(SAMPLE_RATE)
+    reverb.set(1, 10, 0, 1, 1, 1)
+    reverb.reset()
+    const loud = sine(4, 220, 1)
+    const { left } = run(reverb, loud)
+    expect(left.every(Number.isFinite)).toBe(true)
+    // A sine held rings up loud on the modes the sways carry across it,
+    // at so long a decay (as one on a mode does at a Bloom of 0): what
+    // this guards against is growing without end
+    expect(loudest(left)).toBeLessThan(16)
+    const tail = run(reverb, silence(40)).left
+    expect(tail.every(Number.isFinite)).toBe(true)
+    expect(loudest(tail, tail.length - 4800)).toBeLessThan(1e-3)
+  })
+
+  it('blooms again from silence, not from what it held', () => {
+    const reverb = new Reverb(SAMPLE_RATE)
+    reverb.set(0.6, 0.3, 0.5, 1, 1, 1)
+    reverb.reset()
+    run(reverb, sine(1, 330))
+    // Off mid-swell: the loop stops with its lines full
+    reverb.set(0.6, 0.3, 0.5, 1, 0, 1)
+    run(reverb, silence(3))
+    reverb.set(0.6, 0.3, 0.5, 1, 1, 1)
+    // The lines' own tail is long gone; the loop's, left, would be loud
+    expect(loudest(run(reverb, silence(2)).left)).toBeLessThan(1e-9)
+  })
+
+  it('glides its Length, bending the tail no more than a fifth up', () => {
+    // The largest step from one sample to the next, block edges too, with
+    // its Length held, or turned from one to the other twice a second
+    const largestStep = (from: number, to: number) => {
+      const reverb = new Reverb(SAMPLE_RATE)
+      reverb.set(0.6, 4, 0.5, 1, 1, from)
+      reverb.reset()
+      const tone = sine(4, 220)
+      for (let at = 0; at < tone.left.length; at += BLOCK) {
+        if (at % (SAMPLE_RATE / 2) === 0) {
+          const length = (at / (SAMPLE_RATE / 2)) % 2 ? to : from
+          reverb.set(0.6, 4, 0.5, 1, 1, length)
+        }
+        reverb.process(
+          tone.left.subarray(at, at + BLOCK),
+          tone.right.subarray(at, at + BLOCK),
+          BLOCK
+        )
+      }
+      let largest = 0
+      for (let i = SAMPLE_RATE / 2; i < tone.left.length; i++) {
+        const step = (tone.left[i] as number) - (tone.left[i - 1] as number)
+        largest = Math.max(largest, Math.abs(step))
+      }
+      return largest
+    }
+    const held = Math.max(largestStep(0.05, 0.05), largestStep(1, 1))
+    expect(largestStep(0.05, 1)).toBeLessThan(1.6 * held)
+  })
+
+  it('plays as it did before Bloom at a Bloom of 0, whatever its Length', () => {
+    const without = new Reverb(SAMPLE_RATE)
+    without.set(0.4, 3, 0.2, 0.7)
+    without.reset()
+    const expected = run(without, sine(1, 330)).left
+    for (const length of [0.05, 0.5, 1]) {
+      const reverb = new Reverb(SAMPLE_RATE)
+      reverb.set(0.4, 3, 0.2, 0.7, 0, length)
+      reverb.reset()
+      expect(run(reverb, sine(1, 330)).left).toEqual(expected)
+    }
+  })
+
+  it('rings on about twice its decay at most, however long its Length', () => {
+    // Its allpasses alone rang 3.6 s at a Length of 1, the decay aside
+    const decay = 0.5
+    const bloomed = windows(1, 1, decay, 3)
+    const peak = Math.max(...bloomed)
+    const after = Math.round((peakAt(bloomed) + 2.5 * decay) * 10)
+    expect(db(Math.max(...bloomed.slice(after)), peak)).toBeLessThan(-50)
+  })
+
+  it('sways as it blooms: a sine held comes out spread about its pitch', () => {
+    // The share of a held sine's tail left at its own pitch, over its
+    // last two seconds (to half a hertz)
+    const held = (bloom: number) => {
+      const reverb = new Reverb(SAMPLE_RATE)
+      reverb.set(0.6, 1, 0.5, 1, bloom, 0.3)
+      reverb.reset()
+      const { left } = run(reverb, sine(5, 1000))
+      const from = 3 * SAMPLE_RATE
+      let s = 0
+      let c = 0
+      let power = 0
+      for (let i = from; i < left.length; i++) {
+        const turn = (2 * Math.PI * 1000 * i) / SAMPLE_RATE
+        const value = left[i] as number
+        s += value * Math.sin(turn)
+        c += value * Math.cos(turn)
+        power += value * value
+      }
+      const n = left.length - from
+      return (2 * (s * s + c * c)) / n / power
+    }
+    expect(held(0)).toBeGreaterThan(0.99)
+    expect(held(0.25)).toBeLessThan(0.5)
+    expect(held(1)).toBeLessThan(0.5)
+  })
+
+  // A reverb's impulse response, its left side, over so many seconds
+  const response = (
+    bloom: number,
+    length: number,
+    decay: number,
+    tone: number,
+    seconds: number
+  ) => {
+    const reverb = new Reverb(SAMPLE_RATE)
+    reverb.set(0.8, decay, 0.5, 1, bloom, length, tone)
+    reverb.reset()
+    return run(reverb, impulse(seconds)).left
+  }
+  // Its energy at frequencies spread over lo..hi hertz, from a time on, dB
+  const band = (samples: Float32Array, lo: number, hi: number, from = 0) => {
+    const points = 12
+    let energy = 0
+    for (let p = 0; p < points; p++) {
+      const hertz = lo * (hi / lo) ** ((p + 0.5) / points)
+      const turn = (2 * Math.PI * hertz) / SAMPLE_RATE
+      let re = 0
+      let im = 0
+      for (let i = Math.round(from * SAMPLE_RATE); i < samples.length; i++) {
+        re += (samples[i] as number) * Math.cos(turn * i)
+        im -= (samples[i] as number) * Math.sin(turn * i)
+      }
+      energy += re * re + im * im
+    }
+    return 10 * Math.log10(energy / points)
+  }
+
+  it('closes its Tone on the bloom: darker, ringing at its cutoff', () => {
+    const open = response(1, 0.3, 2, 1, 2)
+    // Tone 0.5: its cutoff 2 kHz
+    const half = response(1, 0.3, 2, 0.5, 2)
+    expect(band(half, 6000, 12000) - band(open, 6000, 12000)).toBeLessThan(-15)
+    expect(band(half, 1700, 2300) - band(open, 1700, 2300)).toBeGreaterThan(1)
+    expect(Math.abs(band(half, 200, 500) - band(open, 200, 500))).toBeLessThan(
+      1.5
+    )
+  })
+
+  it('leaves the Tone out at a Bloom of 0', () => {
+    const open = new Reverb(SAMPLE_RATE)
+    open.set(0.4, 3, 0.2, 0.7, 0, 0.3, 1)
+    open.reset()
+    const shut = new Reverb(SAMPLE_RATE)
+    shut.set(0.4, 3, 0.2, 0.7, 0, 0.3, 0)
+    shut.reset()
+    expect(run(shut, sine(1, 330)).left).toEqual(run(open, sine(1, 330)).left)
+  })
+
+  it('thins its lows lap by lap as it blooms, the late tail no boom', () => {
+    // The late tail's lows against its mids: the lines alone keep their
+    // lows as Damp takes the highs; the loop's laps lose them
+    const lows = (bloom: number) => {
+      const tail = response(bloom, 0.15, 4, 1, 4)
+      return band(tail, 40, 120, 2) - band(tail, 400, 1200, 2)
+    }
+    expect(lows(1)).toBeLessThan(lows(0) - 13)
+  })
+
+  it('rings no louder at a closed Tone than its own peak makes it', () => {
+    // A sine held on the cutoff of a Tone shut: the Tone's peak at its Q
+    // of 2 is about twice as loud, outside the loop, so the most it does
+    // is double what the open Tone holds
+    const most = (tone: number) => {
+      const reverb = new Reverb(SAMPLE_RATE)
+      reverb.set(1, 10, 0, 1, 1, 1, tone)
+      reverb.reset()
+      const { left } = run(reverb, sine(4, 200, 1))
+      expect(left.every(Number.isFinite)).toBe(true)
+      const tail = run(reverb, silence(40)).left
+      expect(loudest(tail, tail.length - 4800)).toBeLessThan(1e-3)
+      return loudest(left)
+    }
+    expect(most(0)).toBeLessThan(2.1 * most(1))
+  })
+
+  it('lands its Tone while it does not bloom: no glide left to bloom on', () => {
+    // Its Tone closed at a Bloom of 0, then blooming, against one shut
+    // from the start: the same, to the sample
+    const moved = new Reverb(SAMPLE_RATE)
+    moved.set(0.5, 2, 0.3, 0.7, 0, 0.3, 1)
+    moved.reset()
+    const shut = new Reverb(SAMPLE_RATE)
+    shut.set(0.5, 2, 0.3, 0.7, 0, 0.3, 0)
+    shut.reset()
+    run(moved, sine(0.2, 330))
+    run(shut, sine(0.2, 330))
+    moved.set(0.5, 2, 0.3, 0.7, 0, 0.3, 0)
+    run(moved, silence(0.01))
+    run(shut, silence(0.01))
+    moved.set(0.5, 2, 0.3, 0.7, 1, 0.3, 0)
+    shut.set(0.5, 2, 0.3, 0.7, 1, 0.3, 0)
+    expect(run(moved, sine(1, 330)).left).toEqual(run(shut, sine(1, 330)).left)
+  })
+
+  it('stays finite at any rate, its Length and Tone turned every block', () => {
+    for (const rate of [44100, 48000, 96000]) {
+      const reverb = new Reverb(rate)
+      reverb.set(1, 10, 0, 1, 1, 1)
+      reverb.reset()
+      const left = new Float32Array(BLOCK)
+      const right = new Float32Array(BLOCK)
+      let seed = 1
+      let most = 0
+      let finite = true
+      for (let block = 0; block < (2 * rate) / BLOCK; block++) {
+        reverb.set(1, 10, 0, 1, 1, block % 2 ? 1 : 0.05, block % 2 ? 0 : 1)
+        for (let i = 0; i < BLOCK; i++) {
+          seed = (seed * 1664525 + 1013904223) >>> 0
+          left[i] = right[i] = (seed / 2 ** 32) * 2 - 1
+        }
+        reverb.process(left, right, BLOCK)
+        for (let i = 0; i < BLOCK; i++) {
+          const value = left[i] as number
+          if (!Number.isFinite(value)) finite = false
+          most = Math.max(most, Math.abs(value))
+        }
+      }
+      expect(finite).toBe(true)
+      expect(most).toBeLessThan(4)
+    }
+  })
 })
 
 describe('EffectRack', () => {

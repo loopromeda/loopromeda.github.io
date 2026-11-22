@@ -476,6 +476,75 @@ describe('the chain engine', () => {
     expect(strip.inserts.kindOf(0)).toBe(slots.FX_PHASER)
   })
 
+  it('hands the mix’s reverb its bloom: its tail loudest later', () => {
+    // A short note sent to C alone: when, in 50 ms windows, is it loudest?
+    const loudest = (bloom: number, length: number): number => {
+      const mixer = new Mixer(SAMPLE_RATE)
+      const strip = new Strip(
+        new ChainSynth(SAMPLE_RATE),
+        new EffectRack(SAMPLE_RATE)
+      )
+      const part = new Part([strip])
+      let mix = setMixValue(initMix(), 'e2', 'bloom', bloom)
+      mix = setMixValue(mix, 'e2', 'length', length)
+      applyMix(mixer, mix, [part])
+      let sound = setValue(initSound(), AMP, 'release', 0)
+      sound = setValue(sound, SENDS, 'a', 0)
+      new SoundPlayer(strip).load(setValue(sound, SENDS, 'c', 1))
+      strip.synth.noteOn(1, 60, 1)
+      const window = 0.05 * SAMPLE_RATE
+      const energy: number[] = []
+      const left = new Float32Array(BLOCK)
+      const right = new Float32Array(BLOCK)
+      for (let at = 0; at < 1.5 * SAMPLE_RATE; at += BLOCK) {
+        if (at >= 0.02 * SAMPLE_RATE) strip.synth.releaseAll()
+        mixer.render([part], left, right)
+        const k = Math.floor(at / window)
+        energy[k] = (energy[k] ?? 0) + left.reduce((sum, x) => sum + x * x, 0)
+      }
+      return (energy.indexOf(Math.max(...energy)) * window) / SAMPLE_RATE
+    }
+    expect(loudest(0, 0.6)).toBeLessThan(0.1)
+    expect(loudest(1, 0.6)).toBeGreaterThan(0.3)
+  })
+
+  it('hands the mix’s reverb its Tone: the bloom darker as it closes', () => {
+    // How bright the bloom's tail of a short note sent to C is: the energy
+    // of its steps from sample to sample against its own
+    const brightness = (tone: number): number => {
+      const mixer = new Mixer(SAMPLE_RATE)
+      const strip = new Strip(
+        new ChainSynth(SAMPLE_RATE),
+        new EffectRack(SAMPLE_RATE)
+      )
+      const part = new Part([strip])
+      let mix = setMixValue(initMix(), 'e2', 'bloom', 1)
+      mix = setMixValue(mix, 'e2', 'tone', tone)
+      applyMix(mixer, mix, [part])
+      let sound = setValue(initSound(), AMP, 'release', 0)
+      sound = setValue(sound, SENDS, 'a', 0)
+      new SoundPlayer(strip).load(setValue(sound, SENDS, 'c', 1))
+      strip.synth.noteOn(1, 60, 1)
+      const left = new Float32Array(BLOCK)
+      const right = new Float32Array(BLOCK)
+      let steps = 0
+      let energy = 0
+      let last = 0
+      for (let at = 0; at < SAMPLE_RATE; at += BLOCK) {
+        if (at >= 0.02 * SAMPLE_RATE) strip.synth.releaseAll()
+        mixer.render([part], left, right)
+        if (at < 0.2 * SAMPLE_RATE) continue
+        for (const x of left) {
+          steps += (x - last) ** 2
+          energy += x * x
+          last = x
+        }
+      }
+      return steps / energy
+    }
+    expect(brightness(0.3)).toBeLessThan(brightness(1) / 2)
+  })
+
   it('passes the signal through a drive of 0 unchanged', () => {
     const { sound, id } = addItem(initSound(), 'c1', 'drive')
     const none = setValue(sound, id as string, 'drive', 0)

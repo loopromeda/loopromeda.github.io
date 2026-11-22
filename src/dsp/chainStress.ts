@@ -214,7 +214,8 @@ function fill(rack: EffectRack, kinds = HEAVIEST): void {
     else if (kind === FX_HAAS) rack.setHaas(k, 0.015, k % 2, 0.5)
     else if (kind === FX_DOUBLER) rack.setDoubler(k, 12, 0.012, 1, 0.5)
     else if (kind === FX_WIDTH) rack.setWidth(k, 1.4, 120)
-    else rack.setReverb(k, 0.8, 4, 0.4, 0.5)
+    // Blooming, its loop and its Tone working too
+    else rack.setReverb(k, 0.8, 4, 0.4, 0.5, 1, 0.5, 0.5)
   }
 }
 

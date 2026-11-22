@@ -166,6 +166,27 @@ describe('shownKnobs', () => {
     expect(shownKnobs(AMP_SPEC.knobs, {})).toBe(AMP_SPEC.knobs)
   })
 
+  it('rests a reverb’s Length and Tone at a Bloom of 0, on its own knob', () => {
+    const reverb: readonly KnobSpec[] = EFFECT_KINDS.reverb.knobs
+    expect(reverb.filter((knob) => knob.rests).map(({ key }) => key)).toEqual([
+      'length',
+      'tone',
+    ])
+    const specs: [string, KindSpec][] = [
+      ...SPECS,
+      ...Object.entries(EFFECT_KINDS),
+    ]
+    for (const [, spec] of specs) {
+      for (const { rests } of spec.knobs) {
+        if (!rests) continue
+        const on = spec.knobs.find(({ key }) => key === rests.key)
+        if (!on) throw new Error(`no ${rests.key} to rest on`)
+        expect(rests.is).toBeGreaterThanOrEqual(on.min)
+        expect(rests.is).toBeLessThanOrEqual(on.max)
+      }
+    }
+  })
+
   it("shows a chip's Duty with its pulse, its Steps and Bits otherwise", () => {
     const chip = INPUT_KINDS.chip.knobs
     const pulse = ['wave', 'duty', 'octave', 'semi', 'fine', 'dc']

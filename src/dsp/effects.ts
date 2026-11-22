@@ -84,6 +84,27 @@ class Line {
     return a + (b - a) * (at - i)
   }
 
+  /**
+   * read(d) on a cubic through the four samples around (Hermite's), d at
+   * least 3: a line read between samples again and again, as a loop's is,
+   * keeps its highs where read's straight line dulls them each pass
+   */
+  cubic(delay: number): number {
+    const at = this.#at - delay
+    const i = Math.floor(at)
+    const f = at - i
+    const buffer = this.#buffer
+    const mask = this.#mask
+    const before = buffer[(i - 1) & mask] as number
+    const a = buffer[i & mask] as number
+    const b = buffer[(i + 1) & mask] as number
+    const after = buffer[(i + 2) & mask] as number
+    const slope = 0.5 * (b - before)
+    const bend = before - 2.5 * a + 2 * b - 0.5 * after
+    const turn = 0.5 * (after - before) + 1.5 * (a - b)
+    return ((turn * f + bend) * f + slope) * f + a
+  }
+
   /** What was written exactly whole samples ago, whole at least 1 */
   tap(whole: number): number {
     return this.#buffer[(this.#at - whole) & this.#mask] as number
@@ -117,6 +138,10 @@ export class Ramp {
 
   set goal(value: number) {
     this.#goal = value
+  }
+
+  get goal(): number {
+    return this.#goal
   }
 
   get now(): number {
@@ -370,6 +395,75 @@ const RIGHT_SIGNS = [1, 1, -1, -1, 1, 1, -1, -1] as const
 /** The tail's level against the dry signal's */
 const REVERB_OUT = 0.3
 
+/** The bloom's lap at its shortest and longest, in seconds */
+export const BLOOM_MIN_LENGTH = 0.05
+export const BLOOM_MAX_LENGTH = 1
+/**
+ * The bloom's eight allpasses, each a share of its lap: four short ones
+ * that smear each echo into a cloud, then four long ones that spread it
+ * late. An allpass holds its input back its length on average, so the
+ * eight hold it back 0.8 of the lap and the loop's line the rest
+ */
+const BLOOM_ALLPASSES = [
+  0.0113, 0.0171, 0.0237, 0.0299, 0.119, 0.157, 0.211, 0.231,
+] as const
+const BLOOM_SHORT = 4
+const BLOOM_LOOP = 0.2
+/** The short allpasses' coefficient, and the long ones' */
+const BLOOM_SMEAR = 0.65
+const BLOOM_DIFFUSION = 0.6
+/** The loop's feedback at a Bloom of 1 */
+const BLOOM_FEEDBACK = 0.9
+/**
+ * How far the long allpasses' lines and the loop's sway, in seconds
+ * either way, and how far the reverb's lines do at a Bloom of 1
+ */
+const BLOOM_SWAY = 0.0008
+const REVERB_SWAY = 0.0004
+/**
+ * Each sway's rate, in hertz: the reverb's lines', the long allpasses',
+ * then the loop's. No two alike and each started at its own phase, so
+ * that the tail thickens as an ensemble does rather than wavering as one
+ */
+const SWAY_RATES = [
+  0.89, 0.63, 1.31, 0.51, 1.19, 0.77, 1.47, 1.03, 0.29, 0.43, 0.53, 0.31, 0.37,
+] as const
+const SWAYS = SWAY_RATES.length
+/** A delay this close to its goal, in samples, lands on it */
+const BLOOM_LAND = 1e-3
+/**
+ * The most a delay moves a sample as it glides, in samples: Length turned
+ * all the way across lands in about half a second, its pitch bent at most
+ * an octave down or a fifth up, never read backwards
+ */
+const BLOOM_SLEW = 0.5
+/**
+ * How long the longest allpass rings, 60 dB down, against the lap: each
+ * pass round it loses BLOOM_DIFFUSION. The lap is held to twice the decay
+ * over this, so the bloom rings on at most twice the decay: a short decay
+ * swells fast, and at the knob's 2 s Length turns all the way
+ */
+const BLOOM_RING = (3 * BLOOM_ALLPASSES[7]) / -Math.log10(BLOOM_DIFFUSION)
+const BLOOM_RINGS = 2
+/**
+ * The bloom loop's low cut, in hertz: each lap thins the lows (3 dB at
+ * it, 7 dB an octave under), so that the swell does not pile up into a
+ * boom
+ */
+const BLOOM_LOW_CUT = 120
+/**
+ * The bloom's Tone, a resonant lowpass on what it hands the lines: its
+ * cutoff from TONE_LOW (Tone 0) to TONE_HIGH (Tone 1), in hertz, no
+ * higher than TONE_CEILING of the sample rate; and its Q, Butterworth's
+ * flat 0.707 at Tone 1 (as good as open: 0.7 dB down at 18 kHz at 48
+ * kHz, 0.9 dB at 15 kHz at 96 kHz), rising to TONE_Q as it closes, its
+ * peak then twice as loud
+ */
+const TONE_LOW = 200
+const TONE_HIGH = 20000
+const TONE_CEILING = 0.45
+const TONE_Q = 2
+
 /**
  * A reverb: the input smeared by four allpasses, then a feedback delay
  * network of eight lines mixed by a Householder matrix (each line's next
@@ -377,6 +471,27 @@ const REVERB_OUT = 0.3
  * lowpass in its loop. Size 0..1 sets the lines' lengths, decay the
  * seconds the tail takes to fall 60 dB, damp 0..1 how much darker it
  * grows as it does (20 kHz down to 1 kHz), mix 0..1.
+ *
+ * Bloom 0..1 swells the tail instead of starting it at its loudest:
+ * between the allpasses and the lines, a loop of eight allpasses (a lap
+ * of length seconds, BLOOM_MIN_LENGTH to BLOOM_MAX_LENGTH) fed back into
+ * itself, darkened as the lines are. Each lap spreads the sound later,
+ * and the lines' tail of a sound spread late rises before it falls (two
+ * decays one after the other: t e^(-t/τ)). Bloom crossfades the lines'
+ * input from the input to the loop, at equal power, and turns the loop's
+ * feedback up to BLOOM_FEEDBACK, its level kept as it does; at 0 the loop
+ * is left out and the reverb is as it was. The decay bounds the bloom:
+ * its feedback, and its lap, so that it rings on at most twice the decay
+ * (a short decay swells fast).
+ *
+ * While it blooms, the long allpasses' lines and the loop's sway, each
+ * at its own rate, and the reverb's lines sway with them, the more the
+ * more it blooms: no echo comes round twice at quite the same pitch, and
+ * the tail thickens as it swells. The loop's lines, read between samples
+ * as they sway, are read on a cubic, so that only Damp darkens it, and
+ * a low cut thins its lows a little each lap. Tone 0..1 closes a resonant
+ * lowpass on what the loop hands the lines, open at 1, ringing a little
+ * at its cutoff as it closes, as a synth's filter does.
  */
 export class Reverb {
   readonly #sampleRate: number
@@ -397,34 +512,161 @@ export class Reverb {
   #damp = 1
   readonly #mix = new Ramp(0.25)
   #fresh = true
+  /** The bloom's allpasses and its loop's line */
+  readonly #blooms: Line[] = []
+  readonly #bloomLoop: Line
+  /**
+   * Each allpass's delay and the loop line's, in samples, gliding to its
+   * goal: whole samples, so a delay landed is read exactly
+   */
+  readonly #bloomDelay = new Float64Array(BLOOM_ALLPASSES.length + 1)
+  readonly #bloomGoal = new Float64Array(BLOOM_ALLPASSES.length + 1)
+  /** The input's part of the lines' input, the loop's, and its feedback */
+  readonly #direct = new Ramp(1)
+  readonly #bloomed = new Ramp(0)
+  readonly #feedback = new Ramp(0)
+  /** The loop's lowpass, and its low cut's (a lowpass taken away) */
+  #bloomLow = 0
+  #bloomBase = 0
+  readonly #lowCut: number
+  /**
+   * The Tone's filter (a state-variable lowpass, as Filter's): its two
+   * integrators, its cutoff as a tangent and its damping (1/Q), and where
+   * they glide to over the next block
+   */
+  #toneIc1 = 0
+  #toneIc2 = 0
+  #toneG = 1
+  #toneK = Math.SQRT2
+  #toneGGoal = 1
+  #toneKGoal = Math.SQRT2
+  /**
+   * How far the reverb's lines sway, in samples either way, gliding to its
+   * goal as Size does: the lines' delay moves with it
+   */
+  #lineSway = 0
+  #lineSwayGoal = 0
+  /**
+   * Where each sway stands, in cycles (SWAY_RATES' order), and its shape
+   * this block, 0 to 2, drawn straight across it from its start
+   */
+  readonly #swayAt = new Float64Array(SWAYS)
+  readonly #shape = new Float64Array(SWAYS)
+  readonly #shapeStep = new Float64Array(SWAYS)
+  /** Whether the loop played the last block: else its lines are stale */
+  #blooming = false
+  /** Whether the loop's lines are silent: cleared and not played since */
+  #clean = true
 
   constructor(sampleRate: number) {
     this.#sampleRate = sampleRate
     for (const seconds of REVERB_LINES) {
-      this.#lines.push(new Line(seconds * sampleRate + 2))
+      this.#lines.push(new Line((seconds + 2 * REVERB_SWAY) * sampleRate + 2))
     }
     DIFFUSERS.forEach((seconds, k) => {
       const length = Math.max(1, Math.round(seconds * sampleRate))
       this.#diffusion[k] = length
       this.#diffusers.push(new Line(length + 1))
     })
+    // Each long enough for its lap at its longest and its sway, and the
+    // cubic's two samples past it
+    for (const share of BLOOM_ALLPASSES) {
+      const most = share * BLOOM_MAX_LENGTH + 2 * BLOOM_SWAY
+      this.#blooms.push(new Line(most * sampleRate + 4))
+    }
+    this.#bloomLoop = new Line(
+      (BLOOM_LOOP * BLOOM_MAX_LENGTH + 2 * BLOOM_SWAY) * sampleRate + 4
+    )
+    // Each sway starts a golden turn on from the last, none in step
+    for (let k = 0; k < SWAYS; k++) {
+      const at = k * 0.618034
+      this.#swayAt[k] = at - Math.floor(at)
+    }
     this.#glide = 1 - Math.exp(-1 / (REVERB_GLIDE * sampleRate))
+    this.#lowCut = 1 - Math.exp((-2 * Math.PI * BLOOM_LOW_CUT) / sampleRate)
     this.set(0.6, 2, 0.5, 0.25)
   }
 
-  set(size: number, decay: number, damp: number, mix: number): void {
+  set(
+    size: number,
+    decay: number,
+    damp: number,
+    mix: number,
+    bloom = 0,
+    length = 0.3,
+    tone = 1
+  ): void {
+    const rate = this.#sampleRate
+    const open = clamp01(tone)
+    const cutoff = Math.min(
+      TONE_LOW * (TONE_HIGH / TONE_LOW) ** open,
+      TONE_CEILING * rate
+    )
+    this.#toneGGoal = Math.tan((Math.PI * cutoff) / rate)
+    this.#toneKGoal = 1 / (Math.SQRT1_2 + (TONE_Q - Math.SQRT1_2) * (1 - open))
     this.#scaleGoal = REVERB_SMALLEST + (1 - REVERB_SMALLEST) * clamp01(size)
     this.#decay = decay > 0.05 ? decay : 0.05
     const hertz = 20000 * 0.05 ** clamp01(damp)
     this.#damp = 1 - Math.exp((-2 * Math.PI * hertz) / this.#sampleRate)
     this.#mix.goal = clamp01(mix)
+    const knob =
+      length < BLOOM_MAX_LENGTH
+        ? length > BLOOM_MIN_LENGTH
+          ? length
+          : BLOOM_MIN_LENGTH
+        : BLOOM_MAX_LENGTH
+    // Its allpasses ring no longer than twice the decay
+    const longest = (BLOOM_RINGS * this.#decay) / BLOOM_RING
+    const seconds = knob < longest ? knob : longest
+    const lap = seconds * this.#sampleRate
+    const goal = this.#bloomGoal
+    // At least the cubic's three samples
+    for (let k = 0; k < BLOOM_ALLPASSES.length; k++) {
+      goal[k] = Math.max(3, Math.round((BLOOM_ALLPASSES[k] as number) * lap))
+    }
+    goal[BLOOM_ALLPASSES.length] = Math.max(3, Math.round(BLOOM_LOOP * lap))
+    const amount = clamp01(bloom)
+    // The loop starts from silence, not from what it held when it stopped,
+    // at its lap, not gliding to it
+    if (amount > 0 && !this.#blooming) {
+      this.#clearBloom()
+      this.#bloomDelay.set(goal)
+    }
+    // Its feedback never rings on past the decay: a lap (and the sways'
+    // holding it back, on average) loses at least its share of 60 dB over
+    // it, as each of the lines' passes does
+    const swayed = (BLOOM_ALLPASSES.length - BLOOM_SHORT + 1) * BLOOM_SWAY
+    const most = 10 ** ((-3 * (seconds + swayed)) / this.#decay)
+    const feedback = Math.min(BLOOM_FEEDBACK * amount, most)
+    // The crossfade leads, the loop heard swelling by halfway
+    const fade = (Math.sqrt(amount) * Math.PI) / 2
+    this.#direct.goal = Math.cos(fade)
+    // sin(0) is exactly 0: at a Bloom of 0 the loop is silent
+    this.#bloomed.goal = Math.sin(fade) * Math.sqrt(1 - feedback * feedback)
+    this.#feedback.goal = feedback
+    // The lines sway as the loop is heard: not at all at a Bloom of 0
+    this.#lineSwayGoal = REVERB_SWAY * this.#sampleRate * Math.sqrt(amount)
   }
 
   reset(): void {
     for (const line of this.#lines) line.clear()
     for (const line of this.#diffusers) line.clear()
     this.#low.fill(0)
+    this.#clearBloom()
     this.#fresh = true
+  }
+
+  /** Silences the loop's lines, unless they are already */
+  #clearBloom(): void {
+    if (this.#clean) return
+    const blooms = this.#blooms
+    for (let k = 0; k < blooms.length; k++) (blooms[k] as Line).clear()
+    this.#bloomLoop.clear()
+    this.#bloomLow = 0
+    this.#bloomBase = 0
+    this.#toneIc1 = 0
+    this.#toneIc2 = 0
+    this.#clean = true
   }
 
   process(left: Float32Array, right: Float32Array, length: number): void {
@@ -432,6 +674,13 @@ export class Reverb {
       this.#fresh = false
       this.#scale = this.#scaleGoal
       this.#mix.snap()
+      this.#direct.snap()
+      this.#bloomed.snap()
+      this.#feedback.snap()
+      this.#lineSway = this.#lineSwayGoal
+      this.#toneG = this.#toneGGoal
+      this.#toneK = this.#toneKGoal
+      this.#bloomDelay.set(this.#bloomGoal)
     }
     const rate = this.#sampleRate
     const lines = this.#lines
@@ -443,17 +692,82 @@ export class Reverb {
     const damp = this.#damp
     let mix = this.#mix.now
     const mixStep = this.#mix.step(length)
-    // The gains for the block, from the lengths at its start: each pass
-    // of a line loses its share of 60 dB over the decay
+    // The bloom's loop plays unless it is silent and stays so this block
+    let direct = this.#direct.now
+    let bloomed = this.#bloomed.now
+    let feedback = this.#feedback.now
+    const blooming = bloomed !== 0 || this.#bloomed.goal !== 0
+    const directStep = this.#direct.step(length)
+    const bloomedStep = this.#bloomed.step(length)
+    const feedbackStep = this.#feedback.step(length)
+    this.#blooming = blooming
+    if (blooming) this.#clean = false
+    const blooms = this.#blooms
+    const bloomLoop = this.#bloomLoop
+    const bloomDelay = this.#bloomDelay
+    const bloomGoal = this.#bloomGoal
+    const loop = BLOOM_ALLPASSES.length
+    let gliding = false
+    for (let k = 0; k <= loop; k++) {
+      if (bloomDelay[k] !== bloomGoal[k]) gliding = true
+    }
+    // The sways, slow enough to be drawn straight across a block; still,
+    // and the lines read where they were, while the loop is silent and
+    // the lines' sway has come to rest
+    let lineSway = this.#lineSway
+    const lineSwayGoal = this.#lineSwayGoal
+    const swayGliding = lineSway !== lineSwayGoal
+    const shape = this.#shape
+    const shapeStep = this.#shapeStep
+    const swayAt = this.#swayAt
+    if (blooming || lineSway !== 0 || swayGliding) {
+      for (let k = 0; k < SWAYS; k++) {
+        const at = swayAt[k] as number
+        const to = at + ((SWAY_RATES[k] as number) / rate) * length
+        const from = 1 + sinCycles(at)
+        shape[k] = from
+        shapeStep[k] = (1 + sinCycles(to) - from) / length
+        swayAt[k] = to - Math.floor(to)
+      }
+    } else {
+      shape.fill(0)
+      shapeStep.fill(0)
+    }
+    const bloomSway = BLOOM_SWAY * rate
+    let bloomLow = this.#bloomLow
+    let bloomBase = this.#bloomBase
+    const lowCut = this.#lowCut
+    // The Tone's cutoff glides across the block by one ratio a sample, its
+    // damping in a straight line, as a Filter's sweep does
+    let toneG = this.#toneG
+    let toneK = this.#toneK
+    const toneMoving = toneG !== this.#toneGGoal || toneK !== this.#toneKGoal
+    const toneRatio = toneMoving ? (this.#toneGGoal / toneG) ** (1 / length) : 1
+    const toneKStep = toneMoving ? (this.#toneKGoal - toneK) / length : 0
+    let toneA1 = 1 / (1 + toneG * (toneG + toneK))
+    let toneA2 = toneG * toneA1
+    let toneA3 = toneG * toneA2
+    let toneIc1 = this.#toneIc1
+    let toneIc2 = this.#toneIc2
+    // The gains for the block, from the lengths at its start (and the
+    // sway's, on average): each pass of a line loses its share of 60 dB
+    // over the decay
     let scale = this.#scale
     for (let k = 0; k < LINES; k++) {
-      const seconds = (REVERB_LINES[k] as number) * scale
+      const seconds = (REVERB_LINES[k] as number) * scale + lineSway / rate
       gain[k] = 10 ** ((-3 * seconds) / this.#decay)
     }
     const goal = this.#scaleGoal
     const glide = this.#glide
     for (let i = 0; i < length; i++) {
       scale += (goal - scale) * glide
+      if (swayGliding) {
+        const next = lineSway + (lineSwayGoal - lineSway) * glide
+        lineSway =
+          next - lineSwayGoal < BLOOM_LAND && lineSwayGoal - next < BLOOM_LAND
+            ? lineSwayGoal
+            : next
+      }
       const inL = left[i] as number
       const inR = right[i] as number
       let x = (inL + inR) * 0.5
@@ -464,12 +778,78 @@ export class Reverb {
         line.write(v)
         x = delayed - DIFFUSION * v
       }
+      if (blooming) {
+        if (gliding) {
+          for (let k = 0; k <= loop; k++) {
+            const now = bloomDelay[k] as number
+            const to = bloomGoal[k] as number
+            if (now !== to) {
+              let move = (to - now) * glide
+              if (move > BLOOM_SLEW) move = BLOOM_SLEW
+              else if (move < -BLOOM_SLEW) move = -BLOOM_SLEW
+              const next = now + move
+              bloomDelay[k] =
+                next - to < BLOOM_LAND && to - next < BLOOM_LAND ? to : next
+            }
+          }
+        }
+        const back = bloomLoop.cubic(
+          (bloomDelay[loop] as number) +
+            bloomSway * (shape[SWAYS - 1] as number)
+        )
+        let s = x + feedback * back
+        // The short allpasses, still (whole samples, but while Length
+        // glides), then the long ones, swaying
+        for (let k = 0; k < BLOOM_SHORT; k++) {
+          const line = blooms[k] as Line
+          const delay = bloomDelay[k] as number
+          const delayed = gliding ? line.cubic(delay) : line.tap(delay)
+          const v = s + BLOOM_SMEAR * delayed
+          line.write(v)
+          s = delayed - BLOOM_SMEAR * v
+        }
+        for (let k = BLOOM_SHORT; k < loop; k++) {
+          const line = blooms[k] as Line
+          const swayed = shape[LINES + k - BLOOM_SHORT] as number
+          const delayed = line.cubic(
+            (bloomDelay[k] as number) + bloomSway * swayed
+          )
+          const v = s + BLOOM_DIFFUSION * delayed
+          line.write(v)
+          s = delayed - BLOOM_DIFFUSION * v
+        }
+        for (let k = LINES; k < SWAYS; k++) {
+          shape[k] = (shape[k] as number) + (shapeStep[k] as number)
+        }
+        bloomLow += (s - bloomLow) * damp
+        bloomBase += (bloomLow - bloomBase) * lowCut
+        bloomLoop.write(bloomLow - bloomBase)
+        // The Tone, on what the loop hands the lines
+        if (toneMoving) {
+          toneG *= toneRatio
+          toneK += toneKStep
+          toneA1 = 1 / (1 + toneG * (toneG + toneK))
+          toneA2 = toneG * toneA1
+          toneA3 = toneG * toneA2
+        }
+        const v3 = s - toneIc2
+        const v1 = toneA1 * toneIc1 + toneA2 * v3
+        const v2 = toneIc2 + toneA2 * toneIc1 + toneA3 * v3
+        toneIc1 = 2 * v1 - toneIc1
+        toneIc2 = 2 * v2 - toneIc2
+        x = x * direct + v2 * bloomed
+        direct += directStep
+        bloomed += bloomedStep
+        feedback += feedbackStep
+      }
       let sum = 0
       let outL = 0
       let outR = 0
       for (let k = 0; k < LINES; k++) {
         const delay = (REVERB_LINES[k] as number) * scale * rate
-        const out = (lines[k] as Line).read(delay)
+        const swayed = shape[k] as number
+        shape[k] = swayed + (shapeStep[k] as number)
+        const out = (lines[k] as Line).read(delay + lineSway * swayed)
         outL += out * (LEFT_SIGNS[k] as number)
         outR += out * (RIGHT_SIGNS[k] as number)
         const damped = (low[k] as number) + (out - (low[k] as number)) * damp
@@ -489,7 +869,15 @@ export class Reverb {
       mix += mixStep
     }
     this.#scale = scale
+    this.#lineSway = lineSway
     for (let k = 0; k < LINES; k++) low[k] = flush(low[k] as number)
+    this.#bloomLow = flush(bloomLow)
+    this.#bloomBase = flush(bloomBase)
+    this.#toneIc1 = flush(toneIc1)
+    this.#toneIc2 = flush(toneIc2)
+    // Landed exactly, the glide's ratios aside (and at once while silent)
+    this.#toneG = this.#toneGGoal
+    this.#toneK = this.#toneKGoal
   }
 }
 
@@ -1631,9 +2019,12 @@ export class EffectRack {
     size: number,
     decay: number,
     damp: number,
-    mix: number
+    mix: number,
+    bloom = 0,
+    length = 0.3,
+    tone = 1
   ): void {
-    this.#reverb[k]?.set(size, decay, damp, mix)
+    this.#reverb[k]?.set(size, decay, damp, mix, bloom, length, tone)
   }
 
   /** Point p of slot k's EQ: its kind, frequency, gain and Q */

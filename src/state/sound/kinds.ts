@@ -16,7 +16,11 @@ import {
   EQ_TYPE_NAMES,
 } from '../../dsp/eq'
 import { COMB_MAX_DECAY, COMB_MIN_DECAY } from '../../dsp/comb'
-import { PHASER_STAGES } from '../../dsp/effects'
+import {
+  BLOOM_MAX_LENGTH,
+  BLOOM_MIN_LENGTH,
+  PHASER_STAGES,
+} from '../../dsp/effects'
 import { CHIP_DUTIES, CHIP_STEPS, MAX_BITS } from '../../dsp/oscillator'
 import { LFO_SHAPE_NAMES, VOWEL_NAMES, type ValueSpec } from '../params'
 
@@ -36,6 +40,12 @@ export interface KnobSpec extends ValueSpec {
     readonly is: number
     readonly not?: boolean
   }
+  /**
+   * Doing nothing while another knob of its part stands at a value: the
+   * reverb's Length and Tone at Bloom 0. The editor dims it, still
+   * turned (Knob.tsx)
+   */
+  readonly rests?: { readonly key: string; readonly is: number }
   /**
    * The knob whose place it takes while shown, holding it opening that
    * one's routes: a synced LFO's note value, its Rate's
@@ -112,6 +122,9 @@ const SYNC: KnobSpec = {
 
 /** What a knob of a part takes while Sync is off, its own time or rate */
 const UNSYNCED = { key: 'sync', is: 0 } as const
+
+/** Where a reverb's bloom knobs do nothing: at a Bloom of 0 */
+const BLOOMLESS = { key: 'bloom', is: 0 } as const
 
 /**
  * The note value a synced part takes, among notes (initial its first
@@ -960,6 +973,34 @@ export const EFFECT_KINDS = {
         curve: 'linear',
         step: 0,
         unit: '%',
+      },
+      // The tail swelling before it falls: 0 starts it at its loudest
+      {
+        key: 'bloom',
+        label: 'Bloom',
+        min: 0,
+        max: 1,
+        default: 0,
+        curve: 'linear',
+        step: 0,
+        unit: '%',
+      },
+      // A lap of the bloom's loop: the longer, the slower it swells
+      {
+        ...seconds('length', 'Length', BLOOM_MIN_LENGTH, BLOOM_MAX_LENGTH, 0.3),
+        rests: BLOOMLESS,
+      },
+      // A resonant lowpass on the bloom: open at 100%
+      {
+        key: 'tone',
+        label: 'Tone',
+        min: 0,
+        max: 1,
+        default: 1,
+        curve: 'linear',
+        step: 0,
+        unit: '%',
+        rests: BLOOMLESS,
       },
       mix(0.3),
     ],

@@ -596,7 +596,10 @@ function setEffect(
         value('size'),
         value('decay'),
         value('damp'),
-        value('mix')
+        value('mix'),
+        value('bloom'),
+        value('length'),
+        value('tone')
       )
       return
     case 'eq':
