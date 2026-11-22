@@ -444,6 +444,56 @@ describe('the chain engine', () => {
     expect(maxDifference(render(routed), stack)).toBeGreaterThan(0.01)
   })
 
+  it('plays an FM6, its operators moved by their knobs and routes', () => {
+    let sound = addInput(initSound(), 'fm6').sound
+    sound = setSend(sound, 'c1', 'i1', 0)
+    // OP1 alone heard as it starts: a sine
+    const sine = render(sound)
+    expect(sine.every(Number.isFinite)).toBe(true)
+    expect(peak(sine)).toBeGreaterThan(0.05)
+    expect(peak(sine)).toBeLessThan(1)
+    // OP2 into OP1 (algorithm 1), by its knob and by a route to its level
+    const modulated = setValue(sound, 'i2', 'op2Level', 80)
+    expect(maxDifference(render(modulated), sine)).toBeGreaterThan(0.01)
+    const routed = addRoute(sound, {
+      source: 'velocity',
+      target: 'i2',
+      key: 'op2Level',
+      amount: 0.8,
+    }).sound
+    expect(maxDifference(render(routed), sine)).toBeGreaterThan(0.01)
+    // Its Transpose, and a route to its pitch, move it
+    const up = setValue(sound, 'i2', 'transpose', 12)
+    expect(maxDifference(render(up), sine)).toBeGreaterThan(0.01)
+    const bent = addRoute(sound, {
+      source: 'velocity',
+      target: 'i2',
+      key: 'pitch',
+      amount: 7,
+    }).sound
+    expect(maxDifference(render(bent), sine)).toBeGreaterThan(0.01)
+  })
+
+  it("plays an FM6 on either engine, and ends a note as its FM6's ends", () => {
+    let sound = addInput(initSound(), 'fm6').sound
+    sound = setSend(sound, 'c1', 'i1', 0)
+    // The DX7's chips and output filter, or none: a hair apart on a sine
+    const chip = render(sound)
+    const clean = render(setValue(sound, 'i2', 'engine', 0))
+    expect(maxDifference(chip, clean)).toBeGreaterThan(1e-4)
+    expect(maxDifference(chip, clean)).toBeLessThan(0.05)
+    // A long amp release, OP1's R4 at 99: the note ends with OP1
+    sound = setValue(sound, AMP, 'release', 5)
+    const synth = new ChainSynth(SAMPLE_RATE)
+    applySound(synth, sound)
+    const block = new Float32Array(BLOCK)
+    synth.noteOn(1, 60, 0.9)
+    for (let b = 0; b < 40; b++) synth.process(block)
+    synth.noteOff(1)
+    for (let b = 0; b < 40; b++) synth.process(block)
+    expect(synth.activeVoices).toBe(0)
+  })
+
   it('rings a comb at the note, and talks through a formant', () => {
     let sound = addInput(initSound(), 'noise').sound
     sound = setSend(sound, 'c1', 'i1', 0)

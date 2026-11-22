@@ -105,6 +105,7 @@ export {
 // Panels
 export { OrnamentPanel } from '../ui/OrnamentPanel'
 export type { Ornament } from '../dsp/ornament'
+export { AlgorithmChart } from '../ui/AlgorithmChart'
 export { LanePicker } from '../ui/LanePicker'
 export type { LaneGroup, LaneKnob } from '../state/lanes'
 export { OutputCells } from '../ui/OutputCells'

@@ -21,6 +21,7 @@ import {
   BLOOM_MIN_LENGTH,
   PHASER_STAGES,
 } from '../../dsp/effects'
+import { FM6_ALGORITHMS, FM6_BREAKPOINT_NOTE, FM6_OPS } from '../../dsp/fm6'
 import { CHIP_DUTIES, CHIP_STEPS, MAX_BITS } from '../../dsp/oscillator'
 import { LFO_SHAPE_NAMES, VOWEL_NAMES, type ValueSpec } from '../params'
 
@@ -46,6 +47,12 @@ export interface KnobSpec extends ValueSpec {
    * turned (Knob.tsx)
    */
   readonly rests?: { readonly key: string; readonly is: number }
+  /**
+   * The group of its part's knobs it belongs to, where a part has more
+   * than a panel shows at once: an FM6's operators, each its own (OP 1),
+   * its pitch envelope's and its LFO's
+   */
+  readonly group?: string
   /**
    * The knob whose place it takes while shown, holding it opening that
    * one's routes: a synced LFO's note value, its Rate's
@@ -372,6 +379,149 @@ const PHASE = {
   choices: ['Reset', 'Free'],
 } as const satisfies KnobSpec
 
+/**
+ * A knob of an FM6 in the DX7's own numbers: whole steps from min to
+ * max (0..99 a level or a rate, 0..7 a sensitivity), so a patch's
+ * values carry over as written
+ */
+function dx(
+  key: string,
+  label: string,
+  max: number,
+  initial: number,
+  group?: string,
+  min = 0
+): KnobSpec {
+  return {
+    key,
+    label,
+    min,
+    max,
+    default: initial,
+    curve: 'linear',
+    step: 1,
+    unit: '',
+    ...(group === undefined ? {} : { group }),
+  }
+}
+
+/** A choice of an FM6's, by its DX7 name */
+function dxChoice(
+  key: string,
+  label: string,
+  choices: readonly string[],
+  initial: number,
+  group?: string
+): KnobSpec {
+  return { ...dx(key, label, choices.length - 1, initial, group), choices }
+}
+
+/** An FM6's LFO waves, in the DX7's order (FM6_LFO_TRIANGLE...) */
+export const FM6_LFO_WAVE_NAMES = [
+  'Triangle',
+  'Saw Down',
+  'Saw Up',
+  'Square',
+  'Sine',
+  'S&H',
+] as const
+
+/** A level scaling's curves, in the DX7's order (FM6_CURVE_NEG_LIN...) */
+export const FM6_CURVE_NAMES = ['−Lin', '−Exp', '+Exp', '+Lin'] as const
+
+/** The pitch class names, C first */
+const PITCH_CLASSES = 'C C# D D# E F F# G G# A A# B'.split(' ')
+
+/**
+ * The breakpoints' notes, 0..99, in this app's naming (60 is C4): A0
+ * (the DX7's A-1, a MIDI 21) to C8 (its C7)
+ */
+export const FM6_BREAKPOINT_NAMES: readonly string[] = Array.from(
+  { length: 100 },
+  (_, b) => {
+    const note = FM6_BREAKPOINT_NOTE + b
+    return `${PITCH_CLASSES[note % 12] ?? ''}${Math.floor(note / 12) - 1}`
+  }
+)
+
+/** An FM6 operator's group, OP 1 to OP 6 */
+export function fm6OpGroup(op: number): string {
+  return `OP ${op + 1}`
+}
+
+/** An FM6 operator's knob key: op1Level for op 0's level */
+export function fm6OpKey(op: number, key: string): string {
+  return `op${op + 1}${key}`
+}
+
+/**
+ * An FM6 operator's knobs (op 0 is OP1), as the DX7's: its frequency
+ * (a ratio to the note, Coarse 0 a half, or fixed in hertz), its detune,
+ * its output level and the velocity's say in it, its envelope's four
+ * rates and levels, the keys' say in its rates, its level scaled either
+ * side of a breakpoint, and how far the LFO moves its level. The first
+ * heard at full, the others silent, as the DX7's initial voice.
+ */
+function fm6Operator(op: number): KnobSpec[] {
+  const group = fm6OpGroup(op)
+  const key = (name: string) => fm6OpKey(op, name)
+  const sides = ['Left', 'Right'] as const
+  return [
+    dxChoice(key('Mode'), 'Mode', ['Ratio', 'Fixed'], 0, group),
+    dx(key('Coarse'), 'Coarse', 31, 1, group),
+    dx(key('Fine'), 'Fine', 99, 0, group),
+    dx(key('Detune'), 'Detune', 7, 0, group, -7),
+    dx(key('Level'), 'Level', 99, op === 0 ? 99 : 0, group),
+    dx(key('Velocity'), 'Vel', 7, 0, group),
+    ...[1, 2, 3, 4].map((n) => dx(key(`R${n}`), `R${n}`, 99, 99, group)),
+    ...[1, 2, 3, 4].map((n) =>
+      dx(key(`L${n}`), `L${n}`, 99, n === 4 ? 0 : 99, group)
+    ),
+    dx(key('RateScale'), 'Rate Sc', 7, 0, group),
+    dxChoice(key('Break'), 'Break', FM6_BREAKPOINT_NAMES, 39, group),
+    ...sides.map((side) =>
+      dx(key(`${side}Depth`), `${side[0]} Depth`, 99, 0, group)
+    ),
+    ...sides.map((side) =>
+      dxChoice(
+        key(`${side}Curve`),
+        `${side[0]} Curve`,
+        FM6_CURVE_NAMES,
+        0,
+        group
+      )
+    ),
+    dx(key('Ams'), 'AMS', 3, 0, group),
+  ]
+}
+
+/** An FM6's pitch envelope: its four rates and levels, 50 the note */
+function fm6PitchEnv(): KnobSpec[] {
+  const group = 'Pitch Env'
+  return [
+    ...[1, 2, 3, 4].map((n) => dx(`pitchR${n}`, `R${n}`, 99, 99, group)),
+    ...[1, 2, 3, 4].map((n) => dx(`pitchL${n}`, `L${n}`, 99, 50, group)),
+  ]
+}
+
+/**
+ * An FM6's LFO: its wave, speed and delay, how far it moves the pitch
+ * and the levels, whether a note restarts it, and the pitch's
+ * sensitivity to it
+ */
+function fm6Lfo(): KnobSpec[] {
+  const group = 'LFO'
+  return [
+    dxChoice('lfoWave', 'Wave', FM6_LFO_WAVE_NAMES, 0, group),
+    dx('lfoSpeed', 'Speed', 99, 35, group),
+    dx('lfoDelay', 'Delay', 99, 0, group),
+    dx('lfoPitch', 'PMD', 99, 0, group),
+    dx('lfoAmp', 'AMD', 99, 0, group),
+    dxChoice('lfoSync', 'Sync', ['Off', 'On'], 1, group),
+    dx('lfoPms', 'PMS', 7, 3, group),
+  ]
+}
+
 /** What makes sound: an input is heard through the chains that take it */
 export const INPUT_KINDS = {
   osc: {
@@ -521,6 +671,47 @@ export const INPUT_KINDS = {
       PITCH_DEST,
       { key: 'width', label: 'Width', scale: 0.5, unit: '%' },
       { key: 'detune', label: 'Detune', scale: 1, unit: 'st' },
+    ],
+    refs: [],
+  },
+  // Six operators after the DX7's (src/dsp/fm6.ts), an input of their
+  // own, in its numbers, so its patches port as written (ashon,
+  // 2026-11-22: "야마하 DX-7 의 그런 톤을 ... 최대한 복각 해 보면 좋겠어")
+  fm6: {
+    label: 'FM6',
+    knobs: [
+      dx('algorithm', 'Alg', FM6_ALGORITHMS.length, 1, undefined, 1),
+      dx('feedback', 'Fdbk', 7, 0),
+      dxChoice('keySync', 'Sync', ['Off', 'On'], 1),
+      {
+        key: 'transpose',
+        label: 'Trans',
+        min: -24,
+        max: 24,
+        default: 0,
+        curve: 'linear',
+        step: 1,
+        unit: 'st',
+      },
+      // Clean: the DX7's arithmetic, smooth; DX7: its chips' and its
+      // converter's steps too, and its output's lowpass (src/dsp/fm6.ts)
+      dxChoice('engine', 'Engine', ['Clean', 'DX7'], 1),
+      // DX7: velocity as from its own keys, MIDI's 127 its hardest (about
+      // 100); Full: MIDI's as it comes, brighter (src/dsp/fm6.ts)
+      dxChoice('velRange', 'Velocity', ['DX7', 'Full'], 0),
+      ...Array.from({ length: FM6_OPS }, (_, op) => fm6Operator(op)).flat(),
+      ...fm6PitchEnv(),
+      ...fm6Lfo(),
+    ],
+    dests: [
+      PITCH_DEST,
+      // An operator's output level, a whole its 99 steps
+      ...Array.from({ length: FM6_OPS }, (_, op) => ({
+        key: fm6OpKey(op, 'Level'),
+        label: `${fm6OpGroup(op)} Level`,
+        scale: 1,
+        unit: '%' as const,
+      })),
     ],
     refs: [],
   },

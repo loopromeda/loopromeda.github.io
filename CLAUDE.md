@@ -64,7 +64,17 @@ src/dsp/      pure DSP (oscillators, envelopes, LFOs, filters, voices);
               the waves (a super's stack, hard sync, a phase Free or
               Reset); comb.ts a delay tuned to the note, fed back (a
               plucked string, Karplus-Strong, or a resonator);
-              formant.ts a vowel's three formants; slots.ts
+              formant.ts a vowel's three formants; fm6.ts a
+              six-operator FM voice after the DX7 (its 32
+              algorithms, each operator's envelope, velocity and
+              scaling, a pitch envelope and the voice's LFO, all
+              in the DX7's own numbers; two engines: Clean, in
+              floating point, or the DX7's, its chips' log-sine
+              and powers in integers, its converter's 12 bits and
+              its output's lowpass at 16 kHz; on both its output's
+              coupling, a highpass at 20 Hz, and velocity as the
+              DX7's keys send it, 127 their 100, or MIDI's in full);
+              slots.ts
               numbers the parts,
               sources and destinations; effects.ts the chorus, the
               ensemble (a string machine's three taps on two

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { LFO_MAX_RATE, LFO_MIN_RATE } from '../../dsp/lfo'
 import { VOWELS } from '../../dsp/formant'
 import { PHASER_STAGES } from '../../dsp/effects'
+import { FM6_ALGORITHMS, FM6_OPS } from '../../dsp/fm6'
 import { VOWEL_NAMES, clampValue, formatValue } from '../params'
 import {
   AMP_SPEC,
@@ -236,5 +237,35 @@ describe('the library’s parts', () => {
   it('stacks a super input’s voices up to the most the voice holds', () => {
     const voices = INPUT_KINDS.super.knobs.find((k) => k.key === 'voices')
     expect(voices?.max).toBe(MAX_UNISON)
+  })
+
+  it('holds an FM6 as the DX7’s initial voice: OP1 alone, a sine', () => {
+    const knobs = INPUT_KINDS.fm6.knobs
+    const at = (key: string) => knobs.find((knob) => knob.key === key)
+    expect(at('algorithm')).toMatchObject({ min: 1, default: 1 })
+    expect(at('algorithm')?.max).toBe(FM6_ALGORITHMS.length)
+    // Its knobs: 6 of its own, 21 an operator, 8 the pitch EG’s, 7 the LFO’s
+    expect(knobs).toHaveLength(6 + 21 * FM6_OPS + 8 + 7)
+    // On the DX7's engine, its chips' steps and all, played as its keys play
+    expect(at('engine')).toMatchObject({
+      choices: ['Clean', 'DX7'],
+      default: 1,
+    })
+    expect(at('velRange')).toMatchObject({
+      choices: ['DX7', 'Full'],
+      default: 0,
+    })
+    for (let op = 1; op <= FM6_OPS; op++) {
+      expect(at(`op${op}Level`)?.default).toBe(op === 1 ? 99 : 0)
+      expect(at(`op${op}Coarse`)?.default).toBe(1)
+      expect(at(`op${op}L4`)?.default).toBe(0)
+      expect(at(`op${op}Break`)?.default).toBe(39)
+    }
+    expect(at('pitchL1')?.default).toBe(50)
+    // Routes move the pitch and each operator's level
+    expect(INPUT_KINDS.fm6.dests.map((dest) => dest.key)).toEqual([
+      'pitch',
+      ...Array.from({ length: FM6_OPS }, (_, op) => `op${op + 1}Level`),
+    ])
   })
 })

@@ -177,6 +177,9 @@ export const GLYPHS = {
     'M1 5 V1.5 H5.5 V5 H10 V1.5 H14.5 V5 M2.5 10.5 V7 H7 V10.5 H11.5 V7 H16 V10.5',
   noise: 'M1 6 L3 3 L4 9 L6 2 L7 8 L9 4 L10 10 L12 3 L13 7 L15 2 L17 6',
   ring: 'M2 6 a4 4 0 1 0 8 0 a4 4 0 1 0 -8 0 M8 6 a4 4 0 1 0 8 0 a4 4 0 1 0 -8 0',
+  // A sine whose cycles bunch in the middle and spread at the ends: its
+  // frequency moved by another's, an FM6's operators
+  fm: 'M1 6 C2.5 0 4 0 5.5 6 C6.33 12 7.17 12 8 6 C8.67 0 9.33 0 10 6 C10.83 12 11.67 12 12.5 6 C14 0 15.5 0 17 6',
   lowpass: 'M1 4 H9 C12 4 13 6 17 11',
   highpass: 'M1 11 C5 6 6 4 9 4 H17',
   bandpass: 'M1 11 C5 11 6 3 9 3 C12 3 13 11 17 11',
@@ -324,6 +327,7 @@ export function glyphOf(sound: Sound, id: string): string {
       const { kind, values } = found.part
       if (kind === 'noise') return GLYPHS.noise
       if (kind === 'ring') return GLYPHS.ring
+      if (kind === 'fm6') return GLYPHS.fm
       if (kind === 'chip') {
         const wave = Math.round(values.wave ?? 0)
         if (wave > 0) return CHIP_GLYPHS[wave - 1] ?? GLYPHS.steppedTriangle
@@ -595,8 +599,8 @@ export function heardThrough(sound: Sound, id: string): string | undefined {
 /**
  * An input's own line: an oscillator's wave, a Super's and its voices
  * (Saw ×7), a chip's pulse with its duty or its wave with its steps, and
- * the bits their levels take (Pulse 25%, Triangle 32, Sine 32·4b), or its
- * kind
+ * the bits their levels take (Pulse 25%, Triangle 32, Sine 32·4b), an
+ * FM6's algorithm (Alg 5), or its kind
  */
 export function inputLine(sound: Sound, id: string): string {
   const found = findPart(sound, id)
@@ -607,6 +611,7 @@ export function inputLine(sound: Sound, id: string): string {
     const wave = WAVE_NAMES[values.wave ?? 0] ?? ''
     return `${wave} ×${Math.round(values.voices ?? 0)}`
   }
+  if (kind === 'fm6') return `Alg ${Math.round(values.algorithm ?? 1)}`
   if (kind !== 'chip') return INPUT_KINDS[kind].label
   const wave = Math.round(values.wave ?? 0)
   const name = CHIP_WAVE_NAMES[wave] ?? ''

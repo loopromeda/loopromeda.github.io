@@ -20,13 +20,15 @@ export const MAX_UNISON = 8
 export const MAX_BUSES = 4
 
 /**
- * Input kinds: an oscillator, white noise, two inputs multiplied, and a
- * chip's channel (an oscillator held in steps, on its DAC's DC)
+ * Input kinds: an oscillator, white noise, two inputs multiplied, a
+ * chip's channel (an oscillator held in steps, on its DAC's DC) and six
+ * FM operators after the DX7's (fm6.ts)
  */
 export const INPUT_OSC = 0
 export const INPUT_NOISE = 1
 export const INPUT_RING = 2
 export const INPUT_CHIP = 3
+export const INPUT_FM6 = 4
 
 /**
  * Chain item kinds: a filter, a drive, a comb tuned to the note (a
@@ -98,14 +100,16 @@ export const DEST_PAN = 2
 /**
  * An input's destinations: pitch (semitones), pulse width, FM depth, the
  * hard sync's pitch above the note (semitones) and the unison's detune
- * (semitones)
+ * (semitones); an FM6's, its pitch and its operators' levels in their
+ * places (a whole its 99 steps), OP1's at FM6_LEVEL
  */
 export const INPUT_PITCH = 0
 export const INPUT_WIDTH = 1
 export const INPUT_FM = 2
 export const INPUT_SYNC = 3
 export const INPUT_DETUNE = 4
-const INPUT_DESTS = 5
+export const FM6_LEVEL = 1
+const INPUT_DESTS = 7
 const FIRST_INPUT_DEST = 3
 
 /** Input i's destination param (INPUT_PITCH, INPUT_WIDTH or INPUT_FM) */

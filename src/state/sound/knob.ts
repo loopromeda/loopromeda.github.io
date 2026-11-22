@@ -103,9 +103,10 @@ const PITCH_KNOBS: readonly string[] = ['octave', 'semi', 'fine']
 
 /**
  * The destination key of part that holding its knob key routes to: the
- * knob's own (a cutoff, a send), an oscillator's or a chip's pitch for its
- * Octave, Semi and Fine, or the one of the knob it stands for (a synced LFO's
- * note value, its rate's); undefined for a knob nothing can move
+ * knob's own (a cutoff, a send, an FM6 operator's level), an
+ * oscillator's or a chip's pitch for its Octave, Semi and Fine (an FM6's
+ * for its Transpose), or the one of the knob it stands for (a synced
+ * LFO's note value, its rate's); undefined for a knob nothing can move
  */
 export function knobDest(
   sound: Sound,
@@ -116,13 +117,14 @@ export function knobDest(
   if (stands !== undefined) return knobDest(sound, part, stands)
   if (destOf(sound, part, key)) return key
   const found = findPart(sound, part)
-  return found?.type === 'input' &&
-    (found.part.kind === 'osc' ||
-      found.part.kind === 'super' ||
-      found.part.kind === 'chip') &&
-    PITCH_KNOBS.includes(key)
-    ? 'pitch'
-    : undefined
+  if (found?.type !== 'input') return undefined
+  const kind = found.part.kind
+  const pitched =
+    kind === 'fm6'
+      ? key === 'transpose'
+      : (kind === 'osc' || kind === 'super' || kind === 'chip') &&
+        PITCH_KNOBS.includes(key)
+  return pitched ? 'pitch' : undefined
 }
 
 /**

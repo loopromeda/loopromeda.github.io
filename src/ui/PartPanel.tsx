@@ -60,6 +60,8 @@ import {
   SEND_SPEC,
   VOICE_SPEC,
   reduces,
+  fm6OpGroup,
+  fm6OpKey,
   type DestSpec,
   type EffectKind,
   type InputKind,
@@ -95,10 +97,15 @@ import {
 } from '../state/sound/sound'
 import {
   knobRow,
+  KNOB_COLUMN,
+  KNOB_HEIGHT,
+  KNOB_LABEL,
+  KNOB_READOUT,
   KNOB_SIZE,
   PANEL_BODY,
   SECTION_HEADING,
   SMALL_BUTTON,
+  SMALL_BUTTON_SHAPE,
   SMALL_CONFIRM,
   SMALL_FIELD,
   SMALL_ICON_BUTTON,
@@ -140,7 +147,27 @@ import type { MasterViewKind } from './MasterViews'
 import { MutesCell } from './Mutes'
 import { OutputCells } from './OutputCells'
 import { palette } from './theme'
-import { knobSpec, knoblessDests, routesTo } from '../state/sound/knob'
+import {
+  knobSpec,
+  knobValue,
+  knoblessDests,
+  routesTo,
+} from '../state/sound/knob'
+import { FM6_ALGORITHMS, FM6_OPS } from '../dsp/fm6'
+import { fm6FrequencyText, opRole } from '../viz/fm6'
+import { AlgorithmChart } from './AlgorithmChart'
+import {
+  FM6_START,
+  fm6ChartSpan,
+  fm6PageKeys,
+  fm6PageNames,
+  fm6PageOf,
+  fm6SectionName,
+  fm6ShowPage,
+  fm6Step,
+  type Fm6Place,
+} from './fm6Pages'
+import { MenuButton, type MenuItem } from './MoreMenu'
 import { choiceColumns, choicesWidth } from '../viz/choices'
 import { noteName } from '../viz/keyboard'
 import {
@@ -376,12 +403,48 @@ interface View {
   readonly body?: ReactNode
   /** The body takes the height the panel has, not centred in it */
   readonly fill?: boolean
+  /**
+   * Before its knobs, cells of its own, each as wide as it says: an
+   * FM6's algorithm chart, an operator's frequency
+   */
+  readonly cells?: readonly Cell[]
+  /**
+   * Its own pages, in place of those its row's width would make: an
+   * FM6's, one section's at a time (Global, an operator), its knobs and
+   * cells the page shown's
+   */
+  readonly paging?: Paging
+}
+
+/**
+ * A view's own pages: their names, the one shown and showing another,
+ * and after the title in the header what picks which pages they are (an
+ * FM6's section: IN 2 ‹ OP 3 ›)
+ */
+interface Paging {
+  readonly names: readonly string[]
+  readonly at: number
+  readonly show: (page: number) => void
+  readonly lead?: ReactNode
+  /**
+   * The columns the page stands in: the widest page's, so a knob keeps
+   * its place from one page to the next; none, its knobs spread across
+   * the row as any panel's do
+   */
+  readonly across?: number
+}
+
+/** Where each FM6's panel stands, by its input's id, and moving one */
+interface Fm6Places {
+  readonly of: (id: string) => Fm6Place
+  readonly set: (id: string, place: Fm6Place) => void
 }
 
 const INPUT_HINTS: Record<InputKind, string> = {
   osc: 'Wave and FM',
   chip: 'Steps and DC',
   super: 'Detuned stack',
+  fm6: 'Six-operator FM',
   noise: 'White noise',
   ring: 'One × another',
 }
@@ -415,6 +478,7 @@ const KIND_GLYPHS = {
   osc: GLYPHS.saw,
   chip: GLYPHS.steppedTriangle,
   super: GLYPHS.superSaw,
+  fm6: GLYPHS.fm,
   noise: GLYPHS.noise,
   ring: GLYPHS.ring,
   filter: GLYPHS.lowpass,
@@ -490,6 +554,12 @@ export function PartPanel({
   )
   /** The track being named in the header, by its id */
   const [named, setNamed] = useState<string>()
+  /** Each FM6's section and pages, kept while the editor stays open */
+  const [fm6, setFm6] = useState<Readonly<Record<string, Fm6Place>>>({})
+  const fm6Places: Fm6Places = {
+    of: (id) => fm6[id] ?? FM6_START,
+    set: (id, place) => setFm6((was) => ({ ...was, [id]: place })),
+  }
   const view =
     picked === SENDS
       ? sendsView(
@@ -524,7 +594,8 @@ export function PartPanel({
               picked,
               focus,
               pick,
-              engine.getPart() === 'kit'
+              engine.getPart() === 'kit',
+              fm6Places
             )
   const { chip } = view
   const mixCells: Cell[] = (view.mixKnobs ?? []).map(({ part, key }) => ({
@@ -543,6 +614,7 @@ export function PartPanel({
   }))
   /** The knob row's cells, in order: the part's own section of them */
   const own: Cell[] = [
+    ...(view.cells ?? []),
     ...(view.mixFirst ? mixCells : []),
     ...view.knobs.map(({ part, key, hot, label, color }) => ({
       key: `${part} ${key}`,
@@ -665,8 +737,9 @@ export function PartPanel({
       ? { title: view.group.title, cells: grouped }
       : undefined
   const sections = group ? [own, group.cells] : [own]
+  const { paging } = view
   const pages =
-    view.body || view.choices
+    view.body || view.choices || paging
       ? undefined
       : knobPages(
           sections.map((cells) => cells.map((cell) => cell.width)),
@@ -680,16 +753,26 @@ export function PartPanel({
   const pagesId = useId()
   const feedsShown =
     !view.choices && view.feeds !== undefined && view.feeds.length > 0
-  const tabs = pages && (
+  const tabs = paging ? (
     <PageTabs
       id={pagesId}
       label={`${view.title}’s knobs`}
-      names={pages.map((each) =>
-        pageName(each, sections, [view.title, group?.title ?? view.title])
-      )}
-      at={page}
-      onShow={(to) => setPaged({ id: picked, page: to })}
+      names={paging.names}
+      at={paging.at}
+      onShow={paging.show}
     />
+  ) : (
+    pages && (
+      <PageTabs
+        id={pagesId}
+        label={`${view.title}’s knobs`}
+        names={pages.map((each) =>
+          pageName(each, sections, [view.title, group?.title ?? view.title])
+        )}
+        at={page}
+        onShow={(to) => setPaged({ id: picked, page: to })}
+      />
+    )
   )
 
   return (
@@ -702,10 +785,12 @@ export function PartPanel({
         aria-hidden
         className="pointer-events-none invisible absolute h-0 w-[var(--knob,3rem)]"
       />
-      <div className="flex h-7 shrink-0 items-center gap-2">
+      <div className="@container/head flex h-7 shrink-0 items-center gap-2">
         <span
           aria-hidden
-          className="flex h-5 w-[26px] shrink-0 items-center justify-center rounded-[5px] text-[11px] font-extrabold"
+          // Beside a stepper on a narrow panel (the Fold's inner screen's
+          // side panel), left out for the name: the tile above shows it
+          className={`flex h-5 w-[26px] shrink-0 items-center justify-center rounded-[5px] text-[11px] font-extrabold ${paging?.lead ? '@max-[22rem]/head:hidden' : ''}`}
           style={
             chip.add
               ? {
@@ -744,7 +829,12 @@ export function PartPanel({
             <h2 className="min-w-0 shrink truncate text-sm font-semibold whitespace-nowrap text-(--ink-100)">
               {view.title}
             </h2>
-            <span className="min-w-0 flex-1 truncate text-[11px] text-(--ink-400)">
+            {paging?.lead}
+            <span
+              // Beside a stepper, only where it has room for more than a
+              // letter or two: the phone's narrow screen leaves it out
+              className={`min-w-0 flex-1 truncate text-[11px] text-(--ink-400) ${paging?.lead ? '@max-[28rem]/head:invisible' : ''}`}
+            >
               {view.kind}
             </span>
           </>
@@ -836,10 +926,19 @@ export function PartPanel({
                     pages={pages}
                     page={page}
                     fit={fit}
+                    across={paging?.across}
                     panel={
-                      pages
-                        ? { id: `${pagesId}-page`, tab: `${pagesId}-${page}` }
-                        : undefined
+                      paging
+                        ? {
+                            id: `${pagesId}-page`,
+                            tab: `${pagesId}-${paging.at}`,
+                          }
+                        : pages
+                          ? {
+                              id: `${pagesId}-page`,
+                              tab: `${pagesId}-${page}`,
+                            }
+                          : undefined
                     }
                   />
                 </>
@@ -1664,6 +1763,7 @@ function KnobRows({
   pages,
   page,
   fit,
+  across: columns,
   panel,
 }: {
   own: readonly Cell[]
@@ -1673,6 +1773,11 @@ function KnobRows({
   page: number
   /** How many stand in a row */
   fit: number
+  /**
+   * The columns the row stands in, where the view pages its own (an
+   * FM6's): its widest page's, so a knob keeps its size as they turn
+   */
+  across?: number
   /** The tab panel's id and its tab's, where they are paged */
   panel: { id: string; tab: string } | undefined
 }) {
@@ -1697,7 +1802,16 @@ function KnobRows({
     )
   }
   if (!group) {
-    return <div className={row(own)}>{own.map((cell) => cell.node)}</div>
+    return (
+      <div
+        role={panel ? 'tabpanel' : undefined}
+        id={panel?.id}
+        aria-labelledby={panel?.tab}
+        className={knobRow(columns ?? widthOf(own), fit)}
+      >
+        {own.map((cell) => cell.node)}
+      </div>
+    )
   }
   const before = widthOf(own)
   const all = [...own, ...group.cells]
@@ -1854,7 +1968,9 @@ function viewOf(
   focus: string | undefined,
   pick: (id: string, input?: string) => void,
   /** The kit played: the inserts are its chain's, after every pad's amp */
-  kit: boolean
+  kit: boolean,
+  /** Where each FM6's panel stands */
+  fm6: Fm6Places
 ): View {
   // Every edit here applies to the engine's sound as it is when tapped:
   // sound, from the last redraw, misses knobs turned since
@@ -2150,6 +2266,13 @@ function viewOf(
           ],
         }
       }
+      if (part.kind === 'fm6') {
+        return {
+          ...base,
+          ...fm6View(engine, picked, fm6, into),
+          kind: `FM6 · Alg ${Math.round(part.values.algorithm ?? 1)}`,
+        }
+      }
       if (part.kind === 'ring') {
         return {
           ...base,
@@ -2190,6 +2313,306 @@ function viewOf(
         color: neutralArc(),
       }
   }
+}
+
+/** Fewer knobs than this on an FM6's page spread across its row */
+const FEW_KNOBS = 5
+
+/**
+ * An FM6's panel (fm6Pages.ts): one section's page at a time, Global's
+ * or an operator's, picked by the stepper after its name in the header
+ * (Fm6Stepper), the pages' tabs in the feeds' row. Global's first page
+ * holds the algorithm's chart, a tap on an operator there opening it; an
+ * operator's first, its frequency. Any oscillator's FM it is (→ IN 1)
+ * follows Global's own knobs, the chart giving it room.
+ */
+function fm6View(
+  engine: Engine,
+  part: string,
+  fm6: Fm6Places,
+  into: readonly { part: string; key: string; label: string; hot?: string }[]
+): Pick<View, 'knobs' | 'cells' | 'paging'> {
+  const place = fm6.of(part)
+  const go = (to: Fm6Place) => fm6.set(part, to)
+  const page = fm6PageOf(place)
+  const knobs = fm6PageKeys(place).map((key) => ({ part, key }))
+  const first = page === 0
+  const global = place.section === 0
+  const span = fm6ChartSpan(knobs.length + into.length)
+  const cells: Cell[] =
+    global && first
+      ? [
+          {
+            key: 'chart',
+            width: span,
+            label: 'Algorithm',
+            node: (
+              <Fm6Chart
+                key="chart"
+                engine={engine}
+                part={part}
+                span={span}
+                onPick={(op) => go({ ...place, section: op + 1 })}
+              />
+            ),
+          },
+        ]
+      : !global && first
+        ? [
+            {
+              key: 'frequency',
+              width: 1,
+              label: 'Freq',
+              node: (
+                <Fm6Frequency
+                  key={`frequency ${place.section}`}
+                  engine={engine}
+                  part={part}
+                  op={place.section - 1}
+                />
+              ),
+            },
+          ]
+        : []
+  const shown = global && first ? [...knobs, ...into] : knobs
+  // How many knobs wide the page is, its cells' widths counted
+  const wide = cells.reduce((sum, cell) => sum + cell.width, shown.length)
+  return {
+    knobs: shown,
+    cells,
+    paging: {
+      names: fm6PageNames(place.section),
+      at: page,
+      show: (to) => go(fm6ShowPage(place, to)),
+      lead: (
+        <Fm6Stepper
+          engine={engine}
+          part={part}
+          section={place.section}
+          onSection={(section) => go({ ...place, section })}
+          onStep={(by) => go(fm6Step(place, by))}
+        />
+      ),
+      // A page of a few knobs spread as any panel's (Voice's three
+      // switches and knob, each with room for its choices' names); a
+      // fuller one in eight columns, its knobs where the page before's
+      across: wide < FEW_KNOBS ? undefined : 8,
+    },
+  }
+}
+
+/** An FM6's knob's value as the engine holds it now */
+function fm6Value(engine: Engine, part: string, key: string): number {
+  return knobValue(engine.getSound(), part, key)
+}
+
+/**
+ * An FM6's algorithm and its operators' levels, as a string the chart
+ * redraws on: the knobs turned redraw it, nothing else does
+ */
+function useFm6Shape(
+  engine: Engine,
+  part: string
+): {
+  algorithm: number
+  levels: readonly number[]
+} {
+  const shape = useSyncExternalStore(engine.subscribeSound, () =>
+    [
+      fm6Value(engine, part, 'algorithm'),
+      ...Array.from({ length: FM6_OPS }, (_, op) =>
+        fm6Value(engine, part, fm6OpKey(op, 'Level'))
+      ),
+    ].join(' ')
+  )
+  const [algorithm = 1, ...levels] = shape.split(' ').map(Number)
+  return { algorithm, levels }
+}
+
+/**
+ * Global's first cell: the algorithm's chart (AlgorithmChart), as tall
+ * as the knobs' column beside it, its operators opened by a tap
+ */
+function Fm6Chart({
+  engine,
+  part,
+  span,
+  onPick,
+}: {
+  engine: Engine
+  part: string
+  span: number
+  onPick: (op: number) => void
+}) {
+  const { algorithm, levels } = useFm6Shape(engine, part)
+  return (
+    <div
+      className={`${span === 4 ? 'col-span-4' : span === 3 ? 'col-span-3' : 'col-span-2'} min-h-16 w-full self-stretch rounded-[10px] bg-(--under)/25`}
+    >
+      <AlgorithmChart
+        algorithm={algorithm}
+        levels={levels}
+        onPick={onPick}
+        className="mx-auto max-w-72"
+      />
+    </div>
+  )
+}
+
+/**
+ * An operator's first cell: its frequency as its Mode, Coarse and Fine
+ * set it, a ratio to the note (×1.41) or fixed (440 Hz), in a knob's
+ * place, read again as they turn; under it, what the operator does in
+ * the algorithm (Out, → 1)
+ */
+function Fm6Frequency({
+  engine,
+  part,
+  op,
+}: {
+  engine: Engine
+  part: string
+  op: number
+}) {
+  const key = (name: string) => fm6OpKey(op, name)
+  // As one string, for the store to compare: the figure, then the unit
+  const [value = '', unit = ''] = useSyncExternalStore(
+    engine.subscribeSound,
+    () => {
+      const { value, unit } = fm6FrequencyText(
+        fm6Value(engine, part, key('Mode')) === 1,
+        fm6Value(engine, part, key('Coarse')),
+        fm6Value(engine, part, key('Fine'))
+      )
+      return `${value} ${unit}`
+    }
+  ).split(' ')
+  // Short in the readout (→345), whole for a reader (→ 3 4 5 · Fb)
+  const [short = '', role = ''] = useSyncExternalStore(
+    engine.subscribeSound,
+    () => {
+      const spec = FM6_ALGORITHMS[fm6Value(engine, part, 'algorithm') - 1]
+      return spec ? `${opRole(spec, op, true)}\n${opRole(spec, op)}` : ''
+    }
+  ).split('\n')
+  return (
+    <div className={`${KNOB_COLUMN} w-full self-start`}>
+      <output
+        aria-label={`${fm6OpGroup(op)} frequency`}
+        className={`${KNOB_HEIGHT} flex w-full flex-col items-center justify-center gap-1 rounded-[10px] bg-(--under)/25 px-0.5 font-mono leading-none whitespace-nowrap`}
+      >
+        <span className="text-[12px] font-semibold text-(--ink-100)">
+          {value}
+        </span>
+        {unit && (
+          <span className="text-[10px] font-medium text-(--ink-400)">
+            {unit}
+          </span>
+        )}
+      </output>
+      <span className={KNOB_LABEL}>Freq</span>
+      <span
+        className={KNOB_READOUT}
+        aria-label={`${fm6OpGroup(op)}: ${role}`}
+        title={role}
+      >
+        {short}
+      </span>
+    </div>
+  )
+}
+
+/** The stepper's arrows, a 14 px chevron each */
+const BEFORE = 'M11 4.5L6.5 9l4.5 4.5'
+const AFTER = 'M7 4.5L11.5 9 7 13.5'
+
+/** The menu's pictures: Global's knobs, a carrier, a modulator */
+const SECTION_GLYPHS = {
+  global: 'M2.5 4.5h9M2.5 9.5h9M5 3v3M9 8v3',
+  carrier: 'M3.5 2.5h7v5h-7zM7 7.5v3M3 10.5h8',
+  modulator: 'M3.5 2h7v5h-7zM7 7v5M5 10l2 2 2-2',
+} as const
+
+/** The stepper's name, a menu of the sections: as wide as OP 6 or Global */
+const SECTION_BUTTON = `${SMALL_BUTTON_SHAPE} min-w-15 px-2 bg-(--lift) text-(--ink-100) aria-expanded:bg-(--lift-2)`
+
+/**
+ * Which of an FM6's sections its pages are (fm6Pages.ts), after its
+ * name in the panel's header (IN 2 ‹ OP 3 ›): a step back and on, round
+ * (Global after OP 6), as the DX7's OP SELECT steps; between them its
+ * name, a menu of all seven, each with what it does in the algorithm and
+ * its level (Out · 99, → 1 · 72)
+ */
+function Fm6Stepper({
+  engine,
+  part,
+  section,
+  onSection,
+  onStep,
+}: {
+  engine: Engine
+  part: string
+  section: number
+  onSection: (section: number) => void
+  onStep: (by: number) => void
+}) {
+  const { algorithm, levels } = useFm6Shape(engine, part)
+  const spec = FM6_ALGORITHMS[algorithm - 1] ?? FM6_ALGORITHMS[0]
+  const name = fm6SectionName(section)
+  const items: MenuItem[] = Array.from({ length: FM6_OPS }, (_, op) => ({
+    label: fm6SectionName(op + 1),
+    glyph:
+      spec?.carriers.includes(op) === true
+        ? SECTION_GLYPHS.carrier
+        : SECTION_GLYPHS.modulator,
+    checked: section === op + 1,
+    detail: `${spec ? opRole(spec, op) : ''} · ${Math.round(levels[op] ?? 0)}`,
+    onSelect: () => onSection(op + 1),
+  }))
+  return (
+    <span
+      role="group"
+      aria-label="FM6 section"
+      className="flex shrink-0 items-center gap-1"
+    >
+      <button
+        type="button"
+        aria-label={`Before: ${fm6SectionName((section + FM6_OPS) % (FM6_OPS + 1))}`}
+        onClick={() => onStep(-1)}
+        className={SMALL_ICON_BUTTON}
+      >
+        <ActionIcon path={BEFORE} />
+      </button>
+      <MenuButton
+        label={`Shown: ${name}. Pick another`}
+        groups={[
+          [
+            {
+              label: 'Global',
+              glyph: SECTION_GLYPHS.global,
+              checked: section === 0,
+              detail: `Alg ${algorithm}`,
+              onSelect: () => onSection(0),
+            },
+          ],
+          items,
+        ]}
+        width={13}
+        align="start"
+        className={SECTION_BUTTON}
+      >
+        {name}
+      </MenuButton>
+      <button
+        type="button"
+        aria-label={`After: ${fm6SectionName((section + 1) % (FM6_OPS + 1))}`}
+        onClick={() => onStep(1)}
+        className={SMALL_ICON_BUTTON}
+      >
+        <ActionIcon path={AFTER} />
+      </button>
+    </span>
+  )
 }
 
 /** The panel for a "+" tile: the kinds it adds */

@@ -2,6 +2,7 @@ import { Adsr, AdsrShape, CHOKE, SUSTAIN } from './adsr'
 import { Comb } from './comb'
 import { logCosh, sinCycles, tanhApprox } from './fastMath'
 import { Filter, LOWPASS } from './filter'
+import { FM6_OPS, Fm6Patch, Fm6Voice } from './fm6'
 import { Formant } from './formant'
 import { LFO_MAX_RATE, LFO_MIN_RATE, Lfo } from './lfo'
 import { Noise } from './noise'
@@ -13,8 +14,10 @@ import {
   DEST_COUNT,
   DEST_PAN,
   DEST_PITCH,
+  FM6_LEVEL,
   INPUT_FM,
   INPUT_CHIP,
+  INPUT_FM6,
   INPUT_DETUNE,
   INPUT_NOISE,
   INPUT_OSC,
@@ -153,6 +156,12 @@ const SCRAPE_TIME = 0.004
 const SCRAPE_GAIN = 3
 /** Below this the scrape is over */
 const SCRAPE_LAND = 1e-5
+/**
+ * Under this a block after a sound's FM6s are over is quiet enough to end
+ * the voice (-80 dB): what rings on in its chains (a comb fed back, a
+ * filter's resonance) is heard out first
+ */
+const FM6_QUIET = 1e-4
 
 /**
  * What every voice plays by: the sound's structure (which inputs, chains,
@@ -165,7 +174,7 @@ const SCRAPE_LAND = 1e-5
 export class ChainSettings {
   // Inputs, in the sound's order
   inputCount = 0
-  /** INPUT_OSC, INPUT_NOISE, INPUT_RING or INPUT_CHIP */
+  /** INPUT_OSC, INPUT_NOISE, INPUT_RING, INPUT_CHIP or INPUT_FM6 */
   readonly inputKind = new Int8Array(MAX_INPUTS)
   /**
    * An oscillator's or a chip's wave (an index into WAVES), and pitch in
@@ -228,6 +237,10 @@ export class ChainSettings {
   readonly sync: Float32Array[] = []
   /** Each input's signal over the chunk, for one voice at a time */
   readonly inputOut: Float32Array[] = []
+  /** Each FM6 input's settings: its operators, envelopes and LFO */
+  readonly fm6: Fm6Patch[] = []
+  /** An FM6's operators' level routes, per sample (undefined: none) */
+  readonly fm6Levels: (Float32Array | undefined)[] = []
 
   // Chains
   chainCount = 0
@@ -355,6 +368,8 @@ export class ChainSettings {
     buffers(MAX_INPUTS, this.fm)
     buffers(MAX_INPUTS, this.sync)
     buffers(MAX_INPUTS, this.inputOut)
+    for (let i = 0; i < MAX_INPUTS; i++) this.fm6.push(new Fm6Patch(sampleRate))
+    for (let k = 0; k < FM6_OPS; k++) this.fm6Levels.push(undefined)
     buffers(MAX_CHAINS, this.chainLevel)
     buffers(MAX_CHAINS * MAX_INPUTS, this.send)
     buffers(MAX_CHAINS * MAX_ITEMS, this.itemValue)
@@ -428,6 +443,8 @@ export class ChainVoice {
   /** Where a free oscillator's voices start, drawn as each note does */
   readonly #phases: Noise
   readonly #noises: Noise[] = []
+  /** One per input slot: what an FM6 there plays */
+  readonly #fm6: Fm6Voice[] = []
   readonly #filters: Filter[] = []
   /**
    * A comb and a formant filter per item slot, made only for a slot set
@@ -533,6 +550,7 @@ export class ChainVoice {
         this.#oscillators.push(new Oscillator(sampleRate))
       }
       this.#noises.push(new Noise(Math.imul(seed + 7919 * i, 0x9e3779b1)))
+      this.#fm6.push(new Fm6Voice(sampleRate))
     }
     this.#phases = new Noise(Math.imul(seed, 0x9e3779b9) ^ 0x7f4a7c15)
     for (let f = 0; f < MAX_CHAINS * MAX_ITEMS; f++) {
@@ -720,6 +738,7 @@ export class ChainVoice {
     this.#env.gateOn()
     for (let m = 0; m < MAX_MODULATORS; m++) (this.#envs[m] as Adsr).gateOn()
     this.#triggerLfos()
+    this.#startFm6(false)
   }
 
   /**
@@ -733,6 +752,11 @@ export class ChainVoice {
       this.#env.gateOff()
       for (let m = 0; m < MAX_MODULATORS; m++) {
         ;(this.#envs[m] as Adsr).gateOff()
+      }
+      const settings = this.#settings
+      for (let i = 0; i < settings.inputCount; i++) {
+        if (settings.inputKind[i] !== INPUT_FM6) continue
+        ;(this.#fm6[i] as Fm6Voice).release(settings.fm6[i] as Fm6Patch)
       }
     }
   }
@@ -793,6 +817,10 @@ export class ChainVoice {
     const muted = this.#ghost === GHOST_MUTE
     if (muted) this.#damp(mix, length)
     this.#env.apply(mix, 0, length)
+    // A sound of FM6s alone ends as they do, its amp's release or not: once
+    // this block has had its envelope, so its last samples are heard, and
+    // its chains have rung out
+    if (this.#fm6Done() && quiet(mix, length)) this.#env.reset()
     // A muted ghost gone, at nothing: the voice is free, its key held or not
     if (muted && this.#mute.stage === SUSTAIN) this.#mute.reset()
     this.#gain.target = this.#loudness()
@@ -964,6 +992,9 @@ export class ChainVoice {
           for (let j = 0; j < length; j++) out[j] = (out[j] as number) + dc
           break
         }
+        case INPUT_FM6:
+          this.#renderFm6(i, out, gliding, length)
+          break
         case INPUT_NOISE: {
           const noise = this.#noises[settings.noiseOrdinal[i] as number]
           ;(noise as Noise).process(out, 0, length)
@@ -1681,6 +1712,91 @@ export class ChainVoice {
     this.#triggerLfos()
     this.#env.gateOn()
     for (let m = 0; m < MAX_MODULATORS; m++) (this.#envs[m] as Adsr).gateOn()
+    this.#startFm6(true)
+  }
+
+  /**
+   * Starts every FM6 input's note: afresh, from silence (a note begun),
+   * or from where its envelopes stand (a mono note retriggered). Its
+   * keys are the note transposed by its Transpose; its velocity MIDI's.
+   */
+  #startFm6(afresh: boolean): void {
+    const settings = this.#settings
+    for (let i = 0; i < settings.inputCount; i++) {
+      if (settings.inputKind[i] !== INPUT_FM6) continue
+      const note = this.#note + (settings.transpose[i] as number)
+      ;(this.#fm6[i] as Fm6Voice).start(
+        settings.fm6[i] as Fm6Patch,
+        note,
+        this.#velocity * 127,
+        afresh
+      )
+    }
+  }
+
+  /**
+   * Whether every input heard is an FM6 and every one has gone silent,
+   * its key let go: the note is over, whatever its amp's release
+   */
+  #fm6Done(): boolean {
+    const settings = this.#settings
+    let any = false
+    for (let i = 0; i < settings.inputCount; i++) {
+      if (settings.inputOn[i] !== 1) continue
+      if (settings.inputKind[i] !== INPUT_FM6) return false
+      if (!(this.#fm6[i] as Fm6Voice).done(settings.fm6[i] as Fm6Patch)) {
+        return false
+      }
+      any = true
+    }
+    return any
+  }
+
+  /**
+   * FM6 input i into out over [0, length): its note's phase step per
+   * sample from the glide and the routes (its Transpose in), each
+   * operator's level routes beside it
+   */
+  #renderFm6(
+    i: number,
+    out: Float32Array,
+    gliding: boolean,
+    length: number
+  ): void {
+    const settings = this.#settings
+    const used = settings.destUsed
+    const dests = settings.dests
+    const transpose = settings.transpose[i] as number
+    const pitchDest = inputDest(i, INPUT_PITCH)
+    const increments = settings.increments
+    if (gliding || used[DEST_PITCH] === 1 || used[pitchDest] === 1) {
+      const glide = settings.glide
+      const both = used[DEST_PITCH] === 1 ? dests[DEST_PITCH] : undefined
+      const own = used[pitchDest] === 1 ? dests[pitchDest] : undefined
+      for (let j = 0; j < length; j++) {
+        let pitch = (gliding ? (glide[j] as number) : this.#pitch) + transpose
+        if (both) pitch += both[j] as number
+        if (own) pitch += own[j] as number
+        increments[j] = pitch
+      }
+      pitchesToSteps(increments, length, this.#note0Step)
+    } else {
+      const pitch = this.#pitch + transpose
+      increments.fill(this.#note0Step * 2 ** (pitch / 12), 0, length)
+    }
+    const levels = settings.fm6Levels
+    for (let k = 0; k < FM6_OPS; k++) {
+      const dest = inputDest(i, FM6_LEVEL + k)
+      levels[k] = used[dest] === 1 ? dests[dest] : undefined
+    }
+    out.fill(0, 0, length)
+    ;(this.#fm6[i] as Fm6Voice).render(
+      settings.fm6[i] as Fm6Patch,
+      out,
+      increments,
+      length,
+      levels
+    )
   }
 }
 
@@ -1804,6 +1920,15 @@ function place(
 }
 
 /** A pan within [-1, 1]; not a number, the middle */
+/** Whether every sample of buffer over [0, length) is under FM6_QUIET */
+function quiet(buffer: Float32Array, length: number): boolean {
+  for (let i = 0; i < length; i++) {
+    const x = buffer[i] as number
+    if (x > FM6_QUIET || x < -FM6_QUIET) return false
+  }
+  return true
+}
+
 function clampPan(value: number): number {
   return value > -1 ? (value < 1 ? value : 1) : value <= -1 ? -1 : 0
 }

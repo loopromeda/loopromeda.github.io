@@ -2,11 +2,13 @@ import { VoiceAllocator } from './allocator'
 import { ChainSettings, ChainVoice, GHOST_NONE } from './chainVoice'
 import { softClip } from './clip'
 import { Clock } from './clock'
+import type { Fm6Patch } from './fm6'
 import { MAX_WIDTH, MIN_WIDTH, SQUARE } from './oscillator'
 import { Smoother } from './smoother'
 import {
   INPUT_CHIP,
   INPUT_FM,
+  INPUT_FM6,
   INPUT_NOISE,
   INPUT_OSC,
   INPUT_RING,
@@ -75,7 +77,9 @@ const CHUNK = 128
  * The corner, in hertz, of the highpass after a sound whose chips stand
  * on their DC (DC above 0): the console's output, which turns each step
  * of the DC, a note starting or ending, into a thump
- * (docs/plan/sound-chains.md, The chip)
+ * (docs/plan/sound-chains.md, The chip). A sound with an FM6 has it too,
+ * as the DX7's output does: an operator modulated at its own frequency
+ * makes a sideband at 0 Hz, a slow swell where the two are detuned.
  */
 const DC_CORNER = 10
 /** Under this, what the highpass holds is taken for silence */
@@ -230,9 +234,12 @@ export class ChainSynth {
     this.#restructure('inputCount', clampCount(count, MAX_INPUTS))
   }
 
-  /** Input i's kind: INPUT_OSC, INPUT_NOISE, INPUT_RING or INPUT_CHIP */
+  /**
+   * Input i's kind: INPUT_OSC, INPUT_NOISE, INPUT_RING, INPUT_CHIP or
+   * INPUT_FM6
+   */
   setInputKind(i: number, kind: number): void {
-    if (!isIndex(i, MAX_INPUTS) || !isKind(kind, INPUT_CHIP)) return
+    if (!isIndex(i, MAX_INPUTS) || !isKind(kind, INPUT_FM6)) return
     this.#change(this.#settings.inputKind, i, kind)
   }
 
@@ -386,6 +393,23 @@ export class ChainSynth {
       width > MIN_WIDTH ? (width < MAX_WIDTH ? width : MAX_WIDTH) : MIN_WIDTH
     const lift = wave === SQUARE ? 2 * pulse : 1
     settings.dc[i] = (dc > 0 ? (dc < 1 ? dc : 1) : 0) * lift
+  }
+
+  /**
+   * FM6 input i's settings (fm6.ts), set in the DX7's numbers through
+   * their own setters: its algorithm, operators, envelopes and LFO. A
+   * change is heard from the next block, an operator's level easing there
+   * over 10 ms, the feedback over a step; undefined past the inputs a
+   * sound holds.
+   */
+  fm6(i: number): Fm6Patch | undefined {
+    return isIndex(i, MAX_INPUTS) ? this.#settings.fm6[i] : undefined
+  }
+
+  /** FM6 input i's pitch above the note, in semitones: its Transpose */
+  setFm6Transpose(i: number, semitones: number): void {
+    if (!isIndex(i, MAX_INPUTS)) return
+    this.#settings.transpose[i] = Number.isFinite(semitones) ? semitones : 0
   }
 
   /** Chain c's level into the voice, 0..1 */
@@ -840,8 +864,12 @@ export class ChainSynth {
       this.#level(out, from, to)
       if (right) this.#level(right, from, to)
     }
-    // Free-running LFOs run on in silence too
+    // Free-running LFOs run on in silence too, an FM6's among them
     const settings = this.#settings
+    for (let i = 0; i < settings.inputCount; i++) {
+      if (settings.inputKind[i] !== INPUT_FM6) continue
+      ;(settings.fm6[i] as Fm6Patch).advance(to - from)
+    }
     for (let m = 0; m < settings.modulatorCount; m++) {
       if (settings.modulatorKind[m] !== MOD_LFO) continue
       const phase =
@@ -851,13 +879,16 @@ export class ChainSynth {
     }
   }
 
-  /** True while a chip input stands on its DC (DC above 0) */
+  /**
+   * True while a chip input stands on its DC (DC above 0), or an FM6
+   * plays, whose sidebands can fall at 0 Hz
+   */
   #standsOnDc(): boolean {
     const settings = this.#settings
     for (let i = 0; i < settings.inputCount; i++) {
-      if (settings.inputKind[i] === INPUT_CHIP && settings.dc[i] !== 0) {
-        return true
-      }
+      const kind = settings.inputKind[i]
+      if (kind === INPUT_FM6) return true
+      if (kind === INPUT_CHIP && settings.dc[i] !== 0) return true
     }
     return false
   }

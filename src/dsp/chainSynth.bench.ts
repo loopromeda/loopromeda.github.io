@@ -38,11 +38,13 @@ import {
   FX_TREMOLO,
   FX_WIDTH,
   INPUT_FM,
+  INPUT_FM6,
   INPUT_NOISE,
   INPUT_OSC,
   INPUT_PITCH,
   INPUT_RING,
   INPUT_WIDTH,
+  MAX_INPUTS,
   ITEM_CUTOFF,
   ITEM_FILTER,
   ITEM_RESONANCE,
@@ -158,6 +160,46 @@ test(`renders ${VOICE_COUNT} saw voices from parts well within a block`, async (
   const mean = await timed(`${VOICE_COUNT} saw voices, parts`, synth, bench)
   expect(mean).toBeLessThan(BUDGET_MS)
 })
+
+/**
+ * A DX7 voice at its heaviest: every operator heard (algorithm 32), at
+ * full, the sixth fed back, as many of them as a sound holds inputs
+ */
+function fm6Synth(inputs: number): ChainSynth {
+  const synth = new ChainSynth(SAMPLE_RATE)
+  synth.inputCount = inputs
+  synth.chainCount = 1
+  for (let i = 0; i < inputs; i++) {
+    synth.setInputKind(i, INPUT_FM6)
+    const patch = synth.fm6(i)
+    patch?.setVoice(32, 7, true)
+    for (let op = 0; op < 6; op++) {
+      patch?.setOperator(op, false, op + 1, 0, 0, 99, 0, 0, 0)
+    }
+    synth.setSend(0, i, 1)
+  }
+  synth.setAmp(0.001, 0.3, 1, 0.3)
+  return synth
+}
+
+for (const inputs of [1, MAX_INPUTS]) {
+  test(`renders ${VOICE_COUNT} voices of ${inputs} DX7 voices`, async ({
+    bench,
+  }) => {
+    const synth = fm6Synth(inputs)
+    for (let key = 0; key < VOICE_COUNT; key++) {
+      synth.noteOn(key, 48 + 3 * key, 1)
+    }
+    const took = await timed(
+      `${VOICE_COUNT} voices, ${inputs} FM6`,
+      synth,
+      bench
+    )
+    // One of them within the budget; a sound of them all, recorded
+    if (inputs === 1) expect(took).toBeLessThan(BUDGET_MS)
+    else expect(took).toBeGreaterThan(0)
+  })
+}
 
 test(`renders the old stress patch from parts within a block`, async ({
   bench,

@@ -133,6 +133,155 @@ moved here and the oscillator went back to its six.
   steps and bits, at no DC, as it sounded; its FM goes
   (`src/state/sound/read.ts`).
 
+## FM6
+
+A six-operator FM voice after the Yamaha DX7, an input of its own
+(ashon, 2026-11-22: "야마하 DX-7 의 그런 톤을 넣어보고 싶은데 기본
+프리셋으로 추가해 볼 수 있을까 최대한 복각 해 보면 좋겠어"; then a new
+6-op input rather than presets on the two-operator FM, and eight voices of
+ROM 1A rather than one or all 32). Its knobs are the DX7's own numbers, so
+a voice is written as its sheet gives it and sounds as it did. The editor's
+screen is UX's (`src/ui/fm6Pages.ts`, `AlgorithmChart.tsx`).
+
+| group     | knobs                                                                                                                   |
+| --------- | ----------------------------------------------------------------------------------------------------------------------- |
+| the voice | Alg 1 to 32, Fdbk 0 to 7, Sync (the oscillators' key sync), Trans ±24 semitones, Engine (Clean, DX7)                    |
+| OP 1 to 6 | Mode (Ratio, Fixed), Coarse 0 to 31, Fine 0 to 99, Detune ±7, Level 0 to 99, Vel 0 to 7, R1 to R4 and L1 to L4 0 to 99, |
+|           | Rate Sc 0 to 7, Break A-1 to C8, L and R Depth 0 to 99, L and R Curve (−Lin, −Exp, +Exp, +Lin), AMS 0 to 3              |
+| Pitch Env | R1 to R4 and L1 to L4, 0 to 99 (50 is the note)                                                                         |
+| LFO       | Wave (Triangle, Saw Down, Saw Up, Square, Sine, S&H), Speed, Delay, PMD, AMD 0 to 99, Sync, PMS 0 to 7                  |
+
+Routes move its pitch (Trans holds it) and each operator's level (its
+Level knob holds it, a whole its 99 steps). It starts as the DX7's initial
+voice: OP1 alone at 99, a sine.
+
+- **Sources.** The numbers come from the DX7's firmware (v1.8, as ajxs's
+  disassembly reads it: its numbers taken as facts, nothing copied, as it
+  carries no licence), from msfa (Raph Levien's engine, Apache-2.0) and his
+  notes, and from Ken Shirriff's reading of the chips. Dexed is GPL: none
+  of its code or tables, only its measured detune, as a fact. The code in
+  `src/dsp/fm6.ts` is our own.
+- **Levels** are msfa's, in its log units: an operator at Level 99,
+  envelope 99, no velocity is L 15, and each unit below halves it. The
+  output level and velocity are the firmware's: an attenuation of 127
+  less the level (its low steps from a table) and the keys' scaling, then
+  doubled and the velocity's added, 0.375 dB a step.
+- **Velocity** is the firmware's two tables: at Vel 7 a full velocity
+  plays about 4 dB over the level Vel 0 holds every note at, a soft one
+  far under it.
+- **Level scaling** is the firmware's: the keys in groups of three from
+  the breakpoint (Break 39 is C3, the DX7's name for MIDI 60), a linear
+  or exponential table either side, a negative curve turning down.
+  **Rate scaling** is msfa's: a note's rates up by Rate Sc × (⌊note / 3⌋
+  − 7) / 8, rounded down, from MIDI 24 up.
+- **Modulation**: an operator's phase moves by its modulators' outputs
+  times 2^(17/16) cycles (13.1 radians at full, as Yamaha's chip did).
+  Feedback is msfa's, the last two outputs averaged and scaled by
+  2^(Fdbk − 8); algorithms 4 and 6 run a real loop (OP4, or OP5, back to
+  OP6). The carriers are averaged, as the DX7 turns each down by how many
+  there are. A Fdbk turned glides there over a step, unclicked.
+- **The engines** (ashon, 2026-11-22, the old E-Piano sounding far
+  better than the port: "DX-7 을 잘 복각한 것 맞아? 음향 분석자료를
+  인터넷에서 제대로 찾고 구현해 줘"). The voices' numbers were the DX7's,
+  but not how its chips work them out, nor what its output does after.
+  **DX7**, a new FM6's, works as Ken Shirriff read the chips off their
+  dies ([the log-sine ROM](https://www.righto.com/2021/12/yamaha-dx7-reverse-engineering-part-iii.html),
+  [the output](https://www.righto.com/2022/02/yamaha-dx7-chip-reverse-engineering.html)):
+  - a phase's top 12 bits read a quarter wave of 1024 logs of a sine,
+    unread between its steps;
+  - the envelope's level (12 bits) adds to the log;
+  - 1024 powers of two and a shift take it back to 14 bits and a sign;
+  - the carriers are turned down in the log by how many there are
+    (round(1024 · log2 n));
+  - each voice's sum goes through the converter, whose 12 bits are
+    shifted up by as many as its leading zeros allow (0 to 3), so a quiet
+    note keeps every bit and a loud one loses its lowest three;
+  - each voice then goes through the output's lowpass, before the chains.
+
+  **Clean** is the arithmetic in floating point, the sine read between,
+  and no converter or filter. On a sine the two stay within −60 dB of
+  each other.
+
+- **The output filter** Shirriff gives only as "a sharp low-pass filter
+  around 16 kHz using a Sallen-Key topology". Here it is a fourth-order
+  Butterworth at 16 kHz (0.45 of the sample rate where that is lower), in
+  each voice, so only the FM6 is filtered, not what is mixed with it.
+- **A held note hears its knobs**: a knob turned, or a lane moving it, on
+  an operator's frequency, level, velocity or scalings works out again
+  for every note playing. An envelope at rest (sustaining, or over)
+  stands at its level anew, so a level turned to 0 and back stands where
+  it stood; one moving moves by what its level moved and goes on with its
+  stage. What is heard eases after it over 10 ms (a time constant, in
+  the log), unclicked. A Fixed turned on takes the mode with it, and the
+  Engine changed under a note takes over the other's levels.
+- **Routes to a level** turn the Level knob, no further than 0 and 99,
+  and step for step as the knob does (its low steps from the table). A
+  note ends on its carriers' envelopes, with any route that turns them up:
+  a route or the LFO turning them down never cuts it short. On the DX7
+  engine a carrier under the least level its chip plays is over, a fourth
+  level held there too. Its chains ring out before the voice is freed.
+- **The envelope** runs on the DX7's clock, 49096 Hz: a rate's speed is
+  its qrate's (R × 41 / 64 plus the rate scaling), the attack adding
+  more the lower it starts and jumping the last stretch, a level held as
+  msfa holds it. It steps every 16 samples, the gains gliding between, so
+  a block costs little. A note on a quiet voice starts at L4.
+- **Frequencies**: a ratio is the firmware's, in 4096ths of an octave
+  (14 plays 14.0025, 1.5 a hair flat); Coarse 0 is a half. Fixed is
+  10^(Coarse mod 4 + Fine / 100) Hz, which follows the pitch envelope and
+  the LFO but not the note. Detune is Dexed's measured size, an octave's
+  share falling as the note rises; on a fixed operator it goes up only.
+- **The pitch envelope** is the firmware's levels (in 32nds of an
+  octave, 50 the note) and rates, one per voice, back to L4 as a note
+  starts on a quiet voice.
+- **The LFO** is the voice's, one for every note, as the DX7's: Speed
+  from 0.065 to 50.9 Hz, Delay held then risen as msfa's, Sync
+  restarting it with each note. PMD × PMS moves the pitch; AMD only turns
+  levels down, by each operator's AMS.
+- **DC** (ashon, 2026-11-22, the E-Piano still sounding strange
+  overtones: "여전히 이상한 배음이 들리네"): a 1:1 ratio puts a sideband
+  at 0 Hz, a DC as the note's envelope moves or a swell of a few hertz
+  between operators detuned apart (OP5 and OP6 in E.PIANO 1), as much as
+  an eighth of a note's power under 20 Hz. The one-pole at 10 Hz after
+  the voices (The chip, above) left −19 to −28 dB of it (under 20 Hz
+  against the whole, C3 to C6, velocity 76 to 127). The DX7's output is
+  coupled through capacitors, so each FM6 voice now ends in a
+  second-order Butterworth highpass at 20 Hz too, on both engines (its
+  corner not read off a DX7): −40 to −57 dB.
+- **Velocity** (the same request): a DX7's keys send no more than about
+  100 ([players' reports](https://yamahamusicians.com/forum/threads/keyboard-velocity-range.7315/post-36234),
+  [and more](https://yamahamusicians.com/forum/threads/observations-on-dx7-and-dx7ii-key-velocity-issues.15649/)),
+  so its voices were voiced for that, and Arturia's DX7 V plays them so
+  by default ([its DX7 and Full modes](https://www.kvraudio.com/forum/viewtopic.php?p=8135357)).
+  Here a computer key plays 127, every note harder and brighter than the
+  DX7's keys could. The FM6's Velocity knob: **DX7**, the default, takes
+  MIDI's 127 for 100 (velocity × 100/127); **Full** takes it as it comes.
+  A sound's other parts hear velocity as before. With DX7, the E-Piano's
+  C4 at MIDI 100 has its second, third and fourth harmonics 1.4, 9.9 and
+  19 dB under the first.
+- **Cost**: one 128-frame block of 16 voices here (M3 Max), an FM6 on
+  the DX7 engine 0.21 ms, six of them as inputs 0.98 ms; one is under the
+  0.89 ms budget (a saw 0.036). The voice alone, the DX7's engine costs
+  1.4 times Clean's (0.17 ms against 0.12).
+
+Unsettled, each a choice that can move without changing a voice's data:
+the detune's size (Dexed's measurement, not the firmware's); whether a
+fixed operator follows the note's pitch moves; the feedback's and the
+loops' absolute scale (msfa's); AMS 1 and 2 (msfa's 0.26 and 0.43); the
+output filter's order (Shirriff gives none); whether the feedback hears a
+carrier's turning down (here it does not, as msfa's does not). Not
+there yet: the mod wheel and aftertouch adding to PMD and AMD, as the
+DX7's do, which wants destinations of their own.
+
+Heard, not a fault: the E-Piano's fourth harmonic stands out from about
+D5 to D6 (MIDI 74 to 86), as loud as the first from F#5 to A5 at the
+hardest velocity, the DX7's 100. OP4 into OP3, a 1:1 pair at about 5
+radians, puts it there (its Bessel sidebands), on msfa's arithmetic as
+on this one's. It is not aliasing: Clean at 48 kHz and at 192 kHz give
+the same harmonics up to C6. Its decay quickens a step at F#3, D#4, A4,
+F#5, D#6 and A6, where rate scaling 3 steps, as the firmware quantizes
+it. And velocity moves its overtones up and down, not evenly, as an FM
+index does.
+
 ## The library
 
 Asked for by ashon, 2026-11-17, through Main: "사운드 쪽으로 넘겨서

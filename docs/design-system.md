@@ -143,7 +143,7 @@ Engine-free: each takes plain props and callbacks. Grouped by the
 | Layout     | `FadeRow`                                                                           |
 | Navigation | `KeysNavigator`, `RowNavigator`                                                     |
 | Play       | `Keys`, `Pads`, `KitPads`, `XyPad` (played through `Hands`)                         |
-| Panels     | `OrnamentPanel`, `LanePicker`, `OutputCells`, `SurfacePicker`                       |
+| Panels     | `OrnamentPanel`, `AlgorithmChart`, `LanePicker`, `OutputCells`, `SurfacePicker`     |
 | Toolbar    | `SurfaceButton`, `SurfaceIcon`, `SettingsButton`, `UpdateButton`                    |
 | Theme      | `ThemeRoot`                                                                         |
 
@@ -159,6 +159,13 @@ larger and lighter, and the part's picture on its tile lights the piece
 the knob moves (an envelope's stage, a filter's corner or peak, an LFO's
 fade) and dims the rest (`src/ui/turning.ts`, `outlineLit`), set outside
 React as the drag is.
+
+`AlgorithmChart` draws one of an FM6's 32 algorithms as the DX7's chart
+does (`src/viz/fm6.ts`): the carriers on the bottom row over the output's
+line, each modulator over what it modulates, the feedback a loop round its
+operator, each operator's box lit as loud as its level. Every algorithm
+stands on the same grid, six across and four high, so a box keeps its size
+from one to the next; a tap on one opens it (`onPick`).
 
 The play surfaces take a `Hands` (`src/ui/hands.ts`), which holds who
 plays which note: `new Hands(player)`, the player's `noteOn`, `noteOff`,

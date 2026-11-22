@@ -12,6 +12,7 @@
 import type { LaneTarget } from '../dsp/automation'
 import { ChainSynth } from '../dsp/chainSynth'
 import { PHASER_STAGES, type EffectRack } from '../dsp/effects'
+import { FM6_ENGINE_DX7, FM6_OPS, FM6_VELOCITY_DX7 } from '../dsp/fm6'
 import { CHIP_DUTIES, CHIP_STEPS, CHIP_WAVES } from '../dsp/oscillator'
 import type { Mixer, Part, Strip } from '../dsp/output'
 import {
@@ -31,6 +32,8 @@ import {
   FX_TREMOLO,
   FX_REVERB,
   INPUT_CHIP,
+  INPUT_FM6,
+  FM6_LEVEL,
   INPUT_DETUNE,
   INPUT_FM,
   INPUT_NOISE,
@@ -80,6 +83,7 @@ import {
   MASTER_SPEC,
   SENDS_SPEC,
   STRIP_SPEC,
+  fm6OpKey,
   noteWholes,
   type EffectKind,
   type KnobSpec,
@@ -103,9 +107,116 @@ const INPUT_KIND = {
   // A stack of an oscillator's voices: an oscillator, unison set
   super: INPUT_OSC,
   chip: INPUT_CHIP,
+  fm6: INPUT_FM6,
   noise: INPUT_NOISE,
   ring: INPUT_RING,
 }
+/** Each FM6 operator's knobs' keys (op1Mode...), worked out once */
+const FM6_KEYS = Array.from({ length: FM6_OPS }, (_, op) => {
+  const key = (name: string) => fm6OpKey(op, name)
+  return {
+    mode: key('Mode'),
+    coarse: key('Coarse'),
+    fine: key('Fine'),
+    detune: key('Detune'),
+    level: key('Level'),
+    velocity: key('Velocity'),
+    rateScale: key('RateScale'),
+    ams: key('Ams'),
+    r1: key('R1'),
+    r2: key('R2'),
+    r3: key('R3'),
+    r4: key('R4'),
+    l1: key('L1'),
+    l2: key('L2'),
+    l3: key('L3'),
+    l4: key('L4'),
+    breakpoint: key('Break'),
+    leftDepth: key('LeftDepth'),
+    rightDepth: key('RightDepth'),
+    leftCurve: key('LeftCurve'),
+    rightCurve: key('RightCurve'),
+  }
+})
+
+/**
+ * FM6 input i's knobs onto its settings, in the DX7's numbers: the
+ * voice's and its engine, each operator's, the pitch envelope's and the
+ * LFO's. Allocates nothing: a lane moving a knob runs it every block.
+ */
+function loadFm6(
+  synth: ChainSynth,
+  i: number,
+  value: (key: string, absent?: number) => number
+): void {
+  const patch = synth.fm6(i)
+  if (!patch) return
+  patch.setVoice(value('algorithm'), value('feedback'), value('keySync') === 1)
+  patch.setEngine(value('engine', FM6_ENGINE_DX7))
+  patch.setVelocityRange(value('velRange', FM6_VELOCITY_DX7))
+  synth.setFm6Transpose(i, value('transpose'))
+  for (let op = 0; op < FM6_OPS; op++) {
+    const k = FM6_KEYS[op]!
+    patch.setOperator(
+      op,
+      value(k.mode) === 1,
+      value(k.coarse),
+      value(k.fine),
+      value(k.detune),
+      value(k.level),
+      value(k.velocity),
+      value(k.rateScale),
+      value(k.ams)
+    )
+    patch.setEnvelope(
+      op,
+      value(k.r1),
+      value(k.r2),
+      value(k.r3),
+      value(k.r4),
+      value(k.l1),
+      value(k.l2),
+      value(k.l3),
+      value(k.l4)
+    )
+    patch.setScaling(
+      op,
+      value(k.breakpoint),
+      value(k.leftDepth),
+      value(k.rightDepth),
+      value(k.leftCurve),
+      value(k.rightCurve)
+    )
+  }
+  patch.setPitchEnvelope(
+    value('pitchR1'),
+    value('pitchR2'),
+    value('pitchR3'),
+    value('pitchR4'),
+    value('pitchL1'),
+    value('pitchL2'),
+    value('pitchL3'),
+    value('pitchL4')
+  )
+  patch.setLfo(
+    value('lfoWave'),
+    value('lfoSpeed'),
+    value('lfoDelay'),
+    value('lfoPitch'),
+    value('lfoAmp'),
+    value('lfoSync') === 1,
+    value('lfoPms')
+  )
+}
+
+/** An FM6 operator's level's key, op1Level, to its destination's place */
+const FM6_LEVEL_PARAM = new Map(
+  Array.from({ length: FM6_OPS }, (_, op) => [
+    fm6OpKey(op, 'Level'),
+    FM6_LEVEL + op,
+  ])
+)
+
 const ITEM_KIND = {
   filter: ITEM_FILTER,
   drive: ITEM_DRIVE,
@@ -267,6 +378,8 @@ export class SoundPlayer {
             value('dc')
           )
         )
+      } else if (input.kind === 'fm6') {
+        hold(input.id, { ...input.values }, (value) => loadFm6(synth, i, value))
       } else if (input.kind === 'ring') {
         synth.setRing(i, slot(input.refs.a ?? null), slot(input.refs.b ?? null))
       }
@@ -409,7 +522,8 @@ export class SoundPlayer {
           sync: INPUT_SYNC,
           detune: INPUT_DETUNE,
         }
-        const which = param[key as keyof typeof param]
+        const which =
+          param[key as keyof typeof param] ?? FM6_LEVEL_PARAM.get(key)
         return which === undefined ? undefined : inputDest(i, which)
       }
       const c = sound.chains.findIndex((chain) => chain.id === target)
