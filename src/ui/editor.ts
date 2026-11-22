@@ -192,6 +192,9 @@ export const GLYPHS = {
   sum: 'M13 2 H5 L10 6 L5 10 H13',
   // Two waves a little apart, an echo's taps dying away, a dense tail
   chorus: 'M1 5 C3 1 6 1 9 5 S15 9 17 5 M1 8 C3 4 6 4 9 8 S15 12 17 8',
+  // A chorus of three: an ensemble's three taps, waves one over another
+  ensemble:
+    'M1 3 C3 0 6 0 9 3 S15 6 17 3 M1 6 C3 3 6 3 9 6 S15 9 17 6 M1 9 C3 6 6 6 9 9 S15 12 17 9',
   delay: 'M2 11 V2 M6.5 11 V4.5 M11 11 V7 M15.5 11 V9',
   reverb:
     'M1 11 L2.5 2 L3.5 8 L4.5 4 L5.5 9 L6.5 5.5 L7.5 9.5 L8.5 7 L9.5 10 L10.5 8 L11.5 10.5 L13 9.5 L14.5 10.5 H17',
@@ -217,6 +220,9 @@ export const GLYPHS = {
     'M1 2.5 H2.5 C3.5 2.5 3.8 10 4.5 10 S5.5 2.5 6.5 2.5 H7.5 C8.5 2.5 8.8 10 9.5 10 S10.5 2.5 11.5 2.5 H12.5 C13.5 2.5 13.8 10 14.5 10 S15.5 2.5 16.5 2.5 H17',
   width:
     'M9 1.5 V10.5 M1.5 6 H6.5 M10.5 6 H16.5 M4 3.5 L1.5 6 L4 8.5 M14 3.5 L16.5 6 L14 8.5',
+  // A wave swelling and fading twice, its level swayed: a tremolo's
+  tremolo:
+    'M1 6 L2.3 4 L3.7 9.5 L5 2 L6.3 9.5 L7.7 4 L9 6 L10.3 8 L11.7 2.5 L13 10 L14.3 2.5 L15.7 8 L17 6',
   // Bars of a meter, the master's
   master: 'M3 11 V6 M7 11 V2 M11 11 V4 M15 11 V8',
   // The views of an output (MasterViews): a wave over its line; a
@@ -282,6 +288,7 @@ export const CHOICE_GLYPHS: Readonly<Partial<Record<string, string>>> = {
 /** An effect's pictogram, by its kind */
 export const EFFECT_GLYPHS: Record<EffectKind, string> = {
   chorus: GLYPHS.chorus,
+  ensemble: GLYPHS.ensemble,
   delay: GLYPHS.delay,
   reverb: GLYPHS.reverb,
   eq: GLYPHS.eq,
@@ -291,6 +298,7 @@ export const EFFECT_GLYPHS: Record<EffectKind, string> = {
   doubler: GLYPHS.doubler,
   width: GLYPHS.width,
   phaser: GLYPHS.phaser,
+  tremolo: GLYPHS.tremolo,
 }
 
 /** An item's pictogram, by its kind, a filter's by its type */
@@ -665,7 +673,8 @@ function itemLine(
  * note value, synced), a reverb's decay; an EQ's boldest band (Low +3.0
  * dB), else its low cut, else Flat; a compressor's threshold and ratio, a
  * limiter's ceiling; a Haas's time and the side it holds back (15 ms R),
- * a doubler's detune (±9 ct), a width's; a phaser's rate
+ * a doubler's detune (±9 ct), a width's; a phaser's rate, an ensemble's;
+ * a tremolo's rate (its note value, synced)
  */
 export function effectLine(effect: {
   readonly kind: EffectKind
@@ -696,6 +705,12 @@ export function effectLine(effect: {
       return shown('width', 'width', values)
     case 'phaser':
       return shown('phaser', 'rate', values)
+    case 'ensemble':
+      return shown('ensemble', 'rate', values)
+    case 'tremolo':
+      return values.sync === 1
+        ? shown('tremolo', 'beat', values)
+        : shown('tremolo', 'rate', values)
   }
 }
 

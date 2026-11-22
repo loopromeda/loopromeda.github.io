@@ -29,10 +29,13 @@ import {
   FX_COMPRESSOR,
   FX_DELAY,
   FX_DOUBLER,
+  FX_ENSEMBLE,
   FX_EQ,
   FX_HAAS,
   FX_LIMITER,
+  FX_PHASER,
   FX_REVERB,
+  FX_TREMOLO,
   FX_WIDTH,
   INPUT_FM,
   INPUT_NOISE,
@@ -189,6 +192,9 @@ for (const [name, kind] of [
   ['Haas delays', FX_HAAS],
   ['doublers', FX_DOUBLER],
   ['widths', FX_WIDTH],
+  ['phasers', FX_PHASER],
+  ['ensembles', FX_ENSEMBLE],
+  ['tremolos', FX_TREMOLO],
 ] as const) {
   test(`renders a full rack of ${name} well within a block`, async ({
     bench,

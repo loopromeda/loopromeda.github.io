@@ -889,6 +889,39 @@ export const EFFECT_KINDS = {
     dests: [],
     refs: [],
   },
+  // The string machines' and the dimension chorus's three taps, slow and
+  // fast LFOs on each (src/dsp/effects.ts), as the 1980s' FM keys and
+  // strings were heard through (ashon, 2026-11-22: "루프로메다에 부족한
+  // FX들이나 필터가 있다면 그런 부분들도 구현해서 넣어보면 좋겠네")
+  ensemble: {
+    label: 'Ensemble',
+    tile: 'Ens',
+    knobs: [
+      {
+        key: 'rate',
+        label: 'Rate',
+        min: 0.1,
+        max: 3,
+        default: 0.6,
+        curve: 'exponential',
+        step: 0,
+        unit: 'Hz',
+      },
+      {
+        key: 'depth',
+        label: 'Depth',
+        min: 0,
+        max: 1,
+        default: 0.6,
+        curve: 'linear',
+        step: 0,
+        unit: '%',
+      },
+      mix(0.5),
+    ],
+    dests: [],
+    refs: [],
+  },
   delay: {
     label: 'Delay',
     knobs: [
@@ -1121,6 +1154,58 @@ export const EFFECT_KINDS = {
         choices: PHASER_STAGES.map(String),
       },
       mix(0.5),
+    ],
+    dests: [],
+    refs: [],
+  },
+  // A level swayed, or at Pan 1 swung side to side, as an electric
+  // piano's stereo tremolo (ashon, 2026-11-22, as the ensemble)
+  tremolo: {
+    label: 'Tremolo',
+    knobs: [
+      {
+        key: 'rate',
+        label: 'Rate',
+        min: 0.1,
+        max: 20,
+        default: 4.5,
+        curve: 'exponential',
+        step: 0,
+        unit: 'Hz',
+        when: UNSYNCED,
+      },
+      beat('Rate', LFO_NOTES, '1/8', 'rate'),
+      SYNC,
+      {
+        key: 'depth',
+        label: 'Depth',
+        min: 0,
+        max: 1,
+        default: 0.5,
+        curve: 'linear',
+        step: 0,
+        unit: '%',
+      },
+      {
+        key: 'pan',
+        label: 'Pan',
+        min: 0,
+        max: 1,
+        default: 0,
+        curve: 'linear',
+        step: 0,
+        unit: '%',
+      },
+      {
+        key: 'shape',
+        label: 'Shape',
+        min: 0,
+        max: 1,
+        default: 0,
+        curve: 'linear',
+        step: 0,
+        unit: '%',
+      },
     ],
     dests: [],
     refs: [],

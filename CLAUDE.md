@@ -67,7 +67,13 @@ src/dsp/      pure DSP (oscillators, envelopes, LFOs, filters, voices);
               formant.ts a vowel's three formants; slots.ts
               numbers the parts,
               sources and destinations; effects.ts the chorus, the
-              phaser, delay and reverb, the stereo tools (a Haas delay, a doubler
+              ensemble (a string machine's three taps on two
+              LFOs), the phaser, the tremolo (an auto-pan at Pan
+              1), delay and reverb (its tail swelling first, a
+              loop of allpasses before its lines, every line
+              swaying as it does, the loop thinning its lows lap
+              by lap, a resonant Tone on what blooms: Bloom), the
+              stereo tools (a Haas delay, a doubler
               of two paths, a width) and the mastering tools (an EQ,
               a compressor, a limiter), in stereo, in racks: a sound's
               inserts, the kit's, a bus's, the master's; eq.ts the

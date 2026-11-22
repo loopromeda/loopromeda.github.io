@@ -185,6 +185,24 @@ starting points of one input each.
 - **Phaser** (an effect): 4, 6 or 8 first-order allpasses around 700 Hz
   swept by an LFO (Rate, Depth), each side's sweep a quarter cycle from
   the other's, with Feedback. The string machine, the whoosh.
+- **Ensemble** (an effect; ashon, 2026-11-22: "루프로메다에 부족한
+  FX들이나 필터가 있다면 그런 부분들도 구현해서 넣어보면 좋겠네"): the
+  string machines' and the dimension chorus's. Both sides go into one
+  line, read at three taps around 6 ms, a third of a cycle apart on a
+  slow LFO (Rate, ±2 ms at full Depth) and a fast one ten times as fast
+  (±0.4 ms). The left hears the first tap and half the second, the right
+  the third and half the second, as loud as one, the wet dulled at 8 kHz
+  as a bucket brigade's filters dull it. It spreads a sound without a beat
+  of its own: the FM keys and strings of the 1980s. Its LFOs are read every
+  16 samples, the taps gliding between: four in a rack 0.012 ms a block.
+- **Tremolo** (an effect): both sides' level swayed by one LFO, Depth of
+  the way down at its foot, Shape rounding the sine towards a square.
+  Pan puts the right side up to half a cycle behind, so at 1 the sound
+  swings from side to side, as an electric piano's stereo tremolo does,
+  the two sides together whole. Rate in hertz, or synced (on for one
+  added, as the delay's and the LFO's), its top on the beat while the
+  song plays: one started or moved catches up over some 25 ms,
+  unclicked.
 - **The drive at twice the rate**: besides its first-order antialiasing
   (ADAA), a drive now runs at twice the sample rate, the sound brought up
   and back down by a halfband of two allpass paths (six sections, flat to

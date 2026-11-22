@@ -6,6 +6,7 @@ import {
   Delay,
   Doubler,
   EffectRack,
+  Ensemble,
   Equalizer,
   Haas,
   Limiter,
@@ -14,6 +15,7 @@ import {
   PHASER_STAGES,
   Phaser,
   Reverb,
+  Tremolo,
   WIDTH_MONO_OFF,
   Width,
   compression,
@@ -39,12 +41,14 @@ import {
   FX_COMPRESSOR,
   FX_DELAY,
   FX_DOUBLER,
+  FX_ENSEMBLE,
   FX_EQ,
   FX_HAAS,
   FX_LAST,
   FX_LIMITER,
   FX_PHASER,
   FX_REVERB,
+  FX_TREMOLO,
   FX_WIDTH,
 } from './slots'
 
@@ -69,6 +73,14 @@ function impulse(seconds: number): Stereo {
   const out = silence(seconds)
   out.left[0] = 1
   out.right[0] = 1
+  return out
+}
+
+/** seconds of level on both sides, a constant */
+function constant(seconds: number, level: number): Stereo {
+  const out = silence(seconds)
+  out.left.fill(level)
+  out.right.fill(level)
   return out
 }
 
@@ -1208,5 +1220,144 @@ describe('Phaser', () => {
     expect(rack.kindOf(0)).toBe(FX_PHASER)
     const out = run(rack, sine(0.5, 290))
     expect(rms(out.left, 12000, 24000)).toBeLessThan(0.02)
+  })
+})
+
+describe('Ensemble', () => {
+  it('passes the signal through at a mix of 0', () => {
+    const ensemble = new Ensemble(SAMPLE_RATE)
+    ensemble.set(0.6, 1, 0)
+    ensemble.reset()
+    const signal = sine(0.1, 440)
+    const before = Float32Array.from(signal.left)
+    run(ensemble, signal)
+    expect(signal.left).toEqual(before)
+    expect(signal.right).toEqual(before)
+  })
+
+  it('spreads a signal the same on both sides, as loud as it went in', () => {
+    const ensemble = new Ensemble(SAMPLE_RATE)
+    ensemble.set(0.6, 1, 1)
+    ensemble.reset()
+    const { left, right } = run(ensemble, sine(2, 440))
+    let apart = 0
+    for (let i = 4800; i < left.length; i++) {
+      apart = Math.max(apart, Math.abs(left[i]! - right[i]!))
+    }
+    expect(apart).toBeGreaterThan(0.05)
+    expect(rms(left, 4800, left.length)).toBeCloseTo(0.2 / Math.SQRT2, 1)
+    expect(rms(right, 4800, right.length)).toBeCloseTo(0.2 / Math.SQRT2, 1)
+  })
+
+  it('dulls its wet as a bucket brigade does', () => {
+    const at = (hertz: number) => {
+      const ensemble = new Ensemble(SAMPLE_RATE)
+      ensemble.set(0.6, 0, 1)
+      ensemble.reset()
+      return rms(run(ensemble, sine(0.5, hertz)).left, 4800, 24000)
+    }
+    expect(at(15000) / at(500)).toBeLessThan(0.6)
+  })
+})
+
+describe('Tremolo', () => {
+  it('sways the level by Depth, as far down as all of it', () => {
+    const tremolo = new Tremolo(SAMPLE_RATE, new Clock())
+    tremolo.set(5, 1, 0, 0)
+    tremolo.reset()
+    const { left, right } = run(tremolo, constant(1, 0.5))
+    expect(loudest(left)).toBeCloseTo(0.5, 3)
+    expect(Math.min(...left)).toBeLessThan(0.001)
+    expect(right).toEqual(left)
+    const half = new Tremolo(SAMPLE_RATE, new Clock())
+    half.set(5, 0.5, 0, 0)
+    half.reset()
+    const swayed = run(half, constant(1, 0.5)).left
+    expect(Math.min(...swayed)).toBeCloseTo(0.25, 3)
+  })
+
+  it('swings side to side at a Pan of 1, the two together whole', () => {
+    const tremolo = new Tremolo(SAMPLE_RATE, new Clock())
+    tremolo.set(3, 1, 1, 0)
+    tremolo.reset()
+    const { left, right } = run(tremolo, constant(1, 0.5))
+    for (let i = 0; i < left.length; i += 101) {
+      expect(left[i]! + right[i]!).toBeCloseTo(0.5, 5)
+    }
+    expect(loudest(left)).toBeCloseTo(0.5, 3)
+    expect(Math.min(...right)).toBeLessThan(0.001)
+  })
+
+  it('stands longer at its top and foot as Shape turns', () => {
+    const held = (shape: number) => {
+      const tremolo = new Tremolo(SAMPLE_RATE, new Clock())
+      tremolo.set(2, 1, 0, shape)
+      tremolo.reset()
+      const { left } = run(tremolo, constant(1, 1))
+      return left.filter((x) => x > 0.95 || x < 0.05).length / left.length
+    }
+    expect(held(1)).toBeGreaterThan(held(0) * 2)
+  })
+
+  it('synced, comes round on its note value, its top on the beat', () => {
+    const clock = new Clock()
+    clock.tempo = 120
+    clock.beats = 0
+    const tremolo = new Tremolo(SAMPLE_RATE, clock)
+    // A quarter at 120: twice a second, its own rate unheard
+    tremolo.set(9, 1, 0, 0, 1 / 4)
+    tremolo.reset()
+    const signal = constant(1, 1)
+    for (let at = 0; at < signal.left.length; at += BLOCK) {
+      clock.beats = (at / SAMPLE_RATE) * 2
+      tremolo.process(
+        signal.left.subarray(at, at + BLOCK),
+        signal.right.subarray(at, at + BLOCK),
+        BLOCK
+      )
+    }
+    expect(signal.left[0]).toBeCloseTo(1, 5)
+    // Its foot half way between the beats
+    expect(signal.left[12000]).toBeLessThan(0.001)
+    expect(signal.left[24000]).toBeCloseTo(1, 3)
+  })
+
+  it('catches up with the song as it starts, unclicked', () => {
+    const clock = new Clock()
+    const tremolo = new Tremolo(SAMPLE_RATE, clock)
+    tremolo.set(9, 1, 0, 0, 1 / 4)
+    tremolo.reset()
+    const signal = constant(1, 1)
+    for (let at = 0; at < signal.left.length; at += BLOCK) {
+      // Stopped a third of a second (a third of a cycle on), then playing
+      // from the top: the beat's foot comes up half way round
+      clock.beats = at < 16000 ? Number.NaN : ((at - 16000) / SAMPLE_RATE) * 2
+      tremolo.process(
+        signal.left.subarray(at, at + BLOCK),
+        signal.right.subarray(at, at + BLOCK),
+        BLOCK
+      )
+    }
+    let most = 0
+    for (let i = 1; i < signal.left.length; i++) {
+      most = Math.max(most, Math.abs(signal.left[i]! - signal.left[i - 1]!))
+    }
+    expect(most).toBeLessThan(0.01)
+    // On the beat a little after, its top there
+    expect(signal.left[16000 + 24000]).toBeCloseTo(1, 3)
+  })
+
+  it('plays on a rack, an ensemble beside it', () => {
+    const rack = new EffectRack(SAMPLE_RATE)
+    rack.count = 2
+    rack.setKind(0, FX_ENSEMBLE)
+    rack.setKind(1, FX_TREMOLO)
+    rack.setEnsemble(0, 0.6, 0.6, 0.5)
+    rack.setTremolo(1, 4, 1, 1, 0)
+    expect(rack.kindOf(0)).toBe(FX_ENSEMBLE)
+    expect(rack.kindOf(1)).toBe(FX_TREMOLO)
+    const out = run(rack, sine(1, 440))
+    expect(out.left.every(Number.isFinite)).toBe(true)
+    expect(rms(out.left, 0, out.left.length)).toBeGreaterThan(0.02)
   })
 })

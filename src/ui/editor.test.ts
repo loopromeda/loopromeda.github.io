@@ -342,6 +342,22 @@ describe('tiles', () => {
     )
   })
 
+  it('draws and writes an ensemble and a tremolo', () => {
+    const ensemble = addEffect(busy(), 'ensemble')
+    const id = ensemble.id as string
+    expect(glyphOf(ensemble.sound, id)).toBe(GLYPHS.ensemble)
+    // Its rate
+    expect(
+      effectLine({ kind: 'ensemble', values: effectValues('ensemble') })
+    ).toBe('0.6 Hz')
+    // A tremolo's note value, synced as it starts, or its rate
+    const tremolo = effectValues('tremolo')
+    expect(effectLine({ kind: 'tremolo', values: tremolo })).toBe('1/8')
+    expect(
+      effectLine({ kind: 'tremolo', values: { ...tremolo, sync: 0 } })
+    ).toBe('4.5 Hz')
+  })
+
   it('marks what a route moves', () => {
     expect(modulated(busy())).toEqual(new Set(['x2']))
   })

@@ -29,12 +29,14 @@ import {
   FX_COMPRESSOR,
   FX_DELAY,
   FX_DOUBLER,
+  FX_ENSEMBLE,
   FX_EQ,
   FX_HAAS,
   FX_LAST,
   FX_LIMITER,
   FX_PHASER,
   FX_REVERB,
+  FX_TREMOLO,
   FX_WIDTH,
   MAX_EFFECTS,
 } from './slots'
@@ -233,6 +235,270 @@ export class Chorus {
       if (phase >= 1) phase -= 1
       depth += depthStep
       mix += mixStep
+    }
+    this.#phase = phase
+  }
+}
+
+/**
+ * The ensemble's line: its taps around 6 ms, swept by a slow LFO up to
+ * 2 ms either way and a fast one, ten times as fast, up to 0.4 ms; the
+ * wet through a lowpass at 8 kHz, as a bucket brigade's filters dull it
+ */
+const ENSEMBLE_BASE = 0.006
+const ENSEMBLE_SLOW = 0.002
+const ENSEMBLE_FAST = 0.0004
+const ENSEMBLE_FAST_RATE = 10
+const ENSEMBLE_TONE = 8000
+/** Samples between the LFOs' readings, the taps gliding between them */
+const ENSEMBLE_STEP = 16
+/** sin(120°): a tap a third of a cycle on, from the first's sine and cosine */
+const THIRD = Math.sqrt(3) / 2
+
+/**
+ * An ensemble: the string machines' and the studio's dimension chorus,
+ * which the 1980s' FM keys and strings were heard through. Both sides
+ * summed into one line, read at three taps a third of a cycle apart on
+ * a slow LFO and a fast one; the left hears the first and half the
+ * second, the right the third and half the second, so the three sway
+ * apart and the sound spreads without a beat of its own. Rate the slow
+ * LFO's, in hertz; depth and mix 0..1.
+ */
+export class Ensemble {
+  readonly #sampleRate: number
+  readonly #line: Line
+  /** The slow and the fast LFO, in cycles, and the slow one's step */
+  #slow = 0
+  #fast = 0
+  #step = 0
+  /** Each tap's delay (samples), its glide a sample, and the samples left */
+  readonly #taps = new Float64Array(3)
+  readonly #glides = new Float64Array(3)
+  #until = 0
+  readonly #depth = new Ramp(0.6)
+  readonly #mix = new Ramp(0.5)
+  /** The lowpass on each side's wet, and its coefficient */
+  #lowL = 0
+  #lowR = 0
+  readonly #tone: number
+  #fresh = true
+
+  constructor(sampleRate: number) {
+    this.#sampleRate = sampleRate
+    const most = (ENSEMBLE_BASE + ENSEMBLE_SLOW + ENSEMBLE_FAST) * sampleRate
+    this.#line = new Line(most + 2)
+    this.#tone = 1 - Math.exp((-2 * Math.PI * ENSEMBLE_TONE) / sampleRate)
+    this.set(0.6, 0.6, 0.5)
+  }
+
+  set(rate: number, depth: number, mix: number): void {
+    this.#step = (rate > 0 ? rate : 0) / this.#sampleRate
+    this.#depth.goal = clamp01(depth)
+    this.#mix.goal = clamp01(mix)
+  }
+
+  reset(): void {
+    this.#line.clear()
+    this.#slow = 0
+    this.#fast = 0
+    this.#lowL = 0
+    this.#lowR = 0
+    this.#until = 0
+    this.#fresh = true
+  }
+
+  /**
+   * The taps' delays (samples) where the LFOs stand, at depth: each a
+   * third of a cycle on from the last, on both
+   */
+  #reach(depth: number, to: Float64Array): void {
+    const rate = this.#sampleRate
+    const a = ENSEMBLE_SLOW * rate * depth
+    const b = ENSEMBLE_FAST * rate * depth
+    const s = sinCycles(this.#slow)
+    const c = sinCycles(this.#slow + 0.25)
+    const f = sinCycles(this.#fast)
+    const g = sinCycles(this.#fast + 0.25)
+    const base = ENSEMBLE_BASE * rate
+    to[0] = base + a * s + b * f
+    to[1] = base + a * (THIRD * c - 0.5 * s) + b * (THIRD * g - 0.5 * f)
+    to[2] = base - a * (THIRD * c + 0.5 * s) - b * (THIRD * g + 0.5 * f)
+  }
+
+  process(left: Float32Array, right: Float32Array, length: number): void {
+    const taps = this.#taps
+    const glides = this.#glides
+    if (this.#fresh) {
+      this.#fresh = false
+      this.#depth.snap()
+      this.#mix.snap()
+      this.#reach(this.#depth.now, taps)
+      glides.fill(0)
+      this.#until = 0
+    }
+    let depth = this.#depth.now
+    const depthStep = this.#depth.step(length)
+    let mix = this.#mix.now
+    const mixStep = this.#mix.step(length)
+    const line = this.#line
+    const tone = this.#tone
+    const ahead = this.#step * ENSEMBLE_STEP
+    let until = this.#until
+    let first = taps[0] as number
+    let second = taps[1] as number
+    let third = taps[2] as number
+    let glide1 = glides[0] as number
+    let glide2 = glides[1] as number
+    let glide3 = glides[2] as number
+    let lowL = this.#lowL
+    let lowR = this.#lowR
+    for (let i = 0; i < length; i++) {
+      if (until === 0) {
+        // The LFOs a step on, and the taps' glides there
+        let slow = this.#slow + ahead
+        if (slow >= 1) slow -= 1
+        let fast = this.#fast + ahead * ENSEMBLE_FAST_RATE
+        fast -= fast | 0
+        this.#slow = slow
+        this.#fast = fast
+        this.#reach(depth + depthStep * ENSEMBLE_STEP, glides)
+        glide1 = ((glides[0] as number) - first) / ENSEMBLE_STEP
+        glide2 = ((glides[1] as number) - second) / ENSEMBLE_STEP
+        glide3 = ((glides[2] as number) - third) / ENSEMBLE_STEP
+        until = ENSEMBLE_STEP
+      }
+      until--
+      first += glide1
+      second += glide2
+      third += glide3
+      const inL = left[i] as number
+      const inR = right[i] as number
+      const tap1 = line.read(first)
+      const tap2 = line.read(second)
+      const tap3 = line.read(third)
+      line.write((inL + inR) * 0.5)
+      // Each side a tap and a half, as loud as one
+      lowL += ((tap1 + 0.5 * tap2) * (2 / 3) - lowL) * tone
+      lowR += ((tap3 + 0.5 * tap2) * (2 / 3) - lowR) * tone
+      const dry = dryLevel(mix)
+      const wet = wetLevel(mix)
+      left[i] = inL * dry + lowL * wet
+      right[i] = inR * dry + lowR * wet
+      depth += depthStep
+      mix += mixStep
+    }
+    this.#until = until
+    taps[0] = first
+    taps[1] = second
+    taps[2] = third
+    glides[0] = glide1
+    glides[1] = glide2
+    glides[2] = glide3
+    this.#lowL = flush(lowL)
+    this.#lowR = flush(lowR)
+  }
+}
+
+/** How far Shape at 1 rounds a tremolo's sine towards a square */
+const TREMOLO_SQUARE = 8
+/**
+ * How fast a synced tremolo catches up with the song when it jumps (Play,
+ * a place moved to): cycles a second over its own, half a cycle in 25 ms
+ */
+const TREMOLO_CATCH = 20
+
+/**
+ * A tremolo: both sides' level swayed by one LFO, at its foot Depth
+ * (0..1) of the way down, a sine or, as Shape (0..1) turns, nearer a
+ * square; Pan (0..1) puts the right side that much of half a cycle
+ * behind, so at 1 the sound swings from side to side, as an electric
+ * piano's stereo tremolo does. Rate in hertz, or synced, a note value
+ * at the song's tempo, its top on the beat while the song plays.
+ */
+export class Tremolo {
+  readonly #sampleRate: number
+  readonly #clock: Clock
+  #hertz = 4.5
+  /** A note value, in whole notes, while synced; 0, none */
+  #sync = 0
+  /** The LFO, in cycles: 0 its top */
+  #phase = 0
+  readonly #depth = new Ramp(0.5)
+  readonly #pan = new Ramp(0)
+  readonly #shape = new Ramp(0)
+  #fresh = true
+
+  constructor(sampleRate: number, clock: Clock) {
+    this.#sampleRate = sampleRate
+    this.#clock = clock
+  }
+
+  set(rate: number, depth: number, pan: number, shape: number, sync = 0): void {
+    this.#hertz = rate > 0 ? rate : 0
+    this.#sync = sync > 0 && Number.isFinite(sync) ? sync : 0
+    this.#depth.goal = clamp01(depth)
+    this.#pan.goal = clamp01(pan)
+    this.#shape.goal = clamp01(shape)
+  }
+
+  reset(): void {
+    this.#phase = 0
+    this.#fresh = true
+  }
+
+  process(left: Float32Array, right: Float32Array, length: number): void {
+    const fresh = this.#fresh
+    if (fresh) {
+      this.#fresh = false
+      this.#depth.snap()
+      this.#pan.snap()
+      this.#shape.snap()
+    }
+    const sync = this.#sync
+    let hertz = this.#hertz
+    let catchUp = 0
+    if (sync > 0) {
+      const clock = this.#clock
+      hertz = clock.hertz(sync)
+      const beats = clock.beats
+      if (Number.isFinite(beats)) {
+        const cycles = beats / (sync * 4)
+        const place = cycles - Math.floor(cycles)
+        if (fresh) {
+          this.#phase = place
+        } else {
+          // How far it stands from the song's place, the shorter way
+          // round: a drift taken up at once, a jump caught up unclicked
+          let by = place - this.#phase
+          by -= Math.round(by)
+          const most = (TREMOLO_CATCH * length) / this.#sampleRate
+          catchUp = by > most ? most : by < -most ? -most : by
+        }
+      }
+    }
+    const step = hertz / this.#sampleRate + catchUp / length
+    let depth = this.#depth.now
+    const depthStep = this.#depth.step(length)
+    let pan = this.#pan.now
+    const panStep = this.#pan.step(length)
+    let shape = this.#shape.now
+    const shapeStep = this.#shape.step(length)
+    let phase = this.#phase
+    for (let i = 0; i < length; i++) {
+      const k = shape * TREMOLO_SQUARE
+      // Cosines, their tops at the cycle's start, rounded to a square
+      const l = sinCycles(phase + 0.25)
+      const r = sinCycles(phase + 0.25 - 0.5 * pan)
+      const waveL = (l * (1 + k)) / (1 + k * (l < 0 ? -l : l))
+      const waveR = (r * (1 + k)) / (1 + k * (r < 0 ? -r : r))
+      left[i] = (left[i] as number) * (1 - 0.5 * depth * (1 - waveL))
+      right[i] = (right[i] as number) * (1 - 0.5 * depth * (1 - waveR))
+      phase += step
+      if (phase >= 1) phase -= 1
+      else if (phase < 0) phase += 1
+      depth += depthStep
+      pan += panStep
+      shape += shapeStep
     }
     this.#phase = phase
   }
@@ -1908,6 +2174,8 @@ export class EffectRack {
   readonly #doubler: (Doubler | null)[] = []
   readonly #width: (Width | null)[] = []
   readonly #phaser: (Phaser | null)[] = []
+  readonly #ensemble: (Ensemble | null)[] = []
+  readonly #tremolo: (Tremolo | null)[] = []
   readonly #slots: number
   readonly #kind: Int8Array
   #count = 0
@@ -1935,6 +2203,8 @@ export class EffectRack {
       this.#doubler.push(null)
       this.#width.push(null)
       this.#phaser.push(null)
+      this.#ensemble.push(null)
+      this.#tremolo.push(null)
     }
     this.#restAfter = Math.round(REST_AFTER * sampleRate)
     this.#quiet = this.#restAfter
@@ -1986,6 +2256,12 @@ export class EffectRack {
         return
       case FX_PHASER:
         made(this.#phaser, k, () => new Phaser(rate))
+        return
+      case FX_ENSEMBLE:
+        made(this.#ensemble, k, () => new Ensemble(rate))
+        return
+      case FX_TREMOLO:
+        made(this.#tremolo, k, () => new Tremolo(rate, this.#clock))
         return
       default:
         made(this.#width, k, () => new Width(rate))
@@ -2085,6 +2361,22 @@ export class EffectRack {
     this.#phaser[k]?.set(rate, depth, feedback, stages, mix)
   }
 
+  setEnsemble(k: number, rate: number, depth: number, mix: number): void {
+    this.#ensemble[k]?.set(rate, depth, mix)
+  }
+
+  /** sync: a note value in whole notes, for the tempo to time it; 0, none */
+  setTremolo(
+    k: number,
+    rate: number,
+    depth: number,
+    pan: number,
+    shape: number,
+    sync = 0
+  ): void {
+    this.#tremolo[k]?.set(rate, depth, pan, shape, sync)
+  }
+
   /**
    * The deepest slot k's compressor or limiter turned things down since
    * last asked, dB (0 or less); 0 for any other kind, and while it rests
@@ -2109,6 +2401,8 @@ export class EffectRack {
       this.#doubler[k]?.reset()
       this.#width[k]?.reset()
       this.#phaser[k]?.reset()
+      this.#ensemble[k]?.reset()
+      this.#tremolo[k]?.reset()
     }
     this.#quiet = this.#restAfter
   }
@@ -2162,6 +2456,12 @@ export class EffectRack {
           break
         case FX_PHASER:
           this.#phaser[k]?.process(left, right, length)
+          break
+        case FX_ENSEMBLE:
+          this.#ensemble[k]?.process(left, right, length)
+          break
+        case FX_TREMOLO:
+          this.#tremolo[k]?.process(left, right, length)
       }
     }
     let output = 0

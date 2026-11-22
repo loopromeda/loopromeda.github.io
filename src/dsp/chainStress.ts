@@ -31,10 +31,13 @@ import {
   FX_COMPRESSOR,
   FX_DELAY,
   FX_DOUBLER,
+  FX_ENSEMBLE,
   FX_EQ,
   FX_HAAS,
   FX_LIMITER,
+  FX_PHASER,
   FX_REVERB,
+  FX_TREMOLO,
   FX_WIDTH,
   MAX_CHAINS,
   MAX_BUSES,
@@ -214,6 +217,10 @@ function fill(rack: EffectRack, kinds = HEAVIEST): void {
     else if (kind === FX_HAAS) rack.setHaas(k, 0.015, k % 2, 0.5)
     else if (kind === FX_DOUBLER) rack.setDoubler(k, 12, 0.012, 1, 0.5)
     else if (kind === FX_WIDTH) rack.setWidth(k, 1.4, 120)
+    // The modulation's: every stage, every tap, both sides swaying apart
+    else if (kind === FX_PHASER) rack.setPhaser(k, 0.5, 1, 0.7, 8, 0.5)
+    else if (kind === FX_ENSEMBLE) rack.setEnsemble(k, 0.6, 1, 0.5)
+    else if (kind === FX_TREMOLO) rack.setTremolo(k, 4.5, 1, 1, 1)
     // Blooming, its loop and its Tone working too
     else rack.setReverb(k, 0.8, 4, 0.4, 0.5, 1, 0.5, 0.5)
   }

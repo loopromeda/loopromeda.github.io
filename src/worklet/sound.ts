@@ -27,6 +27,8 @@ import {
   FX_DOUBLER,
   FX_WIDTH,
   FX_PHASER,
+  FX_ENSEMBLE,
+  FX_TREMOLO,
   FX_REVERB,
   INPUT_CHIP,
   INPUT_DETUNE,
@@ -132,6 +134,8 @@ const EFFECT_KIND: Record<EffectKind, number> = {
   doubler: FX_DOUBLER,
   width: FX_WIDTH,
   phaser: FX_PHASER,
+  ensemble: FX_ENSEMBLE,
+  tremolo: FX_TREMOLO,
 }
 const NOTE_SOURCE: Record<NoteSource, number> = {
   velocity: SOURCE_VELOCITY,
@@ -651,6 +655,19 @@ function setEffect(
         value('feedback'),
         PHASER_STAGES[Math.round(value('stages'))] ?? PHASER_STAGES[1],
         value('mix')
+      )
+      return
+    case 'ensemble':
+      rack.setEnsemble(k, value('rate'), value('depth'), value('mix'))
+      return
+    case 'tremolo':
+      rack.setTremolo(
+        k,
+        value('rate'),
+        value('depth'),
+        value('pan'),
+        value('shape'),
+        value('sync') === 1 ? noteWholes(LFO_NOTES, value('beat')) : 0
       )
   }
 }

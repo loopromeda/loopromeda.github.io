@@ -398,6 +398,7 @@ const MODULATOR_HINTS: Record<ModulatorKind, string> = {
 /** Each under its name on a choice, in its 88 px: 16 letters or so */
 const EFFECT_HINTS: Record<EffectKind, string> = {
   chorus: 'Wide and moving',
+  ensemble: 'Lush, three taps',
   delay: 'Echoes, in time',
   reverb: 'A room around it',
   eq: 'Six points',
@@ -407,6 +408,7 @@ const EFFECT_HINTS: Record<EffectKind, string> = {
   doubler: 'Detuned apart',
   width: 'Narrow to wide',
   phaser: 'Sweeping notches',
+  tremolo: 'Pulses or pans',
 }
 
 const KIND_GLYPHS = {

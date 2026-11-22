@@ -51,8 +51,10 @@ export const FX_HAAS = 6
 export const FX_DOUBLER = 7
 export const FX_WIDTH = 8
 export const FX_PHASER = 9
+export const FX_ENSEMBLE = 10
+export const FX_TREMOLO = 11
 /** The highest kind's number */
-export const FX_LAST = FX_PHASER
+export const FX_LAST = FX_TREMOLO
 
 /** Modulator kinds */
 export const MOD_ENV = 0
