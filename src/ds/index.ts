@@ -95,6 +95,7 @@ export { Hands, type Player } from '../ui/hands'
 export { kitGrid, padGrid, padNote, type PadGrid } from '../viz/pads'
 export {
   MIDDLE_C,
+  computerStart,
   isBlack,
   keysFit,
   noteName,

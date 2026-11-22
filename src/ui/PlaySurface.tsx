@@ -34,8 +34,16 @@ import {
   whiteStep,
   whitesAbove,
 } from '../viz/keyboard'
-import { kitGrid, padGrid, padNote, type PadGrid } from '../viz/pads'
+import {
+  PAD_CODES,
+  kitGrid,
+  padGrid,
+  padNote,
+  padOfCode,
+  type PadGrid,
+} from '../viz/pads'
 import { xyOctaves } from '../viz/xy'
+import { computerKeyPressed, useComputerKeys } from './computerKeys'
 import { COMPUTER_ID, Hands } from './hands'
 import { BarIconButton } from './IconButton'
 import { Keys } from './Keys'
@@ -112,29 +120,6 @@ const XY_CODES = [
   'KeyL',
   'KeyP',
   'Semicolon',
-]
-/** For the pads: the home row plays the first ten, the row above the next */
-const PAD_CODES = [
-  'KeyA',
-  'KeyS',
-  'KeyD',
-  'KeyF',
-  'KeyG',
-  'KeyH',
-  'KeyJ',
-  'KeyK',
-  'KeyL',
-  'Semicolon',
-  'KeyQ',
-  'KeyW',
-  'KeyE',
-  'KeyR',
-  'KeyT',
-  'KeyY',
-  'KeyU',
-  'KeyI',
-  'KeyO',
-  'KeyP',
 ]
 /**
  * Each computer key's engine id, the same on keys and pads: a key let go
@@ -321,6 +306,8 @@ export function PlaySurface({
   const range = `${noteName(lowestNote)} – ${noteName(highestNote)}`
   // Where the computer keys' home row starts on the keys: their middle
   const keysStart = computerStart(lowestNote, fit.octaves)
+  // Their letters on the keys and pads, where there is a keyboard
+  const keyboard = useComputerKeys()
   // The arrows' names: the keys move 4 white keys, the rest an octave
   const steps = kind === 'keys' ? `${STEP.keys} white keys` : 'Octave'
   // The navigator, for keys that do not reach C−1 to G9 at once
@@ -387,17 +374,14 @@ export function PlaySurface({
   // its arrows do; on the kit, the pads' keys strike and pick them
   useEffect(() => {
     if (kit) {
-      const padOf = (code: string) => {
-        const pad = PAD_CODES.indexOf(code)
-        return pad >= 0 && pad < kit.length ? pad : undefined
-      }
       const down = (event: KeyboardEvent) => {
         if (event.repeat || event.metaKey || event.ctrlKey || event.altKey)
           return
         if (typing(event.target)) return
-        const pad = padOf(event.code)
+        const pad = padOfCode(event.code, kit.length)
         if (pad === undefined) return
         event.preventDefault()
+        computerKeyPressed()
         kitHands.play(computerId(event.code), pad)
         pick(pad)
       }
@@ -416,7 +400,10 @@ export function PlaySurface({
       }
     }
     const noteOf = (code: string): number | undefined => {
-      if (pads) return notes[PAD_CODES.indexOf(code)]
+      if (pads) {
+        const pad = padOfCode(code, notes.length)
+        return pad === undefined ? undefined : notes[pad]
+      }
       if (!xy) return computerKeyNote(code, keysStart)
       const semitones = XY_CODES.indexOf(code)
       return semitones < 0 ? undefined : middleC(lowestNote, fit.xy) + semitones
@@ -425,12 +412,14 @@ export function PlaySurface({
       if (event.repeat || event.metaKey || event.ctrlKey || event.altKey) return
       if (typing(event.target)) return
       if (event.code === 'KeyZ' || event.code === 'KeyX') {
+        computerKeyPressed()
         shift(event.code === 'KeyZ' ? -1 : 1)
         return
       }
       const note = noteOf(event.code)
       if (note === undefined) return
       event.preventDefault()
+      computerKeyPressed()
       hands.play(computerId(event.code), note)
     }
     const up = (event: KeyboardEvent) => {
@@ -555,6 +544,7 @@ export function PlaySurface({
               picked={picked}
               onPick={pick}
               fullVelocity={fullVelocity}
+              computerKeys={keyboard}
               label="The kit's pads: a tap plays a pad and picks it, its sound in the editor. Computer keys A to ; and Q to Y play them"
             />
           ) : pads ? (
@@ -564,6 +554,7 @@ export function PlaySurface({
               notes={notes}
               root={root}
               fullVelocity={fullVelocity}
+              computerKeys={keyboard}
               label={`Pads ${range} in ${pitchName(root)} ${scaleName(scale)}. Computer keys A to ; and Q to P play them; Z and X shift the octave`}
             />
           ) : xy ? (
@@ -580,6 +571,7 @@ export function PlaySurface({
               lowest={lowestNote}
               octaves={fit.octaves}
               fullVelocity={fullVelocity}
+              computerKeys={keyboard ? keysStart : undefined}
               label={`Keys ${range}. Computer keys A to ; play the white keys from ${noteName(keysStart)}, W to P the black keys between them; Z and X move the keys ${STEP.keys} white keys`}
             />
           )}

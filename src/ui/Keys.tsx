@@ -1,6 +1,7 @@
 import { useEffect, useRef, type PointerEvent } from 'react'
 import {
   BLACK_LENGTH,
+  computerLetters,
   keyAt,
   keyboardLayout,
   noteName,
@@ -8,6 +9,17 @@ import {
   velocityAt,
 } from '../viz/keyboard'
 import type { Hands } from './hands'
+import { KeyCap } from './KeyCap'
+
+/**
+ * Where a white key's letter stands: over the C's name at its front, a
+ * fifth of the way up, between 26 and 32 px, so on short keys (96 px, a
+ * phone held upright) it stays under the black keys and clear of the name
+ */
+const WHITE_PLACE =
+  'bottom-[clamp(1.625rem,20%,2rem)] left-1/2 -translate-x-1/2'
+/** A black key's: at its foot */
+const BLACK_PLACE = 'bottom-1.5 left-1/2 -translate-x-1/2'
 
 /**
  * Piano keys, octaves octaves from the white key lowest to the same one
@@ -24,6 +36,7 @@ export function Keys({
   octaves,
   label,
   fullVelocity = false,
+  computerKeys,
 }: {
   hands: Hands
   /** The lowest note, a white key's */
@@ -31,9 +44,17 @@ export function Keys({
   octaves: number
   label: string
   fullVelocity?: boolean
+  /**
+   * The white key the computer keys' home row starts on (computerStart),
+   * to letter the keys they play; none, no letters
+   */
+  computerKeys?: number
 }) {
   /** The keys' box, measured as each touch starts */
   const boxRef = useRef<DOMRect | null>(null)
+
+  const letters =
+    computerKeys === undefined ? undefined : computerLetters(computerKeys)
 
   // Fingers still down when the keys go (pads chosen instead) let go
   useEffect(() => () => hands.stopTouches(), [hands])
@@ -92,11 +113,24 @@ export function Keys({
           }}
           className={
             key.black
-              ? 'absolute top-0 rounded-b-md bg-(--key-black) shadow-[inset_0_0_0_1px_color-mix(in_oklab,var(--over)_8%,transparent)] data-pressed:bg-(--key-black-held) data-pressed:shadow-[inset_0_3px_0_var(--key-black-edge)]'
-              : 'absolute top-0 flex items-end justify-center rounded-b-lg bg-(--key) pb-2.5 font-mono text-[11px] text-(--ink-400) shadow-[inset_0_-3px_0_color-mix(in_oklab,var(--under)_25%,transparent)] data-pressed:bg-(--key-held) data-pressed:text-(--ink-0) data-pressed:shadow-[inset_0_3px_0_var(--accent)]'
+              ? 'group absolute top-0 rounded-b-md bg-(--key-black) shadow-[inset_0_0_0_1px_color-mix(in_oklab,var(--over)_8%,transparent)] data-pressed:bg-(--key-black-held) data-pressed:shadow-[inset_0_3px_0_var(--key-black-edge)]'
+              : 'group absolute top-0 flex items-end justify-center rounded-b-lg bg-(--key) pb-2.5 font-mono text-[11px] text-(--ink-400) shadow-[inset_0_-3px_0_color-mix(in_oklab,var(--under)_25%,transparent)] data-pressed:bg-(--key-held) data-pressed:text-(--ink-0) data-pressed:shadow-[inset_0_3px_0_var(--accent)]'
           }
         >
           {!key.black && key.note % 12 === 0 ? noteName(key.note) : null}
+          {letters?.has(key.note) ? (
+            <KeyCap
+              letter={letters.get(key.note) as string}
+              tone={
+                key.black
+                  ? 'black'
+                  : key.note === computerKeys
+                    ? 'first'
+                    : 'key'
+              }
+              className={key.black ? BLACK_PLACE : WHITE_PLACE}
+            />
+          ) : null}
         </div>
       ))}
     </div>

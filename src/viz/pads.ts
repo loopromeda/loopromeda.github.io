@@ -5,7 +5,7 @@
  * DOM.
  */
 
-import { MIN_VELOCITY } from './keyboard'
+import { MIN_VELOCITY, computerKeyLetter } from './keyboard'
 
 /** The smallest side a pad is drawn at, and the gap between pads (CSS px) */
 export const PAD_SIZE = 64
@@ -113,6 +113,52 @@ export function padAt(
     index: (grid.rows - 1 - rowFromTop) * grid.columns + column,
     within: clamp01(down - rowFromTop),
   }
+}
+
+/**
+ * The computer keys (KeyboardEvent.code) that play the pads, pad i the
+ * i-th: the home row, A to ;, the first ten, the row above, Q to P, the
+ * next; the kit's sixteen, A to ; and Q to Y. A pad past them has none.
+ */
+export const PAD_CODES = [
+  'KeyA',
+  'KeyS',
+  'KeyD',
+  'KeyF',
+  'KeyG',
+  'KeyH',
+  'KeyJ',
+  'KeyK',
+  'KeyL',
+  'Semicolon',
+  'KeyQ',
+  'KeyW',
+  'KeyE',
+  'KeyR',
+  'KeyT',
+  'KeyY',
+  'KeyU',
+  'KeyI',
+  'KeyO',
+  'KeyP',
+] as const
+
+/**
+ * The pad the computer key code plays, of pads pads in all; undefined for
+ * a key that plays none of them
+ */
+export function padOfCode(code: string, pads: number): number | undefined {
+  const pad = (PAD_CODES as readonly string[]).indexOf(code)
+  return pad >= 0 && pad < pads ? pad : undefined
+}
+
+/**
+ * The letter of the computer key that plays pad index (padOfCode): A on
+ * the first; undefined for a pad past the keys
+ */
+export function padLetter(index: number): string | undefined {
+  const code = PAD_CODES[index]
+  return code === undefined ? undefined : computerKeyLetter(code)
 }
 
 /**

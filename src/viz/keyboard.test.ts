@@ -11,7 +11,9 @@ import {
   REACH_WHITES,
   UPPER_CODES,
   cNote,
+  computerKeyLetter,
   computerKeyNote,
+  computerLetters,
   computerStart,
   isBlack,
   keyAt,
@@ -298,6 +300,68 @@ describe('the computer keys', () => {
     for (const code of ['KeyQ', 'KeyZ', 'KeyX', 'Quote', 'Space']) {
       expect(computerKeyNote(code, 60)).toBeUndefined()
     }
+  })
+})
+
+describe('the computer keys’ letters', () => {
+  const CODES = [...HOME_CODES, ...UPPER_CODES]
+  const codeOf = (letter: string) =>
+    CODES.find((code) => computerKeyLetter(code) === letter)
+
+  it('name each key as it is printed', () => {
+    expect(computerKeyLetter('KeyA')).toBe('A')
+    expect(computerKeyLetter('KeyP')).toBe('P')
+    expect(computerKeyLetter('Semicolon')).toBe(';')
+    expect(new Set(CODES.map(computerKeyLetter)).size).toBe(CODES.length)
+  })
+
+  it('stand on the notes the keys play', () => {
+    expect(Object.fromEntries(computerLetters(60))).toEqual({
+      60: 'A',
+      61: 'W',
+      62: 'S',
+      63: 'E',
+      64: 'D',
+      65: 'F',
+      66: 'T',
+      67: 'G',
+      68: 'Y',
+      69: 'H',
+      70: 'U',
+      71: 'J',
+      72: 'K',
+      73: 'O',
+      74: 'L',
+      75: 'P',
+      76: ';',
+    })
+    // From D4, A on D4: E (over E and F) has no key to stand on
+    const fromD = computerLetters(62)
+    expect(fromD.get(62)).toBe('A')
+    expect(fromD.get(66)).toBe('R') // F#4
+    expect([...fromD.values()]).not.toContain('E')
+  })
+
+  it('agree with what plays, from every white key', () => {
+    for (let start = 0; start <= HIGHEST_NOTE; start++) {
+      if (isBlack(start)) continue
+      const letters = computerLetters(start)
+      expect(letters.get(start)).toBe('A')
+      for (const [note, letter] of letters) {
+        expect(computerKeyNote(codeOf(letter) as string, start)).toBe(note)
+      }
+      const playing = CODES.filter(
+        (code) => computerKeyNote(code, start) !== undefined
+      )
+      expect(letters.size).toBe(playing.length)
+    }
+  })
+
+  it('stop at G9', () => {
+    const top = computerLetters(whiteStep(HIGHEST_NOTE, -7)) // from G8
+    expect(top.get(HIGHEST_NOTE)).toBe('K')
+    expect([...top.keys()].every((note) => note <= HIGHEST_NOTE)).toBe(true)
+    expect([...top.values()]).not.toContain(';')
   })
 })
 

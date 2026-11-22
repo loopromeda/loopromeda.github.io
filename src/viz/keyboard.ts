@@ -229,6 +229,26 @@ export function computerKeyNote(
   return note !== undefined && note <= HIGHEST_NOTE ? note : undefined
 }
 
+/** The letter on the computer key code: KeyA's A, Semicolon's ; */
+export function computerKeyLetter(code: string): string {
+  return code === 'Semicolon' ? ';' : code.replace(/^Key/, '')
+}
+
+/**
+ * The computer keys' letters on the notes they play, their home row
+ * starting on the white key start (computerStart): read from
+ * computerKeyNote, so what is drawn is what plays. A key that plays none
+ * there (R or I with no black key, a note past G9) has no letter.
+ */
+export function computerLetters(start: number): ReadonlyMap<number, string> {
+  const letters = new Map<number, string>()
+  for (const code of [...HOME_CODES, ...UPPER_CODES]) {
+    const note = computerKeyNote(code, start)
+    if (note !== undefined) letters.set(note, computerKeyLetter(code))
+  }
+  return letters
+}
+
 /**
  * Every key from the white key lowest, octaves octaves up, to the same
  * white key above: white keys first, then black (the order to draw them in)

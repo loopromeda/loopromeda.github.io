@@ -1,13 +1,16 @@
 import { describe, expect, it } from 'vitest'
-import { MIN_VELOCITY } from './keyboard'
+import { MIN_VELOCITY, computerKeyLetter } from './keyboard'
 import {
   MAX_COLUMNS,
   MAX_PADS,
   MAX_ROWS,
+  PAD_CODES,
   kitGrid,
   padAt,
   padGrid,
+  padLetter,
   padNote,
+  padOfCode,
   padOrder,
   padSlide,
   padVelocity,
@@ -153,5 +156,57 @@ describe('padSlide', () => {
   it('never goes past the end', () => {
     expect(padSlide(0.5, 0, 4)).toBe(1)
     expect(padSlide(0.5, 1, 4)).toBe(-1)
+  })
+})
+
+describe('the computer keys on the pads', () => {
+  const codeOf = (letter: string) =>
+    PAD_CODES.find((code) => computerKeyLetter(code) === letter) as string
+
+  it('play the pads in order, the home row first, then the row above', () => {
+    expect(
+      Array.from({ length: PAD_CODES.length }, (_, pad) => padLetter(pad))
+    ).toEqual([
+      'A',
+      'S',
+      'D',
+      'F',
+      'G',
+      'H',
+      'J',
+      'K',
+      'L',
+      ';',
+      'Q',
+      'W',
+      'E',
+      'R',
+      'T',
+      'Y',
+      'U',
+      'I',
+      'O',
+      'P',
+    ])
+  })
+
+  it('letter each pad with the key that plays it', () => {
+    for (const pads of [1, 4, 8, MAX_PADS, 16, 20]) {
+      for (let pad = 0; pad < pads; pad++) {
+        expect(padOfCode(codeOf(padLetter(pad) as string), pads)).toBe(pad)
+      }
+    }
+  })
+
+  it('leave the pads past the keys, and the keys past the pads, alone', () => {
+    expect(padLetter(PAD_CODES.length)).toBeUndefined()
+    expect(padLetter(-1)).toBeUndefined()
+    // The kit's sixteen: U, I, O and P play none
+    expect(padOfCode('KeyY', 16)).toBe(15)
+    expect(padOfCode('KeyU', 16)).toBeUndefined()
+    expect(padOfCode('KeyP', 20)).toBe(19)
+    for (const code of ['KeyZ', 'KeyX', 'KeyB', 'Space', 'Quote']) {
+      expect(padOfCode(code, 20)).toBeUndefined()
+    }
   })
 })

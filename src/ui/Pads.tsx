@@ -2,25 +2,32 @@ import { useEffect, useRef, type PointerEvent } from 'react'
 import { noteName, pitchName } from '../viz/keyboard'
 import {
   padAt,
+  padLetter,
   padOrder,
   padSlide,
   padVelocity,
   type PadGrid,
 } from '../viz/pads'
 import type { Hands } from './hands'
+import { KeyCap } from './KeyCap'
 
 const PAD =
-  'flex items-end rounded-lg p-2 font-mono text-[11px] shadow-[inset_0_-3px_0_color-mix(in_oklab,var(--under)_25%,transparent)] data-pressed:bg-(--key-held) data-pressed:text-(--ink-0) data-pressed:shadow-[inset_0_3px_0_var(--accent)]'
+  'group relative flex items-end rounded-lg p-2 font-mono text-[11px] shadow-[inset_0_-3px_0_color-mix(in_oklab,var(--under)_25%,transparent)] data-pressed:bg-(--key-held) data-pressed:text-(--ink-0) data-pressed:shadow-[inset_0_3px_0_var(--accent)]'
 /** The root's pads stand out, as the key's home */
 const ROOT_PAD = `${PAD} bg-(--key-root) text-(--accent)`
 const OTHER_PAD = `${PAD} bg-(--key) text-(--ink-500)`
+
+/** A pad's letter: at its top left, clear of its note at its foot */
+const PAD_LETTER = 'top-1.5 left-1.5'
 
 /**
  * A grid of pads, notes[i] on pad i: the lowest at the bottom left, up
  * along each row, then on to the row above. A pad plays louder pressed
  * nearer its bottom edge (every pad at full velocity, given fullVelocity).
  * A finger keeps the pad it pressed, so a pad is never played by a finger
- * that drifts: moving it up or down sends Slide.
+ * that drifts: moving it up or down sends Slide. Given computerKeys, each
+ * pad a computer key plays shows its letter at its top left (padLetter),
+ * the first's, A, in the accent.
  *
  * @category Play
  */
@@ -31,6 +38,7 @@ export function Pads({
   root,
   label,
   fullVelocity = false,
+  computerKeys = false,
 }: {
   hands: Hands
   grid: PadGrid
@@ -39,6 +47,8 @@ export function Pads({
   root: number
   label: string
   fullVelocity?: boolean
+  /** Letter the pads with the computer keys that play them */
+  computerKeys?: boolean
 }) {
   /** The grid's box, measured as each touch starts */
   const boxRef = useRef<DOMRect | null>(null)
@@ -96,6 +106,7 @@ export function Pads({
       {padOrder(grid).map((index) => {
         const note = notes[index] ?? 0
         const home = (((note - root) % 12) + 12) % 12 === 0
+        const letter = computerKeys ? padLetter(index) : undefined
         return (
           <div
             key={index}
@@ -106,6 +117,13 @@ export function Pads({
             className={home ? ROOT_PAD : OTHER_PAD}
           >
             {home ? noteName(note) : pitchName(note)}
+            {letter && (
+              <KeyCap
+                letter={letter}
+                tone={index === 0 ? 'first' : 'key'}
+                className={PAD_LETTER}
+              />
+            )}
           </div>
         )
       })}
