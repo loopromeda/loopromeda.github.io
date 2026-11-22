@@ -282,6 +282,32 @@ F#5, D#6 and A6, where rate scaling 3 steps, as the firmware quantizes
 it. And velocity moves its overtones up and down, not evenly, as an FM
 index does.
 
+The voices are written as the ROM's sheets give them
+(`src/state/factory.ts`, where the `dx7()` helper reads a voice written
+by the DX7's names). Each is dressed as it was heard on its records and
+stages (`dxSound`), and trimmed to its role's loudness by its sends; the
+voice's data is left as it was. They ran dry and in mono at first,
+beside presets with a chorus, a tremolo and a room on them.
+
+| Preset           | Voice     | Alg | Fdbk | Category | Dressed with                           | LUFS  |
+| ---------------- | --------- | --- | ---- | -------- | -------------------------------------- | ----- |
+| FM E-Piano       | E.PIANO 1 | 5   | 6    | Keys     | Ensemble, Tremolo (Pan 1), keys, room  | −23.0 |
+| FM Brass         | BRASS 1   | 22  | 7    | Brass    | Ensemble, spread, room                 | −21.0 |
+| FM Electric Bass | BASS 1    | 16  | 7    | Bass     | a light chorus, its lows in the middle | −22.1 |
+| FM Tubular Bells | TUB BELLS | 5   | 7    | Bell     | keys, a large room                     | −22.0 |
+| FM Marimba       | MARIMBA   | 7   | 0    | Bell     | keys, room                             | −22.0 |
+| FM Strings       | STRINGS 1 | 2   | 7    | Strings  | a deep Ensemble, spread, room          | −23.9 |
+| FM Flute         | FLUTE 1   | 16  | 5    | Lead     | delay, room                            | −17.0 |
+| FM Clav          | CLAV 1    | 3   | 5    | Keys     | dry, keys                              | −24.9 |
+
+Here "keys" means its notes laid out low to high, left to right
+(keyPan), and "room" means its send to the reverb. Played as from the
+DX7's keys, the Electric Bass, the Strings and the Clav sit 1.9 to 2.9
+dB under their targets, their sends at full (a trim only turns a sound
+down). A phaser on the Clav took 2.3 dB
+off it, more than its send could give back, so it plays dry, as funk's
+clavinets did.
+
 ## The library
 
 Asked for by ashon, 2026-11-17, through Main: "사운드 쪽으로 넘겨서
@@ -421,15 +447,15 @@ each category's in the order written.
 | Category | What it holds                                                                                | Presets |
 | -------- | -------------------------------------------------------------------------------------------- | ------- |
 | Basic    | the starting points: Init, and one input each (a sine, a saw, a square, a super, an FM pair) | 6       |
-| Bass     | a line under 200 Hz, its lows in the middle                                                  | 20      |
-| Lead     | one line over a track, most of them mono or legato                                           | 20      |
+| Bass     | a line under 200 Hz, its lows in the middle                                                  | 21      |
+| Lead     | one line over a track, most of them mono or legato                                           | 21      |
 | Pad      | chords held, slow to come and go                                                             | 12      |
-| Keys     | played as a keyboard is: pianos, organs, a harpsichord, an accordion                         | 10      |
+| Keys     | played as a keyboard is: pianos, organs, a harpsichord, an accordion                         | 12      |
 | Pluck    | plucked and let ring: strings, a synth's plucks                                              | 10      |
-| Bell     | struck and chimed: FM bells, mallets, a music box, a steel drum                              | 10      |
+| Bell     | struck and chimed: FM bells, mallets, a music box, a steel drum                              | 12      |
 | Chord    | a chord from one key: the stabs                                                              | 8       |
-| Strings  | bowed: a section, a machine, a swell, a tremolo, pizzicato                                   | 7       |
-| Brass    | blown: a section, a horn, a trumpet                                                          | 5       |
+| Strings  | bowed: a section, a machine, a swell, a tremolo, pizzicato                                   | 8       |
+| Brass    | blown: a section, a horn, a trumpet                                                          | 6       |
 | Vocal    | voices: choirs, a chop                                                                       | 5       |
 | Atmos    | the beds and textures under a track: drones, wind, the sea                                   | 5       |
 | Drums    | the kit's pads                                                                               | 21      |
@@ -549,7 +575,7 @@ never a product's or a player's.
 | Synth strings       | pop, film, trance        | Strings, Poly Strings, String Swell            | <https://www.soundonsound.com/techniques/synthesizing-strings-string-machines>           |
 | Choir               | ambient, trance, film    | Formant Choir, Choir Pad, Aah Choir, Ooh Choir | <https://csound.com/docs/manual/MiscFormants.html>                                       |
 | Tine electric piano | neo-soul, lo-fi, house   | E-Piano                                        | <https://chicagoelectricpiano.com/?p=198>                                                |
-| FM electric piano   | 80s ballad, city pop     | (E-Piano, Poly Keys, near)                     | <https://www.attackmagazine.com/technique/tutorials/fm-electric-piano/>                  |
+| FM electric piano   | 80s ballad, city pop     | FM E-Piano                                     | <https://www.attackmagazine.com/technique/tutorials/fm-electric-piano/>                  |
 | Drawbar organ       | gospel, rock, house      | Organ                                          | <https://www.soundonsound.com/techniques/synthesizing-tonewheel-organs-part-2>           |
 
 **Leads and basses**

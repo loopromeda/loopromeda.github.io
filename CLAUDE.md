@@ -171,7 +171,8 @@ src/engine/   AudioContext lifecycle, unlock, node wiring; the sound,
 src/state/    params.ts: the knob schema and the old parameters;
               presets.ts: the preset and file format (version 2 holds
               sounds); factory.ts: the shipped presets and the factory
-              kit, written by name (sound/write.ts); library.ts: user
+              kit, written by name (sound/write.ts), the DX7's
+              voices as their sheets give them (dx7()); library.ts: user
               presets and the session's tracks, kept in localStorage;
               surface.ts: keys, pads or XY, the pads' key (root and
               scale), the mod wheel;

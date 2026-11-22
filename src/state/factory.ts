@@ -776,6 +776,147 @@ const PLAYING: Readonly<Record<string, Playing>> = {
     wheel: moves(['mouth.vowel', -1]),
   },
   'Vox Chop': { trim: 1.1, bright: 2, wheel: moves(['mouth.shift', 4]) },
+  // The DX7's, dressed as they were heard (dxSound): only trimmed to
+  // their roles' loudness. Played as from its keys (velocity's 127 their
+  // 100), the Electric Bass, the Strings and the Clav sit under theirs,
+  // their sends at full
+  'FM E-Piano': { trim: 1.7 },
+  'FM Brass': { trim: 2.8 },
+  'FM Tubular Bells': { trim: 2.7 },
+  'FM Marimba': { trim: 1.25 },
+  'FM Flute': { trim: 3.5 },
+}
+
+/** An operator of a DX7 voice, as its patch sheet writes it */
+interface DxOp {
+  /** Coarse: a Ratio's whole part (0 a half), or a Fixed's decade */
+  readonly coarse: number
+  readonly fine?: number
+  readonly fixed?: true
+  readonly detune?: number
+  readonly level: number
+  readonly velocity?: number
+  /** The keyboard's rate scaling */
+  readonly rateScale?: number
+  readonly ams?: number
+  readonly rates: readonly [number, number, number, number]
+  readonly levels: readonly [number, number, number, number]
+  /** The level scaling's breakpoint, the DX7's name for it (C3 is 60) */
+  readonly breakpoint?: string
+  readonly leftDepth?: number
+  readonly rightDepth?: number
+  readonly leftCurve?: DxCurve
+  readonly rightCurve?: DxCurve
+}
+
+/** A level scaling's curve, as the DX7 names it */
+type DxCurve = '-LIN' | '-EXP' | '+EXP' | '+LIN'
+
+const DX_CURVES: readonly DxCurve[] = ['-LIN', '-EXP', '+EXP', '+LIN']
+
+/** The LFO's waves, as the FM6's knob names them */
+type DxWave = 'Triangle' | 'Saw Down' | 'Saw Up' | 'Square' | 'Sine' | 'S&H'
+
+/** A DX7 voice, as its patch sheet writes it, OP1 first */
+interface DxVoice {
+  readonly algorithm: number
+  readonly feedback: number
+  /** Oscillator Key Sync */
+  readonly keySync: boolean
+  /** Semitones from C3, the DX7's middle */
+  readonly transpose?: number
+  readonly ops: readonly [DxOp, DxOp, DxOp, DxOp, DxOp, DxOp]
+  readonly pitchRates?: readonly [number, number, number, number]
+  readonly pitchLevels?: readonly [number, number, number, number]
+  readonly lfo: {
+    readonly wave: DxWave
+    readonly speed: number
+    readonly delay: number
+    readonly pmd: number
+    readonly amd: number
+    readonly sync: boolean
+    readonly pms: number
+  }
+}
+
+/** The breakpoint a DX7 note name stands for: A-1 is 0, C3 39 */
+function dxBreakpoint(name: string): number {
+  const match = /^([A-G]#?)(-?\d)$/.exec(name)
+  const pitch = 'C C# D D# E F F# G G# A A# B'.split(' ')
+  const at = match ? pitch.indexOf(match[1] ?? '') : -1
+  if (!match || at < 0) throw new Error(`no breakpoint ${name}`)
+  // The DX7 names MIDI's 60 C3; a breakpoint of 0 is MIDI's 21
+  return 12 * (Number(match[2]) + 2) + at - 21
+}
+
+/**
+ * A DX7 voice as an FM6 input (src/dsp/fm6.ts), every number as the
+ * DX7's own: a patch sheet's, carried over as it was written
+ */
+function dx7(voice: DxVoice): WrittenPart<'fm6'> {
+  const knobs: Record<string, number | string> = {
+    algorithm: voice.algorithm,
+    feedback: voice.feedback,
+    keySync: voice.keySync ? 'On' : 'Off',
+    transpose: voice.transpose ?? 0,
+    lfoWave: voice.lfo.wave,
+    lfoSpeed: voice.lfo.speed,
+    lfoDelay: voice.lfo.delay,
+    lfoPitch: voice.lfo.pmd,
+    lfoAmp: voice.lfo.amd,
+    lfoSync: voice.lfo.sync ? 'On' : 'Off',
+    lfoPms: voice.lfo.pms,
+  }
+  const pitchRates = voice.pitchRates ?? [99, 99, 99, 99]
+  const pitchLevels = voice.pitchLevels ?? [50, 50, 50, 50]
+  for (let n = 0; n < 4; n++) {
+    knobs[`pitchR${n + 1}`] = pitchRates[n] ?? 99
+    knobs[`pitchL${n + 1}`] = pitchLevels[n] ?? 50
+  }
+  voice.ops.forEach((op, i) => {
+    const key = (name: string) => `op${i + 1}${name}`
+    knobs[key('Mode')] = op.fixed ? 'Fixed' : 'Ratio'
+    knobs[key('Coarse')] = op.coarse
+    knobs[key('Fine')] = op.fine ?? 0
+    knobs[key('Detune')] = op.detune ?? 0
+    knobs[key('Level')] = op.level
+    knobs[key('Velocity')] = op.velocity ?? 0
+    knobs[key('RateScale')] = op.rateScale ?? 0
+    knobs[key('Ams')] = op.ams ?? 0
+    for (let n = 0; n < 4; n++) {
+      knobs[key(`R${n + 1}`)] = op.rates[n] ?? 99
+      knobs[key(`L${n + 1}`)] = op.levels[n] ?? 0
+    }
+    knobs[key('Break')] = dxBreakpoint(op.breakpoint ?? 'A-1')
+    knobs[key('LeftDepth')] = op.leftDepth ?? 0
+    knobs[key('RightDepth')] = op.rightDepth ?? 0
+    knobs[key('LeftCurve')] = DX_CURVES.indexOf(op.leftCurve ?? '-LIN')
+    knobs[key('RightCurve')] = DX_CURVES.indexOf(op.rightCurve ?? '-LIN')
+  })
+  return { kind: 'fm6', ...knobs }
+}
+
+/**
+ * What a DX7 voice was heard through, on its records and its stages:
+ * the inserts after it, where its notes stand, and its sends
+ */
+type DxDressing = Pick<WrittenSound, 'effects' | 'routes' | 'sends'>
+
+/**
+ * A sound of one DX7 voice as the DX7 plays it: its envelopes and
+ * velocity its operators' own, the amp only holding it open (its
+ * velocity 0, its release as long as can be, the note ending as its
+ * operators do); dressed as it was heard (ashon, 2026-11-22: the old
+ * E-Piano, chorused, swaying and in a room, sounded far better than the
+ * DX7's dry), the voice itself as written
+ */
+function dxSound(voice: DxVoice, dressed: DxDressing = {}): WrittenSound {
+  return {
+    inputs: { dx: dx7(voice) },
+    chains: { main: { sends: { dx: 1 } } },
+    amp: { attack: 0.001, sustain: 1, release: 10, velocity: 0 },
+    ...dressed,
+  }
 }
 
 /**
@@ -5213,6 +5354,693 @@ export const FACTORY_PRESETS: readonly Preset[] = byCategory([
   }),
   preset('Chip Pulse 12', 'Lead', chipPulse('12.5%', CHIP_MID_EQ)),
   preset('Chip Pulse 25', 'Lead', chipPulse('25%', CHIP_MID_EQ)),
+  /*
+   * The DX7's own voices, from its first ROM (1A), each number as the
+   * patch has it (src/dsp/fm6.ts plays them as the DX7 does)
+   */
+  // E.PIANO 1: a tine's bell (OP2 at 14 times) over two bodies, one
+  // detuned either way
+  preset(
+    'FM E-Piano',
+    'Keys',
+    dxSound(
+      {
+        algorithm: 5,
+        feedback: 6,
+        keySync: false,
+        pitchRates: [94, 67, 95, 60],
+        lfo: {
+          wave: 'Sine',
+          speed: 34,
+          delay: 33,
+          pmd: 0,
+          amd: 0,
+          sync: false,
+          pms: 3,
+        },
+        ops: [
+          {
+            coarse: 1,
+            detune: 3,
+            level: 99,
+            velocity: 2,
+            rateScale: 3,
+            rates: [96, 25, 25, 67],
+            levels: [99, 75, 0, 0],
+          },
+          {
+            coarse: 14,
+            level: 58,
+            velocity: 7,
+            rateScale: 3,
+            rates: [95, 50, 35, 78],
+            levels: [99, 75, 0, 0],
+          },
+          {
+            coarse: 1,
+            level: 99,
+            velocity: 2,
+            rateScale: 3,
+            rates: [95, 20, 20, 50],
+            levels: [99, 95, 0, 0],
+          },
+          {
+            coarse: 1,
+            level: 89,
+            velocity: 6,
+            rateScale: 3,
+            rates: [95, 29, 20, 50],
+            levels: [99, 95, 0, 0],
+          },
+          {
+            coarse: 1,
+            detune: -7,
+            level: 99,
+            rateScale: 3,
+            rates: [95, 20, 20, 50],
+            levels: [99, 95, 0, 0],
+          },
+          {
+            coarse: 1,
+            detune: 7,
+            level: 79,
+            velocity: 6,
+            rateScale: 3,
+            rates: [95, 29, 20, 50],
+            levels: [99, 95, 0, 0],
+            breakpoint: 'D3',
+            rightDepth: 19,
+          },
+        ],
+      },
+      {
+        // A dimension chorus, then an amp's stereo tremolo, slow and gentle
+        effects: [
+          { kind: 'ensemble', rate: 0.5, depth: 0.5, mix: 0.45 },
+          { kind: 'tremolo', sync: 'Off', rate: 3.5, depth: 0.3, pan: 1 },
+        ],
+        routes: [keyPan(0.4)],
+        sends: { c: 0.25 },
+      }
+    )
+  ),
+  // BRASS 1: three carriers off OP6, two half-pitched and detuned up
+  preset(
+    'FM Brass',
+    'Brass',
+    dxSound(
+      {
+        algorithm: 22,
+        feedback: 7,
+        keySync: true,
+        pitchRates: [84, 95, 95, 60],
+        lfo: {
+          wave: 'Sine',
+          speed: 37,
+          delay: 0,
+          pmd: 5,
+          amd: 0,
+          sync: false,
+          pms: 3,
+        },
+        ops: [
+          {
+            coarse: 0,
+            detune: 7,
+            level: 98,
+            rates: [72, 76, 99, 71],
+            levels: [99, 88, 96, 0],
+            breakpoint: 'C3',
+            rightDepth: 14,
+            leftCurve: '+LIN',
+            rightCurve: '+LIN',
+          },
+          {
+            coarse: 0,
+            detune: 7,
+            level: 86,
+            rates: [62, 51, 29, 71],
+            levels: [82, 95, 96, 0],
+            breakpoint: 'C2',
+            rightDepth: 7,
+            leftCurve: '+LIN',
+            rightCurve: '-EXP',
+          },
+          {
+            coarse: 1,
+            detune: -2,
+            level: 99,
+            velocity: 2,
+            rates: [77, 76, 82, 71],
+            levels: [99, 98, 98, 0],
+            breakpoint: 'C3',
+            leftCurve: '+LIN',
+            rightCurve: '+LIN',
+          },
+          {
+            coarse: 1,
+            level: 99,
+            velocity: 2,
+            rates: [77, 36, 41, 71],
+            levels: [99, 98, 98, 0],
+            breakpoint: 'C3',
+            leftCurve: '+LIN',
+            rightCurve: '+LIN',
+          },
+          {
+            coarse: 1,
+            detune: 1,
+            level: 98,
+            velocity: 2,
+            rates: [77, 36, 41, 71],
+            levels: [99, 98, 98, 0],
+            breakpoint: 'C3',
+            leftCurve: '+LIN',
+            rightCurve: '+LIN',
+          },
+          {
+            coarse: 1,
+            level: 82,
+            velocity: 2,
+            rateScale: 4,
+            rates: [49, 99, 28, 68],
+            levels: [98, 98, 91, 0],
+            breakpoint: 'C3',
+            leftDepth: 54,
+            rightDepth: 50,
+            leftCurve: '-EXP',
+            rightCurve: '-EXP',
+          },
+        ],
+      },
+      {
+        effects: [{ kind: 'ensemble', rate: 0.6, depth: 0.5, mix: 0.35 }],
+        routes: [spread(0.3)],
+        sends: { c: 0.3 },
+      }
+    )
+  ),
+  // BASS 1: an octave down, three modulators into one carrier, the
+  // fifth's struck at once
+  preset(
+    'FM Electric Bass',
+    'Bass',
+    dxSound(
+      {
+        algorithm: 16,
+        feedback: 7,
+        keySync: true,
+        transpose: -12,
+        pitchRates: [94, 67, 95, 60],
+        lfo: {
+          wave: 'Triangle',
+          speed: 35,
+          delay: 0,
+          pmd: 0,
+          amd: 0,
+          sync: false,
+          pms: 3,
+        },
+        ops: [
+          {
+            coarse: 0,
+            level: 99,
+            rateScale: 7,
+            rates: [95, 62, 17, 58],
+            levels: [99, 95, 32, 0],
+            breakpoint: 'A2',
+            leftDepth: 57,
+            rightDepth: 14,
+            leftCurve: '+LIN',
+          },
+          {
+            coarse: 0,
+            level: 80,
+            rateScale: 7,
+            rates: [99, 20, 0, 0],
+            levels: [99, 0, 0, 0],
+            breakpoint: 'D3',
+          },
+          {
+            coarse: 0,
+            level: 99,
+            velocity: 3,
+            rateScale: 6,
+            rates: [88, 96, 32, 30],
+            levels: [79, 65, 0, 0],
+          },
+          {
+            coarse: 5,
+            level: 93,
+            velocity: 5,
+            rateScale: 5,
+            rates: [90, 42, 7, 55],
+            levels: [90, 30, 0, 0],
+          },
+          {
+            coarse: 0,
+            level: 62,
+            velocity: 3,
+            rateScale: 7,
+            rates: [99, 0, 0, 0],
+            levels: [99, 0, 0, 0],
+            breakpoint: 'C#4',
+            leftDepth: 75,
+          },
+          {
+            coarse: 9,
+            level: 85,
+            velocity: 7,
+            rateScale: 1,
+            rates: [94, 56, 24, 55],
+            levels: [93, 28, 0, 0],
+          },
+        ],
+      },
+      {
+        // In the middle, a light chorus's sides above it
+        effects: [
+          { kind: 'chorus', rate: 0.5, depth: 0.3, mix: 0.2 },
+          widened(1, BASS_MONO),
+        ],
+      }
+    )
+  ),
+  // TUB BELLS: two bells at 3.5 times, falling away and swelling back,
+  // over a struck tone fixed at 323.6 Hz
+  preset(
+    'FM Tubular Bells',
+    'Bell',
+    dxSound(
+      {
+        algorithm: 5,
+        feedback: 7,
+        keySync: false,
+        pitchRates: [67, 95, 95, 60],
+        lfo: {
+          wave: 'Saw Down',
+          speed: 35,
+          delay: 0,
+          pmd: 0,
+          amd: 0,
+          sync: false,
+          pms: 1,
+        },
+        ops: [
+          {
+            coarse: 1,
+            detune: 2,
+            level: 95,
+            rateScale: 2,
+            rates: [95, 33, 71, 25],
+            levels: [99, 0, 32, 0],
+          },
+          {
+            coarse: 2,
+            fine: 75,
+            detune: 3,
+            level: 78,
+            rateScale: 2,
+            rates: [98, 12, 71, 28],
+            levels: [99, 0, 32, 0],
+          },
+          {
+            coarse: 1,
+            detune: -5,
+            level: 99,
+            rateScale: 2,
+            rates: [95, 33, 71, 25],
+            levels: [99, 0, 32, 0],
+          },
+          {
+            coarse: 2,
+            fine: 75,
+            detune: -2,
+            level: 75,
+            rateScale: 2,
+            rates: [98, 12, 71, 28],
+            levels: [99, 0, 32, 0],
+          },
+          {
+            fixed: true,
+            coarse: 2,
+            fine: 51,
+            level: 99,
+            velocity: 5,
+            rateScale: 2,
+            rates: [76, 78, 71, 70],
+            levels: [99, 0, 0, 0],
+          },
+          {
+            coarse: 2,
+            detune: -7,
+            level: 85,
+            rateScale: 2,
+            rates: [98, 91, 0, 28],
+            levels: [99, 0, 0, 0],
+          },
+        ],
+      },
+      {
+        routes: [keyPan(0.8)],
+        sends: { c: 0.6 },
+      }
+    )
+  ),
+  // MARIMBA: a struck bar's 3, 5 and 3.75 times, gone in a moment
+  preset(
+    'FM Marimba',
+    'Bell',
+    dxSound(
+      {
+        algorithm: 7,
+        feedback: 0,
+        keySync: true,
+        pitchRates: [94, 67, 95, 60],
+        lfo: {
+          wave: 'Triangle',
+          speed: 35,
+          delay: 0,
+          pmd: 0,
+          amd: 0,
+          sync: true,
+          pms: 3,
+        },
+        ops: [
+          {
+            coarse: 0,
+            level: 95,
+            rateScale: 3,
+            rates: [95, 40, 49, 55],
+            levels: [99, 92, 0, 0],
+          },
+          {
+            coarse: 3,
+            level: 96,
+            velocity: 2,
+            rates: [99, 72, 0, 0],
+            levels: [82, 48, 0, 0],
+            breakpoint: 'D#4',
+            rightDepth: 46,
+          },
+          {
+            coarse: 0,
+            level: 99,
+            velocity: 1,
+            rateScale: 3,
+            rates: [95, 33, 49, 41],
+            levels: [99, 92, 0, 0],
+          },
+          {
+            coarse: 5,
+            level: 85,
+            velocity: 2,
+            rates: [99, 75, 0, 82],
+            levels: [82, 48, 0, 0],
+            breakpoint: 'D#4',
+            rightDepth: 46,
+          },
+          {
+            coarse: 0,
+            fine: 50,
+            level: 93,
+            velocity: 2,
+            rates: [99, 75, 0, 8],
+            levels: [82, 48, 0, 0],
+            breakpoint: 'D#4',
+            rightDepth: 46,
+          },
+          {
+            coarse: 4,
+            fine: 13,
+            level: 99,
+            velocity: 2,
+            rates: [0, 63, 55, 0],
+            levels: [78, 78, 0, 0],
+            breakpoint: 'D3',
+          },
+        ],
+      },
+      {
+        routes: [keyPan(0.8)],
+        sends: { c: 0.35 },
+      }
+    )
+  ),
+  // STRINGS 1: two stacks bowed in slowly, the brighter fed back
+  preset(
+    'FM Strings',
+    'Strings',
+    dxSound(
+      {
+        algorithm: 2,
+        feedback: 7,
+        keySync: true,
+        pitchRates: [94, 67, 95, 60],
+        lfo: {
+          wave: 'Triangle',
+          speed: 30,
+          delay: 0,
+          pmd: 8,
+          amd: 0,
+          sync: false,
+          pms: 2,
+        },
+        ops: [
+          {
+            coarse: 1,
+            level: 99,
+            velocity: 3,
+            rateScale: 2,
+            rates: [45, 24, 20, 41],
+            levels: [99, 85, 70, 0],
+          },
+          {
+            coarse: 1,
+            level: 83,
+            rateScale: 1,
+            rates: [75, 71, 17, 49],
+            levels: [82, 92, 62, 0],
+            breakpoint: 'D#4',
+          },
+          {
+            coarse: 1,
+            level: 86,
+            velocity: 7,
+            rates: [44, 45, 20, 54],
+            levels: [99, 85, 82, 0],
+            breakpoint: 'F4',
+            rightDepth: 97,
+          },
+          {
+            coarse: 1,
+            level: 77,
+            velocity: 2,
+            rateScale: 2,
+            rates: [96, 19, 20, 54],
+            levels: [99, 92, 86, 0],
+          },
+          {
+            coarse: 3,
+            level: 84,
+            velocity: 2,
+            rateScale: 2,
+            rates: [53, 19, 20, 54],
+            levels: [86, 92, 86, 0],
+          },
+          {
+            coarse: 14,
+            level: 53,
+            velocity: 2,
+            rateScale: 2,
+            rates: [53, 19, 20, 54],
+            levels: [99, 92, 86, 0],
+          },
+        ],
+      },
+      {
+        // The string machines' ensemble, deep
+        effects: [{ kind: 'ensemble', rate: 0.5, depth: 0.8, mix: 0.6 }],
+        routes: [spread(0.4)],
+        sends: { c: 0.5 },
+      }
+    )
+  ),
+  // FLUTE 1: a breathy tone, its vibrato and tremolo coming in late
+  preset(
+    'FM Flute',
+    'Lead',
+    dxSound(
+      {
+        algorithm: 16,
+        feedback: 5,
+        keySync: false,
+        pitchRates: [94, 67, 95, 60],
+        lfo: {
+          wave: 'Triangle',
+          speed: 30,
+          delay: 23,
+          pmd: 8,
+          amd: 13,
+          sync: false,
+          pms: 1,
+        },
+        ops: [
+          {
+            coarse: 1,
+            detune: -2,
+            level: 98,
+            velocity: 2,
+            rates: [61, 67, 70, 65],
+            levels: [93, 89, 98, 0],
+            breakpoint: 'D3',
+          },
+          {
+            coarse: 1,
+            detune: 4,
+            level: 75,
+            velocity: 2,
+            rateScale: 4,
+            rates: [99, 97, 62, 54],
+            levels: [99, 99, 90, 0],
+          },
+          {
+            coarse: 1,
+            detune: -3,
+            level: 76,
+            ams: 1,
+            rates: [53, 38, 75, 61],
+            levels: [88, 44, 24, 0],
+            breakpoint: 'G3',
+            leftCurve: '+LIN',
+          },
+          {
+            coarse: 2,
+            level: 0,
+            rateScale: 3,
+            rates: [61, 25, 25, 60],
+            levels: [99, 99, 97, 0],
+            breakpoint: 'A4',
+            leftDepth: 10,
+            rightDepth: 10,
+          },
+          {
+            coarse: 2,
+            level: 56,
+            rates: [65, 38, 0, 61],
+            levels: [99, 0, 0, 0],
+            breakpoint: 'D4',
+            rightDepth: 43,
+          },
+          {
+            coarse: 1,
+            fine: 53,
+            detune: 4,
+            level: 83,
+            velocity: 2,
+            rates: [99, 64, 98, 61],
+            levels: [99, 67, 52, 0],
+            breakpoint: 'G3',
+            rightCurve: '+LIN',
+          },
+        ],
+      },
+      {
+        sends: { b: 0.15, c: 0.4 },
+      }
+    )
+  ),
+  // CLAV 1: two plucked stacks, half-pitched, their bite at 6 and 8
+  // times
+  preset(
+    'FM Clav',
+    'Keys',
+    dxSound(
+      {
+        algorithm: 3,
+        feedback: 5,
+        keySync: true,
+        pitchRates: [0, 0, 0, 0],
+        lfo: {
+          wave: 'Sine',
+          speed: 30,
+          delay: 0,
+          pmd: 0,
+          amd: 0,
+          sync: false,
+          pms: 2,
+        },
+        ops: [
+          {
+            coarse: 0,
+            detune: 1,
+            level: 99,
+            velocity: 3,
+            rateScale: 3,
+            rates: [95, 92, 28, 60],
+            levels: [99, 90, 0, 0],
+            breakpoint: 'F2',
+          },
+          {
+            coarse: 0,
+            detune: -1,
+            level: 99,
+            velocity: 1,
+            rateScale: 3,
+            rates: [95, 95, 0, 0],
+            levels: [99, 96, 89, 0],
+            breakpoint: 'F2',
+          },
+          {
+            coarse: 4,
+            fine: 50,
+            level: 71,
+            velocity: 1,
+            rateScale: 3,
+            rates: [98, 87, 0, 0],
+            levels: [87, 86, 0, 0],
+            breakpoint: 'F2',
+            rightDepth: 21,
+          },
+          {
+            coarse: 2,
+            level: 99,
+            velocity: 2,
+            rateScale: 3,
+            rates: [95, 92, 28, 60],
+            levels: [99, 90, 0, 0],
+            breakpoint: 'F2',
+          },
+          {
+            coarse: 0,
+            detune: -2,
+            level: 99,
+            velocity: 6,
+            rateScale: 3,
+            rates: [95, 95, 0, 0],
+            levels: [99, 96, 89, 0],
+            breakpoint: 'F2',
+          },
+          {
+            coarse: 8,
+            level: 78,
+            velocity: 7,
+            rateScale: 3,
+            rates: [98, 87, 0, 0],
+            levels: [87, 86, 0, 0],
+            breakpoint: 'F2',
+            rightDepth: 21,
+          },
+        ],
+      },
+      {
+        // Dry, as funk's clavinets were, laid out across the keys
+        effects: [widened(1.1, 150)],
+        routes: [keyPan(0.5)],
+        sends: { c: 0.15 },
+      }
+    )
+  ),
 ])
 
 /**
