@@ -172,7 +172,9 @@ src/state/    params.ts: the knob schema and the old parameters;
               presets.ts: the preset and file format (version 2 holds
               sounds); factory.ts: the shipped presets and the factory
               kit, written by name (sound/write.ts), the DX7's
-              voices as their sheets give them (dx7()); library.ts: user
+              voices as their sheets give them (dx7()), the kit's
+              pads the TR-808's voices as its service notes give
+              them, each struck once (struck()); library.ts: user
               presets and the session's tracks, kept in localStorage;
               surface.ts: keys, pads or XY, the pads' key (root and
               scale), the mod wheel;

@@ -3,7 +3,7 @@ import { ChainSynth, POLY } from '../dsp/chainSynth'
 import { EffectRack } from '../dsp/effects'
 import { Mixer, Part, Strip } from '../dsp/output'
 import { SoundPlayer, applyMix, applySound } from '../worklet/sound'
-import { FACTORY_PRESETS } from './factory'
+import { FACTORY_KIT, FACTORY_PRESETS } from './factory'
 import { initMix } from './mix'
 import { LFO_SHAPE_NAMES } from './params'
 import { PRESET_CATEGORIES, cleanName, type Preset } from './presets'
@@ -103,12 +103,12 @@ describe('FACTORY_PRESETS', () => {
   })
 
   it('writes a route amount in its destination units', () => {
-    // 30 semitones on Pitch, which spans 48 at full amount
+    // 27 semitones on Pitch, which spans 48 at full amount
     const kick = named('Kick')
-    const drop = kick.sound.routes.find(
+    const punch = kick.sound.routes.find(
       (route) => route.target === VOICE && route.key === 'pitch'
     )
-    expect(drop?.amount).toBe(0.625)
+    expect(punch?.amount).toBe(0.5625)
   })
 
   it.each(FACTORY_PRESETS.map((preset) => [preset.name, preset] as const))(
@@ -251,14 +251,45 @@ describe('FACTORY_PRESETS', () => {
     )
   })
 
-  it('drops the Kick to 27 semitones under the key', () => {
+  it('rings the Kick as the TR-808 does, onto 27 semitones under the key', () => {
     const synth = loaded(named('Kick'))
     synth.noteOn(1, 60, 1)
-    const out = render(synth, 0.3)
-    // Still falling 30 ms in, at A1 (55 Hz) under C4 by 0.2 s
-    expect(frequencyAt(out, at(0.03))).toBeGreaterThan(75)
+    const out = render(synth, 0.6)
+    // Its punch gone in its first cycles: 30 ms in, only its sigh is left,
+    // a few hertz over A1 (55 Hz) under C4, which it is on by 0.2 s
+    const sighing = frequencyAt(out, at(0.03))
+    expect(sighing).toBeGreaterThan(56)
+    expect(sighing).toBeLessThan(66)
     expect(frequencyAt(out, at(0.2))).toBeCloseTo(55, -0.5)
+    // Let go at once, it rings on as the 808's does from its pulse: a
+    // step's end cuts nothing
+    const struck = loaded(named('Kick'))
+    struck.noteOn(1, 60, 1)
+    const start = render(struck, 0.05)
+    struck.noteOff(1)
+    const rest = render(struck, 0.5)
+    expect(peak(rest, at(0.2), at(0.25))).toBeGreaterThan(peak(start) * 0.03)
   })
+
+  it.each([
+    ['Tom', 135],
+    ['High Tom', 185],
+    ['Conga', 280],
+    ['Clave', 2500],
+  ] as const)('rings the %s at the TR-808 service notes’ %d Hz', (name, hz) => {
+    const synth = loaded(named(name))
+    synth.noteOn(1, 60, 1)
+    const out = render(synth, 0.1)
+    // Its drop into the note over by 20 ms
+    expect(frequencyAt(out, at(0.02)) / hz).toBeCloseTo(1, 1)
+  })
+
+  it.each(FACTORY_KIT)(
+    'levels the kit’s %s by its own parts, not its sends, which a kit replaces',
+    (name) => {
+      expect(named(name).sound.sends.a).toBe(1)
+    }
+  )
 
   it('stops the Closed Hat while the key is still held', () => {
     const synth = loaded(named('Closed Hat'))

@@ -256,6 +256,17 @@ const keyPan = (by: number): WrittenRoute => ({
 })
 
 /**
+ * An envelope struck once, as a drum machine's trigger rings its voice: up
+ * at once and falling to nothing over decay seconds, held or let go
+ */
+const struck = (decay: number): WrittenPart<'env'> => ({
+  kind: 'env',
+  attack: 0.001,
+  decay,
+  release: decay,
+})
+
+/**
  * A width after a widening: the sides scaled by width, and below mono
  * hertz the lows in the middle, as a mix wants them
  */
@@ -511,19 +522,21 @@ const PLAYING: Readonly<Record<string, Playing>> = {
   Clav: { trim: 9.7, free: true, wheel: { open: 1.5 } },
   // The wheel speeds its motor
   Vibes: { trim: 6.8, wheel: moves(['fans.rate', 1.2]) },
-  Kick: { wheel: tuned },
+  Kick: { wheel: tuned, bright: 1 },
   Snare: { wheel: tuned },
-  'Closed Hat': { wheel: opened },
-  'Open Hat': { wheel: opened },
+  'Closed Hat': { free: true, wheel: opened },
+  'Open Hat': { free: true, wheel: opened },
   Tom: { wheel: tuned },
   // The wheel raises its band: a tighter clap
-  Clap: { wheel: moves(['band.cutoff', 1]) },
-  Cowbell: { wheel: tuned },
+  Clap: {
+    wheel: moves(['band.cutoff', 1], ['band2.cutoff', 1], ['band3.cutoff', 1]),
+  },
+  Cowbell: { free: true, wheel: tuned },
   'Low Tom': { wheel: tuned },
   'High Tom': { wheel: tuned },
   Rim: { wheel: tuned },
   Shaker: { wheel: opened },
-  Crash: { wheel: opened },
+  Crash: { free: true, wheel: opened },
   // The wheel drives it: a distorted boom
   Boom: { wheel: moves(['drive.drive', 0.4]) },
   Conga: { wheel: tuned },
@@ -1712,166 +1725,219 @@ export const FACTORY_PRESETS: readonly Preset[] = byCategory([
   }),
 
   preset('Kick', 'Drums', {
-    // A 2A03's triangle (32 steps, off its DC) 27 semitones under the key
-    // (A1 at C4), struck 30 higher and falling to it in about a tenth of a
-    // second, then held; dark noise at the strike
+    // The TR-808's bass drum as Werner, Abel and Smith read its circuit
+    // (DAFx-14): a sine rung by a 1 ms pulse. Its first cycles an octave
+    // and more higher (27 semitones here, gone in about 10 ms: heard as
+    // its punch, not as a pitch), then its sigh, a few hertz falling over
+    // a tenth of a second, onto A1 at C4 (the 808's own near 50 Hz). The
+    // pulse's click at the strike, brighter the harder; no harmonics, so
+    // no note heard over the thump; let go, it rings on as a pulse rang it
     inputs: {
-      body: { kind: 'chip', wave: 'Triangle', octave: -2, semi: -3, dc: 0 },
+      body: { kind: 'osc', wave: 'Sine', octave: -2, semi: -3 },
       noise: { kind: 'noise' },
     },
     chains: {
-      main: { sends: { body: 0.86 } },
+      main: { sends: { body: 1 } },
       click: {
         level: 0,
         sends: { noise: 0.8 },
-        items: { filter: { kind: 'filter', cutoff: 2200 } },
+        items: { filter: { kind: 'filter', cutoff: 3000 } },
       },
     },
     modulators: {
-      drop: { kind: 'env', attack: 0.001, decay: 0.3 },
-      strike: { kind: 'env', attack: 0.001, decay: 0.25 },
+      punch: struck(0.032),
+      sigh: struck(0.5),
+      strike: struck(0.02),
     },
     routes: [
-      { from: 'drop', to: 'voice.pitch', by: 30 },
+      { from: 'punch', to: 'voice.pitch', by: 27 },
+      { from: 'sigh', to: 'voice.pitch', by: 2.5 },
       { from: 'strike', to: 'click.level', by: 1 },
     ],
-    amp: { attack: 0.001, decay: 2, sustain: 0, release: 0.03, velocity: 0.8 },
+    amp: { attack: 0.001, decay: 1, sustain: 0, release: 1, velocity: 0.8 },
   }),
   preset('Snare', 'Drums', {
-    // Mostly a 2A03's triangle (32 steps, off its DC) near G3, falling a
-    // little, with dark noise under it
+    // The TR-808's snare as its service notes give it: two bridged-T tones
+    // an octave apart, 238 and 476 Hz at C4, rung by the trigger and gone
+    // in a few tens of milliseconds, the upper one quieter (Tone sets the
+    // two's mix); and its snappy, white noise through a highpass on an
+    // envelope of its own, longer
     inputs: {
-      body: { kind: 'chip', wave: 'Triangle', semi: -5, dc: 0 },
+      low: { kind: 'osc', wave: 'Sine', semi: -2, fine: 36 },
+      high: { kind: 'osc', wave: 'Sine', octave: 1, semi: -2, fine: 36 },
       noise: { kind: 'noise' },
     },
     chains: {
-      tone: { sends: { body: 0.9 } },
-      main: {
-        sends: { noise: 0.8 },
-        items: { filter: { kind: 'filter', cutoff: 2800 } },
+      tone: { level: 0, sends: { low: 0.7, high: 0.44 } },
+      snappy: {
+        sends: { noise: 0.88 },
+        items: { filter: { kind: 'filter', type: 'HP', cutoff: 1500 } },
       },
     },
-    modulators: { drop: { kind: 'env', attack: 0.001, decay: 0.4 } },
-    routes: [{ from: 'drop', to: 'voice.pitch', by: 2 }],
+    // The tones' 60 ms, under the snappy's fall
+    modulators: { ring: struck(0.45) },
+    routes: [{ from: 'ring', to: 'tone.level', by: 1 }],
     amp: {
       attack: 0.001,
-      decay: 0.8,
+      decay: 0.3,
       sustain: 0,
-      release: 0.05,
+      release: 0.3,
       velocity: 0.8,
     },
   }),
   preset('Closed Hat', 'Drums', {
-    // Two squares two octaves up, ring-modulated: metal, with noise
+    // The TR-808's six squares, 205.3, 304.4, 369.6, 522.7, 540 and 800 Hz
+    // at C4, as Werner, Abel and Smith measured them (ICMC-SMC 2014)
     inputs: {
-      square: { kind: 'osc', wave: 'Square', octave: 2 },
-      square2: { kind: 'osc', wave: 'Square', octave: 2, semi: 6, fine: 35 },
-      noise: { kind: 'noise' },
-      metal: { kind: 'ring', a: 'square', b: 'square2' },
+      m1: { kind: 'osc', wave: 'Square', semi: -4, fine: -20 },
+      m2: { kind: 'osc', wave: 'Square', semi: 3, fine: -38 },
+      m3: { kind: 'osc', wave: 'Square', semi: 6, fine: -2 },
+      m4: { kind: 'osc', wave: 'Square', octave: 1, fine: -2 },
+      m5: { kind: 'osc', wave: 'Square', octave: 1, semi: 1, fine: -45 },
+      m6: { kind: 'osc', wave: 'Square', octave: 2, semi: -5, fine: 35 },
     },
     chains: {
       main: {
-        sends: { noise: 0.66, metal: 0.55 },
+        // Their upper band, near 7.1 kHz, as the hats take it, and the
+        // closed hat's own highpass
+        sends: { m1: 1, m2: 1, m3: 1, m4: 1, m5: 1, m6: 1 },
         items: {
-          filter: { kind: 'filter', type: 'HP', cutoff: 7000, resonance: 0.2 },
+          band: { kind: 'filter', type: 'BP', cutoff: 7100, resonance: 0.3 },
+          filter: { kind: 'filter', type: 'HP', cutoff: 6000 },
         },
       },
     },
+    // Its 50 ms
     amp: {
       attack: 0.001,
-      decay: 0.08,
+      decay: 0.15,
       sustain: 0,
-      release: 0.06,
+      release: 0.15,
       velocity: 0.6,
       pan: -0.3,
     },
   }),
   preset('Open Hat', 'Drums', {
+    // The TR-808's six squares, 205.3, 304.4, 369.6, 522.7, 540 and 800 Hz
+    // at C4, as Werner, Abel and Smith measured them (ICMC-SMC 2014)
     inputs: {
-      square: { kind: 'osc', wave: 'Square', octave: 2 },
-      square2: { kind: 'osc', wave: 'Square', octave: 2, semi: 6, fine: 35 },
-      noise: { kind: 'noise' },
-      metal: { kind: 'ring', a: 'square', b: 'square2' },
+      m1: { kind: 'osc', wave: 'Square', semi: -4, fine: -20 },
+      m2: { kind: 'osc', wave: 'Square', semi: 3, fine: -38 },
+      m3: { kind: 'osc', wave: 'Square', semi: 6, fine: -2 },
+      m4: { kind: 'osc', wave: 'Square', octave: 1, fine: -2 },
+      m5: { kind: 'osc', wave: 'Square', octave: 1, semi: 1, fine: -45 },
+      m6: { kind: 'osc', wave: 'Square', octave: 2, semi: -5, fine: 35 },
     },
     chains: {
       main: {
-        sends: { noise: 0.45, metal: 0.38 },
+        sends: { m1: 0.56, m2: 0.56, m3: 0.56, m4: 0.56, m5: 0.56, m6: 0.56 },
         items: {
-          filter: { kind: 'filter', type: 'HP', cutoff: 6500, resonance: 0.2 },
+          band: { kind: 'filter', type: 'BP', cutoff: 7100, resonance: 0.3 },
+          filter: { kind: 'filter', type: 'HP', cutoff: 5500 },
         },
       },
     },
+    // Its 450 ms, its Decay at noon
     amp: {
       attack: 0.001,
-      decay: 0.45,
+      decay: 1.35,
       sustain: 0,
-      release: 0.35,
+      release: 1.35,
       velocity: 0.6,
       pan: -0.3,
     },
   }),
   preset('Tom', 'Drums', {
+    // The TR-808's mid tom as its service notes give it: a bridged-T rung
+    // at 135 Hz at C4 (its Tuning at noon), starting a little higher as
+    // its diodes conduct after the trigger, gone in 130 ms
     inputs: {
-      head: { kind: 'osc', wave: 'Sine' },
-      noise: { kind: 'noise' },
+      head: { kind: 'osc', wave: 'Sine', octave: -1, semi: 1, fine: -45 },
     },
-    chains: {
-      main: {
-        sends: { head: 1, noise: 0.15 },
-        items: { filter: { kind: 'filter', cutoff: 3000 } },
-      },
-    },
-    modulators: { drop: { kind: 'env', attack: 0.001, decay: 0.12 } },
-    routes: [{ from: 'drop', to: 'voice.pitch', by: 9 }],
+    chains: { main: { sends: { head: 1 } } },
+    modulators: { drop: struck(0.05) },
+    routes: [{ from: 'drop', to: 'voice.pitch', by: 5 }],
     amp: {
       attack: 0.001,
-      decay: 0.35,
+      decay: 0.39,
       sustain: 0,
-      release: 0.3,
+      release: 0.39,
       velocity: 0.6,
       pan: 0.1,
     },
   }),
   preset('Clap', 'Drums', {
-    // Noise in a band, and its first moments torn into bursts: a saw
-    // LFO on the gain, faded out by an envelope
+    // The TR-808's hand clap as its service notes give it: white noise
+    // through a band near 1 kHz, torn into bursts by a sawtooth's falls
+    // 12 ms apart, its trigger stretched to 30 ms so the third is cut off
+    // halfway, and under them its reverb, the same noise on an envelope
+    // of its own, longer. An LFO stops at 50 Hz, so each burst is half a
+    // saw's cycle: its first half falling in one chain, its second, lifted
+    // by a square, in another
     inputs: { noise: { kind: 'noise' } },
     chains: {
-      main: {
+      first: {
+        level: 0,
         sends: { noise: 1 },
         items: {
-          band: { kind: 'filter', type: 'BP', cutoff: 1200, resonance: 0.3 },
+          band: { kind: 'filter', type: 'BP', cutoff: 1000, resonance: 0.35 },
           crack: { kind: 'drive', drive: 0.5 },
+        },
+      },
+      second: {
+        level: 0,
+        sends: { noise: 1 },
+        items: {
+          band2: { kind: 'filter', type: 'BP', cutoff: 1000, resonance: 0.35 },
+          crack2: { kind: 'drive', drive: 0.5 },
+        },
+      },
+      reverb: {
+        level: 0,
+        sends: { noise: 1 },
+        items: {
+          band3: { kind: 'filter', type: 'BP', cutoff: 1000, resonance: 0.35 },
+          crack3: { kind: 'drive', drive: 0.5 },
         },
       },
     },
     modulators: {
-      bursts: { kind: 'lfo', shape: 'Saw', rate: 50 },
-      flutter: { kind: 'env', attack: 0.001, decay: 0.05 },
+      saw: { kind: 'lfo', shape: 'Saw', rate: 41.67 },
+      square: { kind: 'lfo', shape: 'Square', rate: 41.67 },
+      // The 30 ms pulse: one envelope falling as the other rises, their
+      // sum near 1 until it ends
+      pulse: struck(0.1),
+      hold: { kind: 'env', attack: 0.024, decay: 0.05, sustain: 0 },
+      // Its 100 ms
+      tail: struck(0.3),
     },
     routes: [
-      { from: 'bursts', to: 'amp.gain', by: -0.9, via: 'flutter' },
+      { from: 'saw', to: 'first.level', by: -0.89, via: 'pulse' },
+      { from: 'saw', to: 'first.level', by: -0.89, via: 'hold' },
+      { from: 'saw', to: 'second.level', by: -0.89, via: 'pulse' },
+      { from: 'saw', to: 'second.level', by: -0.89, via: 'hold' },
+      { from: 'square', to: 'second.level', by: -0.89, via: 'pulse' },
+      { from: 'square', to: 'second.level', by: -0.89, via: 'hold' },
+      { from: 'tail', to: 'reverb.level', by: 0.71 },
       // Each clap from hands a little apart
       spread(0.12),
     ],
-    amp: {
-      attack: 0.001,
-      decay: 0.3,
-      sustain: 0,
-      release: 0.2,
-      velocity: 0.6,
-    },
+    // Open while the envelopes shape it
+    amp: { attack: 0.001, sustain: 1, release: 1, velocity: 0.6 },
     sends: { c: 0.4 },
   }),
   preset('Cowbell', 'Drums', {
-    // Two squares about 2:3 apart, in a band: the old drum machines' bell
+    // The TR-808's cowbell: two of its squares, 540 and 800 Hz at C4,
+    // through a band, falling at once from its strike and then ringing a
+    // little on, as its two-stage envelope has it
     inputs: {
-      low: { kind: 'osc', wave: 'Square', octave: 1 },
-      high: { kind: 'osc', wave: 'Square', octave: 1, semi: 7, fine: -20 },
+      low: { kind: 'osc', wave: 'Square', octave: 1, semi: 1, fine: -45 },
+      high: { kind: 'osc', wave: 'Square', octave: 2, semi: -5, fine: 35 },
     },
     chains: {
       main: {
-        sends: { low: 0.31, high: 0.31 },
+        level: 0.5,
+        sends: { low: 1, high: 1 },
         items: {
           band: {
             kind: 'filter',
@@ -1880,82 +1946,86 @@ export const FACTORY_PRESETS: readonly Preset[] = byCategory([
             resonance: 0.35,
             keytrack: 1,
           },
+          // Its strike's peaks, the squares meeting, rounded off
+          crack: { kind: 'drive', drive: 0.3 },
         },
       },
     },
+    modulators: { strike: struck(0.03) },
+    routes: [{ from: 'strike', to: 'main.level', by: 0.5 }],
     amp: {
       attack: 0.001,
-      decay: 0.3,
+      decay: 0.4,
       sustain: 0,
-      release: 0.2,
+      release: 0.4,
       velocity: 0.6,
       pan: 0.35,
     },
   }),
 
   preset('Low Tom', 'Drums', {
+    // The TR-808's low tom: a bridged-T at 90 Hz at C4, falling into it as
+    // the mid tom does and gone in 200 ms, with its own pink noise (white
+    // through a lowpass here) under it, a little longer
     inputs: {
-      head: { kind: 'osc', wave: 'Sine', semi: -5 },
+      head: { kind: 'osc', wave: 'Sine', octave: -2, semi: 6, fine: -47 },
       noise: { kind: 'noise' },
     },
     chains: {
-      main: {
-        sends: { head: 1, noise: 0.15 },
-        items: { filter: { kind: 'filter', cutoff: 2500 } },
+      main: { level: 0, sends: { head: 1 } },
+      skin: {
+        level: 0.12,
+        sends: { noise: 1 },
+        items: { filter: { kind: 'filter', cutoff: 1500 } },
       },
     },
-    modulators: { drop: { kind: 'env', attack: 0.001, decay: 0.14 } },
-    routes: [{ from: 'drop', to: 'voice.pitch', by: 9 }],
+    // The head's 200 ms, under the noise's fall
+    modulators: { drop: struck(0.05), ring: struck(3) },
+    routes: [
+      { from: 'drop', to: 'voice.pitch', by: 5 },
+      { from: 'ring', to: 'main.level', by: 1 },
+    ],
     amp: {
       attack: 0.001,
-      decay: 0.45,
+      decay: 0.75,
       sustain: 0,
-      release: 0.35,
+      release: 0.75,
       velocity: 0.6,
       pan: 0.4,
     },
   }),
   preset('High Tom', 'Drums', {
-    inputs: {
-      head: { kind: 'osc', wave: 'Sine', semi: 5 },
-      noise: { kind: 'noise' },
-    },
-    chains: {
-      main: {
-        sends: { head: 1, noise: 0.15 },
-        items: { filter: { kind: 'filter', cutoff: 3500 } },
-      },
-    },
-    modulators: { drop: { kind: 'env', attack: 0.001, decay: 0.1 } },
-    routes: [{ from: 'drop', to: 'voice.pitch', by: 9 }],
+    // The TR-808's high tom: a bridged-T at 185 Hz at C4, falling into it
+    // as the mid tom does, gone in 100 ms
+    inputs: { head: { kind: 'osc', wave: 'Sine', semi: -6 } },
+    chains: { main: { sends: { head: 1 } } },
+    modulators: { drop: struck(0.05) },
+    routes: [{ from: 'drop', to: 'voice.pitch', by: 5 }],
     amp: {
       attack: 0.001,
-      decay: 0.36,
+      decay: 0.3,
       sustain: 0,
-      release: 0.28,
+      release: 0.3,
       velocity: 0.6,
       pan: -0.2,
     },
   }),
   preset('Rim', 'Drums', {
-    // A high click and a burst of noise in a band: the stick on the rim
+    // The TR-808's rim shot: two bridged-T tones, 455 and 1667 Hz at C4,
+    // rung together and gone in 10 ms, warmed for its crack
     inputs: {
-      click: { kind: 'osc', wave: 'Triangle', octave: 1, semi: 5 },
-      noise: { kind: 'noise' },
+      low: { kind: 'osc', wave: 'Sine', octave: 1, semi: -2, fine: -42 },
+      high: { kind: 'osc', wave: 'Sine', octave: 2, semi: 8, fine: 6 },
     },
     chains: {
       main: {
-        sends: { click: 1, noise: 0.85 },
-        items: {
-          band: { kind: 'filter', type: 'BP', cutoff: 1800, resonance: 0.3 },
-          // Its crack: the click's quiet body brought up to its peak
-          crack: { kind: 'drive', drive: 0.4 },
-        },
+        sends: { low: 1, high: 1 },
+        items: { crack: { kind: 'drive', drive: 0.6 } },
       },
     },
     amp: {
       attack: 0.001,
-      decay: 0.04,
+      decay: 0.03,
       sustain: 0,
       release: 0.03,
       velocity: 0.6,
@@ -1985,87 +2055,132 @@ export const FACTORY_PRESETS: readonly Preset[] = byCategory([
     },
   }),
   preset('Crash', 'Drums', {
-    // The hats' metal and noise, a little lower, ringing long
+    // The TR-808's six squares, 205.3, 304.4, 369.6, 522.7, 540 and 800 Hz
+    // at C4, as Werner, Abel and Smith measured them (ICMC-SMC 2014)
     inputs: {
-      square: { kind: 'osc', wave: 'Square', octave: 2 },
-      square2: { kind: 'osc', wave: 'Square', octave: 2, semi: 3, fine: 20 },
-      noise: { kind: 'noise' },
-      metal: { kind: 'ring', a: 'square', b: 'square2' },
+      m1: { kind: 'osc', wave: 'Square', semi: -4, fine: -20 },
+      m2: { kind: 'osc', wave: 'Square', semi: 3, fine: -38 },
+      m3: { kind: 'osc', wave: 'Square', semi: 6, fine: -2 },
+      m4: { kind: 'osc', wave: 'Square', octave: 1, fine: -2 },
+      m5: { kind: 'osc', wave: 'Square', octave: 1, semi: 1, fine: -45 },
+      m6: { kind: 'osc', wave: 'Square', octave: 2, semi: -5, fine: 35 },
     },
     chains: {
-      main: {
-        sends: { noise: 0.32, metal: 0.19 },
+      // The cymbal's three bands: the lower, near 3.4 kHz, and the upper,
+      // near 7.1 kHz, both on its Decay; the upper again past a highpass
+      // ringing near 10.5 kHz, short
+      low: {
+        sends: { m1: 0.25, m2: 0.25, m3: 0.25, m4: 0.25, m5: 0.25, m6: 0.25 },
         items: {
-          filter: { kind: 'filter', type: 'HP', cutoff: 4500, resonance: 0.1 },
+          band: { kind: 'filter', type: 'BP', cutoff: 3440, resonance: 0.3 },
+          filter: { kind: 'filter', type: 'HP', cutoff: 2500 },
+        },
+      },
+      high: {
+        sends: { m1: 0.25, m2: 0.25, m3: 0.25, m4: 0.25, m5: 0.25, m6: 0.25 },
+        items: {
+          band2: { kind: 'filter', type: 'BP', cutoff: 7100, resonance: 0.3 },
+          lowCut: { kind: 'filter', type: 'HP', cutoff: 5000 },
+        },
+      },
+      top: {
+        level: 0,
+        sends: { m1: 0.25, m2: 0.25, m3: 0.25, m4: 0.25, m5: 0.25, m6: 0.25 },
+        items: {
+          band3: { kind: 'filter', type: 'BP', cutoff: 7100, resonance: 0.3 },
+          ring: {
+            kind: 'filter',
+            type: 'HP',
+            cutoff: 10500,
+            resonance: 0.4,
+          },
         },
       },
     },
+    modulators: { bright: struck(0.3) },
+    routes: [{ from: 'bright', to: 'top.level', by: 1 }],
+    // Its 800 ms, its Decay at noon
     amp: {
       attack: 0.001,
-      decay: 1.6,
+      decay: 2.4,
       sustain: 0,
-      release: 1.2,
+      release: 2.4,
       velocity: 0.6,
       pan: 0.4,
     },
     sends: { c: 0.3 },
   }),
   preset('Boom', 'Drums', {
-    // A sine, falling only an octave and ringing on, a little driven: a
-    // long, low kick
-    inputs: { sine: { kind: 'osc', wave: 'Sine', octave: -1 } },
+    // The Kick's 808 at its own pitch (G1 at C4, its bridged-T near 49.5
+    // Hz) with its decay turned up, as Werner, Abel and Smith hear it
+    // stretched: a sine ringing on for seconds, its sigh heard, clean as
+    // the 808's; the wheel drives it
+    inputs: {
+      body: { kind: 'osc', wave: 'Sine', octave: -2, semi: -5 },
+      noise: { kind: 'noise' },
+    },
     chains: {
       main: {
-        sends: { sine: 0.45 },
-        items: { drive: { kind: 'drive', drive: 0.2 } },
+        sends: { body: 0.65 },
+        items: { drive: { kind: 'drive', drive: 0 } },
+      },
+      click: {
+        level: 0,
+        sends: { noise: 0.5 },
+        items: { filter: { kind: 'filter', cutoff: 2500 } },
       },
     },
-    modulators: { drop: { kind: 'env', attack: 0.001, decay: 0.05 } },
-    routes: [{ from: 'drop', to: 'voice.pitch', by: 12 }],
-    amp: {
-      attack: 0.001,
-      decay: 1.2,
-      sustain: 0,
-      release: 0.8,
-      velocity: 0.5,
+    modulators: {
+      punch: struck(0.032),
+      sigh: struck(1.2),
+      strike: struck(0.02),
     },
+    routes: [
+      { from: 'punch', to: 'voice.pitch', by: 27 },
+      { from: 'sigh', to: 'voice.pitch', by: 2.5 },
+      { from: 'strike', to: 'click.level', by: 1 },
+    ],
+    amp: { attack: 0.001, decay: 4, sustain: 0, release: 4, velocity: 0.5 },
   }),
   preset('Conga', 'Drums', {
-    inputs: {
-      head: { kind: 'osc', wave: 'Sine', semi: 7 },
-      slap: { kind: 'noise' },
-    },
-    chains: {
-      main: {
-        sends: { head: 1, slap: 0.1 },
-        items: { filter: { kind: 'filter', cutoff: 4000 } },
-      },
-    },
-    modulators: { drop: { kind: 'env', attack: 0.001, decay: 0.03 } },
+    // The TR-808's mid conga: a bridged-T at 280 Hz at C4, falling into it
+    // as its toms do, gone in 100 ms
+    inputs: { head: { kind: 'osc', wave: 'Sine', semi: 1, fine: 18 } },
+    chains: { main: { sends: { head: 1 } } },
+    modulators: { drop: struck(0.05) },
     routes: [{ from: 'drop', to: 'voice.pitch', by: 5 }],
     amp: {
       attack: 0.001,
-      decay: 0.22,
+      decay: 0.3,
       sustain: 0,
-      release: 0.18,
+      release: 0.3,
       velocity: 0.6,
       pan: 0.3,
     },
   }),
   preset('Clave', 'Drums', {
-    // A triangle high up, gone at once: two sticks of hard wood
-    inputs: { wood: { kind: 'osc', wave: 'Triangle', octave: 1, semi: 7 } },
-    chains: {
-      main: {
-        sends: { wood: 1 },
-        items: { filter: { kind: 'filter', cutoff: 8000 } },
+    // The TR-808's claves: a bridged-T at 2.5 kHz at C4, gone in 25 ms;
+    // past an oscillator's tuning, so an envelope held open lifts it the
+    // last octave
+    inputs: {
+      wood: { kind: 'osc', wave: 'Sine', octave: 2, semi: 3, fine: 8 },
+    },
+    chains: { main: { sends: { wood: 0.85 } } },
+    modulators: {
+      lift: {
+        kind: 'env',
+        attack: 0.001,
+        decay: 0.001,
+        sustain: 1,
+        release: 10,
       },
     },
+    routes: [{ from: 'lift', to: 'voice.pitch', by: 12 }],
     amp: {
       attack: 0.001,
-      decay: 0.09,
+      decay: 0.075,
       sustain: 0,
-      release: 0.06,
+      release: 0.075,
       velocity: 0.6,
       pan: -0.4,
     },
@@ -4415,42 +4530,37 @@ export const FACTORY_PRESETS: readonly Preset[] = byCategory([
   }),
 
   preset('Punch Kick', 'Drums', {
-    // A sine struck three octaves high and dropping to G1 in a few
-    // hundredths of a second, a tick of noise on top, driven for punch
+    // The TR-909's bass drum as Sound On Sound reads it: a triangle shaped
+    // into a sine (its third harmonic 55 dB under, its fifth 39), its
+    // pitch thrown up and falling slowly onto G1 at C4, and a click of
+    // lowpassed noise on an envelope of its own
     inputs: {
-      body: { kind: 'osc', wave: 'Sine', octave: -2, semi: -5 },
+      body: { kind: 'osc', wave: 'Triangle', octave: -2, semi: -5 },
       noise: { kind: 'noise' },
     },
     chains: {
       main: {
-        sends: { body: 0.9 },
-        items: { drive: { kind: 'drive', drive: 0.35 } },
+        sends: { body: 1 },
+        items: { shaper: { kind: 'drive', drive: 0.14 } },
       },
       click: {
         level: 0,
         sends: { noise: 0.6 },
-        items: { filter: { kind: 'filter', type: 'HP', cutoff: 3000 } },
+        items: { filter: { kind: 'filter', cutoff: 5000 } },
       },
     },
-    modulators: {
-      drop: { kind: 'env', attack: 0.001, decay: 0.05 },
-      tick: { kind: 'env', attack: 0.001, decay: 0.012 },
-    },
+    modulators: { sweep: struck(0.2), tick: struck(0.015) },
     routes: [
-      { from: 'drop', to: 'voice.pitch', by: 30 },
+      { from: 'sweep', to: 'voice.pitch', by: 20 },
       { from: 'tick', to: 'click.level', by: 1 },
     ],
-    amp: {
-      attack: 0.001,
-      decay: 0.5,
-      sustain: 0,
-      release: 0.05,
-      velocity: 0.8,
-    },
+    amp: { attack: 0.001, decay: 0.9, sustain: 0, release: 0.9, velocity: 0.8 },
   }),
   preset('Deep Kick', 'Drums', {
     // A round sine on F1, snapped down two octaves into its note and held
-    // half a second, with a soft click
+    // half a second, with a soft click; warmed only a little, its third
+    // harmonic 34 dB under it, so the thump carries no note of its own,
+    // and let go it rings on
     inputs: {
       body: { kind: 'osc', wave: 'Sine', octave: -2, semi: -7 },
       noise: { kind: 'noise' },
@@ -4458,7 +4568,7 @@ export const FACTORY_PRESETS: readonly Preset[] = byCategory([
     chains: {
       main: {
         sends: { body: 1 },
-        items: { drive: { kind: 'drive', drive: 0.15 } },
+        items: { drive: { kind: 'drive', drive: 0.05 } },
       },
       click: {
         level: 0,
@@ -4474,7 +4584,7 @@ export const FACTORY_PRESETS: readonly Preset[] = byCategory([
       { from: 'drop', to: 'voice.pitch', by: 24 },
       { from: 'tick', to: 'click.level', by: 1 },
     ],
-    amp: { attack: 0.001, decay: 1, sustain: 0, release: 0.1, velocity: 0.8 },
+    amp: { attack: 0.001, decay: 1, sustain: 0, release: 1, velocity: 0.8 },
   }),
   preset('Tight Snare', 'Drums', {
     // Two sines a little under 200 and over 300 hertz, bent down as

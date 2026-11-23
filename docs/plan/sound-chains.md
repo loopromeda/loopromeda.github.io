@@ -308,6 +308,95 @@ down). A phaser on the Clav took 2.3 dB
 off it, more than its send could give back, so it plays dry, as funk's
 clavinets did.
 
+## The kit
+
+The factory kit rebuilt from what is published of the drum machines'
+circuits (ashon, 2026-11-23: "드럼 키트도 좋은 신디.드럼 롬이 있거나
+알려진 자료가 있으면 그걸로 좀 수정해 줘. 킥에 음이.들어가서 이 부분을
+좀 더 제대로 다듬을 필요가 있겠어"). Not from a ROM's samples: those are
+licensed, and the app plays only what it synthesizes. The TR-808's
+service notes describe each voice's circuit and give each its tone (a
+period and its hertz, its Tuning at noon) and its decay; two papers
+measure its bass drum and its metal. The TR-909's notes give no such
+table, so only Punch Kick follows it, as Sound On Sound reads its bass
+drum.
+
+The kick's note was its old body's: a chip's triangle, its third
+harmonic 20 dB under the note (at 165 Hz), swept over 30 semitones as
+slowly as a note bends. The 808's bridged-T rings a sine: its first
+cycles more than an octave higher, for about 6 ms, heard as its punch,
+not as a pitch; then its sigh, a few hertz over a tenth of a second
+(Werner, Abel and Smith). The Kick does that now, fitted to the paper's
+first zero crossings, its tail's harmonics 66 dB and more under it.
+
+| Pad        | The 808's, as its notes give it                                                                                            | Here, at C4                                                                                           | LUFS  |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | ----- |
+| Kick       | BD: a bridged-T near 49.5 Hz (56 typical), its decay 50, 300 or 800 ms                                                     | a sine on A1; a punch of 27 st (τ 3.5 ms), a sigh of 2.5 st (τ 54 ms); a click its velocity brightens | −23.9 |
+| Snare      | SD: 238 and 476 Hz, 60 ms; its snappy, noise through a highpass                                                            | the two sines; white noise through a highpass at 1.5 kHz, falling in 100 ms                           | −24.4 |
+| Closed Hat | CH: six squares, 205.3 to 800 Hz, through a band near 7.1 kHz, 50 ms                                                       | the six, free-running; a band at 7.1 kHz, a highpass at 6 kHz                                         | −30.9 |
+| Open Hat   | OH: the same, 90, 450 or 600 ms                                                                                            | 450 ms; a highpass at 5.5 kHz                                                                         | −26.1 |
+| Low Tom    | LT: 80, 90 or 100 Hz, 200 ms; pink noise a little longer                                                                   | 90 Hz, falling 5 st into it; noise through a lowpass at 1.5 kHz                                       | −24.8 |
+| Tom        | MT: 120, 135 or 160 Hz, 130 ms                                                                                             | 135 Hz                                                                                                | −25.9 |
+| High Tom   | HT: 165, 185 or 220 Hz, 100 ms                                                                                             | 185 Hz                                                                                                | −26.7 |
+| Clap       | HC: noise in a band, a sawtooth's bursts until its 30 ms pulse ends halfway through the third; a reverb longer, 100 ms     | a band at 1 kHz, bursts 12 ms apart, the reverb 100 ms                                                | −23.1 |
+| Rim        | RS: 455 and 1667 Hz, 10 ms                                                                                                 | the two, driven for its crack                                                                         | −31.2 |
+| Cowbell    | CB: squares at 540 and 800 Hz in a band, a drop and then a tail, 50 ms                                                     | the two, free-running, a band at 800 Hz; a strike falling in 10 ms over a tail of 130                 | −26.4 |
+| Crash      | CY: the six in a band near 3.4 kHz and one near 7.1, its top band short past a highpass near 10.5 kHz; 350, 800 or 1200 ms | the three bands, the top one gone in 100 ms; 800 ms                                                   | −26.3 |
+| Boom       | BD, its decay up                                                                                                           | the Kick's on G1, ringing 4 s                                                                         | −23.4 |
+| Conga      | MC: 250, 280 or 310 Hz, 100 ms                                                                                             | 280 Hz                                                                                                | −26.6 |
+| Clave      | CL: 2.5 kHz, 25 ms                                                                                                         | 2.5 kHz, its last octave past an oscillator's tuning lifted by an envelope held open                  | −30.1 |
+
+What it took:
+
+- **A decay read as about −27 dB.** The notes do not say what their
+  decay measures; read as the time a voice falls to about −27 dB, an
+  envelope's decay (to −80 dB) is three times it: the tom's 130 ms a
+  decay of 0.39 s.
+- **Where no figure was found, a choice**: the toms' and the congas'
+  drop (the notes say only that two diodes raise the start; 5 st, τ 5
+  ms here), the hats' highpasses, the cowbell's band (measured in a
+  paper behind a paywall), the snare's highpass and its snappy's decay,
+  the clap's band (a blog's 1 kHz) and its reverb's level.
+- **Struck once.** Every pad's amp lets go over its decay, and the
+  envelopes shaping it (`struck`) too, so a step's end cuts nothing: the
+  old pads' releases, 30 to 60 ms, chopped them at a sixteenth's end.
+- **A pad levelled by its parts, never by `trim`**: a kit replaces a
+  preset's sends, and `trim` turns those down, so the Crash came 12 dB
+  too loud into the kit until its six sends were turned down instead (a
+  test holds every kit pad's A send at 1).
+- **The clap's bursts from two LFOs.** An LFO stops at 50 Hz, so each
+  12 ms burst is half a saw's cycle: the first half falling in one
+  chain, the second, a square lifting it from under zero, in another;
+  its 30 ms pulse, an envelope falling as another rises, their sum near
+  1 until it ends.
+- **The toms and Deep Kick 1.8 to 3.7 LU under their target**: a sine at
+  its full level is all one voice gives, short as the 808's are (the old
+  kit's stood as far under).
+
+Punch Kick is the 909's: a triangle through a drive at 0.14, which
+rounds it into a near sine (its third harmonic 55 dB under, its fifth
+39), its pitch thrown 20 st up and falling (τ 22 ms) onto G1, and a
+click of noise lowpassed at 5 kHz. The old one's drive put its third
+harmonic 12 dB under the note. Deep Kick keeps its sine, driven 0.05
+where it was 0.15 (its third harmonic 34 dB under, from 18) and let go
+over 1 s.
+
+The kit at its heaviest (16 pads, 4 voices each, all sounding) costs
+0.55 ms a block on this Mac, 0.41 before: the hats' and the crash's six
+oscillators.
+
+Sources: the TR-808's service notes,
+<https://www.manualslib.com/manual/1294765/Roland-Tr-808.html?page=14>
+(its tones and decays) and
+<https://www.manualslib.com/manual/1294765/Roland-Tr-808.html?page=6>
+(its voices' circuits); its bass drum,
+<https://dafx14.fau.de/papers/dafx14_kurt_james_werner_a_physically_informed,_ci.pdf>;
+its cymbal and hats,
+<https://speech.di.uoa.gr/ICMC-SMC-2014/images/VOL_2/1453.pdf>; the
+909's bass drum,
+<https://www.soundonsound.com/techniques/practical-bass-drum-synthesis>;
+the clap's band, <https://www.baratatronix.com/blog/cascadia-808-clap-synthesis>.
+
 ## The library
 
 Asked for by ashon, 2026-11-17, through Main: "사운드 쪽으로 넘겨서
@@ -605,17 +694,17 @@ never a product's or a player's.
 
 **Drums**
 
-| Sound      | Heard in               | Preset                      | Source                                                                              |
-| ---------- | ---------------------- | --------------------------- | ----------------------------------------------------------------------------------- |
-| Kick       | house, techno, hip-hop | Kick, Punch Kick, Deep Kick | <https://www.soundonsound.com/techniques/practical-bass-drum-synthesis>             |
-| Snare      | all                    | Snare, Tight Snare          | <https://www.soundonsound.com/techniques/practical-snare-drum-synthesis>            |
-| Clap       | house, pop, trap       | Clap                        | <https://www.kvraudio.com/forum/viewtopic.php?p=8606994>                            |
-| Hats       | all electronic         | Closed Hat, Open Hat        | <https://www.ericasynths.lv/media/HIHAT_MANUAL_1.pdf>                               |
-| Cymbal     | electronic, synthwave  | Crash, Ride                 | <https://github.com/rupa/synth-secrets>                                             |
-| Toms       | synthwave, 80s, techno | Tom, Low Tom, High Tom      | <https://www.attackmagazine.com/technique/tutorials/drum-synthesis-in-logic-es2/2/> |
-| Cowbell    | house, Latin           | Cowbell                     | <https://speech.di.uoa.gr/ICMC-SMC-2014/images/VOL_2/1453.pdf>                      |
-| Rim, clave | electro, house         | Rim, Clave                  | <https://cim.mcgill.ca/~clark/nordmodularbook/nm_percussion.html>                   |
-| Shaker     | house, pop, lo-fi      | Shaker                      | <https://cim.mcgill.ca/~clark/nordmodularbook/nm_percussion.html>                   |
+| Sound      | Heard in               | Preset                      | Source                                                                                |
+| ---------- | ---------------------- | --------------------------- | ------------------------------------------------------------------------------------- |
+| Kick       | house, techno, hip-hop | Kick, Punch Kick, Deep Kick | <https://dafx14.fau.de/papers/dafx14_kurt_james_werner_a_physically_informed,_ci.pdf> |
+| Snare      | all                    | Snare, Tight Snare          | <https://www.manualslib.com/manual/1294765/Roland-Tr-808.html?page=14>                |
+| Clap       | house, pop, trap       | Clap                        | <https://www.manualslib.com/manual/1294765/Roland-Tr-808.html?page=6>                 |
+| Hats       | all electronic         | Closed Hat, Open Hat        | <https://speech.di.uoa.gr/ICMC-SMC-2014/images/VOL_2/1453.pdf>                        |
+| Cymbal     | electronic, synthwave  | Crash, Ride                 | <https://github.com/rupa/synth-secrets>                                               |
+| Toms       | synthwave, 80s, techno | Tom, Low Tom, High Tom      | <https://www.manualslib.com/manual/1294765/Roland-Tr-808.html?page=14>                |
+| Cowbell    | house, Latin           | Cowbell                     | <https://speech.di.uoa.gr/ICMC-SMC-2014/images/VOL_2/1453.pdf>                        |
+| Rim, clave | electro, house         | Rim, Clave                  | <https://www.manualslib.com/manual/1294765/Roland-Tr-808.html?page=14>                |
+| Shaker     | house, pop, lo-fi      | Shaker                      | <https://cim.mcgill.ca/~clark/nordmodularbook/nm_percussion.html>                     |
 
 **Starting points**
 
