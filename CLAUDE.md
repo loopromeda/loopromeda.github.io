@@ -9,7 +9,8 @@ kit, then a step sequencer, under way:
 as many as are added), a sequence for each, then a song, under way,
 knob lanes in a loop, the sequencer up top (a tab of the editor's
 rail), recording what is played into a loop, a note's ornaments, ghost
-notes, and projects (a session saved under a name):
+notes, projects (a session saved under a name), and a loop put in a step
+at a time (step input):
 `docs/plan/tracks-and-song.md`; the transport on the tab rail, then
 MIDI (notes in, learn, clock out and in), under way:
 `docs/plan/transport-and-midi.md`. What real devices did:
@@ -165,7 +166,9 @@ src/engine/   AudioContext lifecycle, unlock, node wiring; the sound,
               on the next bar (each loop counted from where it came
               in: origin, loopStep), and recording (a
               Recorder fed where each note was heard, the output's
-              latency taken off), and a note of the Seq tab's loop
+              latency taken off), step input (the cursor on a step of
+              the Seq tab's loop, moved by hand, the notes played put
+              at it: setStepInput), and a note of the Seq tab's loop
               heard on its own while stopped (auditionNote); the
               compressors' and limiters' reductions (reductions.ts:
               who watches which, many at once, the list told under a
@@ -211,7 +214,10 @@ src/state/    params.ts: the knob schema and the old parameters;
               is played while recording written into a loop (on the
               sixteenth nearest, as long as held, after its step has
               played), Overdub or Replace, a loop of no notes growing
-              with the take, which sets its length;
+              with the take, which sets its length; stepInput.ts:
+              a note played put at the step cursor, or taken away
+              there, drawn out while held as the cursor moves on, and
+              the cursor moved round the loop;
               project.ts: a project, the session (the tracks, the mix,
               the song) kept under a name, the list of them and a
               project's file; projects.ts: the projects kept in
@@ -314,6 +320,12 @@ src/ui/       React components; SoundEditor.tsx the sound as tiles
               OrnamentPanel.tsx sets in the lanes' place, heard
               while stopped; with Ghost on a tap puts a ghost note,
               hollow with an x, or makes a note one and back;
+              with Step on, step input: a cursor framed on a step,
+              each note played below put there, StepInputPanel.tsx
+              in the lanes' place moving it a step or a beat (and
+              the arrow keys), a tap or a bar's chip moving it too,
+              the bar shown the cursor's and a note put out of sight
+              its rows brought in;
               RowNavigator.tsx a camera over
               its rows; under it LaneStrip.tsx its knob lanes, one
               over another, drawn on, and LanePicker.tsx in its
@@ -325,7 +337,8 @@ src/ui/       React components; SoundEditor.tsx the sound as tiles
               the swing, the meter (2/4 to 5/4, 6/8 to 12/8), the
               click, the count-in, Overdub or Replace and each
               track's loop on or off;
-              transportKeys.ts Space, the arrows and Home on it);
+              transportKeys.ts Space, the arrows and Home on it,
+              the arrows step input's cursor while it is on);
               the sound's Out and the
               mix's Master hold views of the output, as many side by
               side as keep their shapes (ViewsAcross), or the Master

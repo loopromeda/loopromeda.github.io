@@ -23,6 +23,8 @@ import {
   loopOn,
   pickScene,
   playedNotes,
+  putNote,
+  removeNote,
   setLoopOn,
   type Loop,
   type Note,
@@ -31,6 +33,7 @@ import {
 } from '../state/song'
 import { barSteps, beatSteps, sameMeter } from '../state/meter'
 import { Recorder, type RecordMode } from '../state/record'
+import { cursorIn, moveCursor, stepPlay, stepTie } from '../state/stepInput'
 import { lanesPlayed, sameLanes, type PlayedLane } from '../state/lanes'
 import { knobChanges } from '../state/sound/diff'
 import { initSound, type Sound } from '../state/sound/sound'
@@ -212,6 +215,19 @@ interface Held {
   readonly pad?: number
 }
 
+/**
+ * What a key held while step input is on put: the track's loop, the step
+ * and the key, whether it put a note there (or took one away), and
+ * whether a kit's pad (a step long, never drawn out)
+ */
+interface StepHeld {
+  readonly track: string
+  readonly step: number
+  readonly key: number
+  readonly put: boolean
+  readonly kit: boolean
+}
+
 /** A pad a kit has not: nothing to show */
 const EMPTY = initSound()
 
@@ -354,6 +370,13 @@ export class Engine {
   #local = (step: number): number => step - this.#origin
   /** How recording meets the notes there: the device's setting */
   #recordMode: RecordMode = 'overdub'
+  /**
+   * Step input (src/state/stepInput.ts): the cursor, a step of the Seq
+   * tab's loop, or none while it is off
+   */
+  #stepCursor: number | undefined
+  /** What each key held put while step input is on, by touch id */
+  readonly #stepHeld = new Map<number, StepHeld>()
   readonly #transportListeners = new Set<() => void>()
   #step = -1
   readonly #stepListeners = new Set<(step: number) => void>()
@@ -465,10 +488,16 @@ export class Engine {
    * Touch id plays note on the track picked, a synth's; one holding a
    * note elsewhere (a pad, another track) lets it go. Nothing on a kit.
    * With slide, the finger is placed there (the XY pad): the note starts
-   * with that Slide, and glides to it as its pitch does.
+   * with that Slide, and glides to it as its pitch does. With step input
+   * on, the note goes into the track's loop at the cursor too
+   * (setStepInput).
    */
   noteOn(id: number, note: number, velocity = 1, slide?: number): void {
-    this.#noteOn(this.getTrack(), id, note, velocity, slide)
+    const track = this.getTrack()
+    this.#noteOn(track, id, note, velocity, slide)
+    if (track.kind === 'synth') {
+      this.#stepPut(track.id, id, Math.round(note), velocity, false)
+    }
   }
 
   #noteOn(
@@ -494,9 +523,15 @@ export class Engine {
   /**
    * Touch id strikes pad of the kit picked (at the pad's note), held as a
    * key is; one holding another note lets it go. Nothing on a synth.
+   * With step input on, the pad goes into the kit's loop at the cursor
+   * too (setStepInput).
    */
   hit(id: number, pad: number, velocity = 1): void {
-    this.#hit(this.getTrack(), id, pad, velocity)
+    const track = this.getTrack()
+    this.#hit(track, id, pad, velocity)
+    if (track.kind === 'kit' && track.pads[pad]) {
+      this.#stepPut(track.id, id, pad, velocity, true)
+    }
   }
 
   #hit(track: Track, id: number, pad: number, velocity: number): void {
@@ -524,6 +559,7 @@ export class Engine {
 
   /** Touch id lets go, on the track and the pad it holds */
   noteOff(id: number): void {
+    this.#stepHeld.delete(id)
     const held = this.#held.get(id)
     if (!held) return
     this.#held.delete(id)
@@ -559,6 +595,7 @@ export class Engine {
   /** Every note stops at once, the sequencer with them */
   panic(): void {
     this.#held.clear()
+    this.#stepHeld.clear()
     this.#post({ t: 'panic' })
     this.#stopped()
   }
@@ -676,6 +713,7 @@ export class Engine {
   setRecording(on: boolean): void {
     if (on === this.#recorder.on || !this.#node) return
     if (on) {
+      this.#stepOff()
       const track = this.getTrack().id
       this.pickSeqTrack(track)
       const next = !this.#playing
@@ -697,6 +735,119 @@ export class Engine {
     if (!this.#recorder.on) return
     this.#post({ t: 'record', on: false })
     this.#recorder.stop(this.#local(this.#step + 1))
+  }
+
+  /**
+   * Where step input puts the notes played: a step of the Seq tab's loop
+   * (its last, where the loop is shorter now); none while it is off
+   */
+  readonly getStepCursor = (): number | undefined =>
+    this.#stepCursor === undefined
+      ? undefined
+      : cursorIn(this.#stepCursor, this.getSeqLoop().steps)
+
+  /**
+   * Step input on, its cursor at step at of the Seq tab's loop, or off
+   * (src/state/stepInput.ts): each note played on the play surface
+   * (noteOn, hit: the keys, the pads, the XY pad on its nearest semitone,
+   * the computer keys) goes into the loop of the track played at the
+   * cursor, not in time, and the cursor moves only when moved. On,
+   * recording ends, and the Seq tab shows the track played and follows
+   * it. Its listeners are the transport's.
+   */
+  setStepInput(on: boolean, at = 0): void {
+    if (!on) {
+      if (this.#stepCursor === undefined) return
+      this.#stepOff()
+    } else {
+      this.#endRecording()
+      this.pickSeqTrack(this.getTrack().id)
+      this.#stepCursor = cursorIn(at, this.getSeqLoop().steps)
+    }
+    for (const listener of this.#transportListeners) listener()
+  }
+
+  /** The cursor at step of the Seq tab's loop, while step input is on */
+  setStepCursor(step: number): void {
+    if (this.#stepCursor === undefined) return
+    const to = cursorIn(step, this.getSeqLoop().steps)
+    if (to === this.#stepCursor) return
+    this.#stepCursor = to
+    for (const listener of this.#transportListeners) listener()
+  }
+
+  /**
+   * Moves the cursor by steps, round the Seq tab's loop: a synth's key
+   * held draws the note it put out (or back) to reach it, unless the
+   * cursor went round
+   */
+  moveStepCursor(by: number): void {
+    const from = this.#stepCursor
+    if (from === undefined) return
+    const { to, wrapped } = moveCursor(from, by, this.getSeqLoop().steps)
+    this.#stepCursor = to
+    if (!wrapped) {
+      for (const held of this.#stepHeld.values()) {
+        if (!held.put || held.kit) continue
+        this.#stepEdit(held.track, (loop) =>
+          stepTie(loop, held.step, held.key, to)
+        )
+      }
+    }
+    for (const listener of this.#transportListeners) listener()
+  }
+
+  #stepOff(): void {
+    this.#stepCursor = undefined
+    this.#stepHeld.clear()
+  }
+
+  /**
+   * A key played on the play surface while step input is on, by touch id:
+   * put at the cursor into the loop of the track it sounds on, or taken
+   * away there where a note of it starts on the cursor. A touch holding
+   * one already moved to key: the note it put goes with it.
+   */
+  #stepPut(
+    track: string,
+    id: number,
+    key: number,
+    velocity: number,
+    kit: boolean
+  ): void {
+    const cursor = this.#stepCursor
+    if (cursor === undefined) return
+    const step = cursorIn(cursor, loopOf(this.#song, track).steps)
+    const was = this.#stepHeld.get(id)
+    if (was?.track === track && was.step === step && was.key === key) return
+    if (!was) {
+      let put = false
+      this.#stepEdit(track, (loop) => {
+        const played = stepPlay(loop, step, key, velocity)
+        put = played.put
+        return played.loop
+      })
+      this.#stepHeld.set(id, { track, step, key, put, kit })
+      return
+    }
+    const note = { step, key, length: 1, velocity }
+    if (was.put && was.track !== track) {
+      this.#stepEdit(was.track, (loop) => removeNote(loop, was.step, was.key))
+    }
+    this.#stepEdit(track, (loop) =>
+      putNote(
+        was.put && was.track === track
+          ? removeNote(loop, was.step, was.key)
+          : loop,
+        note
+      )
+    )
+    this.#stepHeld.set(id, { track, step, key, put: true, kit })
+  }
+
+  /** Plays what edit makes of track's loop, the loop put on as it is */
+  #stepEdit(track: string, edit: (loop: Loop) => Loop): void {
+    this.setSong(setLoopOn(editLoop(this.#song, track, edit), track, true))
   }
 
   /**
@@ -1196,9 +1347,9 @@ export class Engine {
     this.#mix = fitted
     if (pickChanged) this.#pick = picked
     // The Seq tab's track gone, it shows the one played; so it does
-    // while recording, the track played followed
+    // while recording or in step input, the track played followed
     if (
-      (pickChanged && this.#recorder.on) ||
+      (pickChanged && (this.#recorder.on || this.#stepCursor !== undefined)) ||
       !tracks.some((track) => track.id === this.#seqTrack)
     ) {
       this.#seqTrack = picked.track
@@ -1273,6 +1424,8 @@ export class Engine {
   pickSeqTrack(id: string): void {
     if (id === this.#seqTrack) return
     if (!this.#tracks.some((track) => track.id === id)) return
+    // Step input writes the loop of the track played: it is picked too
+    if (this.#stepCursor !== undefined) this.pickTrack(id)
     this.#seqTrack = id
     for (const listener of this.#soundListeners) listener()
   }

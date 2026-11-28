@@ -11,6 +11,7 @@ import {
   loopWindow,
   noteBox,
   othersRows,
+  revealKey,
   rowsFit,
   shiftWindow,
 } from './steps'
@@ -238,5 +239,39 @@ describe('loopWindow', () => {
   it('frames least rows from 0 for a loop of no notes', () => {
     expect(loopWindow([])).toEqual({ first: 0, rows: 6 })
     expect(loopWindow([], 3)).toEqual({ first: 0, rows: 3 })
+  })
+})
+
+describe('revealKey', () => {
+  it('leaves the rows alone where the key stands in them', () => {
+    expect(revealKey(48, 48, 12, 0, 127)).toBe(48)
+    expect(revealKey(48, 59, 12, 0, 127)).toBe(48)
+  })
+
+  it('moves the rows as little as brings the key in', () => {
+    // Above: the key the top row
+    expect(revealKey(48, 60, 12, 0, 127)).toBe(49)
+    expect(revealKey(48, 72, 12, 0, 127)).toBe(61)
+    // Below: the key the bottom row
+    expect(revealKey(48, 47, 12, 0, 127)).toBe(47)
+    expect(revealKey(48, 36, 12, 0, 127)).toBe(36)
+  })
+
+  it('keeps the rows within the reach', () => {
+    expect(revealKey(100, 127, 12, 0, 127)).toBe(116)
+    expect(revealKey(10, 0, 12, 0, 127)).toBe(0)
+    // A kit's 16 pads, 8 shown
+    expect(revealKey(0, 15, 8, 0, 15)).toBe(8)
+    expect(revealKey(8, 3, 8, 0, 15)).toBe(3)
+  })
+
+  it('brings in every key it is given, wherever the rows stand', () => {
+    for (let first = 0; first <= 116; first += 7) {
+      for (let key = 0; key <= 127; key += 5) {
+        const to = revealKey(first, key, 12, 0, 127)
+        expect(key).toBeGreaterThanOrEqual(to)
+        expect(key).toBeLessThan(to + 12)
+      }
+    }
   })
 })

@@ -972,13 +972,17 @@ const TRY_ID = -1
 const TRY_MS = 180
 let trying: ReturnType<typeof setTimeout> | undefined
 
-/** Strikes pad once, for its note just set to be heard */
+/**
+ * Strikes pad of the kit played once, for its note just set to be heard:
+ * as a row of the step grid plays it (playKey), so step input leaves it
+ * out of the loop
+ */
 function tryPad(engine: Engine, pad: number): void {
   if (trying !== undefined) {
     clearTimeout(trying)
     engine.noteOff(TRY_ID)
   }
-  engine.hit(TRY_ID, pad)
+  engine.playKey(TRY_ID, engine.getTrack().id, pad)
   trying = setTimeout(() => {
     trying = undefined
     engine.noteOff(TRY_ID)

@@ -550,6 +550,43 @@ engine's part by Main, the screen's by UX.
 - Not built: a loop's own meter (polymeter), a meter that changes within
   the song, beats grouped unevenly (7/8 as 2+2+3), x/16.
 
+### L. Step input
+
+Asked for by ashon, 2026-11-22 ("시퀀스를 찍을 때 한스텝을 화살표로
+움직이면서 아래 키패드로 노트를 찍고 다음 스텝으로 가서 또 찍고 이런
+식으로 스케치 할 수 있게 만들어 줘"): a sequence sketched a step at a
+time, not in time, a step moved to by arrows and its notes played on the
+play surface below. The engine's part by Main, the screen's by UX.
+
+- **A cursor** (`Engine.setStepInput`, `getStepCursor`): on, it stands
+  on one step of the Seq tab's loop (on its last, where the loop is
+  made shorter under it), and moves only when moved: a step back or on
+  (`moveStepCursor`), round the loop, or put on a step (`setStepCursor`).
+  It does not move as a note is put: ashon moves it, as asked.
+- **What goes in** (`src/state/stepInput.ts`, pure): each note played on
+  the play surface (`Engine.noteOn`, `hit`: the keys, the pads, the XY
+  pad on the semitone nearest where it is pressed, the kit's pads, the
+  computer keys) goes into the loop of the track played, at the cursor,
+  a step long, as hard as played; keys held at once make a chord. A key
+  played where a note of it starts on the cursor takes that note away; a
+  finger slid to another key takes the note it put with it. A note of
+  the key held over the cursor from before is cut short of it, as on the
+  grid. The loop is put on as it is written. What the grid plays itself
+  (its rows' names, a note put: `Engine.playKey`) and a pad tried from
+  its panel do not go in.
+- **Held, a note grows**: a synth's key held while the cursor moves on
+  draws its note out to reach the cursor (back, to a step at least, as
+  it moves back), short of the next note of its key; not as the cursor
+  goes round, and a kit's pad stays a step.
+- **The track**: the track played, as recording's; step input on shows
+  it on the Seq tab, which follows a track picked below, and a track
+  picked on the Seq tab is picked to play too, so the loop shown is the
+  one the keys write. Step input and recording leave each other off.
+  While the sequencer plays, a note put sounds as played and then from
+  the loop as the sequencer passes it.
+- Not built: the cursor moving on by itself after a note; a step other
+  than the sixteenth; a ghost or an ornament put from the play surface.
+
 ## Projects
 
 Asked for by ashon, 2026-11-13 ("시퀀스와 현재 악기 구성을 전부 저장할

@@ -148,6 +148,23 @@ export function shiftWindow(
 }
 
 /**
+ * The first key shown once key is brought into the rows shown, moved as
+ * little as it takes (none when it stands there already): within
+ * low..high, as shiftWindow keeps it. A note step input put out of sight
+ * comes into it.
+ */
+export function revealKey(
+  first: number,
+  key: number,
+  rows: number,
+  low: number,
+  high: number
+): number {
+  const by = key < first ? key - first : Math.max(0, key - (first + rows - 1))
+  return shiftWindow(first, by, rows, low, high)
+}
+
+/**
  * The rows of the grid another track plays in the bar shown, of columns
  * steps: the keys of the notes whose step falls in it, each loop's own
  * length wrapped under the bar (a two-bar loop shows its second bar under

@@ -125,14 +125,16 @@ const RECORD_LABELS: readonly { value: RecordMode; label: string }[] = [
 /**
  * The transport's keys on the page, for a desktop (transportKeys.ts):
  * Space plays and stops, the arrows move a beat back and on (with Shift a
- * bar), Home goes to the first
+ * bar), Home goes to the first. While step input is on, the arrows move
+ * its cursor a step (with Shift a beat of the song's meter).
  */
 export function useTransportKeys(engine: Engine): void {
   useEffect(() => {
     // The Space that played presses no button focused as it comes up
     let spaceTaken = false
     const down = (event: KeyboardEvent) => {
-      const action = transportKey(event)
+      const stepping = engine.getStepCursor() !== undefined
+      const action = transportKey(event, stepping)
       if (action === undefined) return
       event.preventDefault()
       if (action.kind === 'toggle') {
@@ -142,6 +144,11 @@ export function useTransportKeys(engine: Engine): void {
         else engine.play()
       } else if (action.kind === 'start') {
         engine.rewind()
+      } else if (action.kind === 'cursor') {
+        const beat = beatSteps(engine.getSong().meter)
+        engine.moveStepCursor(
+          action.unit === 'beat' ? action.by * beat : action.by
+        )
       } else {
         engine.seek(action.beats)
       }

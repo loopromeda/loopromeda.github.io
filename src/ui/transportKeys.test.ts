@@ -62,6 +62,45 @@ describe('transportKey', () => {
     expect(transportKey(press('Home', shift))).toBeUndefined()
   })
 
+  it('moves step input’s cursor with the arrows, a beat with Shift', () => {
+    const stepping = true
+    expect(transportKey(press('ArrowLeft'), stepping)).toEqual({
+      kind: 'cursor',
+      by: -1,
+      unit: 'step',
+    })
+    expect(transportKey(press('ArrowRight'), stepping)).toEqual({
+      kind: 'cursor',
+      by: 1,
+      unit: 'step',
+    })
+    expect(
+      transportKey(press('ArrowLeft', { shiftKey: true }), stepping)
+    ).toEqual({ kind: 'cursor', by: -1, unit: 'beat' })
+    expect(
+      transportKey(press('ArrowRight', { shiftKey: true }), stepping)
+    ).toEqual({ kind: 'cursor', by: 1, unit: 'beat' })
+  })
+
+  it('keeps Space and Home the transport’s while stepping', () => {
+    expect(transportKey(press(' '), true)).toEqual(TOGGLE)
+    expect(transportKey(press('Home'), true)).toEqual({ kind: 'start' })
+  })
+
+  it('leaves the arrows to a field and a slider while stepping too', () => {
+    for (const kind of ['input', '[role=slider]', '[role=listbox]']) {
+      expect(
+        transportKey(press('ArrowRight', { target: element(kind) }), true)
+      ).toBeUndefined()
+    }
+    expect(
+      transportKey(press('ArrowRight', { defaultPrevented: true }), true)
+    ).toBeUndefined()
+    expect(
+      transportKey(press('ArrowLeft', { metaKey: true }), true)
+    ).toBeUndefined()
+  })
+
   it('leaves other keys alone, and keys with another modifier', () => {
     expect(transportKey(press('ArrowUp'))).toBeUndefined()
     expect(transportKey(press('Enter'))).toBeUndefined()

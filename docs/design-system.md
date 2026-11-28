@@ -135,17 +135,17 @@ belong to the graph's tiles and to states (picked, keyboard focus).
 Engine-free: each takes plain props and callbacks. Grouped by the
 `@category` tag in each one's JSDoc.
 
-| Category   | Components                                                                          |
-| ---------- | ----------------------------------------------------------------------------------- |
-| Controls   | `ValueKnob`, `Switch`, `IconButton`, `SmallIconButton`, `BarIconButton`, `Dropdown` |
-| Overlays   | `Popover`, `MoreMenu`, `MenuButton`, `ConfirmDialog`                                |
-| Settings   | `SettingGroup`, `SettingRow`, `SwitchRow`, `ChoiceRow`                              |
-| Layout     | `FadeRow`                                                                           |
-| Navigation | `KeysNavigator`, `RowNavigator`                                                     |
-| Play       | `Keys`, `Pads`, `KitPads`, `XyPad` (played through `Hands`)                         |
-| Panels     | `OrnamentPanel`, `AlgorithmChart`, `LanePicker`, `OutputCells`, `SurfacePicker`     |
-| Toolbar    | `SurfaceButton`, `SurfaceIcon`, `SettingsButton`, `UpdateButton`                    |
-| Theme      | `ThemeRoot`                                                                         |
+| Category   | Components                                                                                        |
+| ---------- | ------------------------------------------------------------------------------------------------- |
+| Controls   | `ValueKnob`, `Switch`, `IconButton`, `SmallIconButton`, `BarIconButton`, `Dropdown`               |
+| Overlays   | `Popover`, `MoreMenu`, `MenuButton`, `ConfirmDialog`                                              |
+| Settings   | `SettingGroup`, `SettingRow`, `SwitchRow`, `ChoiceRow`                                            |
+| Layout     | `FadeRow`                                                                                         |
+| Navigation | `KeysNavigator`, `RowNavigator`                                                                   |
+| Play       | `Keys`, `Pads`, `KitPads`, `XyPad` (played through `Hands`)                                       |
+| Panels     | `OrnamentPanel`, `StepInputPanel`, `AlgorithmChart`, `LanePicker`, `OutputCells`, `SurfacePicker` |
+| Toolbar    | `SurfaceButton`, `SurfaceIcon`, `SettingsButton`, `UpdateButton`                                  |
+| Theme      | `ThemeRoot`                                                                                       |
 
 `ValueKnob` is the knob of the sound and the mix with no engine behind it:
 a value in a `ValueSpec`'s range (`src/state/params.ts`: min, max, default,

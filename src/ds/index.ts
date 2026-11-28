@@ -105,6 +105,8 @@ export {
 // Panels
 export { OrnamentPanel } from '../ui/OrnamentPanel'
 export type { Ornament } from '../dsp/ornament'
+export { StepInputPanel } from '../ui/StepInputPanel'
+export type { Meter } from '../state/meter'
 export { AlgorithmChart } from '../ui/AlgorithmChart'
 export { LanePicker } from '../ui/LanePicker'
 export type { LaneGroup, LaneKnob } from '../state/lanes'

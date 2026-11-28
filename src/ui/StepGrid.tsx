@@ -40,6 +40,7 @@ import {
   dragVelocity,
   noteBox,
   othersRows,
+  revealKey,
   rowsFit,
   shiftWindow,
 } from '../viz/steps'
@@ -50,6 +51,7 @@ import { LanePicker } from './LanePicker'
 import { LaneStrip } from './LaneStrip'
 import { OrnamentPanel } from './OrnamentPanel'
 import { RowNavigator } from './RowNavigator'
+import { StepInputPanel } from './StepInputPanel'
 
 /** The most rows a synth's grid shows: two octaves */
 const SYNTH_ROWS = 24
@@ -86,6 +88,18 @@ const PICKED =
 
 /** The ornaments' toggle: a trill's zigzag */
 const TRILL = 'M2.5 11.5l2.2-5 2.2 5 2.2-5 2.2 5 2.2-5 2 5'
+
+/** Step input's toggle: a step's column, and the way on from it */
+const STEP_ICON = 'M3 4h4.5v10H3zM10.5 9h5M13 6.5L15.5 9 13 11.5'
+
+/**
+ * Step input's cursor, a column of the bar shown: tinted under the
+ * notes, and framed over them in the accent, apart from the playhead's
+ * plain lift
+ */
+const CURSOR_TINT = 'pointer-events-none absolute inset-y-0 bg-(--accent)/15'
+const CURSOR_FRAME =
+  'pointer-events-none absolute inset-y-0 rounded-[3px] shadow-[inset_0_0_0_2px_var(--accent)]'
 
 /**
  * A bar's chip: the bar shown pressed, the bar playing ringed within and
@@ -158,7 +172,14 @@ interface Drag {
  * muted, a kit's pad hit softly), hollow with an x in its first step
  * (none where its ornament marks the box), and a tap on a note makes it
  * a ghost or a note again, heard while stopped; OrnamentPanel turns the
- * note picked into one too.
+ * note picked into one too. With Step on (step input, apart from Ghost
+ * and Ornaments), a cursor stands on a step, framed in the accent, and
+ * each note played on the play surface below goes in there
+ * (Engine.setStepInput); StepInputPanel, in the lanes' place, moves it a
+ * step or a beat (so do the arrow keys), and a tap on the grid moves it
+ * to the step tapped as well as putting or taking a note, a bar's chip to
+ * that bar. The bar shown is the cursor's, and the rows shown move to
+ * bring in a note it put out of sight.
  * The step playing is lit outside React, as the audio thread tells of
  * it; edits go to the engine, which sends the loop whole.
  */
@@ -190,6 +211,20 @@ export function StepGrid({ engine }: { engine: Engine }) {
     [pads]
   )
   const mix = useSyncExternalStore(engine.subscribeMix, engine.getMix)
+  // Step input's cursor: the transport's, clamped to the loop as it reads
+  const subscribeCursor = useCallback(
+    (listener: () => void) => {
+      const transport = engine.subscribeTransport(listener)
+      const loops = subscribe(listener)
+      return () => {
+        transport()
+        loops()
+      }
+    },
+    [engine, subscribe]
+  )
+  const cursor = useSyncExternalStore(subscribeCursor, engine.getStepCursor)
+  const stepping = cursor !== undefined
   const loopRef = useRef<Loop>(loop)
   useLayoutEffect(() => {
     loopRef.current = loop
@@ -201,7 +236,11 @@ export function StepGrid({ engine }: { engine: Engine }) {
   const beat = beatSteps(meter)
   const bars = barsOf(loop, meter)
   const [shown, setShown] = useState(0)
-  const bar = Math.min(shown, bars - 1)
+  // Stepping, the bar shown is the cursor's
+  const bar = Math.min(
+    stepping ? Math.floor(cursor / columns) : shown,
+    bars - 1
+  )
   // While it plays, the bar shown is the bar playing, until one is picked
   const followRef = useRef(true)
   /**
@@ -221,6 +260,14 @@ export function StepGrid({ engine }: { engine: Engine }) {
    */
   const pickBar = (each: number) => {
     setShown(each)
+    // Stepping, the cursor goes to the bar's first step (kept where it is
+    // in its own bar), as read now: the loop may just have changed
+    const at = engine.getStepCursor()
+    if (at !== undefined) {
+      if (Math.floor(at / columns) !== each)
+        engine.setStepCursor(each * columns)
+      return
+    }
     followRef.current = !engine.getPlaying() || each === barAt(engine.step)
   }
   // The rows another track of the same kind plays in the bar shown, in
@@ -280,6 +327,16 @@ export function StepGrid({ engine }: { engine: Engine }) {
     setOrnamenting(false)
     setPicked(undefined)
   }, [])
+  /** Step input on, at the bar shown's first step, or off */
+  const setStepping = (on: boolean) => {
+    if (on) {
+      closeOrnaments()
+      setGhosting(false)
+      followRef.current = false
+    }
+    engine.setStepInput(on, bar * columns)
+  }
+  const closeStepping = useCallback(() => engine.setStepInput(false), [engine])
   // Ghost: a tap puts a ghost note, or turns a note into one and back
   const [ghosting, setGhosting] = useState(false)
   /**
@@ -354,12 +411,21 @@ export function StepGrid({ engine }: { engine: Engine }) {
     }
   }, [engine, loop.steps, bar, bars, barAt, columns])
 
-  // Played, the grid follows the bar playing again; stopped, it shows
-  // the bar Play starts from as that moves (the arrow keys)
+  // Step input goes as the grid does
+  useEffect(() => () => engine.setStepInput(false), [engine])
+
+  // Played, the grid follows the bar playing again (not while stepping:
+  // it shows the cursor's); stopped, it shows the bar Play starts from as
+  // that moves (the arrow keys)
   useEffect(() => {
     let cue = engine.cue
     return engine.subscribeTransport(() => {
-      if (engine.getPlaying()) {
+      const at = engine.getStepCursor()
+      if (at !== undefined) {
+        // The bar shown kept as the cursor's, for after
+        followRef.current = false
+        setShown(Math.floor(at / columns))
+      } else if (engine.getPlaying()) {
         followRef.current = true
       } else if (engine.cue !== cue) {
         followRef.current = true
@@ -367,7 +433,7 @@ export function StepGrid({ engine }: { engine: Engine }) {
       }
       cue = engine.cue
     })
-  }, [engine, barAt])
+  }, [engine, barAt, columns])
 
   // A finger still down as the grid goes lets its note go
   useEffect(
@@ -396,6 +462,7 @@ export function StepGrid({ engine }: { engine: Engine }) {
     )
     const step = bar * columns + cell.column
     const key = first + cell.row
+    if (stepping) engine.setStepCursor(step)
     const was = loopRef.current
     const over = noteOver(was, step, key)
     const put: Note = { step, key, length: 1, velocity: 1 }
@@ -420,9 +487,10 @@ export function StepGrid({ engine }: { engine: Engine }) {
       column: box.width / columns,
       room: roomAt(was, note.step, key),
     }
-    // Held still, the note is picked for its ornament
+    // Held still, the note is picked for its ornament: not while stepping
     const pointer = event.pointerId
     window.clearTimeout(holdRef.current)
+    if (stepping) return
     holdRef.current = window.setTimeout(() => {
       const drag = dragRef.current
       if (!drag || drag.pointer !== pointer || drag.axis) return
@@ -545,6 +613,54 @@ export function StepGrid({ engine }: { engine: Engine }) {
     return out
   }, [loop, bar, first, rows, synth, columns])
   const keyName = (key: number) => (kit ? (kit[key] ?? '') : noteName(key))
+  // What starts at the cursor, lowest first, a ghost's in brackets
+  const atCursor = useMemo(() => {
+    if (cursor === undefined) return []
+    return loop.notes
+      .filter((note) => note.step === cursor)
+      .sort((a, b) => a.key - b.key)
+      .map((note) => {
+        const name = kit ? (kit[note.key] ?? '') : noteName(note.key)
+        return note.ghost ? `(${name})` : name
+      })
+  }, [loop, cursor, kit])
+
+  // A note step input put out of sight brings its row into it: the
+  // loop's notes at the cursor compared as the song changes
+  const viewRef = useRef({ first, rows, high, kit: !!kit })
+  useLayoutEffect(() => {
+    viewRef.current = { first, rows, high, kit: !!kit }
+  })
+  useEffect(() => {
+    let seen = { track: engine.getSeqTrack().id, loop: engine.getSeqLoop() }
+    return subscribe(() => {
+      const was = seen
+      seen = { track: engine.getSeqTrack().id, loop: engine.getSeqLoop() }
+      const at = engine.getStepCursor()
+      if (at === undefined || was.track !== seen.track) return
+      if (was.loop === seen.loop) return
+      const before = new Set(
+        was.loop.notes.map(({ step, key }) => `${step}:${key}`)
+      )
+      const put = seen.loop.notes.filter(
+        (note) => note.step === at && !before.has(`${note.step}:${note.key}`)
+      )
+      const last = put[put.length - 1]
+      if (!last) return
+      const view = viewRef.current
+      const to = revealKey(
+        view.first,
+        last.key,
+        view.rows,
+        LOWEST_NOTE,
+        view.high
+      )
+      if (to === view.first) return
+      setFirsts((each) =>
+        view.kit ? { ...each, kit: to } : { ...each, synth: to }
+      )
+    })
+  }, [engine, subscribe])
 
   const template = {
     gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))`,
@@ -601,7 +717,10 @@ export function StepGrid({ engine }: { engine: Engine }) {
           path={GHOST_ICON}
           pressed={ghosting}
           onClick={() => {
-            if (!ghosting) closeOrnaments()
+            if (!ghosting) {
+              closeOrnaments()
+              closeStepping()
+            }
             setGhosting(!ghosting)
           }}
         />
@@ -611,9 +730,18 @@ export function StepGrid({ engine }: { engine: Engine }) {
           pressed={ornamenting}
           onClick={() => {
             if (ornamenting) closeOrnaments()
-            else setOrnamenting(true)
+            else {
+              setOrnamenting(true)
+              closeStepping()
+            }
             setGhosting(false)
           }}
+        />
+        <SmallIconButton
+          label="Step input"
+          path={STEP_ICON}
+          pressed={stepping}
+          onClick={() => setStepping(!stepping)}
         />
         <button
           type="button"
@@ -637,7 +765,7 @@ export function StepGrid({ engine }: { engine: Engine }) {
 
       {/* Lanes under it, the grid keeps three rows: they pan instead */}
       <div
-        className={`flex flex-1 gap-1 ${ornamenting || loop.lanes.length > 0 ? 'min-h-16' : 'min-h-0'}`}
+        className={`flex flex-1 gap-1 ${ornamenting || stepping || loop.lanes.length > 0 ? 'min-h-16' : 'min-h-0'}`}
       >
         {reach > rows && (
           <RowNavigator
@@ -727,6 +855,15 @@ export function StepGrid({ engine }: { engine: Engine }) {
             style={{ width: `${100 / columns}%` }}
             className="pointer-events-none absolute inset-y-0 bg-(--lift-3)"
           />
+          {stepping && (
+            <div
+              style={{
+                left: `${((cursor % columns) / columns) * 100}%`,
+                width: `${100 / columns}%`,
+              }}
+              className={CURSOR_TINT}
+            />
+          )}
           {loop.notes.map((note) => {
             const box = noteBox(note, bar, first, rows, columns)
             if (!box) return null
@@ -813,6 +950,16 @@ export function StepGrid({ engine }: { engine: Engine }) {
               ))}
             </svg>
           )}
+          {stepping && (
+            <div
+              aria-hidden
+              style={{
+                left: `${((cursor % columns) / columns) * 100}%`,
+                width: `${100 / columns}%`,
+              }}
+              className={CURSOR_FRAME}
+            />
+          )}
           {ornamenting && pickedNote && (
             <Ring
               note={pickedNote}
@@ -839,7 +986,17 @@ export function StepGrid({ engine }: { engine: Engine }) {
         />
       )}
 
-      {!ornamenting && loop.lanes.length > 0 && (
+      {stepping && (
+        <StepInputPanel
+          step={cursor}
+          meter={meter}
+          names={atCursor}
+          onMove={(by) => engine.moveStepCursor(by)}
+          onClose={closeStepping}
+        />
+      )}
+
+      {!ornamenting && !stepping && loop.lanes.length > 0 && (
         <div className="flex max-h-[45%] shrink-0 flex-col gap-2 overflow-y-auto overscroll-contain [scrollbar-width:none]">
           {loop.lanes.map((lane) => {
             const knob = knobOf(lane)

@@ -2,16 +2,25 @@
  * The transport's keys, for a desktop (docs/plan/transport-and-midi.md,
  * 1): Space plays and stops, the arrows left and right move a beat back
  * and on (where it plays, or the beat Play starts from), with Shift a
- * bar, and Home goes back to the first. Each leaves alone a key its
- * target works itself: text typed, a slider's or a list's arrows, a
- * dialog's every key.
+ * bar, and Home goes back to the first. While step input is on (the Seq
+ * tab's Step), the arrows move its cursor a step instead, with Shift a
+ * beat. Each leaves alone a key its target works itself: text typed, a
+ * slider's or a list's arrows, a dialog's every key.
  */
 
-/** What a key does to the transport: plays or stops, or moves by beats */
+/**
+ * What a key does to the transport: plays or stops, moves by beats, or
+ * moves step input's cursor by steps or by beats
+ */
 export type TransportKey =
   | { readonly kind: 'toggle' }
   | { readonly kind: 'start' }
   | { readonly kind: 'move'; readonly beats: number }
+  | {
+      readonly kind: 'cursor'
+      readonly by: number
+      readonly unit: 'step' | 'beat'
+    }
 
 /** A bar's beats, which Shift moves by */
 const BAR_BEATS = 4
@@ -63,8 +72,14 @@ const ARROWS: Readonly<Record<string, number>> = {
   ArrowRight: 1,
 }
 
-/** What the key pressed does to the transport: nothing, if not its */
-export function transportKey(press: KeyPress): TransportKey | undefined {
+/**
+ * What the key pressed does to the transport: nothing, if not its. While
+ * stepping (step input on), the arrows move its cursor.
+ */
+export function transportKey(
+  press: KeyPress,
+  stepping = false
+): TransportKey | undefined {
   if (press.metaKey || press.ctrlKey || press.altKey) return undefined
   if (press.defaultPrevented) return undefined
   const target = isTarget(press.target) ? press.target : undefined
@@ -78,6 +93,9 @@ export function transportKey(press: KeyPress): TransportKey | undefined {
   if (way === undefined && press.key !== 'Home') return undefined
   if (target?.closest(ARROWS_OWN)) return undefined
   if (way === undefined) return { kind: 'start' }
+  if (stepping) {
+    return { kind: 'cursor', by: way, unit: press.shiftKey ? 'beat' : 'step' }
+  }
   return { kind: 'move', beats: press.shiftKey ? way * BAR_BEATS : way }
 }
 
