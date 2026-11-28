@@ -37,6 +37,7 @@ import { FINE_ZONES, fineZone, type FineZone } from '../viz/fine'
 import { HOLD, KNOB_READOUT, KNOB_SIZE } from './controls'
 import { CHOICE_GLYPHS } from './editor'
 import { keepHeld } from './held'
+import { restNote } from './rests'
 import { ground, palette } from './theme'
 import { endTurning, startTurning } from './turning'
 
@@ -179,6 +180,12 @@ export function Knob({
     read: () => knobValue(engine.getSound(), part, knob),
     write: (value) => engine.edit((sound) => setKnob(sound, part, knob, value)),
     format: format ?? ((value) => formatValue(spec, value)),
+    rests: () =>
+      restNote(
+        spec.rests,
+        (key) => knobSpec(engine.getSound(), part, key),
+        (key) => knobValue(engine.getSound(), part, key)
+      ),
   }
   if (isSwitch(spec)) {
     return <Toggle turns={turns} color={color} follow={engine.subscribeSound} />
@@ -342,6 +349,12 @@ export function MixKnob({
     read: () => mixValue(engine.getMix(), part, knob) ?? spec.default,
     write: (value) => engine.editMix(part, knob, value),
     format: (value) => formatValue(spec, value),
+    rests: () =>
+      restNote(
+        spec.rests,
+        (key) => mixKnob(engine.getMix(), part, key),
+        (key) => mixValue(engine.getMix(), part, key)
+      ),
   }
   if (isSwitch(spec)) {
     return <Toggle turns={turns} color={color} follow={engine.subscribeMix} />
@@ -462,6 +475,11 @@ interface Turns {
   readonly read: () => number
   readonly write: (value: number) => void
   readonly format: (value: number) => string
+  /**
+   * What a reader is told while it does nothing (restNote: the reverb's
+   * Length at Bloom 0), or undefined while it acts; dimmed then
+   */
+  readonly rests?: () => string | undefined
 }
 
 /**
@@ -516,6 +534,8 @@ function Dial({
   const tieRef = useRef<SVGLineElement>(null)
   /** The routes drawn last, as a key, so an unrelated change draws nothing */
   const routesShownRef = useRef('')
+  /** What a reader is told of its routes and of its resting, last set */
+  const notesRef = useRef({ routes: '', rest: '' })
   /** The latest knob it turns, for a hold that fires after a redraw */
   const routedRef = useRef(routed)
   /** The drag in progress, and when the last tap ended */
@@ -599,13 +619,37 @@ function Dial({
       badge.textContent = `${count}`
       badge.style.display = count > 0 ? '' : 'none'
     }
+    const routes =
+      count === 0 ? '' : count === 1 ? '1 route. ' : `${count} routes. `
+    notesRef.current.routes =
+      dest === undefined ? '' : `${routes}Hold to route.`
+    describe()
+  }
+
+  /**
+   * Dims the knob while it does nothing (Turns.rests), but not while it
+   * is turned, so what it is turned to reads
+   */
+  const showRest = () => {
+    const note = turnsRef.current.rests?.() ?? ''
+    const wrap = wrapRef.current
+    wrap?.toggleAttribute(
+      'data-rests',
+      note !== '' && !wrap.hasAttribute('data-turning')
+    )
+    if (note === notesRef.current.rest) return
+    notesRef.current.rest = note
+    describe()
+  }
+
+  /** Tells a reader of its resting and its routes, or of nothing */
+  const describe = () => {
     const root = rootRef.current
-    if (root) {
-      const routes =
-        count === 0 ? '' : count === 1 ? '1 route. ' : `${count} routes. `
-      if (dest === undefined) root.removeAttribute('aria-description')
-      else root.setAttribute('aria-description', `${routes}Hold to route.`)
-    }
+    if (!root) return
+    const { rest, routes } = notesRef.current
+    const text = [rest, routes].filter(Boolean).join(' ')
+    if (text) root.setAttribute('aria-description', text)
+    else root.removeAttribute('aria-description')
   }
 
   const set = (value: number) => {
@@ -675,6 +719,7 @@ function Dial({
   const turnStarts = () => {
     rootRef.current?.setAttribute('data-turning', '')
     wrapRef.current?.setAttribute('data-turning', '')
+    showRest()
     const knob = routedRef.current
     if (knob) startTurning(knob.part, knob.knob)
   }
@@ -683,6 +728,7 @@ function Dial({
   const turnEnds = () => {
     rootRef.current?.removeAttribute('data-turning')
     wrapRef.current?.removeAttribute('data-turning')
+    showRest()
     const knob = routedRef.current
     if (knob) endTurning(knob.part, knob.knob)
   }
@@ -699,16 +745,18 @@ function Dial({
     routedRef.current = routed
     show(read())
     showRoutes()
+    showRest()
   })
 
   // A value set elsewhere: a preset loaded, the sound read back; a route
-  // added, turned or removed
+  // added, turned or removed; the knob it rests on turned
   useLayoutEffect(
     () =>
       follow(() => {
         const value = read()
         if (value !== shownRef.current) show(value)
         showRoutes()
+        showRest()
       }),
     // show, showRoutes and read use only refs; address names what they
     // read, and follow is the engine's or the value's, kept as it is
@@ -876,7 +924,12 @@ function Dial({
         style={{ '--tone': color } as CSSProperties}
         className={`${KNOB_SIZE} relative aspect-square touch-none rounded-full outline-none focus-visible:ring-2 focus-visible:ring-(--accent) data-turning:bg-[color-mix(in_oklab,var(--tone)_18%,transparent)] data-turning:shadow-[0_0_0_1.5px_var(--tone)]`}
       >
-        <svg viewBox="0 0 48 48" className="block size-full" aria-hidden>
+        {/* Dimmed while it rests, its focus ring not */}
+        <svg
+          viewBox="0 0 48 48"
+          className="block size-full transition-opacity duration-150 in-data-rests:opacity-40"
+          aria-hidden
+        >
           <path
             ref={reachRef}
             d={REACH_ARC}
@@ -955,7 +1008,7 @@ function Dial({
       )}
       <span
         style={hot ? { color: hot } : undefined}
-        className="text-[11px] leading-tight whitespace-nowrap text-(--ink-400)"
+        className="text-[11px] leading-tight whitespace-nowrap text-(--ink-400) transition-opacity duration-150 in-data-rests:opacity-40"
       >
         {spec.label}
       </span>
@@ -967,7 +1020,7 @@ function Dial({
        */}
       <span
         ref={textRef}
-        className="origin-top font-mono text-[11px] leading-tight whitespace-nowrap text-(--ink-200) tabular-nums transition-[scale,color,background-color,font-weight] duration-300 in-data-turning:z-10 in-data-turning:scale-125 in-data-turning:rounded-sm in-data-turning:bg-(--face) in-data-turning:font-light in-data-turning:text-(--ink-0) in-data-turning:duration-100"
+        className="origin-top font-mono text-[11px] leading-tight whitespace-nowrap text-(--ink-200) tabular-nums transition-[scale,color,background-color,font-weight,opacity] duration-300 in-data-rests:opacity-40 in-data-turning:z-10 in-data-turning:scale-125 in-data-turning:rounded-sm in-data-turning:bg-(--face) in-data-turning:font-light in-data-turning:text-(--ink-0) in-data-turning:duration-100"
       />
     </div>
   )

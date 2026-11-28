@@ -158,7 +158,10 @@ first move to its lift, or a moment after a key's nudge) its value reads
 larger and lighter, and the part's picture on its tile lights the piece
 the knob moves (an envelope's stage, a filter's corner or peak, an LFO's
 fade) and dims the rest (`src/ui/turning.ts`, `outlineLit`), set outside
-React as the drag is.
+React as the drag is. A knob that does nothing while another of its part
+stands at a value (its spec's `rests`: the reverb's Length and Tone at
+Bloom 0) stands dimmed, face, name and value, still turned and lit while
+it is, and tells a reader why (`src/ui/rests.ts`).
 
 `AlgorithmChart` draws one of an FM6's 32 algorithms as the DX7's chart
 does (`src/viz/fm6.ts`): the carriers on the bottom row over the output's
